@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.json
+!package.json
+*.mp4
+*.mov
+*.wav
+*.m4a
+.DS_Store
+.idea/
+.vscode/
+out/
