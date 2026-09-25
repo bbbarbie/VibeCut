@@ -17,10 +17,13 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from . import features, shots as shots_mod
+from . import evidence, features, shots as shots_mod
 from .media import Media, loudness_lufs
 
 OK, WARN, BAD = "ok", "warn", "bad"
+# Not a judgement: the media doesn't carry what this rule needs to see
+# (see evidence.py). The value is kept; the verdict is withheld.
+PENDING = "pending"
 
 
 @dataclass
@@ -32,6 +35,7 @@ class Finding:
     verdict: str
     detail: str
     extra: dict = field(default_factory=dict)
+    evidence: list[str] = field(default_factory=list)  # readings it rests on
 
 
 @dataclass
@@ -338,4 +342,34 @@ def analyze(media: Media, shot_list: list[shots_mod.Shot] | None = None) -> Repo
                check_duplicates, check_opening):
         findings += fn(media, s)
     findings += check_loudness(media)
+    gate(findings, evidence.available(media))
     return Report(media.path, media.duration, media.fps, len(s), findings, s)
+
+
+# What each finding has to see to be believed. Shot lengths, colour jumps
+# and repeated views are visible in stills (to index accuracy). Whether a
+# cut lands inside a movement, and whether sound and picture change on the
+# same frame, need every frame -- a keyframe every second can't say.
+NEEDS = {
+    "rhythm": [evidence.STILL], "rhythm_cv": [evidence.STILL], "long_shot": [evidence.STILL],
+    "cut_on_motion": [evidence.MOTION],
+    "jl_cuts": [evidence.MOTION, evidence.AUDIO],
+    "continuity": [evidence.STILL],
+    "duplicates": [evidence.STILL],
+    "first_cut": [evidence.STILL],
+    "first_speech": [evidence.AUDIO],
+    "loudness": [evidence.AUDIO],
+}
+
+
+def gate(findings: list[Finding], have: set[str]) -> None:
+    """Withhold the verdict of any finding the media can't support."""
+    for f in findings:
+        if not f.evidence:
+            f.evidence = list(NEEDS.get(f.key, [evidence.STILL]))
+        lacking = evidence.missing(f.evidence, have)
+        if lacking and f.verdict != PENDING:
+            f.extra = {**f.extra, "withheld_verdict": f.verdict, "lacking": lacking}
+            f.verdict = PENDING
+            f.detail = (f"Not checked: this needs {evidence.describe(lacking)}, which this "
+                        f"reading doesn't have. The number is kept, not judged.")

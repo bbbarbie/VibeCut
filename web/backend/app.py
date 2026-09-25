@@ -20,7 +20,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import board as bd
-from . import cut, indexer, llm, locate, musiclib, storyboard, timeline, vision
+from . import cut, indexer, llm, locate, musiclib, storyboard, timeline, vision, voiceover
+from .preferences import PreferenceError, Preferences
 from .workflow import Workflow, WorkflowError
 
 @asynccontextmanager
@@ -46,12 +47,23 @@ LOCK = threading.RLock()
 # The rough cut (reject + trim) and where the edit stands relative to its gate.
 PLAN: dict = {"plan": None}
 WORKFLOW = Workflow()
+# What the creator's edits have taught -- only what they confirmed.
+PREFS = Preferences(indexer.CACHE / "preferences.json")
 
 
 def _make_proposals(direction: dict) -> dict:
     lean = None if direction.get("keywords") else (direction.get("themes", []), direction.get("labels", []))
     return storyboard.build(list(CLIPS.values()), direction.get("text", ""),
-                            vision=VISION_USED["value"], lean=lean, cut=cut.for_story(PLAN["plan"]))
+                            vision=VISION_USED["value"], lean=lean, cut=cut.for_story(PLAN["plan"]),
+                            voiceover=direction.get("voiceover"))
+
+
+def _direction() -> dict | None:
+    """The direction the proposals are currently built from."""
+    for t in reversed(SESSION.turns):
+        if t.direction is not None and not t.undone:
+            return t.direction
+    return None
 
 
 def _lean_labels() -> set[str]:
@@ -108,7 +120,15 @@ def _session() -> dict:
         "workflow": WORKFLOW.public(),
         "cut": cut.summary(PLAN["plan"]) if PLAN["plan"] else None,
         "music": musiclib.current_public(),
+        "preferences": PREFS.public(SESSION),
+        "voiceover": _voiceover_public(),
     }
+
+
+def _voiceover_public() -> dict | None:
+    v = (_direction() or {}).get("voiceover")
+    return None if not v else {"source": v["source"], "timing": v["timing"],
+                               "lines": len(v["lines"]), "total": v["total"]}
 
 
 def _board_before(turn: bd.Turn) -> dict | None:
@@ -267,6 +287,7 @@ def api_clear() -> dict:
     with LOCK:
         CLIPS.clear()
         SESSION = bd.Session()
+        PREFS.new_project()
         WORKFLOW = Workflow()
         PLAN["plan"] = None
         _refresh_catalog()
@@ -301,7 +322,8 @@ def api_chat(req: ChatReq) -> dict:
     with LOCK:
         cat = CATALOG["cat"]
         try:
-            out = (llm.interpret if llm.available() else llm.interpret_offline)(msg, cat, SESSION)
+            out = (llm.interpret if llm.available() else llm.interpret_offline)(
+                msg, cat, SESSION, PREFS.for_model())
         except llm.LLMError as e:
             raise HTTPException(502, str(e)) from e
         if out.get("error"):
@@ -309,10 +331,79 @@ def api_chat(req: ChatReq) -> dict:
         direction = out.get("direction")
         if direction is not None:
             direction = {**direction, "text": msg}
+            # A new description of the video keeps the voiceover it's told over.
+            vo = (_direction() or {}).get("voiceover")
+            if vo:
+                direction["voiceover"] = vo
         SESSION.add({"kind": "chat", "text": msg, "ops": out.get("ops", []),
                      "reply": out.get("reply", ""), "question": out.get("question"),
                      "choices": out.get("choices", []) if out.get("question") else [],
                      "direction": direction}, cat, _make_proposals)
+        return _session()
+
+
+# --------------------------------------------------------------------------
+# the creator's voiceover as the spine (opt-in)
+# --------------------------------------------------------------------------
+
+class VoiceoverReq(BaseModel):
+    text: str
+
+
+@app.post("/api/voiceover")
+def api_voiceover(req: VoiceoverReq) -> dict:
+    """Subtitles or a script -> a fourth proposal that follows it. Recorded
+    as a turn, so Undo takes it away again."""
+    if not CLIPS:
+        raise HTTPException(400, "drop some clips in first")
+    if WORKFLOW.state not in ("story", "styling"):
+        raise HTTPException(409, "Look over what was cut first — approve it, then we’ll build the story.")
+    script = voiceover.parse(req.text)
+    if not script["lines"]:
+        raise HTTPException(400, "no lines found — paste subtitles (.srt) or the script itself")
+    with LOCK:
+        cur = {k: v for k, v in (_direction() or {"text": ""}).items() if k != "voiceover"}
+        what = "from subtitles" if script["timing"] == "estimated" else "timed from the words"
+        SESSION.add({"kind": "direct", "text": f"Voiceover: {len(script['lines'])} lines, {what}",
+                     "ops": [], "direction": {**cur, "voiceover": script}}, CATALOG["cat"], _make_proposals)
+        return _session()
+
+
+# --------------------------------------------------------------------------
+# what edits teach: candidates, sorted only by the creator
+# --------------------------------------------------------------------------
+
+class ClassifyReq(BaseModel):
+    turn: int
+    klass: str
+    rule: str = ""
+    scope: str = ""
+    counter: str = ""
+    reason: str = ""
+
+
+@app.post("/api/preferences/classify")
+def api_pref_classify(req: ClassifyReq) -> dict:
+    with LOCK:
+        try:
+            PREFS.classify(SESSION, req.turn, req.klass, "user", req.rule, req.scope, req.counter, req.reason)
+        except PreferenceError as e:
+            raise HTTPException(400, str(e)) from e
+        return _session()
+
+
+@app.post("/api/preferences/{rid}/{action}")
+def api_pref_change(rid: str, action: str) -> dict:
+    with LOCK:
+        try:
+            if action == "forget":
+                PREFS.revoke(rid, "user")
+            elif action == "narrow":
+                PREFS.narrow(rid, "user")
+            else:
+                raise HTTPException(404)
+        except PreferenceError as e:
+            raise HTTPException(400, str(e)) from e
         return _session()
 
 

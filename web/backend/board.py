@@ -94,7 +94,9 @@ def board_from_option(option: dict) -> dict:
             "id": f"{prefix}{i + 1}",
             "title": b["title"],
             "detail": b["detail"],
-            "shots": [{"id": s["id"], "start": s["start"], "end": s["end"]} for s in b["shots"]],
+            # a voiceover line nothing shows stays a gap of its length
+            "shots": [_gap(s["key"], s["end"] - s["start"]) if s.get("gap")
+                      else {"id": s["id"], "start": s["start"], "end": s["end"]} for s in b["shots"]],
         } for i, b in enumerate(option["beats"])],
     }
 

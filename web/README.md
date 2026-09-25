@@ -121,7 +121,9 @@ two stages run on the whole shoot, then everything stops at one gate.
 1. **Reject** (`cutgrammar/reject.py`): whole clips nobody would use — lens
    cap / pocket, murky-dark or blurred end to end, shaking throughout, a
    two-second mis-tap, a second take of the same view (kept: the better one).
-   Each has a plain reason ("全片模糊", "和 IMG_4471 几乎一样"). Talking
+   Each has a plain reason ("全片模糊", "和 IMG_4471 几乎一样"). A reason
+about movement ("全程剧烈晃动") was judged from about one frame a second,
+so it is marked "judged from a few frames, play it to be sure". Talking
    clips are never dropped as duplicates — they may say different things —
    only flagged as possible retakes.
 2. **Trim** (`cutgrammar/trim.py`): the best window inside each kept shot.
@@ -169,6 +171,49 @@ Each turn is a list of operations — `move_beat`, `drop_beat`, `drop_shot`,
 `tests/test_board.py` pins this down without a model: the two ops for the
 acceptance request change the opening and remove the market, and every
 other beat comes out byte-identical.
+
+## Follow your voiceover (opt-in)
+
+If you've recorded narration — or written it — paste its subtitles (.srt)
+or the script under **Follow my voiceover…**, before or after the three
+proposals appear. A fourth proposal, *Follow the voiceover*, comes first:
+one part per spoken line (`backend/voiceover.py`).
+
+- The voice sets the time: a line holds the screen until the next begins,
+  so the edit is exactly as long as the narration.
+- What a line names (food, the sea, a temple, people, 市场, 海边, 寺…)
+  recalls shots by their on-device labels; which ones are used is decided
+  by how well they're made, never by the label's confidence. A long line
+  is split over a few shots; the same clip never plays twice in a row.
+- A line nothing on the shelf shows — or an abstract one ("I finally felt
+  free") — is left as an **empty stretch of its length** and listed under
+  "Lines with nothing to show", with why. It is not covered with an
+  unrelated pretty shot. Fill it by dropping a shot there, or film one.
+- Timing is labelled honestly: subtitles give *estimated* timing (never
+  checked against the recording), a script gives *text only* (lengths from
+  word counts, ~15% off). Nothing claims the picture is locked to the voice.
+
+The voiceover is a turn in the log like any other: Undo removes it. A new
+description of the video keeps it. Once chosen, the story is edited by
+chat and timeline exactly as before. The narration itself is not played or
+mixed — there's no audio track for it yet.
+
+## What your edits teach — only when you say so
+
+Every edit (chat or timeline) can be sorted with **Remember…** under it
+(`backend/preferences.py`): *Just here*, *For this video*, *Every video*,
+*Privacy or rights*, or *Don't learn*. Leaving it alone teaches nothing.
+Only *For this video* and *Every video* are ever used again, and *Every
+video* needs the rule, when it applies, and when it doesn't. Saying "from
+now on" / "以后也这样" only suggests *Every video*; you still confirm it.
+An undone edit can't be remembered — its before and after are gone.
+
+Confirmed rules are listed at the top of the chat (**Remembered**) and are
+sent to the chat model with each message; candidates never are. *Only this
+video* narrows an every-video rule; *Forget* retires it. Both keep the old
+record with who changed it and when. Every-video rules persist in
+`~/.cache/vibecut/preferences.json`; this-video rules go when the shelf is
+cleared.
 
 ## Music that fits the storyboard's shape
 
@@ -241,7 +286,8 @@ localhost instead; the same 30 clips took 6.9 s that way.
 ## Out of scope
 
 Captions, music, motion graphics, export, rendering, auth, database,
-collaboration, automatic style learning. The timeline plays spans of the original files in
+collaboration, automatic style learning (edits are only learned when the
+creator sorts them — see above). The timeline plays spans of the original files in
 sequence; nothing is re-encoded.
 
 ## Known limits

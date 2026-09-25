@@ -54,7 +54,8 @@ SYSTEM = """You are the editing assistant inside VibeCut, a tool that helps a vl
 ## What you see
 Each user message comes with the current state:
 - FOOTAGE: a summary of what was filmed (on-device image labels, dates, places).
-- PROPOSALS: three storyboards built from the footage (keys: time, place, subject). They are suggestions; the user picks one with choose_option.
+- PROPOSALS: three storyboards built from the footage (keys: time, place, subject). They are suggestions; the user picks one with choose_option. If the creator gave a voiceover there is a fourth, key voice: one beat per spoken line, titled with the line. Its gaps are lines nothing on the shelf shows; they are deliberate — don't fill one with an unrelated shot unless the user asks, and then prefer a shot that shows what the line says.
+- CREATOR RULES (only if the creator has confirmed any): preferences they asked to keep. Follow them where they apply; the current message wins if it says otherwise. Never invent a rule from one edit.
 - STORYBOARD: the working storyboard — beats in order, each with an id (like t1, s3), a title, and its shots (id like 3f2a9c01be44:0, duration, time filmed, labels, quality 0–1, "cam" if the creator is talking to camera).
 - SHELF: shots that are not in the storyboard, available to add or swap in.
 
@@ -112,7 +113,7 @@ SCHEMA = {
                              "title", "direction", "amount"],
                 "properties": {
                     "op": {"type": "string", "enum": list(bd.LLM_OPS)},
-                    "option": _nullable({"type": "string", "enum": ["time", "place", "subject"]}),
+                    "option": _nullable({"type": "string", "enum": ["time", "place", "subject", "voice"]}),
                     "beat": _nullable({"type": "string"}),
                     "shot": _nullable({"type": "string"}),
                     "with_shot": _nullable({"type": "string"}),
@@ -147,7 +148,7 @@ def _shot_line(cat: bd.Catalog, sid: str, start: float | None = None, end: float
     return f"{key or sid} {d:.1f}s {when} q{s.score:.2f}{cam} [{labels}]"
 
 
-def render_state(cat: bd.Catalog, session: bd.Session) -> str:
+def render_state(cat: bd.Catalog, session: bd.Session, rules: str = "") -> str:
     shots = list(cat.shots.values())
     counts: dict[str, int] = {}
     for s in shots:
@@ -189,6 +190,8 @@ def render_state(cat: bd.Catalog, session: bd.Session) -> str:
     shelf = sorted((s for s in shots if s.id not in used and not s.utility), key=lambda s: -s.score)
     out.append(f"SHELF ({len(shelf)} shots not in the storyboard, best first):")
     out += ["  " + _shot_line(cat, s.id) for s in shelf[:150]]
+    if rules:
+        out += ["", rules]
     return "\n".join(out)
 
 
@@ -211,13 +214,14 @@ class LLMError(Exception):
     pass
 
 
-def interpret(message: str, cat: bd.Catalog, session: bd.Session) -> dict:
-    """-> {"reply", "question", "choices", "direction", "ops"}"""
+def interpret(message: str, cat: bd.Catalog, session: bd.Session, rules: str = "") -> dict:
+    """-> {"reply", "question", "choices", "direction", "ops"}. `rules` are the
+    creator's confirmed preferences (preferences.py), never candidates."""
     import anthropic
 
     messages = _history(session) + [{
         "role": "user",
-        "content": f"{render_state(cat, session)}\n\nUSER: {message}",
+        "content": f"{render_state(cat, session, rules)}\n\nUSER: {message}",
     }]
     try:
         resp = client().beta.messages.create(
@@ -252,7 +256,7 @@ def interpret(message: str, cat: bd.Catalog, session: bd.Session) -> dict:
     return out
 
 
-def interpret_offline(message: str, cat: bd.Catalog, session: bd.Session) -> dict:
+def interpret_offline(message: str, cat: bd.Catalog, session: bd.Session, rules: str = "") -> dict:
     """No key: the first message still works (keyword lean), edits need the model."""
     if session.board is None:
         d = sb.read_direction(message, list(cat.shots.values()))

@@ -9,6 +9,7 @@ import { Keys } from './components/Keys'
 import { Player } from './components/Player'
 import { Menu, SwapPicker, type MenuItem } from './components/Menus'
 import { Music } from './components/Music'
+import type { ClassifyReq } from './components/Remember'
 import { Shelf } from './components/Shelf'
 import { Story, type PlayItem, type Selection } from './components/Story'
 import { Timeline, type Marks } from './components/Timeline'
@@ -168,6 +169,13 @@ export default function App() {
   }
 
   const toggle = async (turn: number) => { setSession(await api.toggle(turn)) }
+
+  // The voiceover proposal, and what edits teach. Errors surface where they were asked.
+  const followVoiceover = async (text: string) => { setSession(await api.voiceover(text)) }
+  const classify = async (req: ClassifyReq) => { setSession(await api.classify(req)) }
+  const changeRule = async (id: string, action: 'forget' | 'narrow') => {
+    try { setSession(await api.rule(id, action)) } catch (e) { note((e as Error).message) }
+  }
 
   // ---- import ----------------------------------------------------------------
   const importPicked = useCallback(async (picked: Picked[]) => {
@@ -559,7 +567,8 @@ export default function App() {
 
       <div className={`grid min-h-0 ${level === 'story' ? 'grid-cols-[320px_minmax(0,1fr)_440px]' : 'grid-cols-[320px_minmax(0,1fr)]'}`}>
         <Chat items={chatItems} pending={pending} onSend={send} onToggle={toggle}
-              disabled={!!pending} llm={session?.llm ?? false} hasBoard={!!session?.board} />
+              disabled={!!pending} llm={session?.llm ?? false} hasBoard={!!session?.board}
+              prefs={session?.preferences ?? null} onClassify={classify} onRule={changeRule} />
 
         {level === 'story' ? (
           <>
@@ -578,6 +587,7 @@ export default function App() {
                 selected={storySel}
                 onPick={(fl) => importPicked(fromInput(fl))}
                 onAsk={send}
+                onVoiceover={followVoiceover}
                 onUse={apply}
                 onPlay={playSource}
                 onSelect={(sel, anchor) => {

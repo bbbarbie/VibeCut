@@ -77,6 +77,30 @@ print(report.to_text(r))
 Thresholds are first guesses. They are meant to be recalibrated against
 real reference videos, not treated as received truth.
 
+### What each finding could see
+
+Every finding lists the readings it rests on (`evidence`): file metadata,
+still frames, the full-rate picture, or the sound track. `media.load()`
+decodes every frame; `media.load_index()` samples keyframes (~1/s), which
+are stills — nothing between two of them was seen. A finding whose
+reading isn't there is reported as **n/c** (verdict `pending`, "not
+checked") with its number kept, never as fine. So `cut_on_motion` and
+`jl_cuts` are judged only from a full decode. `tests/test_evidence.py`
+reads one file both ways and checks the gate moves with the reading and
+nothing else.
+
+## Record a shoot, check it later
+
+An edit is in/out points into files; a re-exported or swapped file moves
+every one of them. `inventory.py` records a folder by content hash and
+metadata (display orientation, tracks) without writing to it, and `verify`
+names each missing, changed or new file:
+
+```bash
+python inventory.py build ~/Movies/Tokyo --out tokyo.inventory.json
+python inventory.py verify tokyo.inventory.json      # exit 1 if anything changed
+```
+
 ## Does it actually work?
 
 A metric that only fires on bad footage proves nothing — it has to move

@@ -1,4 +1,4 @@
-import type { CutData, Job, Project, Session } from './types'
+import type { CutData, Job, PrefClass, Project, Session } from './types'
 
 async function j<T>(res: Promise<Response>): Promise<T> {
   const r = await res
@@ -32,4 +32,8 @@ export const api = {
   chat: (message: string) => j<Session>(post('/api/chat', { message })),
   ops: (ops: Record<string, unknown>[], label: string) => j<Session>(post('/api/ops', { ops, label })),
   toggle: (turn: number) => j<Session>(post(`/api/turns/${turn}/toggle`, {})),
+  voiceover: (text: string) => j<Session>(post('/api/voiceover', { text })),
+  classify: (req: { turn: number; klass: PrefClass; rule?: string; scope?: string; counter?: string; reason?: string }) =>
+    j<Session>(post('/api/preferences/classify', req)),
+  rule: (id: string, action: 'forget' | 'narrow') => j<Session>(post(`/api/preferences/${id}/${action}`, {})),
 }

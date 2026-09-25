@@ -59,6 +59,23 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   `speech_mask` is level-based, so music reads as talking and those clips
   are barely trimmed (3 real clips: 7:16 → 7:12). A real VAD is the fix.
 
+- From montage-vlog-compiler (MIT; see NOTICE), four pieces:
+  - **Evidence levels** (`cutgrammar/evidence.py`): every finding names
+    what it rests on — meta / still / motion / audio. A finding whose
+    reading the media lacks gets verdict `pending` ("not checked"), value
+    kept. `load_index()` carries no motion. Rough-cut "shaky" rejects are
+    flagged as guessed from stills.
+  - **Inventory** (`cutgrammar/inventory.py`, `inventory.py`): read-only
+    sha256 manifest of a shoot folder; verify names missing / changed /
+    unexpected files. CLI only, not wired into import.
+  - **Preferences** (`web/backend/preferences.py`): each edit turn is a
+    candidate; only the creator sorts it. Only "every video" (needs rule +
+    when + when-not) and "this video" are ever reused, and only confirmed
+    rules reach the model. Undone edits can't be confirmed. Long-term rules
+    live in `$VIBECUT_CACHE/preferences.json`.
+  - **Voiceover mode** (`web/backend/voiceover.py`): opt-in fourth proposal
+    from the creator's SRT or script. See the amended non-goal below.
+
 ## The rule that matters most
 
 **Do not build the fixer until the thresholds are calibrated against real
@@ -106,8 +123,10 @@ Every new rule ships with a discrimination test or it does not ship.
 - Python 3.10+, numpy only. ffmpeg/ffprobe via subprocess.
 - New rules go in `grammar.py` as `check_*(media, shots) -> list[Finding]`
   and get registered in `analyze()`.
-- Findings carry a raw `value` and a `verdict` (`ok` / `warn` / `bad`).
-  Never a verdict without the number behind it.
+- Findings carry a raw `value` and a `verdict` (`ok` / `warn` / `bad`, or
+  `pending` when the reading can't support a judgement — see
+  `evidence.py`). Never a verdict without the number behind it. A new rule
+  declares what it needs in `grammar.NEEDS`.
 - Comments explain *why a rule exists in editing terms*, not what the
   code does.
 
@@ -122,6 +141,12 @@ Every new rule ships with a discrimination test or it does not ship.
 - **No transcript dependency.** ChatCut and Descript own the talking-head
   case because transcript-as-timeline works there. Vlogs have no
   transcript spine; that absence is the whole opening.
+  *Amended (user decision):* the default path still needs no transcript.
+  A creator who brings their **own** narration (SRT or script) gets one
+  extra proposal that follows it — the voice sets time, the words pick
+  footage by label, unmatched lines stay as listed gaps. Nothing is
+  transcribed, no speech model is added, and no other path depends on it.
+  Don't grow it into transcript-as-timeline editing.
 
 ## Known limits (upgrade path, in order)
 

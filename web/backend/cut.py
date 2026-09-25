@@ -73,6 +73,7 @@ def compute(clips: dict[str, dict], old: Plan | None = None) -> Plan:
             "id": r["id"], "name": r["name"], "duration": r["duration"],
             "auto_rejected": v.rejected, "code": v.code, "zh": v.zh, "en": v.en,
             "flags": v.flags, "talking": trim.is_talking(c.sig), "shots": shots,
+            "evidence": v.evidence, "unverified": v.unverified() if v.rejected else [],
         }
     _apply_overrides(plan)
     return plan
