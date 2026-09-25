@@ -1,0 +1,16 @@
+VibeCut
+
+This project adapts design from the following work:
+
+cut-motion — https://github.com/Endless1936/cut-motion
+Copyright 2026 prototech
+Licensed under the Apache License, Version 2.0
+(http://www.apache.org/licenses/LICENSE-2.0).
+
+What is adapted: the staged workflow state machine with a single human
+approval gate (one authoritative state; transitions only by explicit
+command; exactly one approval gate; silence is never approval; decisions
+recorded with the actor; revisions reopen the gate). See
+web/backend/workflow.py. No cut-motion source code, assets, or reference
+media are included. cut-motion's transcript-as-spine approach is
+deliberately not used.

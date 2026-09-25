@@ -1,0 +1,133 @@
+# VibeCut — working notes for Claude
+
+Read this before touching anything. It carries the decisions that are
+already made, so they don't get relitigated every session.
+
+## What this is
+
+A tool that turns fragmented footage into something worth watching.
+Target user: a vlogger who films 100 clips on a trip and cannot face
+editing them. Not agencies, not ad teams, not performance marketers.
+
+## The bet
+
+Whether a vlog is *beautiful* is not computable. But most of what makes
+amateur footage read as amateur is craft nobody taught the person holding
+the camera — and craft is measurable.
+
+Rough split of what drives the impression:
+
+| Share | What | Automatable |
+| --- | --- | --- |
+| 40% | Hard constraints: exposure jumps, loudness, subtitle over a face | yes |
+| 30% | Editing grammar: J/L cuts, cut on motion, 180° rule, shot size | yes |
+| 20% | Surface consistency: one LUT, one font, fixed subtitle position | yes |
+| 10% | Taste: what to include, where the emotion goes | **no — left to the user** |
+
+The promise to a user is therefore *not* "this will be beautiful." It is
+**"this will have no amateur tells."** Don't let the copy drift past that.
+
+## Status
+
+- `cutgrammar/` — measurement. Built, tested, uncalibrated.
+- `cutfix/` — acts on the measurements. **Not built. Do not start yet.**
+- `storyline/` — proposes several edits from one shoot. Not built as a
+  module; v1 axis enumeration (time / place / subject, no LLM) lives in
+  `web/backend/storyboard.py`.
+- `web/` — first interface (FastAPI + Vite/React). Built at the user's
+  explicit request despite the "no web UI" non-goal below; scope is
+  deliberately one path: drop → index → three proposals → pick one →
+  edit by chat or timeline. Two levels: **Story** (default — parts and
+  shots, no timecodes) and **Frames** (the precise timeline). Select, then
+  act; no jargon in the UI. See `web/README.md`.
+- Chat editing rule: a turn applies operations to the working storyboard
+  (`web/backend/board.py`), never regenerates it. The LLM only emits ops;
+  the diff is computed, not reported by the model. Keep it that way.
+
+- `cutgrammar/music.py` — energy-shape matching of the user's own tracks to
+  the storyboard. Built, synthetic-tested; **not yet judged on a real music
+  library** (none on the dev machine). Beat snapping is the next task.
+
+- Timeline precision (`web/backend/timeline.py`, `web/frontend/src/snap.ts`):
+  built and tested. Known: scrub-snapping at fit zoom on long edits pulls
+  too far (21% of scrubs >1 s); motion targets are ±0.5 s (keyframe index).
+
+- Rough cut (`cutgrammar/reject.py`, `trim.py`, `signals.py`; gate in
+  `web/backend/workflow.py`, design adapted from cut-motion — see NOTICE).
+  Discrimination-tested on synthetic fixtures; thresholds are guesses and
+  every decision passes a human gate. **Known failure on real footage:**
+  `speech_mask` is level-based, so music reads as talking and those clips
+  are barely trimmed (3 real clips: 7:16 → 7:12). A real VAD is the fix.
+
+## The rule that matters most
+
+**Do not build the fixer until the thresholds are calibrated against real
+videos.** Every threshold in `grammar.py` is currently a guess. A fixer
+driven by guessed thresholds will confidently make footage worse, and it
+will be hard to tell that it has.
+
+Calibration means: run the analyser over ~20 videos known to be well cut
+and ~20 that aren't, and derive each threshold from that distribution.
+
+## Architecture
+
+Pixels are touched exactly once. `media.load()` decodes to 48×27 RGB at
+native frame rate plus mono 16 kHz audio; every later stage reads those
+small arrays, never the original file. This is what makes iterating on the
+rules cheap, and it is not negotiable — a change that re-decodes video per
+rule is a bug even if it passes.
+
+`media.load_index()` is the one other entry point: keyframes only (~1/s on
+iPhone), decoded once at 384×216 on the hardware decoder, with the 48×27
+grid derived in memory. It exists because full-rate decode of 4K60 HEVC is
+~18s per 100s of footage — too slow to index a shoot. Grammar rules still
+use `load()`; index mode is for shots, thumbnails (`bestframe.py`) and
+storyboards, where ±1s cut accuracy is fine.
+
+```
+media.load()   ffprobe metadata + tiny frames + audio
+  └ shots.detect()      histogram distance, adaptive threshold
+      └ features.*      motion, spectral-flux novelty, brightness
+          └ grammar.*   rules, each returning a number and a verdict
+              └ report  terminal / JSON
+```
+
+## How to validate
+
+**A metric that fires on bad footage proves nothing.** It has to *move*
+when the edit improves. `tests/test_discriminates.py` is the pattern:
+build two fixtures that differ in exactly one respect, assert the metric
+separates them and recovers the magnitude that was built in.
+
+Every new rule ships with a discrimination test or it does not ship.
+
+## Conventions
+
+- Python 3.10+, numpy only. ffmpeg/ffprobe via subprocess.
+- New rules go in `grammar.py` as `check_*(media, shots) -> list[Finding]`
+  and get registered in `analyze()`.
+- Findings carry a raw `value` and a `verdict` (`ok` / `warn` / `bad`).
+  Never a verdict without the number behind it.
+- Comments explain *why a rule exists in editing terms*, not what the
+  code does.
+
+## Non-goals
+
+- **No generative video.** The viewer sees only frames the creator
+  actually filmed. This is a positioning decision, not a technical limit:
+  it is what separates this from every AI video tool, and it keeps
+  inference cost sane.
+- **No web UI** until the measurements are trusted. An earlier prototype
+  (FRAME) burned its effort on a timeline editor before the core worked.
+- **No transcript dependency.** ChatCut and Descript own the talking-head
+  case because transcript-as-timeline works there. Vlogs have no
+  transcript spine; that absence is the whole opening.
+
+## Known limits (upgrade path, in order)
+
+1. Thresholds are guesses — calibrate first.
+2. Motion is frame-differencing, not optical flow: no direction, so the
+   180° rule can't be checked.
+3. No face detection: shot size and subtitle-over-face unmeasured.
+4. No beat tracking: cut-to-music alignment unmeasured.
+5. Shot detection misses dissolves and fades (TransNetV2 is the fix).

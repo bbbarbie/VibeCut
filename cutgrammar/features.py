@@ -66,6 +66,20 @@ def _stft_mag(x: np.ndarray, hop: int, win_len: int) -> np.ndarray:
     return np.abs(np.fft.rfft(frames, axis=1)).astype(np.float32)
 
 
+def spectral_flux(media: Media, hop_s: float = 0.01) -> np.ndarray:
+    """Half-wave rectified spectral flux: energy *appearing*, per hop.
+
+    The onset envelope. audio_novelty builds scene changes on it; music.py
+    autocorrelates it for tempo.
+    """
+    if not media.has_audio:
+        return np.zeros(0, dtype=np.float32)
+    hop = max(int(AUDIO_SR * hop_s), 1)
+    mag = _stft_mag(media.audio, hop, win_len=max(hop * 4, 512))
+    flux = np.maximum(np.diff(mag, axis=0), 0.0).sum(axis=1)
+    return np.concatenate([[0.0], flux]).astype(np.float32)
+
+
 def audio_novelty(media: Media, hop_s: float = 0.01, win: int = 25) -> np.ndarray:
     """How sharply the sound changes at each hop.
 
@@ -78,13 +92,7 @@ def audio_novelty(media: Media, hop_s: float = 0.01, win: int = 25) -> np.ndarra
     if not media.has_audio:
         return np.zeros(0, dtype=np.float32)
 
-    hop = max(int(AUDIO_SR * hop_s), 1)
-    mag = _stft_mag(media.audio, hop, win_len=max(hop * 4, 512))
-
-    # half-wave rectified flux: only energy appearing counts as an onset
-    flux = np.diff(mag, axis=0)
-    flux = np.maximum(flux, 0.0).sum(axis=1)
-    flux = np.concatenate([[0.0], flux])
+    flux = spectral_flux(media, hop_s)
 
     # plus the slower level change, so a fade to silence also registers
     db, _ = frame_audio(media, hop_s)

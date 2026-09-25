@@ -9,7 +9,9 @@ tech plan, at the scale of a single clip.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
+import sys
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -34,6 +36,11 @@ class Media:
     # mono float32 at AUDIO_SR, empty if the file has no audio track
     audio: np.ndarray
     meta: dict = field(default_factory=dict)
+    # Set only by load_index(): per-sample timestamps (samples are not
+    # evenly spaced there) and the same samples at thumbnail size.
+    times: np.ndarray | None = None
+    # (n_frames, PREVIEW_H, PREVIEW_W, 3) uint8, display orientation
+    preview: np.ndarray | None = None
 
     @property
     def n_frames(self) -> int:
@@ -41,7 +48,25 @@ class Media:
 
     def t(self, frame_idx: int) -> float:
         """Frame index -> seconds."""
+        if self.times is not None:
+            if frame_idx >= len(self.times):
+                return self.duration
+            return float(self.times[frame_idx])
         return frame_idx / self.fps
+
+    @property
+    def capture_time(self) -> str | None:
+        """When it was filmed, in the camera's local time if the file says so.
+
+        Apple writes a zone-aware `creationdate`; the generic `creation_time`
+        is UTC, which puts a Tokyo breakfast at 23:00 the night before.
+        """
+        tags = self.meta.get("tags", {})
+        return tags.get("com.apple.quicktime.creationdate") or self.creation_time
+
+    @property
+    def gps(self) -> tuple[float, float] | None:
+        return parse_iso6709(self.location)
 
     @property
     def has_audio(self) -> bool:
@@ -124,6 +149,196 @@ def load(path: str, verbose: bool = False) -> Media:
         frames=frames,
         audio=audio,
         meta={"tags": tags, "codec": v.get("codec_name")},
+    )
+
+
+def load_audio(path: str) -> Media:
+    """A sound file as a Media with no pictures: mono 16 kHz, like load()'s audio.
+
+    Lets music reuse the same audio features (frame_audio, spectral_flux)
+    the grammar rules are measured with, instead of a second implementation.
+    """
+    info = probe(path)
+    if not any(s.get("codec_type") == "audio" for s in info["streams"]):
+        raise ValueError(f"no audio stream in {path}")
+    raw = _run(["ffmpeg", "-v", "error", "-i", path, "-map", "0:a:0", "-vn",
+                "-f", "f32le", "-ac", "1", "-ar", str(AUDIO_SR), "-"])
+    audio = np.frombuffer(raw, dtype=np.float32).copy()
+    tags = info["format"].get("tags", {})
+    return Media(
+        path=path, fps=0.0,
+        duration=float(info["format"].get("duration") or len(audio) / AUDIO_SR),
+        width=0, height=0, creation_time=None, location=None,
+        frames=np.zeros((0, FRAME_H, FRAME_W, 3), dtype=np.uint8),
+        audio=audio,
+        meta={"tags": {k.lower(): v for k, v in tags.items()}},
+    )
+
+
+def parse_iso6709(s: str | None) -> tuple[float, float] | None:
+    """'+35.6595+139.7005+040.805/' -> (35.6595, 139.7005)."""
+    if not s:
+        return None
+    m = re.match(r"([+-]\d+(?:\.\d+)?)([+-]\d+(?:\.\d+)?)", s)
+    if not m:
+        return None
+    lat, lon = float(m.group(1)), float(m.group(2))
+    if lat == 0 and lon == 0:
+        return None
+    return lat, lon
+
+
+# --------------------------------------------------------------------------
+# index mode
+# --------------------------------------------------------------------------
+#
+# load() decodes every frame, which is what the grammar rules need: a cut
+# on motion is a question about individual frames. Indexing a whole shoot
+# asks a coarser question -- where are the shots, what is in them, which
+# frame is the best -- and a 4K60 iPhone clip decoded frame by frame costs
+# ~18s per 100s of footage even on the hardware decoder. So index mode
+# decodes keyframes only. iPhones put one every second, which is enough to
+# find shots and pick a thumbnail, at ~1% of the cost.
+#
+# It is still one decode per file: the samples come out at thumbnail size
+# and the 48x27 grid is derived from them in memory, so nothing downstream
+# goes back to the file.
+
+PREVIEW_BOX = (384, 216)       # max (w, h) of the thumbnail-size samples
+MIN_KEYFRAME_RATE = 0.4        # below this, sample decoded frames instead
+FALLBACK_SAMPLE_FPS = 2.0
+
+
+def _rotation(stream: dict) -> int:
+    for sd in stream.get("side_data_list", []) or []:
+        if "rotation" in sd:
+            return int(round(float(sd["rotation"]))) % 360
+    try:
+        return -int(stream.get("tags", {}).get("rotate", 0)) % 360
+    except ValueError:
+        return 0
+
+
+def _fit(w: int, h: int, box: tuple[int, int]) -> tuple[int, int]:
+    scale = min(box[0] / w, box[1] / h, 1.0)
+    return max(2, int(w * scale) // 2 * 2), max(2, int(h * scale) // 2 * 2)
+
+
+def area_resize(img: np.ndarray, w: int, h: int) -> np.ndarray:
+    """Box-filter resize of (n, H, W, 3) uint8, for any ratio."""
+    def weights(src: int, dst: int) -> np.ndarray:
+        edges = np.linspace(0, src, dst + 1)
+        wm = np.zeros((dst, src), dtype=np.float32)
+        for i in range(dst):
+            a, b = edges[i], edges[i + 1]
+            lo, hi = int(np.floor(a)), int(np.ceil(b))
+            for j in range(lo, min(hi, src)):
+                wm[i, j] = min(b, j + 1) - max(a, j)
+            wm[i] /= wm[i].sum()
+        return wm
+    wy = weights(img.shape[1], h)
+    wx = weights(img.shape[2], w)
+    out = np.einsum("yh,nhwc,xw->nyxc", wy, img.astype(np.float32), wx, optimize=True)
+    return np.clip(out + 0.5, 0, 255).astype(np.uint8)
+
+
+def _decode_samples(path: str, stream: dict, pw: int, ph: int,
+                    keyframes: bool, hw: bool) -> tuple[np.ndarray, np.ndarray]:
+    """Decode sampled frames at (pw, ph). Returns (frames, pts seconds)."""
+    ten_bit = "10" in (stream.get("pix_fmt") or "") or "12" in (stream.get("pix_fmt") or "")
+    cmd = ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "info"]
+    if keyframes:
+        cmd += ["-skip_frame", "nokey"]
+    if hw:
+        cmd += ["-hwaccel", "videotoolbox", "-hwaccel_output_format", "videotoolbox_vld"]
+    cmd += ["-noautorotate", "-i", path, "-map", "0:v:0", "-an", "-sn", "-dn"]
+    chain = []
+    if not keyframes:
+        chain.append(f"fps={FALLBACK_SAMPLE_FPS}")
+    if hw:
+        chain += [f"scale_vt=w={pw}:h={ph}",
+                  "hwdownload", f"format={'p010le' if ten_bit else 'nv12'}"]
+    else:
+        chain.append(f"scale={pw}:{ph}:flags=area")
+    chain.append("showinfo")
+    cmd += ["-vf", ",".join(chain), "-fps_mode", "passthrough",
+            "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
+    p = subprocess.run(cmd, capture_output=True)
+    if p.returncode != 0:
+        raise RuntimeError(f"ffmpeg failed: {p.stderr.decode(errors='ignore')[-500:]}")
+    stride = pw * ph * 3
+    n = len(p.stdout) // stride
+    frames = np.frombuffer(p.stdout[: n * stride], dtype=np.uint8).reshape(n, ph, pw, 3)
+    pts = [float(x) for x in re.findall(rb"pts_time:\s*([-\d.]+)", p.stderr)]
+    times = np.array(pts[:n] + [np.nan] * (n - len(pts)), dtype=np.float64)
+    return frames, times
+
+
+def load_index(path: str, audio: bool = True, verbose: bool = False) -> Media:
+    """Keyframe-sampled Media for indexing a shoot. See the note above."""
+    info = probe(path)
+    vstreams = [s for s in info["streams"] if s.get("codec_type") == "video"]
+    if not vstreams:
+        raise ValueError(f"no video stream in {path}")
+    v = vstreams[0]
+    astreams = [s for s in info["streams"] if s.get("codec_type") == "audio"]
+    duration = float(info["format"].get("duration", 0.0) or v.get("duration", 0.0) or 0.0)
+    tags = {**info["format"].get("tags", {}), **v.get("tags", {})}
+    w, h = int(v.get("width", 0)), int(v.get("height", 0))
+    pw, ph = _fit(w, h, PREVIEW_BOX)
+    rot = _rotation(v)
+
+    def decode(keyframes: bool) -> tuple[np.ndarray, np.ndarray]:
+        if sys.platform == "darwin":
+            try:
+                return _decode_samples(path, v, pw, ph, keyframes, hw=True)
+            except RuntimeError:
+                pass  # codec the hardware won't take -- fall through
+        return _decode_samples(path, v, pw, ph, keyframes, hw=False)
+
+    sampling = "keyframes"
+    frames, times = decode(keyframes=True)
+    if duration > 0 and len(frames) < max(2, duration * MIN_KEYFRAME_RATE):
+        # Screen recordings and some exports put a keyframe every 10s+.
+        sampling = f"{FALLBACK_SAMPLE_FPS:g}fps"
+        frames, times = decode(keyframes=False)
+    if len(frames) == 0:
+        raise ValueError(f"no decodable frames in {path}")
+    if np.isnan(times).any():
+        times = np.linspace(0, duration, len(frames), endpoint=False)
+    times = times - times[0]
+
+    # Display orientation: the matrix says how far the stored picture is
+    # turned counter-clockwise from upright.
+    k = {90: 1, 180: 2, 270: 3}.get(rot, 0)
+    if k:
+        frames = np.ascontiguousarray(np.rot90(frames, k=k, axes=(1, 2)))
+        w, h = (h, w) if k % 2 else (w, h)
+
+    if verbose:
+        print(f"  indexed {path}: {len(frames)} samples over {duration:.1f}s")
+
+    snd = np.zeros(0, dtype=np.float32)
+    if audio and astreams:
+        araw = _run(["ffmpeg", "-v", "error", "-i", path, "-map", "0:a:0",
+                     "-f", "f32le", "-ac", "1", "-ar", str(AUDIO_SR), "-"])
+        snd = np.frombuffer(araw, dtype=np.float32).copy()
+
+    n = len(frames)
+    return Media(
+        path=path,
+        fps=n / duration if duration > 0 else 1.0,
+        duration=duration or float(times[-1]),
+        width=w,
+        height=h,
+        creation_time=tags.get("creation_time"),
+        location=tags.get("location") or tags.get("com.apple.quicktime.location.ISO6709"),
+        frames=area_resize(frames, FRAME_W, FRAME_H),
+        audio=snd,
+        meta={"tags": tags, "codec": v.get("codec_name"), "rotation": rot,
+              "sampling": sampling},
+        times=times,
+        preview=frames,
     )
 
 

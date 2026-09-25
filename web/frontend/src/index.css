@@ -1,0 +1,28 @@
+@import "tailwindcss";
+@import "@fontsource/eb-garamond/400.css";
+@import "@fontsource/eb-garamond/500.css";
+@import "@fontsource/eb-garamond/600.css";
+@import "@fontsource/eb-garamond/400-italic.css";
+
+@theme {
+  --color-ink: #0c0c0e;
+  --color-panel: #141417;
+  --color-raised: #1c1c20;
+  --color-line: #26262b;
+  --color-muted: #8b8b94;
+  --color-accent: #b9d9eb; /* Columbia blue */
+  --color-accent-ink: #0b2233;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "SF Pro Text", "Inter", sans-serif;
+  /* Garamond for words people read (chat, titles); sans for dense UI labels. */
+  --font-serif: "EB Garamond", Garamond, "Times New Roman", serif;
+}
+
+html, body, #root { height: 100%; }
+body {
+  @apply bg-ink text-zinc-200 antialiased;
+  font-size: 13px;
+  overflow: hidden;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #2c2c32; border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-track { background: transparent; }

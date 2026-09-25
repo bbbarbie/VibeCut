@@ -9,9 +9,12 @@ sit beside it, all reading the same index.
 ```
 VibeCut/
   cutgrammar/    measure how a video is cut          <- this
+  web/           first interface: drop a shoot, pick one of three storyboards
   cutfix/        act on those measurements           (later)
   storyline/     propose several edits from one shoot (later)
 ```
+
+See [`web/README.md`](web/README.md) to run the interface.
 
 ---
 
