@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from './api'
 import { Chat, type ChatItem } from './components/Chat'
+import { CreatorProfile } from './components/CreatorProfile'
+import { CreativeTools } from './components/CreativeTools'
 import { CutReview } from './components/CutReview'
 import { Keys } from './components/Keys'
 import { Player } from './components/Player'
@@ -26,6 +28,14 @@ const r3 = (x: number) => Math.round(x * 1000) / 1000
 type Queue = { source: string; items: PlayItem[]; index: number }
 
 export default function App() {
+  const [profileOpen, setProfileOpen] = useState(window.location.hash === '#profile')
+  const [toolsOpen, setToolsOpen] = useState(window.location.hash === '#tools')
+  const profileButton = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    const change = () => { setProfileOpen(window.location.hash === '#profile'); setToolsOpen(window.location.hash === '#tools'); transport.stop() }
+    window.addEventListener('hashchange', change)
+    return () => window.removeEventListener('hashchange', change)
+  }, [])
   const [clips, setClips] = useState<Clip[]>([])
   const [session, setSession] = useState<Session | null>(null)
   const [local, setLocal] = useState<Msg[]>([hello])
@@ -200,7 +210,7 @@ export default function App() {
   }, [importing, say])
 
   useEffect(() => {
-    const isFiles = (e: DragEvent) => e.dataTransfer?.types.includes('Files')
+    const isFiles = (e: DragEvent) => !profileOpen && !toolsOpen && e.dataTransfer?.types.includes('Files')
     const enter = (e: DragEvent) => { if (isFiles(e)) { dragDepth.current++; setDragging(true) } }
     const leave = (e: DragEvent) => { if (isFiles(e) && --dragDepth.current <= 0) { dragDepth.current = 0; setDragging(false) } }
     const over = (e: DragEvent) => { if (isFiles(e)) e.preventDefault() }
@@ -221,7 +231,7 @@ export default function App() {
       window.removeEventListener('dragover', over)
       window.removeEventListener('drop', drop)
     }
-  }, [importPicked])
+  }, [importPicked, profileOpen, toolsOpen])
 
   // ---- previews (shelf, storyboard cards): a queue of spans ------------------
   const stopQueue = () => { setQueue(null) }
@@ -330,6 +340,7 @@ export default function App() {
   // ---- keyboard: industry conventions ----------------------------------------
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
+      if (profileOpen || toolsOpen) return
       if (e.key === 'Alt') setAlt(true)
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
@@ -492,7 +503,17 @@ export default function App() {
       && segment.start < v.shot.end)?.shot.id ?? null : null
 
   return (
-    <div className="grid h-full grid-rows-[44px_1fr]">
+    <>
+    {profileOpen && <CreatorProfile onTools={() => { window.location.hash = 'tools' }} onClose={() => {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+      setProfileOpen(false)
+      requestAnimationFrame(() => profileButton.current?.focus())
+    }} />}
+    {toolsOpen && <CreativeTools onProfile={() => { window.location.hash = 'profile' }} onClose={() => {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+      setToolsOpen(false)
+    }} />}
+    <div className="grid h-full grid-rows-[44px_1fr]" style={profileOpen || toolsOpen ? { display: 'none' } : undefined}>
       <header className="flex items-center gap-3 border-b border-line bg-ink px-4">
         <span className="font-serif text-[19px] font-semibold tracking-tight text-zinc-100">Vibe<span className="text-accent">Cut</span></span>
         <span className="text-[11px] text-muted">no amateur tells</span>
@@ -506,6 +527,14 @@ export default function App() {
           ))}
         </div>
         <div className="flex-1" />
+        <button type="button" onClick={() => {
+          transport.stop(); videoRef.current?.pause(); setMenu(null); setSwap(null); setHelp(false)
+          window.location.hash = 'tools'
+        }} className="shrink-0 rounded-lg border border-accent/30 px-3 py-1 text-[12px] text-accent hover:bg-raised">Creative tools</button>
+        <button ref={profileButton} type="button" onClick={() => {
+          transport.stop(); videoRef.current?.pause(); setMenu(null); setSwap(null); setHelp(false)
+          window.location.hash = 'profile'
+        }} className="shrink-0 rounded-lg border border-accent/30 px-3 py-1 text-[12px] text-accent hover:bg-raised">Creator profile</button>
         {session?.cut && (
           <button type="button" onClick={() => { setLevel('story'); setShowCut(true) }}
                   title={`${session.cut.line_en} — click to see what was cut and why`}
@@ -628,6 +657,7 @@ export default function App() {
         </div>
       )}
     </div>
+    </>
   )
 }
 

@@ -26,7 +26,44 @@ Needs macOS for the full experience: the hardware decoder (VideoToolbox)
 and the on-device Vision helper. Elsewhere it falls back to software
 decode and colour-based subject grouping.
 
+## Creator profile
+
+Open **Creator profile** in the header (or visit `/#profile`). Save your
+name, handle, creative goals, platforms, preferred mood and pacing, caption
+font/color/placement, things to avoid, and up to 10 reference bookmarks with
+notes. The responsive profile page includes a live caption style sample.
+
+Use **Save profile** to persist preferences in this browser's localStorage.
+They survive page reloads and editing sessions; they do not sync across
+browsers, devices, or different localhost ports. No account is created.
+Unsaved changes trigger a warning on leaving through the page's Back button
+or reloading. Storage failures are shown without discarding the draft.
+
+This is the profile foundation: preferences are not yet passed to the editing
+engine, reference videos are not fetched or analyzed, and the sample is not a
+rendered video. Opening the profile keeps the editor mounted and pauses playback.
+Tests for persistence, invalid data, and storage failures run with `npm test`.
+
 ## Layout: two levels
+
+### Creative tools (feature previews)
+
+Open **Creative tools** from the editor or profile, or visit `/#tools`.
+Seven buttons represent the previously reviewed recording workflows:
+camera motion, guided edit planning, titles/motion graphics, reference style,
+video variants, AI presenters, and supporting B-roll.
+
+Each opens a configuration dialog with direction choices, a written brief,
+an optional reference link, and a snapshot of the saved creator profile.
+**Save brief** persists one brief per feature in browser localStorage;
+**Download brief** exports a JSON plan for handoff. Existing briefs can be
+reopened and revised. Draft changes are guarded when closing the dialog.
+
+These are functional planning interfaces, **not connected generators**:
+they do not ingest reference videos, call paid providers, modify the timeline,
+or render/export video. The panel explains what each integration still needs.
+See [feature roadmap](feature-roadmap.md) for the seven source recordings and
+implementation boundaries.
 
 **Story** (default, where people live): the edit as parts and shots. Before
 a story is chosen, the centre asks what the video is about, then shows the
@@ -201,7 +238,7 @@ localhost instead; the same 30 clips took 6.9 s that way.
 ## Out of scope
 
 Captions, music, motion graphics, export, rendering, auth, database,
-collaboration, memory. The timeline plays spans of the original files in
+collaboration, automatic style learning. The timeline plays spans of the original files in
 sequence; nothing is re-encoded.
 
 ## Known limits
