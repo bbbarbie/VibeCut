@@ -44,6 +44,11 @@ export function CutReview({ data, clips, approved, busy, onOverride, onApprove, 
               <div className="mt-1.5 truncate text-[11px] text-zinc-400">{c.name}</div>
               <div className="text-[13px] leading-snug text-zinc-100">{c.override === 'reject' ? '你选择不用' : c.zh}</div>
               <div className="text-[11px] leading-snug text-muted">{c.override === 'reject' ? 'you threw this away' : c.en}</div>
+              {c.override !== 'reject' && c.unverified?.length > 0 && (
+                <div className="text-[11px] leading-snug text-amber-200/80" title="Judged from about one frame a second — what happened between them wasn’t seen">
+                  只看了零散几帧，请播放确认 — judged from a few frames, play it to be sure
+                </div>
+              )}
               <div className="mt-2 flex gap-1.5">
                 <Btn onClick={() => onWatch(c.id, 0, c.duration, c.id)}>Watch</Btn>
                 {c.override === 'reject'

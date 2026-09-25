@@ -22,7 +22,7 @@ from datetime import datetime
 
 import numpy as np
 
-from . import trim
+from . import evidence, trim
 from .signals import ClipSignals
 
 LENS_CAP_LUMA = 12      # mean brightness, 0..255
@@ -35,6 +35,17 @@ ACCIDENT_S = 3.0
 DUP_SIMILARITY = 0.93   # cosine, on the embedding supplied
 DUP_WINDOW_MIN = 15     # takes of the same thing are filmed close together
 
+# What each reason rests on (see evidence.py). Signals come from the index,
+# one sample a second: shake is change *between* samples a second apart, so
+# "shaking throughout" is a guess about motion made from stills -- the
+# reason says so, and the gate is where a person watches it.
+NEEDS = {
+    "empty": [evidence.META], "lens-cap": [evidence.STILL], "dark": [evidence.STILL],
+    "blurry": [evidence.STILL], "duplicate": [evidence.STILL],
+    "accident": [evidence.META, evidence.STILL], "shaky": [evidence.MOTION],
+}
+INDEX_READS = {evidence.META, evidence.STILL}
+
 
 @dataclass
 class Verdict:
@@ -44,6 +55,14 @@ class Verdict:
     en: str = ""
     flags: list[dict] = field(default_factory=list)   # warnings that don't reject
     stats: dict = field(default_factory=dict)
+
+    @property
+    def evidence(self) -> list[str]:
+        return list(NEEDS.get(self.code, []))
+
+    def unverified(self, have: set[str] = INDEX_READS) -> list[str]:
+        """Readings the reason needs that the index never had."""
+        return evidence.missing(self.evidence, have)
 
 
 def judge(sig: ClipSignals, faces: np.ndarray | None = None) -> Verdict:

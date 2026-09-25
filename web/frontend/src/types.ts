@@ -41,10 +41,10 @@ export type Job = {
   elapsed: number
 }
 
-export type BeatShot = { id: string; clip_id: string; start: number; end: number; thumb: string; lean: boolean }
+export type BeatShot = { id: string; clip_id: string; start: number; end: number; thumb: string; lean: boolean; gap?: boolean; why?: string }
 export type Beat = { title: string; detail: string; lean: boolean; shots: BeatShot[] }
 export type Option = {
-  key: 'time' | 'place' | 'subject'
+  key: 'time' | 'place' | 'subject' | 'voice'
   name: string
   axis: string
   summary: string
@@ -52,6 +52,9 @@ export type Option = {
   degraded: boolean
   same_order_as_time: number | null
   beats: Beat[]
+  // the voiceover proposal only
+  timing?: 'estimated' | 'text_only'
+  gaps?: { line: number; text: string; at: number; dur: number; reason: string }[]
 }
 export type Proposals = {
   direction: string
@@ -92,7 +95,8 @@ export type Workflow = { state: string; gate: string; decision: string | null; r
 export type CutShot = { id: string; full: [number, number]; auto: [number, number]; window: [number, number]; use: [number, number]
   target: number; whole: boolean; reason_zh: string; reason_en: string; notes: string[]; seconds: number[]; override: string | null }
 export type CutClip = { id: string; name: string; duration: number; auto_rejected: boolean; rejected: boolean; override: string | null
-  code: string; zh: string; en: string; flags: { code: string; zh: string; en: string }[]; talking: boolean; shots: Record<string, CutShot> }
+  code: string; zh: string; en: string; flags: { code: string; zh: string; en: string }[]; talking: boolean; shots: Record<string, CutShot>
+  evidence: string[]; unverified: string[] }
 export type CutData = { workflow: Workflow; summary: CutSummary | null; clips: CutClip[] }
 
 export type Session = {
@@ -106,7 +110,21 @@ export type Session = {
   turns: Turn[]
   proposals: Proposals | null
   llm: boolean
+  preferences: Preferences
+  voiceover: { source: string; timing: 'estimated' | 'text_only'; lines: number; total: number } | null
 }
+
+// What edits teach -- only once the creator has sorted them.
+export type PrefClass = 'long_term' | 'project' | 'single_edit' | 'compliance_fix' | 'rejected'
+export type PrefCandidate = {
+  turn: number; said: string; kind: 'chat' | 'direct'; lines: string[]; suggested: PrefClass
+  readable: boolean; status: 'candidate' | 'confirmed' | 'rejected'; klass: PrefClass | null; rule: string | null
+}
+export type PrefRule = {
+  id: string; klass: 'long_term' | 'project'; rule: string; scope: string; counter: string; reason: string
+  active: boolean; evidence: { said: string; changed: string[] }; history: { at: number; action: string; klass: string; actor: string }[]
+}
+export type Preferences = { candidates: PrefCandidate[]; rules: PrefRule[] }
 
 export type TimelineItem = { uid: string; shotId: string; clipId: string; start: number; end: number; thumb: string; beatId: string; beatTitle: string; mark?: Mark }
 export type Mark = 'added' | 'moved' | 'trimmed'

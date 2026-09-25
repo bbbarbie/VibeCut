@@ -459,6 +459,8 @@ def kmeans(x: np.ndarray, k: int, iters: int = 40, seed: int = 0) -> tuple[np.nd
 
 
 def silhouette(x: np.ndarray, lab: np.ndarray) -> float:
+    if len(set(lab.tolist())) < 2:
+        return -1.0  # k-means collapsed (near-identical shots): no separation at all
     dist = 1 - x @ x.T
     scores = []
     for i in range(len(x)):
@@ -537,9 +539,12 @@ def order_overlap(a: list[str], b: list[str]) -> float:
 
 
 def build(clips: list[dict], direction: str, vision: bool,
-          lean: tuple[list[str], list[str]] | None = None, cut: tuple[set, dict] | None = None) -> dict:
+          lean: tuple[list[str], list[str]] | None = None, cut: tuple[set, dict] | None = None,
+          voiceover: dict | None = None) -> dict:
     """Three proposals. `lean` = (theme names, Vision labels) when the chat
-    model has already read the direction; otherwise keyword matching."""
+    model has already read the direction; otherwise keyword matching.
+    With the creator's `voiceover` (voiceover.parse), a fourth comes first:
+    one part per spoken line."""
     everyone = shots_from_clips(clips, cut)
     shots, notes = usable(everyone)
     if lean is not None:
@@ -565,6 +570,11 @@ def build(clips: list[dict], direction: str, vision: bool,
                            "thumb": s.thumb, "lean": s.lean} for s in b.shots],
             } for b in o.beats],
         })
+
+    if voiceover and voiceover.get("lines"):
+        from . import voiceover as vo
+        best = {f"{c['id']}:{s['index']}": s["best_t"] for c in clips for s in c["shots"]}
+        out.insert(0, vo.propose(voiceover, shots, best))
 
     n_lean = sum(s.lean for s in shots)
     return {

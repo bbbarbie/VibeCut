@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import type { Board, BoardBeat, BoardShot, Clip, Option, Session } from '../types'
 import { dur } from '../format'
+import { Voiceover } from './Voiceover'
 
 // The Story level: the edit as parts and shots, nothing else. No timecodes,
 // no tracks, no frames -- those live one level down, in Frames.
@@ -14,7 +15,7 @@ const beatLength = (b: BoardBeat) => b.shots.reduce((n, s) => n + s.end - s.star
 const playItems = (beats: { shots: { id: string; clip_id: string | null; start: number; end: number; gap?: boolean }[] }[]): PlayItem[] =>
   beats.flatMap((b) => b.shots.filter((s) => !s.gap && s.clip_id).map((s) => ({ id: s.id, clipId: s.clip_id!, start: s.start, end: s.end })))
 
-export function Story({ session, clips, asking, playing, nowShot, selected, onPick, onAsk, onUse, onPlay,
+export function Story({ session, clips, asking, playing, nowShot, selected, onPick, onAsk, onVoiceover, onUse, onPlay,
   onSelect, onMoveBeat, onRetitle, onBeatAction }: {
   session: Session | null
   clips: Clip[]
@@ -24,6 +25,7 @@ export function Story({ session, clips, asking, playing, nowShot, selected, onPi
   selected: Selection
   onPick: (files: FileList) => void
   onAsk: (text: string) => void
+  onVoiceover: (text: string) => Promise<void>
   onUse: (o: Option) => void
   onPlay: (source: string, items: PlayItem[]) => void
   onSelect: (sel: Selection, anchor: DOMRect | null) => void
@@ -36,16 +38,19 @@ export function Story({ session, clips, asking, playing, nowShot, selected, onPi
   const [showOthers, setShowOthers] = useState(false)
 
   if (!clips.length) return <Empty onPick={onPick} />
-  if (!board && !proposals) return <Ask clips={clips} asking={asking} onAsk={onAsk} />
+  const vo = <Voiceover current={session?.voiceover ?? null} busy={asking} onSubmit={onVoiceover} />
+  if (!board && !proposals) return <Ask clips={clips} asking={asking} onAsk={onAsk} voiceover={vo} />
   if (!board || showOthers) {
+    const n = proposals!.options.length
     return (
       <div className="min-h-0 flex-1 overflow-y-auto p-5">
-        <div className="mb-4 flex items-baseline gap-3">
-          <h2 className="font-serif text-[24px] text-zinc-100">Three ways to tell it</h2>
+        <div className="mb-4 flex flex-wrap items-baseline gap-3">
+          <h2 className="font-serif text-[24px] text-zinc-100">{n === 4 ? 'Four' : 'Three'} ways to tell it</h2>
           <span className="text-[12px] text-muted">Watch one, then pick the one closest to what you want. You can change anything after.</span>
           {board && <button type="button" onClick={() => setShowOthers(false)} className="ml-auto text-[12px] text-accent hover:underline">Back to my story</button>}
         </div>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="mb-4 flex">{vo}</div>
+        <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${n > 3 ? 2 : n}, minmax(0, 1fr))` }}>
           {proposals!.options.map((o) => (
             <OptionCard key={o.key} o={o} current={board?.option === o.key} playing={playing === `card:${o.key}`}
                         onPlay={() => onPlay(`card:${o.key}`, playItems(o.beats.map((b) => ({ shots: b.shots.map((s) => ({ ...s, clip_id: s.clip_id })) }))))}
@@ -91,7 +96,7 @@ function Empty({ onPick }: { onPick: (f: FileList) => void }) {
 
 // ---- clips loaded, nothing proposed yet: ask, right here ---------------------
 
-function Ask({ clips, asking, onAsk }: { clips: Clip[]; asking: boolean; onAsk: (t: string) => void }) {
+function Ask({ clips, asking, onAsk, voiceover }: { clips: Clip[]; asking: boolean; onAsk: (t: string) => void; voiceover: ReactNode }) {
   const [text, setText] = useState('')
   const shots = clips.flatMap((c) => c.shots.map((s) => ({ ...s, clip: c })))
   const go = (t: string) => { if (t.trim() && !asking) onAsk(t.trim()) }
@@ -117,6 +122,7 @@ function Ask({ clips, asking, onAsk }: { clips: Clip[]; asking: boolean; onAsk: 
                     className="rounded-full border border-line px-2.5 py-1 text-[11px] text-muted hover:text-zinc-200">{x}</button>
           ))}
         </div>
+        <div className="mt-5 flex">{voiceover}</div>
         <div className="mt-8 grid grid-cols-6 gap-1.5 opacity-80">
           {shots.slice(0, 24).map((s) => (
             <img key={s.id} src={s.thumb} className="aspect-video w-full rounded object-cover" />
@@ -132,7 +138,7 @@ function Ask({ clips, asking, onAsk }: { clips: Clip[]; asking: boolean; onAsk: 
 function OptionCard({ o, current, playing, onPlay, onUse }: {
   o: Option; current: boolean; playing: boolean; onPlay: () => void; onUse: () => void
 }) {
-  const shots = o.beats.reduce((n, b) => n + b.shots.length, 0)
+  const shots = o.beats.reduce((n, b) => n + b.shots.filter((s) => !s.gap).length, 0)
   const length = o.beats.reduce((n, b) => n + b.shots.reduce((m, s) => m + s.end - s.start, 0), 0)
   return (
     <article className={`flex min-w-0 flex-col rounded-xl border bg-raised ${current ? 'border-accent/60' : 'border-line'}`}>
@@ -140,6 +146,18 @@ function OptionCard({ o, current, playing, onPlay, onUse }: {
         <h3 className="font-serif text-[20px] text-zinc-100">{o.name}</h3>
         <p className="mt-1 text-[12px] leading-snug text-zinc-400">{o.summary}</p>
         {o.notes.map((t) => <p key={t} className="mt-2 rounded-md bg-amber-300/10 px-2 py-1.5 text-[11px] text-amber-200/90">{t}</p>)}
+        {o.gaps && o.gaps.length > 0 && (
+          <details className="mt-2 text-[11px]">
+            <summary className="cursor-pointer text-amber-200/90">Lines with nothing to show ({o.gaps.length})</summary>
+            <ul className="mt-1 space-y-1">
+              {o.gaps.map((g) => (
+                <li key={`${g.line}-${g.at}`} className="text-zinc-400">
+                  <span className="tabular-nums text-zinc-500">{dur(g.at)}</span> “{g.text}” <span className="text-muted">— {g.reason}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
         <div className="mt-3 flex gap-2">
           <button type="button" onClick={onPlay}
                   className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-[12px] text-zinc-200 hover:bg-zinc-800">
@@ -158,10 +176,12 @@ function OptionCard({ o, current, playing, onPlay, onUse }: {
             <div className="flex items-baseline gap-2">
               <span className="text-[10px] tabular-nums text-zinc-600">{i + 1}</span>
               <span className="truncate font-serif text-[15px] text-zinc-200">{b.title}</span>
-              <span className="ml-auto shrink-0 text-[10px] text-muted">{b.shots.length} shot{b.shots.length === 1 ? '' : 's'}</span>
+              <span className="ml-auto shrink-0 text-[10px] text-muted">{b.shots.every((s) => s.gap) ? 'nothing to show yet' : `${b.shots.filter((s) => !s.gap).length} shot${b.shots.filter((s) => !s.gap).length === 1 ? '' : 's'}`}</span>
             </div>
             <div className="mt-1 flex gap-0.5 overflow-hidden pl-4">
-              {b.shots.slice(0, 8).map((s) => <img key={s.id} src={s.thumb} className="h-8 w-14 shrink-0 rounded-sm object-cover" />)}
+              {b.shots.slice(0, 8).map((s, k) => s.gap
+                ? <span key={`gap${k}`} title={s.why} className="h-8 w-14 shrink-0 rounded-sm bg-[repeating-linear-gradient(45deg,#18181b,#18181b_4px,#27272a_4px,#27272a_8px)]" />
+                : <img key={s.id} src={s.thumb} className="h-8 w-14 shrink-0 rounded-sm object-cover" />)}
               {b.shots.length > 8 && <span className="self-center pl-1 text-[10px] text-muted">+{b.shots.length - 8}</span>}
             </div>
           </li>

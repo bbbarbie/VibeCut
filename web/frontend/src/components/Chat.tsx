@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import type { DiffLine, Msg, Turn } from '../types'
+import type { DiffLine, Msg, PrefCandidate, Preferences, Turn } from '../types'
+import { Remember, Rules, type ClassifyReq } from './Remember'
 
 const EXAMPLE = 'three days in Tokyo, lean into the food'
 
@@ -16,7 +17,7 @@ const MARK: Record<DiffLine['kind'], { sym: string; cls: string }> = {
   none: { sym: '·', cls: 'text-zinc-500 bg-zinc-800/40' },
 }
 
-export function Chat({ items, pending, onSend, onToggle, disabled, llm, hasBoard }: {
+export function Chat({ items, pending, onSend, onToggle, disabled, llm, hasBoard, prefs, onClassify, onRule }: {
   items: ChatItem[]
   pending: string | null
   onSend: (text: string) => void
@@ -24,7 +25,11 @@ export function Chat({ items, pending, onSend, onToggle, disabled, llm, hasBoard
   disabled: boolean
   llm: boolean
   hasBoard: boolean
+  prefs: Preferences | null
+  onClassify: (r: ClassifyReq) => Promise<void>
+  onRule: (id: string, action: 'forget' | 'narrow') => void
 }) {
+  const candidate = new Map((prefs?.candidates ?? []).map((c) => [c.turn, c]))
   const [text, setText] = useState('')
   const end = useRef<HTMLDivElement>(null)
   useEffect(() => { end.current?.scrollIntoView({ behavior: 'smooth' }) }, [items.length, pending])
@@ -45,11 +50,13 @@ export function Chat({ items, pending, onSend, onToggle, disabled, llm, hasBoard
         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted">Chat</span>
         {!llm && <span className="text-[10px] text-muted" title="Typed edits need a language model: add ANTHROPIC_API_KEY to web/.env. Everything else works without it.">typed edits are off</span>}
       </header>
+      {prefs && <Rules rules={prefs.rules} onRule={onRule} />}
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {items.map((it) => it.type === 'local'
           ? <Local key={it.msg.id} m={it.msg} />
           : <TurnView key={`t${it.turn.id}`} t={it.turn} onToggle={onToggle}
+                      candidate={candidate.get(it.turn.id)} onClassify={onClassify}
                       onChoice={openChoices === it.turn.id ? (c) => send(c) : undefined} />)}
         {pending && (
           <>
@@ -113,9 +120,11 @@ function Local({ m }: { m: Msg }) {
   )
 }
 
-function TurnView({ t, onToggle, onChoice }: {
+function TurnView({ t, onToggle, onChoice, candidate, onClassify }: {
   t: Turn; onToggle: (id: number) => void; onChoice?: (c: string) => void
+  candidate?: PrefCandidate; onClassify: (r: ClassifyReq) => Promise<void>
 }) {
+  const remember = candidate && !t.undone && <Remember c={candidate} onClassify={onClassify} />
   const faded = t.undone ? 'opacity-40' : ''
   const undo = t.has_ops && (
     <button type="button" onClick={() => onToggle(t.id)}
@@ -145,6 +154,7 @@ function TurnView({ t, onToggle, onChoice }: {
           <div className={`max-w-[85%] rounded-2xl rounded-br-md bg-accent px-3 py-2 font-serif text-[16px] leading-snug text-accent-ink ${faded}`}>{t.text}</div>
         </div>
       )}
+      {t.kind === 'direct' && remember ? <div className="flex flex-wrap justify-end pl-5">{remember}</div> : null}
 
       {t.kind === 'chat' && (t.reply || t.question || t.lines.length > 0 || t.skipped.length > 0 || t.direction) && (
         <div className={`rounded-lg border border-line bg-raised/60 px-2.5 py-2 ${t.undone ? 'opacity-50' : ''}`}>
@@ -183,6 +193,7 @@ function TurnView({ t, onToggle, onChoice }: {
           {t.skipped.map((s) => (
             <p key={s} className="mt-1.5 text-[11px] text-amber-200/80">Skipped: {s}</p>
           ))}
+          {remember && <div className="mt-1.5 flex flex-wrap justify-end">{remember}</div>}
         </div>
       )}
     </div>

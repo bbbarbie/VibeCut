@@ -5,10 +5,10 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 
-from .grammar import BAD, OK, WARN, Report
+from .grammar import BAD, OK, PENDING, WARN, Report
 
-MARK = {OK: "  ok ", WARN: " warn", BAD: "  BAD"}
-COLOR = {OK: "\033[32m", WARN: "\033[33m", BAD: "\033[31m"}
+MARK = {OK: "  ok ", WARN: " warn", BAD: "  BAD", PENDING: "  n/c"}
+COLOR = {OK: "\033[32m", WARN: "\033[33m", BAD: "\033[31m", PENDING: "\033[90m"}
 RESET = "\033[0m"
 
 
