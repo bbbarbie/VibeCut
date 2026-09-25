@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { CREATIVE_TOOLS, makeBrief, readBriefs, storeBrief } from './creativeTools.ts'
+import { CREATIVE_TOOLS, guidedEditMessage, makeBrief, readBriefs, storeBrief } from './creativeTools.ts'
 import { emptyProfile } from './profile.ts'
 
 test('all seven recording workflows can save independent briefs and creator snapshots', () => {
@@ -25,4 +25,14 @@ test('malformed storage cannot be overwritten by saving a new brief', () => {
   const storage = { getItem: () => 'broken', setItem: () => { wrote = true } }
   assert.throws(() => storeBrief(storage, makeBrief(CREATIVE_TOOLS[0], 'Push in', 'Test', '', emptyProfile())))
   assert.equal(wrote, false)
+})
+test('the live guided edit becomes a constrained reversible storyboard request', () => {
+  const tool = CREATIVE_TOOLS.find(t => t.id === 'guided-edit')!
+  const creator = { ...emptyProfile(), pace: 'Quick' as const, avoid: 'flashy transitions' }
+  const message = guidedEditMessage(makeBrief(tool, 'Daily vlog', 'Open on breakfast, then show the walk to class.', '', creator))
+  assert.match(message, /daily vlog edit/)
+  assert.match(message, /Open on breakfast/)
+  assert.match(message, /quick pacing/)
+  assert.match(message, /smallest reversible storyboard changes/)
+  assert.throws(() => guidedEditMessage(makeBrief(CREATIVE_TOOLS[0], 'Push in', 'Move closer', '', creator)))
 })

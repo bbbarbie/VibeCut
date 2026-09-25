@@ -3,6 +3,7 @@ import { api } from './api'
 import { Chat, type ChatItem } from './components/Chat'
 import { CreatorProfile } from './components/CreatorProfile'
 import { CreativeTools } from './components/CreativeTools'
+import { guidedEditMessage, type FeatureBrief } from './creativeTools'
 import { CutReview } from './components/CutReview'
 import { Keys } from './components/Keys'
 import { Player } from './components/Player'
@@ -138,6 +139,14 @@ export default function App() {
     } finally {
       setPending(null)
     }
+  }
+
+  const applyCreativePlan = async (brief: FeatureBrief) => {
+    if (!clips.length) throw new Error('Drop some clips into the editor first — then Plan my edit can arrange them.')
+    const text = guidedEditMessage(brief)
+    setPending(text)
+    try { setSession(await api.chat(text)) }
+    finally { setPending(null) }
   }
 
   const run = async (ops: Record<string, unknown>[], label: string) => {
@@ -509,7 +518,7 @@ export default function App() {
       setProfileOpen(false)
       requestAnimationFrame(() => profileButton.current?.focus())
     }} />}
-    {toolsOpen && <CreativeTools onProfile={() => { window.location.hash = 'profile' }} onClose={() => {
+    {toolsOpen && <CreativeTools onApplyPlan={applyCreativePlan} onProfile={() => { window.location.hash = 'profile' }} onClose={() => {
       window.history.replaceState(null, '', window.location.pathname + window.location.search)
       setToolsOpen(false)
     }} />}

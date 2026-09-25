@@ -41,6 +41,21 @@ export const CREATIVE_TOOLS = [
 export type CreativeTool = typeof CREATIVE_TOOLS[number]
 export type FeatureBrief = { version: 1; tool: string; option: string; request: string; reference: string; creator: CreatorProfile; savedAt: string }
 export const BRIEFS_KEY = 'vibecut.feature-briefs.v1'
+export const LIVE_TOOL_ID = 'guided-edit'
+
+export function guidedEditMessage(brief: FeatureBrief): string {
+  if (brief.tool !== LIVE_TOOL_ID) throw new Error('Only Plan my edit can change the storyboard right now.')
+  const preferences = [
+    `${brief.creator.pace.toLowerCase()} pacing`,
+    brief.creator.avoid.trim() ? `avoid ${brief.creator.avoid.trim()}` : '',
+  ].filter(Boolean).join('; ')
+  return [
+    `Plan and apply a ${brief.option.toLowerCase()} edit to my current footage.`,
+    `Story direction: ${brief.request}`,
+    `Creator preferences: ${preferences}.`,
+    'If there is no working storyboard yet, choose the proposal that best fits. Make only the smallest reversible storyboard changes needed, and ask one question instead of guessing when the direction is ambiguous.',
+  ].join('\n')
+}
 
 export function makeBrief(tool: CreativeTool, option: string, request: string, reference: string, creator: CreatorProfile): FeatureBrief {
   if (!(tool.options as readonly string[]).includes(option)) throw new Error('Choose an available option.')

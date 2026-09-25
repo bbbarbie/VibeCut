@@ -46,24 +46,27 @@ Tests for persistence, invalid data, and storage failures run with `npm test`.
 
 ## Layout: two levels
 
-### Creative tools (feature previews)
+### Creative tools
 
 Open **Creative tools** from the editor or profile, or visit `/#tools`.
-Seven buttons represent the previously reviewed recording workflows:
-camera motion, guided edit planning, titles/motion graphics, reference style,
-video variants, AI presenters, and supporting B-roll.
+Seven cards represent the previously reviewed recording workflows. **Plan my
+edit** is available now; camera motion, titles/motion graphics, reference
+style, video variants, AI presenters, and supporting B-roll are visibly
+disabled and labelled **Coming soon**.
 
-Each opens a configuration dialog with direction choices, a written brief,
-an optional reference link, and a snapshot of the saved creator profile.
-**Save brief** persists one brief per feature in browser localStorage;
-**Download brief** exports a JSON plan for handoff. Existing briefs can be
-reopened and revised. Draft changes are guarded when closing the dialog.
+Plan my edit accepts a format and story direction, includes the creator's
+saved pacing/avoid preferences, and sends that request through the existing
+`/api/chat` editing path. The resulting operations are validated, recorded in
+the same turn log as chat edits, shown as a diff, and can be undone. If no
+storyboard exists, the editing model can choose the proposal that best fits.
+Errors such as missing footage, an unapproved rough cut, or missing AI editing
+configuration stay in the dialog. The last successful direction is saved in
+browser localStorage so it can be revised later.
 
-These are functional planning interfaces, **not connected generators**:
-they do not ingest reference videos, call paid providers, modify the timeline,
-or render/export video. The panel explains what each integration still needs.
-See [feature roadmap](feature-roadmap.md) for the seven source recordings and
-implementation boundaries.
+The remaining six cards do not open placeholder planning forms. They will be
+enabled only when their real generation, analysis, retrieval, or rendering
+pipelines exist. See [feature roadmap](feature-roadmap.md) for the seven source
+recordings and implementation boundaries.
 
 **Story** (default, where people live): the edit as parts and shots. Before
 a story is chosen, the centre asks what the video is about, then shows the
