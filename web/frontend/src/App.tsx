@@ -718,17 +718,7 @@ export default function App() {
           <button type="button" onClick={openExport} title="Render the edit, its words on screen and its music to one video file"
                   className="shrink-0 rounded-lg bg-accent px-3 py-1 text-[12px] font-semibold text-accent-ink hover:opacity-90">Export</button>
         )}
-        {session?.cut && (
-          <button type="button" onClick={() => { setLevel('story'); setShowCut(true) }}
-                  title={`${session.cut.line_en} — click to see what was cut and why`}
-                  className="truncate rounded-md px-2 py-1 font-serif text-[14px] text-zinc-300 hover:bg-raised">
-            {session.cut.line_en}{atGate ? ' · waiting for your OK' : ''}
-          </button>
-        )}
         {importing && <span className="text-[11px] text-accent">indexing…</span>}
-        <span className="text-[11px] text-zinc-600" title="Video, thumbnails and index stay on this Mac. With chat edits on, the storyboard's text (titles, shot labels, durations) goes to the language model.">
-          footage stays on this Mac{session?.llm ? ' · storyboard text goes to Claude' : ''}
-        </span>
       </header>
 
       <div className={`grid min-h-0 ${level === 'story' ? 'grid-cols-[320px_minmax(0,1fr)_440px]' : 'grid-cols-[320px_minmax(0,1fr)]'}`}>
