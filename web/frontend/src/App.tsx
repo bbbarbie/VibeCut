@@ -8,6 +8,8 @@ import { guidedEditMessage, titlesRequest, type FeatureBrief } from './creativeT
 import { KIND_META, partsOf } from './overlayDraw'
 import { loadProfile } from './profile'
 import { CutReview } from './components/CutReview'
+import { StyleQuestions } from './components/StyleQuestions'
+import { composeBrief, sayPicks, type Picks } from './brief'
 import { Export } from './components/Export'
 import { Remix } from './components/Remix'
 import { Overlays } from './components/Overlays'
@@ -25,7 +27,7 @@ import { bytes, dur, uid } from './format'
 import { clock, locate, toSource } from './sequence'
 import { cutWhilePlaying, step } from './snap'
 import { phStore, snapStore, transport, transportStore, useStore } from './transport'
-import type { Clip, CutData, Msg, Option, Overlay, OverlayKind, Overlays as OverlayData, Segment, Session, Shot, TimelineData } from './types'
+import type { Clip, CutData, Msg, Option, Overlay, OverlayKind, Overlays as OverlayData, Segment, Session, Shot, StyleAnswers, StyleQuestion, TimelineData } from './types'
 
 const hello: Msg = {
   id: 'hello', role: 'app', at: 0,
@@ -83,6 +85,16 @@ export default function App() {
   const [exporting, setExporting] = useState(false)
   const [remixing, setRemixing] = useState(false)
   const [talkOpen, setTalkOpen] = useState(false)   // talking-head cut
+  // The style questions after the first description, and the brief they make
+  // while the rough cut waits for an OK (sent as the first chat turn after it).
+  const [asking, setAsking] = useState<{ text: string; questions: StyleQuestion[] | null; tailored: boolean } | null>(null)
+  const [brief, setBriefState] = useState<{ message: string; style: StyleAnswers; said: string } | null>(() => {
+    try { return JSON.parse(sessionStorage.getItem('vibecut.brief') ?? 'null') } catch { return null }
+  })
+  const setBrief = (b: typeof brief) => {
+    setBriefState(b)
+    try { if (b) sessionStorage.setItem('vibecut.brief', JSON.stringify(b)); else sessionStorage.removeItem('vibecut.brief') } catch { /* private window */ }
+  }
   const dragDepth = useRef(0)
   const videoRef = useRef<HTMLVideoElement>(null)
   const musicRef = useRef<HTMLAudioElement>(null)
@@ -117,6 +129,8 @@ export default function App() {
   const approveCut = async () => {
     setApproving(true)
     try { setSession(await api.approve()); setShowCut(false) } finally { setApproving(false) }
+    // The creator already said what the video is and how it should feel.
+    if (brief) { const b = brief; setBrief(null); send(b.message, b.style) }
   }
   useEffect(() => {
     transport.video = videoRef.current
@@ -150,20 +164,42 @@ export default function App() {
     return out.sort((a, b) => a.at - b.at)
   }, [local, session])
 
-  const send = async (text: string) => {
+  const send = async (text: string, style?: StyleAnswers) => {
     if (!clips.length) {
       setLocal((ms) => [...ms, { id: uid(), role: 'user', text, at: Date.now() }])
       say('Drop some clips in first — then there’s something to arrange.')
       return
     }
+    // The first description: ask a few style questions before anything is built.
+    if (!style && !session?.board && !session?.proposals && !brief) { askStyle(text); return }
     setPending(text)
     try {
-      setSession(await api.chat(text))
+      setSession(await api.chat(text, style))
     } catch (e) {
       setLocal((ms) => [...ms, { id: uid(), role: 'user', text, at: Date.now() }])
       say((e as Error).message)
     } finally {
       setPending(null)
+    }
+  }
+
+  const askStyle = (text: string) => {
+    setAsking({ text, questions: null, tailored: false })
+    api.questions(text)
+      .then((r) => setAsking((a) => a && a.text === text ? { ...a, questions: r.questions, tailored: r.tailored } : a))
+      .catch(() => setAsking((a) => a && a.text === text ? { ...a, questions: [] } : a))
+  }
+  const answered = (picks: Picks, extra: string) => {
+    if (!asking?.questions) return
+    const { text, questions } = asking
+    setAsking(null)
+    const b = { ...composeBrief(text, questions, picks, extra), said: sayPicks(questions, picks) }
+    if (atGate) {
+      // Cutting comes after the questions: show the rough cut now, build on OK.
+      setBrief(b)
+      say(`Got it: “${text}”${b.said ? ` — ${b.said}` : ''}. First, here’s what I’d throw away from the clips. OK it and I’ll build three versions in that style.`)
+    } else {
+      send(b.message, b.style)
     }
   }
 
@@ -647,10 +683,11 @@ export default function App() {
       window.history.replaceState(null, '', window.location.pathname + window.location.search)
       setToolsOpen(false)
     }} />}
-    <div className="grid h-full grid-rows-[44px_1fr]" style={profileOpen || toolsOpen ? { display: 'none' } : undefined}>
+ {asking && <StyleQuestions description={asking.text} questions={asking.questions} tailored={asking.tailored}
+                                onDone={answered} onCancel={() => setAsking(null)} />}
+    <div className="grid h-full grid-rows-[48px_1fr]" style={profileOpen || toolsOpen ? { display: 'none' } : undefined}>
       <header className="flex items-center gap-3 border-b border-line bg-ink px-4">
-        <span className="font-serif text-[19px] font-semibold tracking-tight text-zinc-100">Vibe<span className="text-accent">Cut</span></span>
-        <span className="text-[11px] text-muted">no amateur tells</span>
+        <span className="font-serif text-[21px] font-semibold tracking-tight text-zinc-100">Vibe<span className="text-accent">Cut</span></span>
         <div className="ml-6 flex rounded-lg border border-line bg-panel p-0.5 text-[12px]">
           {([['story', 'Story', 'Your video as parts and shots — reorder, remove, swap'],
              ['frames', 'Frames', 'The detailed timeline — cut and trim frame by frame']] as const).map(([k, name, tip]) => (
@@ -704,7 +741,7 @@ export default function App() {
             <main className="relative flex min-h-0 min-w-0 flex-col bg-panel">
               {talkOpen ? (
                 <TalkCut onApply={applyTalk} onWatch={preview} onClose={() => setTalkOpen(false)} />
-              ) : (atGate || showCut) && cutData ? (
+              ) : ((atGate && (brief || session?.board || session?.proposals)) || showCut) && cutData ? (
                 <CutReview data={cutData} clips={clips} approved={!atGate} busy={approving}
                            onOverride={cutOverride} onApprove={approveCut} onWatch={preview}
                            onClose={() => setShowCut(false)} />

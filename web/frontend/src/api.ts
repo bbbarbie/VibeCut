@@ -1,4 +1,4 @@
-import type { CutData, ExportJob, Job, LookFit, PrefClass, Project, RefCard, RefJob, RefSummary, Session, TalkState } from './types'
+import type { CutData, ExportJob, Job, LookFit, PrefClass, Project, RefCard, RefJob, RefSummary, Session, StyleAnswers, StyleQuestion, TalkState } from './types'
 
 export type RemixJob = {
   id: string
@@ -43,7 +43,8 @@ export const api = {
   cut: () => j<CutData>(fetch('/api/cut')),
   override: (target: string, action: string) => j<CutData>(post('/api/cut/override', { target, action })),
   approve: () => j<Session>(post('/api/cut/approve', {})),
-  chat: (message: string) => j<Session>(post('/api/chat', { message })),
+  chat: (message: string, style?: StyleAnswers) => j<Session>(post('/api/chat', { message, style: style ?? null })),
+  questions: (message: string) => j<{ questions: StyleQuestion[]; tailored: boolean }>(post('/api/brief/questions', { message })),
   ops: (ops: Record<string, unknown>[], label: string) => j<Session>(post('/api/ops', { ops, label })),
   toggle: (turn: number) => j<Session>(post(`/api/turns/${turn}/toggle`, {})),
   voiceover: (text: string) => j<Session>(post('/api/voiceover', { text })),

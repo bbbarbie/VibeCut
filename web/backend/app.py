@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import board as bd
-from . import cut, export, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import brief, cut, export, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import Workflow, WorkflowError
 
@@ -57,7 +57,7 @@ def _make_proposals(direction: dict) -> dict:
     lean = None if direction.get("keywords") else (direction.get("themes", []), direction.get("labels", []))
     return storyboard.build(list(CLIPS.values()), direction.get("text", ""),
                             vision=VISION_USED["value"], lean=lean, cut=cut.for_story(PLAN["plan"]),
-                            voiceover=direction.get("voiceover"))
+                            voiceover=direction.get("voiceover"), style=direction.get("style"))
 
 
 def _direction() -> dict | None:
@@ -307,6 +307,12 @@ def api_clear() -> dict:
 
 class ChatReq(BaseModel):
     message: str
+    # Answers to the style questions (brief.py), sent with the first description.
+    style: dict | None = None
+
+
+class QuestionsReq(BaseModel):
+    message: str
 
 
 @app.get("/api/session")
@@ -342,11 +348,32 @@ def api_chat(req: ChatReq) -> dict:
             vo = (_direction() or {}).get("voiceover")
             if vo:
                 direction["voiceover"] = vo
+            # ...and the style answers, unless this message brings new ones.
+            style = brief.clean_style(req.style) or (_direction() or {}).get("style")
+            if style:
+                direction["style"] = style
         SESSION.add({"kind": "chat", "text": msg, "ops": out.get("ops", []),
                      "reply": out.get("reply", ""), "question": out.get("question"),
                      "choices": out.get("choices", []) if out.get("question") else [],
                      "direction": direction}, cat, _make_proposals)
         return _session()
+
+
+@app.post("/api/brief/questions")
+def api_brief_questions(req: QuestionsReq) -> dict:
+    """The style questions asked once, after the first description."""
+    with LOCK:
+        shots, _ = storyboard.usable(storyboard.shots_from_clips(list(CLIPS.values())))
+        qs = brief.fixed_questions(brief.theme_counts(shots))
+    tailored = False
+    if llm.available() and req.message.strip():
+        try:
+            extra = llm.tailor_questions(req.message.strip(), qs)
+            qs += extra
+            tailored = bool(extra)
+        except llm.LLMError:
+            pass  # the fixed questions are enough on their own
+    return {"questions": qs, "tailored": tailored}
 
 
 # --------------------------------------------------------------------------

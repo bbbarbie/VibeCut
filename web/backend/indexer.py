@@ -26,7 +26,7 @@ from . import vision
 
 CACHE = Path(os.environ.get("VIBECUT_CACHE", "~/.cache/vibecut")).expanduser()
 VIDEO_EXT = {".mp4", ".mov"}
-INDEX_VERSION = 3  # 3: per-second signals + sampled frames for reject/trim
+INDEX_VERSION = 4  # 3: per-second signals + sampled frames for reject/trim; 4: HDR thumbnails tone-mapped
 WORKERS = max(2, min(6, (os.cpu_count() or 4) - 2))
 
 
@@ -64,7 +64,10 @@ def index_clip(path: str) -> dict:
     sh = shots.detect(m)
     bfs = bestframe.best_frames(m, sh)
     thumbs = [f"shot{s.index:03d}.jpg" for s in sh]
-    bestframe.write_jpegs([m.preview[b.frame] for b in bfs], [str(d / t) for t in thumbs])
+    # What a person looks at is shown the way the phone showed it (HDR ->
+    # SDR); everything measured below still reads the frames as decoded.
+    shown = media.to_sdr(m.preview, m.meta)
+    bestframe.write_jpegs([shown[b.frame] for b in bfs], [str(d / t) for t in thumbs])
 
     # How much the picture changes second to second: a walking shot vs a
     # locked-off one. Keyframe-rate, so a coarse measure of energy only.
@@ -83,7 +86,7 @@ def index_clip(path: str) -> dict:
     sig = signals.from_media(m)
     (d / "samples").mkdir(exist_ok=True)
     sample_names = [f"samples/{i:04d}.jpg" for i in range(len(m.preview))]
-    bestframe.write_jpegs(list(m.preview), [str(d / n) for n in sample_names], quality=6)
+    bestframe.write_jpegs(list(shown), [str(d / n) for n in sample_names], quality=6)
 
     rec = {
         "signals": sig.to_json(),

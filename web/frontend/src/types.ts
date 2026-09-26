@@ -194,3 +194,8 @@ export type TalkPlan = {
 export type TalkJob = { stage: 'transcribing' | 'reviewing' | 'done' | 'error'; done: number; total: number; current: string
   error: string | null; silent: string[] }
 export type TalkState = { job: TalkJob | null; plan: TalkPlan | null; llm: boolean }
+
+// The style questions asked once, after the first description (brief.py).
+export type StyleChoice = { key: string; label: string; hint?: string }
+export type StyleQuestion = { id: string; question: string; multi: boolean; hint?: string; choices: StyleChoice[] }
+export type StyleAnswers = { length?: string; pace?: string; opening?: string }

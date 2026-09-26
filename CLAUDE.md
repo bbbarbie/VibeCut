@@ -109,6 +109,17 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   judged on one real shoot (42 clips, 3 references). Every weight is a
   guess; the selector has no model behind it (no key on this Mac).
 
+- **Style questions** (`web/backend/brief.py`, `StyleQuestions.tsx`,
+  `web/frontend/src/brief.ts`): after the first one-line description, a
+  popup asks length / pace / opening / focus, one question at a time, before
+  the rough cut is shown. Length, pace and opening travel as `style` on the
+  direction and reshape each proposal (`brief.shape`); focus and any
+  Claude-tailored question (key only) become direction words. Targets (60 s,
+  180 s, pace caps 8 / 5 / 2.5 s) are guesses. Tests: `tests/test_brief.py`.
+- HDR (HLG/PQ) footage: thumbnails and samples are tone-mapped to SDR in
+  `media.to_sdr` so they look like the phone showed them; measurement frames
+  are untouched. `tests/test_hdr.py`.
+
 - From montage-vlog-compiler (MIT; see NOTICE), four pieces:
   - **Evidence levels** (`cutgrammar/evidence.py`): every finding names
     what it rests on — meta / still / motion / audio. A finding whose
