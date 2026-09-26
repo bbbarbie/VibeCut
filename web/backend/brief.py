@@ -23,6 +23,10 @@ LENGTH_S = {"short": 60.0, "medium": 180.0, "long": None}
 # Longest a single shot may run at each pace, around its best frame.
 PACE_CAP_S = {"calm": 8.0, "balanced": 5.0, "fast": 2.5}
 MIN_SHOT_S = 1.5
+# A short or fast edit shows each moment once: several shots of the same
+# clip, or look-alikes (same cosine cut-off as remix's select.py), are one
+# moment, and only its strongest shot stays. Longer, calmer edits keep them.
+SIMILAR = 0.78
 OPENINGS = ("hook", "start")
 STYLE_KEYS = {"length": tuple(LENGTH_S), "pace": tuple(PACE_CAP_S), "opening": OPENINGS}
 
@@ -100,11 +104,21 @@ def _window(s, cap: float, best: dict[str, float]) -> None:
     s.start, s.end = round(a, 3), round(a + cap, 3)
 
 
+def one_per_moment(shots: list, rank) -> list:
+    """Keep the strongest shot of each moment, in story order."""
+    keep: list = []
+    for s in sorted(shots, key=rank, reverse=True):
+        if not any(s.clip_id == k.clip_id or float(s.vec @ k.vec) >= SIMILAR for k in keep):
+            keep.append(s)
+    return [s for s in shots if s in keep]
+
+
 def shape(options: list, style: dict | None, best: dict[str, float]) -> None:
     """Reshape storyboard.Option objects in place to the creator's answers.
 
     Order within the story is never changed except by the hook, which lifts
-    the single strongest shot to the front. Length is met by leaving out the
+    the single strongest shot to the front. Short or fast edits keep one shot
+    per moment (`one_per_moment`). Length is met by leaving out the
     weakest shots first, but every part keeps at least its best one.
     """
     from .storyboard import Beat
@@ -123,6 +137,9 @@ def shape(options: list, style: dict | None, best: dict[str, float]) -> None:
                 for s in b.shots:
                     _window(s, max(cap, MIN_SHOT_S), best)
 
+        if style.get("length") == "short" or style.get("pace") == "fast":
+            for b in o.beats:
+                b.shots = one_per_moment(b.shots, rank)
         if style.get("opening") == "hook":
             everything = [s for b in o.beats for s in b.shots]
             if len(everything) > 1:

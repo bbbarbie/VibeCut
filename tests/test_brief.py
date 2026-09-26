@@ -72,7 +72,7 @@ def main() -> int:
     check("calm lets shots run longer", cmax > fmax, f"{cmax:.2f}s vs {fmax:.2f}s")
     check("fast keeps each best frame in its window",
           all(s["start"] <= BEST[s["id"]] <= s["end"] for o in fast for b in o["beats"] for s in b["shots"]))
-    check("fast keeps every shot", [shot_ids(o) for o in fast] == [shot_ids(o) for o in base])
+    check("calm keeps every shot", [sorted(shot_ids(o)) for o in calm] == [sorted(shot_ids(o)) for o in base])
 
     print("opening")
     hook = build({"opening": "hook"})
@@ -81,6 +81,14 @@ def main() -> int:
         check(f"{b['key']}: opens on one shot", first["title"] == "Opening" and len(first["shots"]) == 1)
         check(f"{b['key']}: the strongest one", first["shots"][0]["id"] == "spare0000001:0", first["shots"][0]["id"])
         check(f"{b['key']}: nothing twice, nothing lost", sorted(shot_ids(h)) == sorted(shot_ids(b)))
+
+    print("one shot per moment")
+    for o in short + fast:
+        clips = [s["id"].split(":")[0] for b in o["beats"] for s in b["shots"]]
+        check(f"{o['key']}: no clip twice when short/fast", len(clips) == len(set(clips)), str(clips))
+    med = build({"length": "medium"})
+    check("medium keeps several shots of one clip",
+          any(len({s["id"].split(":")[0] for s in b["shots"]}) < len(b["shots"]) for o in med for b in o["beats"]))
 
     print("shared shots")
     check("answers don't leak into the next build", build(None) == base)
