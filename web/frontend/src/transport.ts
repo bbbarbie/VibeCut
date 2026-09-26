@@ -6,6 +6,7 @@
 import { useSyncExternalStore } from 'react'
 import { locate, toSource, type SeqItem } from './sequence'
 import type { Target } from './snap'
+import { swapSource } from './hold'
 
 export function createStore<T>(initial: T) {
   let v = initial
@@ -68,8 +69,7 @@ export class Transport {
     if (v.getAttribute('src') === url && v.readyState >= 1) return
     await new Promise<void>((res) => {
       v.addEventListener('loadedmetadata', () => res(), { once: true })
-      v.setAttribute('src', url)
-      v.load()
+      swapSource(v, url)
     })
   }
 

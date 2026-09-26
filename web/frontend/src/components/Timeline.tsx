@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { clock, locate, parseTimecode, readout, smpte, type SeqItem } from '../sequence'
 import { approaching, snap, type Target, type TargetType } from '../snap'
 import { phStore, snapStore, transport, transportStore, useStore } from '../transport'
-import type { TimelineData } from '../types'
+import type { Overlay, TimelineData } from '../types'
+import { KIND_META } from '../overlayDraw'
 import { SHOT_MIME } from './Shelf'
 
 const TL_MIME = 'application/x-vibecut-tl'
@@ -17,8 +18,11 @@ const TICK_H: Record<TargetType, number> = { shot: 14, silence: 9, motion: 7, be
 const MARK_CLS = { added: 'bg-emerald-400', moved: 'bg-amber-300', trimmed: 'bg-sky-400' } as const
 export type Marks = { in: number | null; out: number | null }
 
+const LANE_ROW = 17
+type Drag = { id: string; mode: 'move' | 'end'; x0: number; grab: number; start: number; end: number; moved: boolean }
+
 export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, onReorder,
-  onInsertShot, onClear, onHelp }: {
+  onInsertShot, onClear, onHelp, overlays = [], selectedOverlay = null, onSelectOverlay, onOverlayEdit, onExport }: {
   tl: TimelineData
   marks: Marks
   marksOf: Record<string, 'added' | 'moved' | 'trimmed' | undefined>
@@ -31,6 +35,11 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   onInsertShot: (shotId: string, at: number) => void
   onClear: () => void
   onHelp: () => void
+  overlays?: Overlay[]
+  selectedOverlay?: string | null
+  onSelectOverlay?: (id: string) => void
+  onOverlayEdit?: (id: string, patch: { start?: number; dur?: number }) => void
+  onExport?: () => void
 }) {
   const ph = useStore(phStore)
   const tr = useStore(transportStore)
@@ -127,6 +136,26 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
     ;(document.activeElement as HTMLElement)?.blur()
   }
 
+  // Words on screen get their own lane above the shots, stacked when they overlap.
+  const [drag, setDrag] = useState<Drag | null>(null)
+  const lanes = useMemo(() => {
+    const ends: number[] = []
+    const row = new Map<string, number>()
+    for (const o of overlays) {
+      let r = ends.findIndex((e) => e <= o.start + 1e-3)
+      if (r < 0) { r = Math.min(ends.length, 2); if (r === ends.length) ends.push(0) }
+      ends[r] = Math.max(ends[r], o.shown_end)
+      row.set(o.id, r)
+    }
+    return { row, n: ends.length }
+  }, [overlays])
+  const laneH = lanes.n ? lanes.n * LANE_ROW + 6 : 0
+  const overlayTime = (clientX: number, bypass: boolean) => {
+    const el = track.current!
+    const { t, localPps } = tOf(clientX - el.getBoundingClientRect().left + el.scrollLeft)
+    return snap(tl.targets, t, { pxPerSec: localPps, disabled: bypass }).t
+  }
+
   const rate = tr.rate
   const hl = sn?.target
   const hlX = hl ? xOf(hl.t) : null
@@ -185,6 +214,10 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
           <input type="range" min={1} max={40} step={0.5} value={zoom}
                  onChange={(e) => setZoom(Number(e.target.value))} className="w-20 accent-[#b9d9eb]" />
         </label>
+        {onExport && (
+          <button type="button" onClick={onExport} disabled={!items.length} title="Render the edit, its words on screen and its music to one video file"
+                  className="shrink-0 rounded-md bg-accent px-2 py-0.5 text-[11px] font-semibold text-accent-ink disabled:opacity-30">Export…</button>
+        )}
         <button type="button" onClick={onHelp} title="Keyboard shortcuts"
                 className="grid size-6 shrink-0 place-items-center rounded-md border border-line text-[12px] text-muted hover:text-zinc-200">?</button>
         <button type="button" onClick={onClear} disabled={!items.length}
@@ -241,9 +274,57 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
               </svg>
             </div>
 
+            {overlays.map((o) => {
+              const d = drag?.id === o.id ? drag : null
+              const a = d ? d.start : o.start
+              const z = d ? d.end : o.shown_end
+              const x = xOf(a)
+              const w = Math.max(12, xOf(Math.min(z, tl.total)) - x)
+              const meta = KIND_META[o.kind]
+              const edge = o.dur != null || o.anchor.to === 'edit'
+              return (
+                <div key={o.id}
+                     title={`${meta.label}: ${o.kind === 'chapters' ? 'chapter bar' : o.text}\nDrag to move (it sticks to cuts; hold ⌥ for exact), drag the right edge to change its length`}
+                     onPointerDown={(e) => {
+                       if (e.button !== 0) return
+                       e.stopPropagation()
+                       e.currentTarget.setPointerCapture(e.pointerId)
+                       const box = e.currentTarget.getBoundingClientRect()
+                       const mode = edge && e.clientX > box.right - 7 ? 'end' : 'move'
+                       // where on the pill it was grabbed, so the pill doesn't jump under the pointer
+                       setDrag({ id: o.id, mode, x0: e.clientX, grab: e.clientX - box.left, start: o.start, end: o.shown_end, moved: false })
+                     }}
+                     onPointerMove={(e) => {
+                       if (!d) return
+                       if (!d.moved && Math.abs(e.clientX - d.x0) < 4) return
+                       if (d.mode === 'move') {
+                         const t = Math.max(0, overlayTime(e.clientX - d.grab, e.altKey))
+                         setDrag({ ...d, moved: true, start: t, end: t + (o.shown_end - o.start) })
+                       } else {
+                         const t = Math.max(o.start + 0.5, overlayTime(e.clientX, e.altKey))
+                         setDrag({ ...d, moved: true, end: t })
+                       }
+                     }}
+                     onPointerUp={() => {
+                       if (!d) return
+                       setDrag(null)
+                       if (!d.moved) { onSelectOverlay?.(o.id); return }
+                       if (d.mode === 'move') onOverlayEdit?.(o.id, { start: Math.round(d.start * 1000) / 1000 })
+                       else onOverlayEdit?.(o.id, { dur: Math.round((d.end - o.start) * 1000) / 1000 })
+                     }}
+                     className={`absolute flex cursor-grab items-center gap-1 overflow-hidden rounded px-1 text-[10px] leading-none text-zinc-900 active:cursor-grabbing ${
+                       selectedOverlay === o.id ? 'ring-2 ring-white' : ''} ${d?.moved ? 'opacity-80' : ''}`}
+                     style={{ left: x, width: w, top: 31 + (lanes.row.get(o.id) ?? 0) * LANE_ROW, height: LANE_ROW - 3, background: meta.color }}>
+                  <span className="shrink-0 font-semibold">{meta.icon}</span>
+                  <span className="truncate">{o.kind === 'chapters' ? 'Chapter bar' : o.text}</span>
+                  {edge && <span className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize bg-black/20" />}
+                </div>
+              )
+            })}
+
             {items.map((it: SeqItem, k) => (k === 0 || items[k - 1].beat_id !== it.beat_id) && (
               <div key={`beat-${it.beat_id}-${k}`} className="pointer-events-none absolute top-8 truncate text-[10px] font-medium text-zinc-400"
-                   style={{ left: geo.left[k] + PAD, maxWidth: 220 }}>
+                   style={{ left: geo.left[k] + PAD, maxWidth: 220, top: 32 + laneH }}>
                 {it.beat_title}
               </div>
             ))}
@@ -262,11 +343,11 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                     scrubTo(e.clientX, e.altKey)   // a click also puts the playhead there
                     onSelect(it.key, new DOMRect(e.clientX - 1, rect.top, 2, rect.height))
                   }}
-                  className={`group absolute top-[50px] bottom-3 cursor-pointer overflow-hidden rounded-md ${it.kind === 'gap'
+                  className={`group absolute bottom-3 cursor-pointer overflow-hidden rounded-md ${it.kind === 'gap'
                     ? 'bg-[repeating-linear-gradient(45deg,#18181b,#18181b_6px,#27272a_6px,#27272a_12px)]' : 'bg-black'} ${
                     selected === it.key ? 'ring-2 ring-accent' : 'ring-1 ring-zinc-800 hover:ring-zinc-600'}`}
                   style={{
-                    left: geo.left[k] + PAD, width: geo.w[k],
+                    top: 50 + laneH, left: geo.left[k] + PAD, width: geo.w[k],
                     backgroundImage: thumb ? `url(${thumb})` : undefined,
                     backgroundSize: 'auto 100%', backgroundRepeat: 'repeat-x', backgroundPosition: 'center',
                   }}
@@ -281,8 +362,8 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
             })}
 
             {dropAt != null && (
-              <div className="pointer-events-none absolute top-[46px] bottom-2 w-0.5 rounded bg-accent"
-                   style={{ left: (dropAt < items.length ? geo.left[dropAt] : geo.end + GAP) + PAD - 2 }} />
+              <div className="pointer-events-none absolute bottom-2 w-0.5 rounded bg-accent"
+                   style={{ top: 46 + laneH, left: (dropAt < items.length ? geo.left[dropAt] : geo.end + GAP) + PAD - 2 }} />
             )}
 
             {/* the snapped / approaching target, named */}

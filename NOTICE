@@ -57,3 +57,39 @@ reimplemented here, not copied):
   not used back to back; timing states text_only / estimated, never locked
   without watching) -> web/backend/voiceover.py.
 Its templates, reference documents and worked example are not included.
+
+Overlay Studio — https://github.com/jeszhou/overlay-studio
+Copyright (c) 2026 Jessie Zhou. All rights reserved.
+Licensed under the "Overlay Studio Community Edition — Free Use License
+v1.0" (source-available, not an open-source licence). That licence does not
+permit redistributing modified copies, sublicensing, or using the software
+as part of a product or service offered to others, so NO Overlay Studio
+source code, effect-card components, scripts, assets, fonts or sound files
+are included in VibeCut, and none were translated line by line. VibeCut's
+overlay code was written independently.
+
+Ideas taken from its public design and documentation, reimplemented from
+scratch for vlogs:
+- a fixed, curated library of overlay kinds; the machine only picks which
+  one, and when, rather than generating graphics -> web/backend/overlays.py
+  (KINDS, suggest);
+- the whole set of overlays as one JSON document that can be diffed and
+  edited field by field -> overlays live on the storyboard as ops;
+- a checker that only reports and never rewrites (too-brief, overlapping,
+  cut-off overlays) -> overlays.check;
+- a fade that completes before an overlay's end, so it never vanishes on
+  a hard cut -> web/frontend/src/overlayDraw.ts (envelope);
+- export as frames rendered by the browser and composited by ffmpeg ->
+  web/backend/export.py, overlayDraw.renderSchedule (VibeCut renders in the
+  creator's own browser with Canvas; no headless browser or puppeteer).
+
+Nunito (web/frontend, via @fontsource/nunito) — SIL Open Font License 1.1.
+
+hypit — https://github.com/hypit-ai/hypit
+
+Idea only: learning an edit's structure from a reference video and
+reusing it with other material. No code, templates or assets are included,
+and its generative half (swapping in generated footage, faces or voices) is
+deliberately not adopted. Here a reference is only *measured*
+(cutgrammar/style.py) and applied to the creator's own footage
+(web/backend/restyle.py, reference.py, export.py).

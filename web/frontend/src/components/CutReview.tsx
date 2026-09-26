@@ -27,8 +27,7 @@ export function CutReview({ data, clips, approved, busy, onOverride, onApprove, 
         </p>
         {s && (
           <div className="mt-4 rounded-xl border border-line bg-raised px-4 py-3">
-            <div className="font-serif text-[22px] text-zinc-100">{s.line_zh}</div>
-            <div className="text-[12px] text-muted">{s.line_en}</div>
+            <div className="font-serif text-[22px] text-zinc-100">{s.line_en}</div>
           </div>
         )}
 
@@ -42,11 +41,10 @@ export function CutReview({ data, clips, approved, busy, onOverride, onApprove, 
                 <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 text-[10px] tabular-nums text-zinc-300">{dur(c.duration)}</span>
               </div>
               <div className="mt-1.5 truncate text-[11px] text-zinc-400">{c.name}</div>
-              <div className="text-[13px] leading-snug text-zinc-100">{c.override === 'reject' ? '你选择不用' : c.zh}</div>
-              <div className="text-[11px] leading-snug text-muted">{c.override === 'reject' ? 'you threw this away' : c.en}</div>
+              <div className="text-[13px] leading-snug text-zinc-100">{c.override === 'reject' ? 'You threw this away' : c.en}</div>
               {c.override !== 'reject' && c.unverified?.length > 0 && (
                 <div className="text-[11px] leading-snug text-amber-200/80" title="Judged from about one frame a second — what happened between them wasn’t seen">
-                  只看了零散几帧，请播放确认 — judged from a few frames, play it to be sure
+                  Judged from a few frames — play it to be sure
                 </div>
               )}
               <div className="mt-2 flex gap-1.5">
@@ -67,7 +65,7 @@ export function CutReview({ data, clips, approved, busy, onOverride, onApprove, 
 
       <div className="absolute inset-x-0 bottom-0 flex items-center gap-4 border-t border-line bg-panel/95 px-5 py-3 backdrop-blur">
         <div className="min-w-0">
-          <div className="truncate font-serif text-[17px] text-zinc-100">{s?.line_zh}</div>
+          <div className="truncate font-serif text-[17px] text-zinc-100">{s?.line_en}</div>
           <div className="text-[11px] text-muted">{approved ? 'Already approved. Your changes are recorded.' : 'Nothing is built on this until you approve it.'}</div>
         </div>
         <div className="ml-auto flex gap-2">
@@ -96,8 +94,8 @@ function KeptRow({ c, thumb, onOverride, onWatch }: {
         <img src={thumb} className="h-10 w-16 shrink-0 rounded object-cover" />
         <div className="min-w-0">
           <div className="truncate text-[12px] text-zinc-300">{c.name} <span className="text-muted">· {dur(c.duration)}{c.talking ? ' · someone talking' : ''}</span></div>
-          {c.override === 'keep' && <div className="text-[11px] text-accent">你选择留下（自动判断是：{c.zh}） <button type="button" className="underline" onClick={() => onOverride(c.id, 'auto')}>Undo</button></div>}
-          {c.flags.map((f) => <div key={f.code} className="text-[11px] text-amber-200/90">{f.zh} <span className="text-muted">— {f.en}</span></div>)}
+          {c.override === 'keep' && <div className="text-[11px] text-accent">You kept it (I’d have left it out: {c.en}) <button type="button" className="underline" onClick={() => onOverride(c.id, 'auto')}>Undo</button></div>}
+          {c.flags.map((f) => <div key={f.code} className="text-[11px] text-amber-200/90">{f.en}</div>)}
         </div>
         <div className="ml-auto shrink-0">
           <Btn danger onClick={() => onOverride(c.id, 'reject')}>Throw away</Btn>
@@ -132,8 +130,7 @@ function ShotBar({ clipId, s, single, onOverride, onWatch }: {
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="text-[12px] tabular-nums text-zinc-200">keeps {dur(u0)}–{dur(u1)} · {(u1 - u0).toFixed(0)}s of {len.toFixed(0)}s</span>
-        <span className="text-[12px] text-zinc-300">{s.override === 'full' ? '你选择留下整段' : s.reason_zh}</span>
-        <span className="text-[11px] text-muted">{s.override === 'full' ? 'you kept the whole clip' : s.reason_en}</span>
+        <span className="text-[12px] text-zinc-300">{s.override === 'full' ? 'You kept the whole clip' : s.reason_en}</span>
       </div>
       <div className="mt-1.5 flex flex-wrap gap-1.5">
         <Btn onClick={() => onWatch(clipId, u0, u1, s.id)}>Watch what’s kept</Btn>

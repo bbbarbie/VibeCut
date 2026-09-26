@@ -15,8 +15,8 @@ const beatLength = (b: BoardBeat) => b.shots.reduce((n, s) => n + s.end - s.star
 const playItems = (beats: { shots: { id: string; clip_id: string | null; start: number; end: number; gap?: boolean }[] }[]): PlayItem[] =>
   beats.flatMap((b) => b.shots.filter((s) => !s.gap && s.clip_id).map((s) => ({ id: s.id, clipId: s.clip_id!, start: s.start, end: s.end })))
 
-export function Story({ session, clips, asking, playing, nowShot, selected, onPick, onAsk, onVoiceover, onUse, onPlay,
-  onSelect, onMoveBeat, onRetitle, onBeatAction }: {
+export function Story({ session, clips, asking, playing, nowShot, selected, onPick, onAsk, onVoiceover, onTalk, onUse, onPlay,
+  onSelect, onMoveBeat, onRetitle, onBeatAction, matchStyle }: {
   session: Session | null
   clips: Clip[]
   asking: boolean
@@ -26,19 +26,30 @@ export function Story({ session, clips, asking, playing, nowShot, selected, onPi
   onPick: (files: FileList) => void
   onAsk: (text: string) => void
   onVoiceover: (text: string) => Promise<void>
+  onTalk: () => void
   onUse: (o: Option) => void
   onPlay: (source: string, items: PlayItem[]) => void
   onSelect: (sel: Selection, anchor: DOMRect | null) => void
   onMoveBeat: (beat: string, to: number) => void
   onRetitle: (beat: string, title: string) => void
   onBeatAction: (action: 'play' | 'up' | 'down' | 'remove' | 'frames', beat: string) => void
+  matchStyle?: ReactNode
 }) {
   const board = session?.board ?? null
   const proposals = session?.proposals ?? null
   const [showOthers, setShowOthers] = useState(false)
 
   if (!clips.length) return <Empty onPick={onPick} />
-  const vo = <Voiceover current={session?.voiceover ?? null} busy={asking} onSubmit={onVoiceover} />
+  const vo = (
+    <div className="flex flex-wrap items-start gap-2">
+      {proposals && matchStyle && <div className="w-full">{matchStyle}</div>}
+      <Voiceover current={session?.voiceover ?? null} busy={asking} onSubmit={onVoiceover} />
+      <button type="button" onClick={onTalk}
+              className="rounded-xl border border-dashed border-line px-3 py-2.5 text-left text-[12px] text-muted hover:text-zinc-200">
+        Talking to camera? Cut it by what you said…
+      </button>
+    </div>
+  )
   if (!board && !proposals) return <Ask clips={clips} asking={asking} onAsk={onAsk} voiceover={vo} />
   if (!board || showOthers) {
     const n = proposals!.options.length
@@ -63,7 +74,7 @@ export function Story({ session, clips, asking, playing, nowShot, selected, onPi
   return (
     <BoardRows session={session!} board={board} playing={playing} nowShot={nowShot} selected={selected}
                onPlay={onPlay} onSelect={onSelect} onMoveBeat={onMoveBeat} onRetitle={onRetitle}
-               onBeatAction={onBeatAction} onOthers={() => setShowOthers(true)} />
+               onBeatAction={onBeatAction} onOthers={() => setShowOthers(true)} matchStyle={matchStyle} />
   )
 }
 
@@ -195,7 +206,7 @@ function OptionCard({ o, current, playing, onPlay, onUse }: {
 // ---- the chosen story: one row per part --------------------------------------
 
 function BoardRows({ session, board, playing, nowShot, selected, onPlay, onSelect, onMoveBeat, onRetitle,
-  onBeatAction, onOthers }: {
+  onBeatAction, onOthers, matchStyle }: {
   session: Session; board: Board; playing: string | null; nowShot: string | null; selected: Selection
   onPlay: (source: string, items: PlayItem[]) => void
   onSelect: (sel: Selection, anchor: DOMRect | null) => void
@@ -203,6 +214,7 @@ function BoardRows({ session, board, playing, nowShot, selected, onPlay, onSelec
   onRetitle: (beat: string, title: string) => void
   onBeatAction: (action: 'play' | 'up' | 'down' | 'remove' | 'frames', beat: string) => void
   onOthers: () => void
+  matchStyle?: ReactNode
 }) {
   const [dragBeat, setDragBeat] = useState<string | null>(null)
   const [dropAt, setDropAt] = useState<number | null>(null)
@@ -245,6 +257,7 @@ function BoardRows({ session, board, playing, nowShot, selected, onPlay, onSelec
           </button>
         </div>
       </div>
+      {matchStyle && <div className="mb-4">{matchStyle}</div>}
 
       <ol ref={rows} className="space-y-2"
           onDragOver={(e) => { if (dragBeat) { e.preventDefault(); setDropAt(indexAt(e.clientY)) } }}

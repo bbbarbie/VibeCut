@@ -144,7 +144,7 @@ function ShotCard({ clip, shot, active, onPreview, onAdd, onUseRejected }: {
       <div className="truncate px-0.5 text-[10px] text-muted">{when(clip.capture_time) || 'no date'}{clip.gps ? ' · GPS' : ''}</div>
       {thrown ? (
         <div className="mt-1 rounded bg-rose-500/10 px-1.5 py-1 text-[10px] leading-snug text-rose-200" title={clip.cut!.en}>
-          没用上：{clip.cut!.override === 'reject' ? '你选择不用' : clip.cut!.zh}
+          Left out: {clip.cut!.override === 'reject' ? 'you threw this away' : clip.cut!.en}
           {onUseRejected && <button type="button" onClick={(e) => { e.stopPropagation(); onUseRejected() }}
                                     className="ml-1 underline">Use it</button>}
         </div>

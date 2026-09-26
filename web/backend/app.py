@@ -7,6 +7,8 @@ the storyboard *text* goes to the chat model (see llm.py).
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 import threading
 import uuid
 from pathlib import Path
@@ -15,12 +17,12 @@ from urllib.parse import unquote
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import board as bd
-from . import cut, indexer, llm, locate, musiclib, storyboard, timeline, vision, voiceover
+from . import cut, export, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import Workflow, WorkflowError
 
@@ -91,8 +93,11 @@ def _session() -> dict:
     b = SESSION.board
     board = None if b is None else {
         **{k: b[k] for k in ("option", "name", "structure")},
+        "style": b.get("style"),
         "beats": [{**bt, "shots": [shot(x) for x in bt["shots"]]} for bt in b["beats"]],
     }
+    tl = timeline.build(b, CLIPS, musiclib.current())
+    tl["frame"] = export.frame_size(tl["items"], CLIPS)
     last = SESSION.last_active()
     ghosts = []
     if last and last.diff and not last.diff["replaced"]:
@@ -116,7 +121,9 @@ def _session() -> dict:
         } for t in SESSION.turns],
         "proposals": SESSION.proposals,
         "llm": llm.available(),
-        "timeline": timeline.build(b, CLIPS, musiclib.current()),
+        "timeline": tl,
+        "overlays": {"items": overlays.resolve(b), "style": overlays.style_of(b),
+                     "findings": overlays.check(b, cat)},
         "workflow": WORKFLOW.public(),
         "cut": cut.summary(PLAN["plan"]) if PLAN["plan"] else None,
         "music": musiclib.current_public(),
@@ -471,6 +478,242 @@ def api_toggle(tid: int) -> dict:
 
 
 # --------------------------------------------------------------------------
+# talking-head mode (口播): transcribe on this Mac, cut pauses and retakes,
+# a gate to review every cut, then a storyboard with subtitles
+# --------------------------------------------------------------------------
+
+TALK: dict = {"plan": None, "job": None}
+
+
+class TalkReq(BaseModel):
+    locale: str = "zh-CN"
+    script: str = ""
+    clips: list[str] | None = None
+
+
+def _talk_clips(ids: list[str] | None) -> list[dict]:
+    rejected, _ = cut.for_story(PLAN["plan"])
+    pool = [c for c in CLIPS.values() if (c["id"] in ids if ids else c["id"] not in rejected)]
+    return sorted(pool, key=lambda c: (storyboard.parse_when(c.get("capture_time")) or storyboard.datetime.max, c["name"]))
+
+
+@app.post("/api/talk")
+def api_talk(req: TalkReq) -> dict:
+    if not CLIPS:
+        raise HTTPException(400, "drop some clips in first")
+    if req.locale not in speech.LOCALES:
+        raise HTTPException(400, f"language must be one of {', '.join(speech.LOCALES)}")
+    job = TALK["job"]
+    if job and job["stage"] in ("transcribing", "reviewing"):
+        raise HTTPException(409, "already transcribing")
+    clips = _talk_clips(req.clips)
+    job = {"stage": "transcribing", "done": 0, "total": len(clips), "current": "", "error": None, "silent": []}
+    TALK["job"] = job
+
+    def work() -> None:
+        try:
+            transcripts, levels, used = {}, {}, {}
+            for c in clips:
+                job["current"] = c["name"]
+                try:
+                    res = speech.transcribe(c, req.locale)
+                except speech.SpeechError as e:
+                    if "no sound" in str(e):
+                        res = []
+                    else:
+                        raise
+                if res:
+                    transcripts[c["id"]] = res
+                    levels[c["id"]] = talk.active(speech.audio(c))
+                    used[c["id"]] = c
+                else:
+                    job["silent"].append(c["name"])
+                job["done"] += 1
+            if not transcripts:
+                raise speech.SpeechError("No speech found in these clips — is the language right?")
+            job["stage"] = "reviewing"
+            agent = llm.review_talk if llm.available() else None
+            plan = talk.build(transcripts, used, req.locale, levels, req.script, agent)
+            with LOCK:
+                TALK["plan"] = plan
+            job["stage"] = "done"
+        except Exception as e:  # noqa: BLE001 -- shown at the gate
+            job["stage"], job["error"] = "error", str(e)
+
+    threading.Thread(target=work, daemon=True).start()
+    return {"job": job, "plan": None, "llm": llm.available()}
+
+
+@app.get("/api/talk")
+def api_talk_state() -> dict:
+    with LOCK:
+        p = TALK["plan"]
+        return {"job": TALK["job"], "plan": talk.public(p) if p else None, "llm": llm.available()}
+
+
+class TalkToggleReq(BaseModel):
+    id: str
+
+
+@app.post("/api/talk/toggle")
+def api_talk_toggle(req: TalkToggleReq) -> dict:
+    """Put a cut back, or take something out -- the creator's call at the gate."""
+    with LOCK:
+        if not TALK["plan"]:
+            raise HTTPException(400, "nothing transcribed yet")
+        try:
+            talk.toggle(TALK["plan"], req.id)
+        except KeyError as e:
+            raise HTTPException(404, f"no item {req.id}") from e
+        return {"job": TALK["job"], "plan": talk.public(TALK["plan"]), "llm": llm.available()}
+
+
+class TalkApplyReq(BaseModel):
+    captions: bool = True
+    profile: dict = {}
+
+
+@app.post("/api/talk/apply")
+def api_talk_apply(req: TalkApplyReq) -> dict:
+    """The reviewed cut becomes the working storyboard -- one turn, undoable."""
+    with LOCK:
+        p = TALK["plan"]
+        if not p:
+            raise HTTPException(400, "nothing transcribed yet")
+        snap = talk.board(p, captions=req.captions, style=overlays.style_from_profile(req.profile) or None)
+        if not snap["beats"]:
+            raise HTTPException(409, "Everything was cut — put something back first.")
+        s = talk.public(p)["summary"]
+        SESSION.add({"kind": "direct", "text": "You used the talking-head cut",
+                     "ops": [{"op": "choose_option", "option": "talk", "snapshot": snap}],
+                     "reply": s["line_en"] + (" · subtitles added" if req.captions else "")},
+                    CATALOG["cat"], _make_proposals)
+        return _session()
+
+
+# --------------------------------------------------------------------------
+# words on screen: suggested from what the edit knows, then edited like shots
+# --------------------------------------------------------------------------
+
+class SuggestReq(BaseModel):
+    profile: dict = {}
+    title: str | None = None
+    kinds: list[str] | None = None
+
+
+@app.post("/api/overlays/suggest")
+def api_overlays_suggest(req: SuggestReq) -> dict:
+    """Fill in the overlays the edit is missing. One turn: Undo takes them all away."""
+    with LOCK:
+        b = SESSION.board
+        if not b:
+            raise HTTPException(409, "Choose a story first — titles hang off its parts and shots.")
+        ops, notes = overlays.suggest(b, CATALOG["cat"], req.profile, req.title, req.kinds)
+        style = overlays.style_from_profile(req.profile)
+        if style and not b.get("overlay_style"):
+            ops.insert(0, {"op": "overlay_style", **style})
+        if not ops:
+            raise HTTPException(409, "Nothing to add — " + (notes[0][0].lower() + notes[0][1:] if notes
+                                                              else "every part already has its words."))
+        n = sum(o["op"] == "add_overlay" for o in ops)
+        reply = f"Added {n} overlay{'s' * (n != 1)} from what the edit already knows."
+        if notes:
+            reply += " " + " ".join(notes)
+        SESSION.add({"kind": "direct", "text": "You asked for titles and labels", "ops": ops, "reply": reply},
+                    CATALOG["cat"], _make_proposals)
+        return _session()
+
+
+# --------------------------------------------------------------------------
+# export: the edit + its words on screen + music, as one file
+# --------------------------------------------------------------------------
+
+class ExportReq(BaseModel):
+    music: bool = True
+
+
+@app.post("/api/export")
+def api_export(req: ExportReq) -> dict:
+    """Create an export. The browser then uploads its overlay frames and starts it."""
+    with LOCK:
+        if not SESSION.board:
+            raise HTTPException(409, "Choose a story first — there's nothing to export yet.")
+        tl = timeline.build(SESSION.board, CLIPS, musiclib.current())
+        track = musiclib.current() if req.music else None
+        try:
+            # Named after what the video says it is: its title, else the story.
+            title = next((o["text"] for o in SESSION.board.get("overlays", []) if o["kind"] == "title"), None)
+            job = export.create(tl["items"], dict(CLIPS), title or SESSION.board.get("name", ""),
+                                track.path if track else None, SESSION.board.get("style"))
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        return job.public()
+
+
+def _job(jid: str) -> export.Job:
+    job = export.JOBS.get(jid)
+    if not job:
+        raise HTTPException(404, "no such export")
+    return job
+
+
+@app.post("/api/export/{jid}/frames/{n}")
+async def api_export_frame(jid: str, n: int, request: Request) -> dict:
+    job = _job(jid)
+    try:
+        export.save_frame(job, n, await request.body())
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"ok": True}
+
+
+class ExportStartReq(BaseModel):
+    schedule: list[dict] = []
+
+
+@app.post("/api/export/{jid}/start")
+def api_export_start(jid: str, req: ExportStartReq) -> dict:
+    job = _job(jid)
+    try:
+        export.start(job, req.schedule)
+    except (ValueError, KeyError, TypeError) as e:
+        raise HTTPException(400, str(e)) from e
+    return job.public()
+
+
+@app.get("/api/export/{jid}")
+def api_export_status(jid: str) -> dict:
+    return _job(jid).public()
+
+
+@app.post("/api/export/{jid}/cancel")
+def api_export_cancel(jid: str) -> dict:
+    job = _job(jid)
+    job.cancel = True
+    if job.stage == "waiting":
+        job.stage = "cancelled"
+    return job.public()
+
+
+@app.get("/api/export/{jid}/file")
+def api_export_file(jid: str) -> FileResponse:
+    job = _job(jid)
+    if job.stage != "done" or not job.path or not os.path.isfile(job.path):
+        raise HTTPException(404, "not finished")
+    return FileResponse(job.path, media_type="video/mp4", filename=Path(job.path).name)
+
+
+@app.post("/api/export/{jid}/reveal")
+def api_export_reveal(jid: str) -> Response:
+    job = _job(jid)
+    if job.stage != "done" or not job.path:
+        raise HTTPException(404, "not finished")
+    if sys.platform == "darwin":
+        subprocess.Popen(["open", "-R", job.path])
+    return Response(status_code=204)
+
+
+# --------------------------------------------------------------------------
 # music: tracks from the creator's own folder that fit the storyboard's shape
 # --------------------------------------------------------------------------
 
@@ -513,6 +756,188 @@ def api_music_audio(track_id: str) -> FileResponse:
     if not p:
         raise HTTPException(404)
     return FileResponse(p)
+
+
+# --------------------------------------------------------------------------
+# borrow a feeling: learn a reference video's style, apply it as one turn
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+# remix: reference reels + the shelf -> one finished short, then the board
+# --------------------------------------------------------------------------
+
+class RemixReq(BaseModel):
+    refs: list[str]                 # links, or paths on this Mac
+    title: str | None = None
+    sub: str | None = None
+    length: float | None = None
+    name: str | None = None
+
+
+@app.post("/api/remix")
+def api_remix_start(req: RemixReq) -> dict:
+    with LOCK:
+        if not CLIPS:
+            raise HTTPException(409, "Drop your clips in first — the remix is made from them.")
+        refs = [r.strip() for r in req.refs if r.strip()]
+        if not refs:
+            raise HTTPException(400, "Paste at least one reference link.")
+        clips = dict(CLIPS)
+        cut_now = cut.for_story(PLAN["plan"]) if PLAN["plan"] else None
+
+    def on_done(job: remix.Job) -> None:
+        # the finished remix becomes the working storyboard, one undoable turn,
+        # and its track joins the music list so the timeline knows the beat
+        with LOCK:
+            r = job.result or {}
+            mx = r.get("music")
+            if mx and not any(t.id == mx["track"].id for t in musiclib.STATE["tracks"]):
+                musiclib.STATE["tracks"].append(mx["track"])
+            if mx:
+                musiclib.use(mx["track"].id)
+            SESSION.add({"kind": "direct", "text": f"Remix in the style of {len(job.refs)} reference(s)",
+                         "ops": remix.session_ops(r),
+                         "reply": f"{r['plan'].duration:.0f} s, {len(r['plan'].picks)} shots" if r.get("plan") else ""},
+                        CATALOG["cat"], _make_proposals)
+
+    job = remix.start(refs, clips, cut_now, req.model_dump(), on_done)
+    return job.public()
+
+
+def _remix_job(jid: str) -> remix.Job:
+    job = remix.JOBS.get(jid)
+    if not job:
+        raise HTTPException(404, "no such remix")
+    return job
+
+
+@app.get("/api/remix/{jid}")
+def api_remix_status(jid: str) -> dict:
+    return _remix_job(jid).public()
+
+
+@app.get("/api/remix/{jid}/file")
+def api_remix_file(jid: str) -> FileResponse:
+    job = _remix_job(jid)
+    if not job.result or not job.result.get("path"):
+        raise HTTPException(409, "not finished yet")
+    return FileResponse(job.result["path"], media_type="video/mp4", filename=Path(job.result["path"]).name)
+
+
+@app.get("/api/remix/{jid}/credits")
+def api_remix_credits(jid: str) -> FileResponse:
+    job = _remix_job(jid)
+    if not job.result or not job.result.get("credits"):
+        raise HTTPException(409, "not finished yet")
+    return FileResponse(job.result["credits"], media_type="text/plain", filename=Path(job.result["credits"]).name)
+
+
+class RefReq(BaseModel):
+    source: str             # a path on this Mac (from /api/locate or /api/upload), or a link
+
+
+@app.post("/api/references")
+def api_ref_start(req: RefReq) -> dict:
+    try:
+        return reference.start(req.source).public()
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@app.get("/api/references")
+def api_ref_library() -> dict:
+    return {"references": reference.library(), "links": reference.ytdlp() is not None}
+
+
+@app.get("/api/references/jobs/{jid}")
+def api_ref_job(jid: str) -> dict:
+    job = reference.JOBS.get(jid)
+    if not job:
+        raise HTTPException(404, "no such job")
+    return job.public()
+
+
+def _grid() -> dict | None:
+    return timeline.build(SESSION.board, CLIPS, musiclib.current()).get("grid")
+
+
+@app.get("/api/references/{rid}")
+def api_ref_card(rid: str) -> dict:
+    with LOCK:
+        b = SESSION.board
+        landscape = None
+        if b:
+            fr = export.frame_size(timeline.layout(b), CLIPS)
+            landscape = fr["w"] > fr["h"]
+        try:
+            out = reference.card(rid, _grid(), landscape)
+        except ValueError as e:
+            raise HTTPException(404, str(e)) from e
+        out["music"] = reference.music_matches(rid, musiclib.STATE["tracks"])
+        out["music_folder"] = musiclib.STATE["status"] == "ready"
+        out["has_story"] = b is not None
+        return out
+
+
+class LookReq(BaseModel):
+    strength: str = "full"
+
+
+@app.post("/api/references/{rid}/look")
+def api_ref_look(rid: str, req: LookReq) -> dict:
+    """Fit the look to the shots in this story; before/after stills to judge it by."""
+    with LOCK:
+        if not SESSION.board:
+            raise HTTPException(409, "Choose a story first — the look is fitted to its shots.")
+        try:
+            return reference.fit_look(rid, SESSION.board, CATALOG["cat"], req.strength)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+
+
+class RefApplyReq(BaseModel):
+    traits: list[str]
+    strength: str = "full"
+
+
+@app.post("/api/references/{rid}/apply")
+def api_ref_apply(rid: str, req: RefApplyReq) -> dict:
+    """One direct turn: the diff says what changed, Undo takes all of it back."""
+    with LOCK:
+        if not SESSION.board:
+            raise HTTPException(409, "Choose a story first — a style is applied to an edit.")
+        try:
+            look = reference.fit_look(rid, SESSION.board, CATALOG["cat"], req.strength) if "look" in req.traits else None
+            op = reference.make_op(rid, req.traits, _grid(), look)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        t = SESSION.add({"kind": "direct", "text": f"Borrow the feel of “{op['name']}”", "ops": [op]},
+                        CATALOG["cat"], _make_proposals)
+        if t.skipped:
+            SESSION.turns.remove(t)
+            SESSION.replay(CATALOG["cat"], _make_proposals)
+            raise HTTPException(400, t.skipped[0])
+        return _session()
+
+
+@app.delete("/api/references/{rid}")
+def api_ref_forget(rid: str) -> dict:
+    try:
+        reference.forget(rid)
+    except ValueError as e:
+        raise HTTPException(404, str(e)) from e
+    return api_ref_library()
+
+
+@app.get("/api/references/{rid}/files/{name}")
+def api_ref_file(rid: str, name: str) -> FileResponse:
+    try:
+        p = reference.file_path(rid, name)
+    except ValueError:
+        p = None
+    if not p:
+        raise HTTPException(404)
+    return FileResponse(p, media_type="image/jpeg")
 
 
 # --------------------------------------------------------------------------

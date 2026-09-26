@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { CREATIVE_TOOLS, guidedEditMessage, makeBrief, readBriefs, storeBrief } from './creativeTools.ts'
+import { CREATIVE_TOOLS, guidedEditMessage, makeBrief, readBriefs, storeBrief, titlesRequest } from './creativeTools.ts'
 import { emptyProfile } from './profile.ts'
 
 test('all seven recording workflows can save independent briefs and creator snapshots', () => {
@@ -35,4 +35,13 @@ test('the live guided edit becomes a constrained reversible storyboard request',
   assert.match(message, /quick pacing/)
   assert.match(message, /smallest reversible storyboard changes/)
   assert.throws(() => guidedEditMessage(makeBrief(CREATIVE_TOOLS[0], 'Push in', 'Move closer', '', creator)))
+})
+test('Titles & motion becomes a words-on-screen request carrying only the style it needs', () => {
+  const tool = CREATIVE_TOOLS.find(t => t.id === 'motion-graphics')!
+  const creator = { ...emptyProfile(), name: 'Mika', handle: 'mika', font: 'Editorial' as const, color: '#aabbcc', about: 'private notes' }
+  const req = titlesRequest(makeBrief(tool, 'Part labels', 'Kyoto in three days', '', creator))
+  assert.deepEqual(req.kinds, ['part'])
+  assert.equal(req.title, 'Kyoto in three days')
+  assert.deepEqual(Object.keys(req.profile).sort(), ['captionPosition', 'color', 'font', 'handle', 'name'])
+  assert.throws(() => titlesRequest(makeBrief(CREATIVE_TOOLS[0], 'Push in', 'Move closer', '', creator)))
 })

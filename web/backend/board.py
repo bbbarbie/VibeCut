@@ -25,6 +25,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from . import overlays as ov
+from . import restyle
 from . import storyboard as sb
 
 # Pace. Trimming keeps each shot centred on its best frame, so a tighter
@@ -35,10 +37,13 @@ MIN_SHOT_S = 1.5
 
 # What the chat model may emit.
 LLM_OPS = ("choose_option", "move_beat", "drop_beat", "drop_shot", "swap_shot",
-           "add_shot", "move_shot", "retitle_beat", "set_pace", "open_with", "end_with")
+           "add_shot", "move_shot", "retitle_beat", "set_pace", "open_with", "end_with",
+           "add_overlay", "edit_overlay", "drop_overlay")
 # Plus the precise timeline edits, which come from the keyboard, never from
 # a sentence: cut at a point, trim an edge to a point, remove a range.
-OPS = LLM_OPS + ("split", "trim", "drop_range")
+OPS = LLM_OPS + ("split", "trim", "drop_range", "overlay_style", "apply_style")
+# Words on screen (overlays.py): same log, same undo, but they never touch a shot.
+OVERLAY_OPS = ("add_overlay", "edit_overlay", "drop_overlay", "overlay_style")
 
 FRAME = 1 / 30  # sequence frame; the smallest piece a cut or trim may leave
 
@@ -94,6 +99,7 @@ def board_from_option(option: dict) -> dict:
             "id": f"{prefix}{i + 1}",
             "title": b["title"],
             "detail": b["detail"],
+            **({"line": b["line"]} if b.get("line") else {}),
             # a voiceover line nothing shows stays a gap of its length
             "shots": [_gap(s["key"], s["end"] - s["start"]) if s.get("gap")
                       else {"id": s["id"], "start": s["start"], "end": s["end"]} for s in b["shots"]],
@@ -206,7 +212,9 @@ def apply(board: dict | None, op: dict, cat: Catalog, proposals: dict | None,
     kind = op.get("op")
     if kind not in OPS:
         raise OpError(f"unknown operation {kind!r}")
-    op = {k: v for k, v in op.items() if v is not None}
+    # null means "not given" -- except an overlay's length, where it means
+    # "as long as what it hangs off" (a caption filling its spoken line).
+    op = {k: v for k, v in op.items() if v is not None or (k == "dur" and kind in OVERLAY_OPS)}
 
     if kind == "choose_option":
         snap = op.get("snapshot")
@@ -225,6 +233,23 @@ def apply(board: dict | None, op: dict, cat: Catalog, proposals: dict | None,
         board = {"option": "manual", "name": "Your cut", "structure": "Built by hand from the shelf.",
                  "beats": []}
     b = copy.deepcopy(board)
+
+    if kind in OVERLAY_OPS:
+        try:
+            {"add_overlay": lambda: ov.add(b, op, new_id), "edit_overlay": lambda: ov.edit(b, op),
+             "drop_overlay": lambda: ov.drop(b, op), "overlay_style": lambda: ov.set_style(b, op)}[kind]()
+        except (ov.OverlayError, ValueError, TypeError) as e:
+            raise OpError(str(e)) from e
+        return b, op
+
+    if kind == "apply_style":
+        # A borrowed style (restyle.py): retimes shots, and records the look
+        # and transitions for export. Comes from the style card, never chat.
+        try:
+            restyle.apply(b, op, cat)
+        except restyle.StyleError as e:
+            raise OpError(str(e)) from e
+        return b, op
 
     if kind == "move_beat":
         beat = _beat(b, op.get("beat"))
@@ -361,6 +386,7 @@ def apply(board: dict | None, op: dict, cat: Catalog, proposals: dict | None,
             b["beats"][-1]["shots"].append(entry)
         _prune(b)
 
+    ov.prune(b)  # overlays go with what they hang off
     return b, op
 
 
@@ -486,7 +512,7 @@ def describe(d: dict, a: dict | None, b: dict | None, ops: list[dict] | None = N
                     else f"Lifted a range at {where}, gap left")
             lines.append({"kind": "removed" if removed is not None else "gap", "beat": fb["id"], "text": text})
         if lines:
-            return lines
+            return lines + ov.describe(a, b)
     if d["replaced"] and b:
         lines.append({"kind": "replaced", "text": f"Started from “{b['name']}”"})
         return lines
@@ -565,6 +591,8 @@ def describe(d: dict, a: dict | None, b: dict | None, ops: list[dict] | None = N
     if shot_moves and not d["beats"]["moved"]:
         where = {title.get(m["beat"], m["beat"]) for m in shot_moves}
         lines.append({"kind": "moved", "text": f"Moved {n(len(shot_moves))} within “{'”, “'.join(sorted(where))}”"})
+    lines += ov.describe(a, b)
+    lines += restyle.describe(a, b)
     if not lines:
         lines.append({"kind": "none", "text": "No change"})
     return lines

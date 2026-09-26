@@ -101,8 +101,11 @@ def _parse_fps(stream: dict) -> float:
     return 30.0
 
 
-def load(path: str, verbose: bool = False) -> Media:
+def load(path: str, verbose: bool = False, limit_s: float | None = None) -> Media:
+    """Every frame at 48x27 plus mono audio. `limit_s` reads only the start
+    (a long reference video is learnt from its first minutes)."""
     info = probe(path)
+    head = ["-t", f"{limit_s:.3f}"] if limit_s else []
 
     vstreams = [s for s in info["streams"] if s.get("codec_type") == "video"]
     if not vstreams:
@@ -112,6 +115,8 @@ def load(path: str, verbose: bool = False) -> Media:
 
     fps = _parse_fps(v)
     duration = float(info["format"].get("duration", 0.0))
+    if limit_s:
+        duration = min(duration, limit_s) if duration else limit_s
     tags = {**info["format"].get("tags", {}), **v.get("tags", {})}
 
     if verbose:
@@ -119,7 +124,7 @@ def load(path: str, verbose: bool = False) -> Media:
 
     # --- video: native fps, tiny resolution -------------------------------
     raw = _run([
-        "ffmpeg", "-v", "error", "-i", path,
+        "ffmpeg", "-v", "error", "-i", path, *head,
         "-f", "rawvideo", "-pix_fmt", "rgb24",
         "-vf", f"scale={FRAME_W}:{FRAME_H}",
         "-",
@@ -133,7 +138,7 @@ def load(path: str, verbose: bool = False) -> Media:
     audio = np.zeros(0, dtype=np.float32)
     if astreams:
         araw = _run([
-            "ffmpeg", "-v", "error", "-i", path,
+            "ffmpeg", "-v", "error", "-i", path, *head,
             "-f", "f32le", "-ac", "1", "-ar", str(AUDIO_SR), "-",
         ])
         audio = np.frombuffer(araw, dtype=np.float32).copy()

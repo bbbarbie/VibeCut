@@ -16,3 +16,6 @@ out/
 node_modules/
 web/frontend/dist/
 .env
+
+# design mockups use real footage stills — never commit them
+design/mockups/assets/

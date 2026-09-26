@@ -3,8 +3,15 @@ import { api } from './api'
 import { Chat, type ChatItem } from './components/Chat'
 import { CreatorProfile } from './components/CreatorProfile'
 import { CreativeTools } from './components/CreativeTools'
-import { guidedEditMessage, type FeatureBrief } from './creativeTools'
+import { MatchStyle } from './components/MatchStyle'
+import { guidedEditMessage, titlesRequest, type FeatureBrief } from './creativeTools'
+import { KIND_META, partsOf } from './overlayDraw'
+import { loadProfile } from './profile'
 import { CutReview } from './components/CutReview'
+import { Export } from './components/Export'
+import { Remix } from './components/Remix'
+import { Overlays } from './components/Overlays'
+import { TalkCut } from './components/TalkCut'
 import { Keys } from './components/Keys'
 import { Player } from './components/Player'
 import { Menu, SwapPicker, type MenuItem } from './components/Menus'
@@ -18,13 +25,22 @@ import { bytes, dur, uid } from './format'
 import { clock, locate, toSource } from './sequence'
 import { cutWhilePlaying, step } from './snap'
 import { phStore, snapStore, transport, transportStore, useStore } from './transport'
-import type { Clip, CutData, Msg, Option, Segment, Session, Shot, TimelineData } from './types'
+import type { Clip, CutData, Msg, Option, Overlay, OverlayKind, Overlays as OverlayData, Segment, Session, Shot, TimelineData } from './types'
 
 const hello: Msg = {
   id: 'hello', role: 'app', at: 0,
   text: 'Hi — I’m here to help you shape the video. Once you’ve picked a story, you can also just tell me what to change: “the opening is too slow”, “take out the market”, “end on the sunset”. Everything can be undone.',
 }
 const EMPTY_TL: TimelineData = { fps: 30, total: 0, items: [], targets: [], grid: null }
+const EMPTY_OVERLAYS: OverlayData = {
+  items: [], findings: [], style: { font: 'Clean', color: '#ffffff', accent: '#b9d9eb', captions: 'bottom', backing: 'shadow' },
+}
+const shortDate = (iso: string | null | undefined) => {
+  const m = iso?.match(/^(\d{4})-(\d\d)-(\d\d)/)
+  if (!m) return null
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/,/g, '').toUpperCase()
+}
 const r3 = (x: number) => Math.round(x * 1000) / 1000
 
 type Queue = { source: string; items: PlayItem[]; index: number }
@@ -61,12 +77,21 @@ export default function App() {
   const [flash, setFlash] = useState<string | null>(null)
   const [alt, setAlt] = useState(false)
   const [help, setHelp] = useState(false)
+  // Words on screen: which one is open, and which tab the Frames sidebar shows.
+  const [selOverlay, setSelOverlay] = useState<string | null>(null)
+  const [framesTab, setFramesTab] = useState<'shots' | 'words'>('shots')
+  const [exporting, setExporting] = useState(false)
+  const [remixing, setRemixing] = useState(false)
+  const [talkOpen, setTalkOpen] = useState(false)   // talking-head cut
   const dragDepth = useRef(0)
   const videoRef = useRef<HTMLVideoElement>(null)
   const musicRef = useRef<HTMLAudioElement>(null)
   const tr = useStore(transportStore)
   const tl = session?.timeline ?? EMPTY_TL
   const fr = 1 / tl.fps
+  const ovData = session?.overlays ?? EMPTY_OVERLAYS
+  const parts = useMemo(() => partsOf(tl.items), [tl.items])
+  const overlayView = useMemo(() => ({ items: ovData.items, style: ovData.style, parts }), [ovData, parts])
 
   const shots = useMemo(() => {
     const m = new Map<string, { clip: Clip; shot: Shot }>()
@@ -150,17 +175,30 @@ export default function App() {
     finally { setPending(null) }
   }
 
+  const applyCreativeTitles = async (brief: FeatureBrief) => {
+    if (!session?.board) throw new Error('Choose a story first — titles hang off its parts and shots.')
+    const req = titlesRequest(brief)
+    const s = await api.suggestOverlays(req)
+    setSession(s)
+    offerUndo(s)
+    setLevel('story')
+  }
+
+  const offerUndo = (s: Session) => {
+    const t = s.turns.at(-1)
+    if (t?.skipped.length) note(`Couldn’t: ${t.skipped[0]}`)
+    if (t && t.lines.length && !t.skipped.length) {
+      setUndoable({ turn: t.id, text: t.lines.map((l) => l.text).join(' · ') })
+      window.clearTimeout(undoTimer.current)
+      undoTimer.current = window.setTimeout(() => setUndoable(null), 7000)
+    }
+  }
+
   const run = async (ops: Record<string, unknown>[], label: string) => {
     try {
       const s = await api.ops(ops, label)
       setSession(s)
-      const t = s.turns.at(-1)
-      if (t?.skipped.length) note(`Couldn’t: ${t.skipped[0]}`)
-      if (t && t.lines.length && !t.skipped.length) {
-        setUndoable({ turn: t.id, text: t.lines.map((l) => l.text).join(' · ') })
-        window.clearTimeout(undoTimer.current)
-        undoTimer.current = window.setTimeout(() => setUndoable(null), 7000)
-      }
+      offerUndo(s)
       return s
     } catch (e) {
       note(`Couldn’t apply that: ${(e as Error).message}`)
@@ -357,7 +395,7 @@ export default function App() {
   // ---- keyboard: industry conventions ----------------------------------------
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      if (profileOpen || toolsOpen) return
+      if (profileOpen || toolsOpen || exporting) return
       if (e.key === 'Alt') setAlt(true)
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
@@ -488,6 +526,84 @@ export default function App() {
       { label: 'Remove — leave empty space', hint: '⌥ Delete', danger: true, onClick: () => run([{ op: 'drop_shot', shot: menu.key, leave_gap: true }], `You removed shot ${it?.n}, leaving the space`) },
     ] }
   }
+  // ---- words on screen ------------------------------------------------------
+  const runOverlay = async (ops: Record<string, unknown>[], label: string) => {
+    const before = new Set(ovData.items.map((o) => o.id))
+    const s = await run(ops, label)
+    const added = s?.overlays.items.find((o) => !before.has(o.id))
+    if (added) { setSelOverlay(added.id); showOverlay(added) }
+    return s
+  }
+  const showOverlay = (o: Overlay) => {
+    // Park the playhead where it's fully in, so the preview shows it.
+    const t = phStore.get()
+    if (t < o.start || t >= o.shown_end) transport.seek(Math.min(o.start + 0.6, (o.start + o.shown_end) / 2))
+  }
+  const watchOverlay = (o: Overlay) => {
+    stopQueue()
+    setSegment(null)
+    transport.seek(Math.max(0, o.start - 0.8))
+    transport.play(1)
+  }
+  const suggestOverlays = async () => {
+    const { profile } = loadProfile(window.localStorage)
+    const said = session?.proposals?.direction?.trim()
+    const s = await api.suggestOverlays({ profile, title: said && said.length <= 48 ? said : undefined })
+    setSession(s)
+    offerUndo(s)
+  }
+  const newOverlayAt = (kind: OverlayKind): Record<string, unknown> => {
+    const { profile } = loadProfile(window.localStorage)
+    const items = tl.items
+    const beatId = level === 'story' && storySel ? storySel.beat : null
+    const it = level === 'frames' ? items[locate(items, phStore.get())]
+      : beatId ? items.find((x) => x.beat_id === beatId) : items[0]
+    const where = kind === 'end' || kind === 'chapters' ? {}
+      : level === 'frames' ? { start: r3(phStore.get()) }
+        : beatId ? { beat: beatId, at: 0.3 } : { start: 0.4 }
+    const partNo = it ? parts.findIndex((p) => p.id === it.beat_id) + 1 : 1
+    const clip = it?.clip_id ? clips.find((c) => c.id === it.clip_id) : null
+    const handle = profile.handle.trim() ? (profile.handle.startsWith('@') ? profile.handle : '@' + profile.handle.trim()) : ''
+    const words: Record<OverlayKind, Record<string, unknown>> = {
+      title: { text: session?.board?.name ?? 'Title' },
+      part: { text: it?.beat_title ?? 'Part', sub: `Part ${partNo}` },
+      name: { text: profile.name.trim() || 'Name', sub: handle },
+      caption: { text: 'What you said here' },
+      date: { text: shortDate(clip?.capture_time) ?? shortDate(new Date().toISOString())! },
+      end: { text: 'Thanks for watching', sub: handle },
+      chapters: {},
+    }
+    return { ...where, ...words[kind] }
+  }
+  const editOverlayOnTimeline = (id: string, patch: { start?: number; dur?: number }) => {
+    const o = ovData.items.find((x) => x.id === id)
+    const what = patch.start != null ? 'moved' : 'changed the length of'
+    run([{ op: 'edit_overlay', overlay: id, ...patch }], `You ${what} the ${o ? KIND_META[o.kind].label.toLowerCase() : 'overlay'}`)
+  }
+  const selectOverlay = (id: string | null) => {
+    setSelOverlay(id)
+    const o = id ? ovData.items.find((x) => x.id === id) : null
+    if (o && level === 'frames') { setFramesTab('words'); timelineOwns(); showOverlay(o) }
+  }
+  const overlaysPanel = session?.board ? (
+    <Overlays data={ovData} items={tl.items} level={level} selected={selOverlay} busy={!!pending}
+              onSelect={selectOverlay} onRun={runOverlay} onSuggest={suggestOverlays} onWatch={watchOverlay} newAt={newOverlayAt} />
+  ) : null
+  const applyTalk = async (captions: boolean) => {
+    const { profile } = loadProfile(window.localStorage)
+    const s = await api.talkApply(captions, profile)
+    setSession(s)
+    offerUndo(s)
+    setTalkOpen(false)
+    setShowCut(false)
+  }
+  const openTalk = () => { transport.stop(); stopQueue(); setMenu(null); setLevel('story'); setShowCut(false); setTalkOpen(true) }
+
+  const openExport = () => { transport.stop(); videoRef.current?.pause(); stopQueue(); setMenu(null); setExporting(true) }
+  const openRemix = () => { transport.stop(); videoRef.current?.pause(); stopQueue(); setMenu(null); setShowCut(false); setRemixing(true) }
+  // the finished remix is already on the session as a turn; show it as the story
+  const remixDone = async () => { const s = await api.session(); setSession(s); setLevel('story') }
+
   const usedIds = useMemo(() => new Set((session?.board?.beats ?? []).flatMap((b) => b.shots.map((x) => x.id))), [session])
 
   const apply = (o: Option) => run([{ op: 'choose_option', option: o.key }], `You started from “${o.name}”`)
@@ -526,7 +642,8 @@ export default function App() {
       setProfileOpen(false)
       requestAnimationFrame(() => profileButton.current?.focus())
     }} />}
-    {toolsOpen && <CreativeTools onApplyPlan={applyCreativePlan} onProfile={() => { window.location.hash = 'profile' }} onClose={() => {
+    {toolsOpen && <CreativeTools onApplyPlan={applyCreativePlan} onApplyTitles={applyCreativeTitles}
+      onStyled={(s) => { setSession(s); offerUndo(s); setLevel('story') }} onProfile={() => { window.location.hash = 'profile' }} onClose={() => {
       window.history.replaceState(null, '', window.location.pathname + window.location.search)
       setToolsOpen(false)
     }} />}
@@ -548,15 +665,27 @@ export default function App() {
           transport.stop(); videoRef.current?.pause(); setMenu(null); setSwap(null); setHelp(false)
           window.location.hash = 'tools'
         }} className="shrink-0 rounded-lg border border-accent/30 px-3 py-1 text-[12px] text-accent hover:bg-raised">Creative tools</button>
+        {clips.length > 0 && (
+          <button type="button" onClick={openRemix} title="Paste reels you like — get a finished short in their style, from your clips"
+                  className="shrink-0 rounded-lg bg-accent px-3 py-1 text-[12px] font-medium text-accent-ink hover:brightness-110">Make it like a reel</button>
+        )}
+        {clips.length > 0 && (
+          <button type="button" onClick={openTalk} title="Talking to camera? Transcribe on this Mac, cut pauses and retakes, add subtitles"
+                  className="shrink-0 rounded-lg border border-accent/30 px-3 py-1 text-[12px] text-accent hover:bg-raised">Talking to camera</button>
+        )}
         <button ref={profileButton} type="button" onClick={() => {
           transport.stop(); videoRef.current?.pause(); setMenu(null); setSwap(null); setHelp(false)
           window.location.hash = 'profile'
         }} className="shrink-0 rounded-lg border border-accent/30 px-3 py-1 text-[12px] text-accent hover:bg-raised">Creator profile</button>
+        {session?.board && (
+          <button type="button" onClick={openExport} title="Render the edit, its words on screen and its music to one video file"
+                  className="shrink-0 rounded-lg bg-accent px-3 py-1 text-[12px] font-semibold text-accent-ink hover:opacity-90">Export</button>
+        )}
         {session?.cut && (
           <button type="button" onClick={() => { setLevel('story'); setShowCut(true) }}
                   title={`${session.cut.line_en} — click to see what was cut and why`}
                   className="truncate rounded-md px-2 py-1 font-serif text-[14px] text-zinc-300 hover:bg-raised">
-            {session.cut.line_zh}{atGate ? ' · 待你确认' : ''}
+            {session.cut.line_en}{atGate ? ' · waiting for your OK' : ''}
           </button>
         )}
         {importing && <span className="text-[11px] text-accent">indexing…</span>}
@@ -573,12 +702,16 @@ export default function App() {
         {level === 'story' ? (
           <>
             <main className="relative flex min-h-0 min-w-0 flex-col bg-panel">
-              {(atGate || showCut) && cutData ? (
+              {talkOpen ? (
+                <TalkCut onApply={applyTalk} onWatch={preview} onClose={() => setTalkOpen(false)} />
+              ) : (atGate || showCut) && cutData ? (
                 <CutReview data={cutData} clips={clips} approved={!atGate} busy={approving}
                            onOverride={cutOverride} onApprove={approveCut} onWatch={preview}
                            onClose={() => setShowCut(false)} />
               ) : (
               <Story
+                matchStyle={<MatchStyle onDone={(s) => { setSession(s); offerUndo(s); setLevel('story') }}
+                                        onAdjust={() => { transport.stop(); window.location.hash = 'tools' }} />}
                 session={session}
                 clips={clips}
                 asking={!!pending}
@@ -588,6 +721,7 @@ export default function App() {
                 onPick={(fl) => importPicked(fromInput(fl))}
                 onAsk={send}
                 onVoiceover={followVoiceover}
+                onTalk={openTalk}
                 onUse={apply}
                 onPlay={playSource}
                 onSelect={(sel, anchor) => {
@@ -604,32 +738,51 @@ export default function App() {
               {undoable && <UndoToast text={undoable.text} onUndo={() => { toggle(undoable.turn); setUndoable(null) }} />}
             </main>
             <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto border-l border-line bg-panel p-3">
-              <div className="flex aspect-[16/10] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-line">
-                <Player videoRef={videoRef} segment={segment} label={storyLabel} gap={false}
+              <div className="flex aspect-[16/10] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-line"
+                   onClick={() => { if (tr.playing && !segment) transport.stop() }}>
+                <Player videoRef={videoRef} segment={segment} label={tr.playing && !segment ? 'Your story, with its words on screen — click to pause' : storyLabel}
+                        gap={tr.gap && !segment} overlay={overlayView} frame={tl.frame}
                         onTime={() => {}} onEnd={() => { if (queue) playAt(queue, queue.index + 1) }} onPlayingChange={() => {}} />
               </div>
-              {!segment && <p className="px-1 text-[12px] text-muted">Press Watch on anything to see it here.</p>}
+              {!segment && !tr.playing && <p className="px-1 text-[12px] text-muted">Press Watch on anything to see it here.</p>}
+              {overlaysPanel}
               {session?.board && <Music board={session.board} inUse={session.music?.id ?? null} onSession={setSession} />}
             </aside>
           </>
         ) : (
           <main className="relative flex min-h-0 min-w-0 flex-col">
             <div className="flex min-h-0 flex-1">
-              <Shelf
-                clips={clips}
-                activeShot={activeShot}
-                busy={importing}
-                onPick={(fl) => importPicked(fromInput(fl))}
-                onPreview={(c, sh) => preview(c.id, sh.start, sh.end, sh.id)}
-                onAdd={(_, sh) => insertShot(sh.id, tl.items.length)}
-                onUseRejected={(c) => cutOverride(c.id, 'keep')}
-              />
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-panel">
+                {session?.board && (
+                  <div className="flex h-8 shrink-0 items-end gap-1 border-b border-line px-3" role="tablist">
+                    {([['shots', 'Shots'], ['words', `Words on screen${ovData.items.length ? ` · ${ovData.items.length}` : ''}`]] as const).map(([k, name]) => (
+                      <button key={k} type="button" role="tab" aria-selected={framesTab === k} onClick={() => setFramesTab(k)}
+                              className={`rounded-t-md px-2.5 py-1 text-[11px] ${framesTab === k ? 'bg-raised text-zinc-100' : 'text-muted hover:text-zinc-200'}`}>{name}</button>
+                    ))}
+                  </div>
+                )}
+                {framesTab === 'words' && overlaysPanel ? (
+                  <div className="min-h-0 flex-1 overflow-y-auto p-3">{overlaysPanel}</div>
+                ) : (
+                  <Shelf
+                    clips={clips}
+                    activeShot={activeShot}
+                    busy={importing}
+                    onPick={(fl) => importPicked(fromInput(fl))}
+                    onPreview={(c, sh) => preview(c.id, sh.start, sh.end, sh.id)}
+                    onAdd={(_, sh) => insertShot(sh.id, tl.items.length)}
+                    onUseRejected={(c) => cutOverride(c.id, 'keep')}
+                  />
+                )}
+              </div>
               <div className="flex w-[44%] min-w-[320px] flex-col">
                 <Player
                   videoRef={videoRef}
                   segment={segment}
                   label={label}
                   gap={tr.gap && !segment}
+                  overlay={overlayView}
+                  frame={tl.frame}
                   onTime={() => {}}
                   onEnd={() => { if (queue) playAt(queue, queue.index + 1) }}
                   onPlayingChange={() => {}}
@@ -653,6 +806,11 @@ export default function App() {
               onInsertShot={insertShot}
               onClear={clear}
               onHelp={() => setHelp(true)}
+              overlays={ovData.items}
+              selectedOverlay={selOverlay}
+              onSelectOverlay={selectOverlay}
+              onOverlayEdit={editOverlayOnTimeline}
+              onExport={openExport}
             />
             {undoable && <UndoToast text={undoable.text} onUndo={() => { toggle(undoable.turn); setUndoable(null) }} />}
           </main>
@@ -666,6 +824,8 @@ export default function App() {
       )}
       {session?.music && <audio ref={musicRef} src={session.music.audio} preload="auto" />}
       {help && <Keys onClose={() => setHelp(false)} />}
+      {exporting && <Export tl={tl} overlays={ovData} parts={parts} music={session?.music?.title ?? null} style={session?.board?.style} onClose={() => setExporting(false)} />}
+      {remixing && <Remix onClose={() => setRemixing(false)} onDone={remixDone} />}
 
       {dragging && (
         <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-[2px]">

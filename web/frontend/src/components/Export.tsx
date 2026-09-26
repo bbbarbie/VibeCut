@@ -1,0 +1,151 @@
+import { useEffect, useRef, useState } from 'react'
+import { api } from '../api'
+import { dur } from '../format'
+import { renderSchedule, type Part } from '../overlayDraw'
+import type { BoardStyle, ExportJob, Overlays, TimelineData } from '../types'
+
+type Phase = { kind: 'ready' } | { kind: 'drawing'; done: number; of: number } | { kind: 'rendering'; job: ExportJob }
+  | { kind: 'done'; job: ExportJob } | { kind: 'error'; message: string }
+
+// Export: the edit, its words on screen and its music, as one file. The
+// words are drawn here, by the same code as the preview, then composited
+// by the server -- so the file shows exactly what the player showed.
+export function Export({ tl, overlays, parts, music, style, onClose }: {
+  tl: TimelineData
+  overlays: Overlays
+  parts: Part[]
+  music: string | null
+  style?: BoardStyle | null
+  onClose: () => void
+}) {
+  const [phase, setPhase] = useState<Phase>({ kind: 'ready' })
+  const [withMusic, setWithMusic] = useState(!!music)
+  const [withWords, setWithWords] = useState(overlays.items.length > 0)
+  const cancelled = useRef(false)
+  const jobId = useRef<string | null>(null)
+  const frame = tl.frame ?? { w: 1920, h: 1080 }
+  const issues = overlays.findings.filter((f) => f.verdict === 'bad').length
+  const busy = phase.kind === 'drawing' || phase.kind === 'rendering'
+
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) onClose() }
+    window.addEventListener('keydown', esc)
+    return () => window.removeEventListener('keydown', esc)
+  }, [busy, onClose])
+
+  const go = async () => {
+    cancelled.current = false
+    try {
+      const job = await api.exportCreate(withMusic)
+      jobId.current = job.id
+      let schedule: { frame: number | null; start: number; end: number }[] = []
+      if (withWords && overlays.items.length) {
+        setPhase({ kind: 'drawing', done: 0, of: 1 })
+        schedule = await renderSchedule({
+          items: overlays.items, style: overlays.style, parts, fps: tl.fps, total: job.total, w: job.size.w, h: job.size.h,
+          upload: async (n, png) => { await api.exportFrame(job.id, n, png) },
+          onProgress: (done, of) => setPhase({ kind: 'drawing', done, of }),
+          cancelled: () => cancelled.current,
+        })
+      }
+      let s = await api.exportStart(job.id, schedule)
+      setPhase({ kind: 'rendering', job: s })
+      while (s.stage !== 'done' && s.stage !== 'error' && s.stage !== 'cancelled') {
+        await new Promise((r) => setTimeout(r, 400))
+        s = await api.exportStatus(job.id)
+        setPhase({ kind: 'rendering', job: s })
+      }
+      if (s.stage === 'done') setPhase({ kind: 'done', job: s })
+      else if (s.stage === 'error') setPhase({ kind: 'error', message: s.error ?? 'The export failed.' })
+      else setPhase({ kind: 'ready' })
+    } catch (e) {
+      if (cancelled.current) { setPhase({ kind: 'ready' }); return }
+      setPhase({ kind: 'error', message: (e as Error).message })
+    }
+  }
+
+  const cancel = async () => {
+    cancelled.current = true
+    if (jobId.current) await api.exportCancel(jobId.current).catch(() => {})
+  }
+
+  const pct = phase.kind === 'drawing' ? phase.done / Math.max(1, phase.of)
+    : phase.kind === 'rendering' ? phase.job.progress : phase.kind === 'done' ? 1 : 0
+  const status = phase.kind === 'drawing' ? `Drawing the words on screen… ${phase.done}/${phase.of} frames`
+    : phase.kind === 'rendering' ? ({
+      waiting: 'Starting…', shots: `Rendering shots… ${phase.job.done} of ${phase.job.of}`, joining: 'Joining the shots…',
+      finishing: `Adding ${phase.job.overlays ? 'words' : ''}${phase.job.overlays && phase.job.music ? ' and ' : ''}${phase.job.music ? 'music' : ''}${!phase.job.overlays && !phase.job.music ? 'sound' : ''}… ${Math.round(phase.job.progress * 100)}%`,
+      done: 'Done', error: 'Failed', cancelled: 'Cancelled',
+    } as const)[phase.job.stage] : ''
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-[2px]" onPointerDown={(e) => { if (e.target === e.currentTarget && !busy) onClose() }}>
+      <div role="dialog" aria-labelledby="export-title" className="w-[440px] max-w-[92vw] rounded-2xl border border-line bg-panel p-5 shadow-2xl shadow-black/60">
+        <div className="flex items-baseline gap-2">
+          <h2 id="export-title" className="font-serif text-[24px] text-zinc-100">Export</h2>
+          <span className="text-[12px] text-muted">{frame.w}×{frame.h} · {dur(tl.total)} · 30 fps</span>
+        </div>
+        <p className="mt-1 text-[12px] leading-snug text-zinc-400">
+          Renders the timeline to one MP4 in <span className="text-zinc-300">Movies/VibeCut</span>. Your original clips are only read.
+          {frame.h > frame.w ? ' Vertical, because most of this edit was filmed that way.' : ''}
+        </p>
+
+        <div className="mt-4 space-y-2 text-[12px]">
+          <Toggle on={withWords} disabled={!overlays.items.length || busy} onChange={setWithWords}
+                  label={overlays.items.length ? `Words on screen (${overlays.items.length})` : 'Words on screen — none yet'} />
+          <Toggle on={withMusic} disabled={!music || busy} onChange={setWithMusic}
+                  label={music ? `Music: ${music}` : 'Music — none chosen under the edit'} />
+          {style && (style.look || style.transitions || style.letterbox) && (
+            <p className="rounded-lg bg-raised px-2.5 py-1.5 text-[11px] leading-snug text-zinc-300">
+              Borrowed from “{style.name}”: {[style.look && 'its colour', style.transitions && (style.transitions.between !== 'cut' || style.transitions.open || style.transitions.close) && 'its transitions',
+                style.letterbox && 'cinematic bars'].filter(Boolean).join(', ') || 'its timing'} — rendered here, not in the preview.
+            </p>
+          )}
+          {withWords && issues > 0 && (
+            <p className="rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-200">
+              {issues} overlay{issues === 1 ? ' has' : 's have'} a problem a viewer would notice (cut off, too quick to read, or overlapping). They’re marked in Words on screen.
+            </p>
+          )}
+        </div>
+
+        {phase.kind !== 'ready' && (
+          <div className="mt-4">
+            <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
+              <div className={`h-full rounded-full ${phase.kind === 'error' ? 'bg-rose-400' : 'bg-accent'} transition-[width] duration-300`} style={{ width: `${pct * 100}%` }} />
+            </div>
+            {status && <p className="mt-1.5 text-[11px] tabular-nums text-muted">{status}</p>}
+            {phase.kind === 'error' && <p className="mt-1.5 text-[12px] text-rose-300">{phase.message}</p>}
+            {phase.kind === 'done' && (
+              <p className="mt-1.5 text-[12px] text-zinc-200">Saved <span className="font-medium">{phase.job.file}</span> in {phase.job.elapsed.toFixed(0)}s.
+                {phase.job.notes?.length ? <span className="block text-muted">{phase.job.notes.join(' ')}</span> : null}</p>
+            )}
+          </div>
+        )}
+
+        <div className="mt-5 flex justify-end gap-2">
+          {phase.kind === 'done' ? <>
+            <button type="button" onClick={() => api.exportReveal(phase.job.id)} className="rounded-lg border border-line px-3 py-1.5 text-[12px] text-zinc-200 hover:bg-raised">Show in Finder</button>
+            <a href={`/api/export/${phase.job.id}/file`} download className="rounded-lg border border-line px-3 py-1.5 text-[12px] text-zinc-200 hover:bg-raised">Download</a>
+            <button type="button" onClick={onClose} className="rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-accent-ink">Done</button>
+          </> : busy ? (
+            <button type="button" onClick={cancel} className="rounded-lg border border-line px-3 py-1.5 text-[12px] text-zinc-200 hover:bg-raised">Cancel</button>
+          ) : <>
+            <button type="button" onClick={onClose} className="rounded-lg px-3 py-1.5 text-[12px] text-muted hover:text-zinc-200">Close</button>
+            <button type="button" onClick={go} disabled={!tl.items.length} className="rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-accent-ink disabled:opacity-30">
+              {phase.kind === 'error' ? 'Try again' : 'Export video'}
+            </button>
+          </>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Toggle({ on, disabled, onChange, label }: { on: boolean; disabled?: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <label className={`flex items-center gap-2 ${disabled ? 'text-zinc-600' : 'text-zinc-200'}`}>
+      <input type="checkbox" checked={on && !disabled} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="accent-[#b9d9eb]" />
+      <span className="truncate">{label}</span>
+    </label>
+  )
+}

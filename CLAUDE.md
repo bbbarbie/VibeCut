@@ -59,6 +59,56 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   `speech_mask` is level-based, so music reads as talking and those clips
   are barely trimmed (3 real clips: 7:16 → 7:12). A real VAD is the fix.
 
+- Words on screen + export (`web/backend/overlays.py`, `export.py`,
+  `web/frontend/src/overlayDraw.ts`; ideas from Overlay Studio — design
+  only, its licence forbids including its code, see NOTICE). Overlays are
+  ops in the turn log, anchored to edit / end / part / shot; one style per
+  video; suggestions only use words the edit already knows; checks report,
+  never change. One Canvas function draws both preview and export frames;
+  ffmpeg here has no drawtext, so don't move text rendering server-side.
+  Export is the only place pixels are re-encoded. Checks' thresholds
+  (reading speed etc.) are guesses, uncalibrated.
+
+- Talking-head mode (`web/backend/talk.py`, `speech.py`, `TalkCut.tsx`):
+  rules + optional model review; tested on synthetic transcripts and through
+  the real recogniser (`tests/test_talk_speech.py`, macOS TTS). Thresholds
+  (MIN_PAUSE 0.45 s, breath 0.27 s, retake similarity 0.6) are guesses. Not
+  yet tried on a real creator's talking-head footage or with the live model.
+
+- **Borrow a feeling** (`cutgrammar/style.py`, `grade.py`; `web/backend/
+  reference.py`, `restyle.py`; `BorrowStyle.tsx`; idea from Hypit, analysis
+  only — see NOTICE). A reference video (file, or link via yt-dlp) is read
+  with `load()` and reduced to measurements: pace + arc, transitions, beat
+  alignment, look, letterbox, music feel. Applied as one `apply_style` op
+  (never from chat): pace/beat retime shots; LUT, transitions and bars are
+  rendered only in `export.py` (dissolves use source handles so cuts stay
+  on their frame, else fall back to cuts and say so). Tests:
+  `tests/test_style.py` (discrimination; optional real footage via
+  `VIBECUT_REAL_CLIPS`), `tests/test_restyle.py` (board + full render round
+  trip). Dissolve thresholds were set on real handheld footage (a few
+  dozen joins); a soft transition only counts as a habit above 15% of joins.
+  Beat alignment needs a steady tempo, because hard audio cuts make their own onsets.
+  Everything else is a guess. The reference's frames and audio never reach an export.
+
+- **Remix** (`web/backend/remix.py`, `select.py`; `cutgrammar/openverse.py`;
+  CLI only so far: `python -m web.backend.remix --ref <link|file>… --footage
+  <folder>`). Reference reels + the shoot → one finished short, server-side,
+  no browser. The references' styles (Borrow a feeling) are merged into a
+  fingerprint (median shot length + arc, hook hold, tempo range, energy arc,
+  length); `select.py` picks that many moments — distinctive labels (IDF
+  across the shoot), face-in-the-world, subject, steadiness; sqrt-of-footage
+  quota per session; look-alikes (cosine ≥ 0.78 in a session) collapse;
+  windows cut in just before the busiest second. Music comes from Openverse
+  (Jamendo/Freesound, CC0/BY/BY-SA only, credit line written next to the
+  export); the drop is found from the waveform and placed at the end of the
+  hook; every shot is a whole number of beats. Captions (title, tag, clock +
+  a phrase from a label) are drawn by an AppKit helper into export's PNG
+  schedule; `export.py` gained `mix` (in-point, gain, original gain, ducks,
+  sfx, loudnorm) and a per-item `punch` (zoompan). Tested on synthetic
+  fixtures (`tests/test_select.py`, `test_remix.py`, `test_openverse.py`);
+  judged on one real shoot (42 clips, 3 references). Every weight is a
+  guess; the selector has no model behind it (no key on this Mac).
+
 - From montage-vlog-compiler (MIT; see NOTICE), four pieces:
   - **Evidence levels** (`cutgrammar/evidence.py`): every finding names
     what it rests on — meta / still / motion / audio. A finding whose
@@ -147,6 +197,15 @@ Every new rule ships with a discrimination test or it does not ship.
   footage by label, unmatched lines stay as listed gaps. Nothing is
   transcribed, no speech model is added, and no other path depends on it.
   Don't grow it into transcript-as-timeline editing.
+  *Amended again (user decision, 2026-09-25):* a **talking-head mode (口播精剪)**
+  may transcribe — opt-in, never on the default path. Speech-to-text runs
+  on this Mac only (Apple SpeechTranscriber via `web/backend/speech/
+  vibespeech.swift`; no Python speech model, audio never leaves). It cuts
+  pauses to a breath, earlier takes of repeated sentences, stumbles and
+  fillers, shows every cut at a gate, then becomes a normal storyboard with
+  subtitle overlays (`web/backend/talk.py`). With a key, only the transcript
+  *text* goes to Claude to judge retakes. It still isn't a transcript
+  editor: the words are reviewed, not typed into.
 
 ## Known limits (upgrade path, in order)
 

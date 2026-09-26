@@ -46,6 +46,26 @@ Tests for persistence, invalid data, and storage failures run with `npm test`.
 
 ## Layout: two levels
 
+### Borrow a feeling
+
+Creative tools → **Borrow a feeling**: paste a link (needs `yt-dlp`) or drop
+a video whose editing you love. VibeCut reads it once at 48×27 and learns
+its **pacing** (shot length and how it changes through the video),
+**transitions** (hard cut / dissolve / dip to black / white flash / fades),
+whether it **cuts on the beat**, its **colour** (tone curve, white balance,
+split toning, saturation), its **frame** (cinematic bars) and its **music
+feel** (energy arc, tempo). Each trait says what it was measured from.
+
+Tick what to borrow. Pacing and beat retime your shots (a shot is never
+held longer than it was filmed; voiceover parts keep their timing). The
+colour becomes one LUT fitted to *your* shots, previewed before/after, with
+colour shifts capped so the reference's subject matter doesn't tint your
+footage. Grade, transitions and bars are rendered in the export only, not
+in the preview. Music is never copied; your own tracks with the same feel
+are suggested instead. It's all one turn, and Undo removes it. Learnt styles
+are kept in `$VIBECUT_CACHE/references/`, where Forget also deletes a
+downloaded copy.
+
 ### Creative tools
 
 Open **Creative tools** from the editor or profile, or visit `/#tools`.
@@ -283,12 +303,112 @@ M5 MacBook, Chrome driving the real UI:
 When Spotlight and the folder search both miss, the files are copied over
 localhost instead; the same 30 clips took 6.9 s that way.
 
+## Words on screen (titles, labels, captions)
+
+**Words on screen** sits under the player in Story and as a tab beside the
+shelf in Frames (`backend/overlays.py`, `src/overlayDraw.ts`). Seven kinds:
+title, part label, name tag, caption, date, end card, chapter bar.
+
+- **✦ Add titles for me** fills in only what the edit already knows: the
+  title from what you said the video is, a label for each part, a date where
+  the filming day changes, one caption per line of your voiceover (on the
+  *Follow the voiceover* story), a name tag from your Creator profile over
+  the first shot of you talking to camera (after the title, never on top
+  of it), and an end card with your handle. A kind with nothing true to say
+  is left out, and the reply says why. Suggesting again never replaces
+  what's there. **Creative tools → Titles & motion** does the same from a
+  brief.
+- **Anchored, not placed.** Each overlay hangs off the whole video, its end,
+  a part or a shot. Move the part and its label moves; cut the video shorter
+  and the end card stays at the end; remove the shot and its name tag goes,
+  and the diff says so. Dragging a pill on the timeline's overlay lane (it
+  sticks to cuts, ⌥ for exact) re-anchors it to what's under it.
+- **One look per video:** font (Clean / Editorial / Rounded), text and
+  accent colour, backing (shadow / box / none) and caption position are
+  set once for the whole video. Starting values come from your Creator
+  profile.
+- Per overlay: words, second line, place (3×3 within the safe area; vertical
+  video keeps clear of where TikTok/Reels put their buttons), size, how it
+  comes in (fade / rise / slide / type on), length, start.
+- Every change is an op (`add_overlay`, `edit_overlay`, `drop_overlay`,
+  `overlay_style`) in the same turn log as cuts: diffed, undoable, and
+  sortable with *Remember…*. With a key set, chat can add or reword them
+  too ("put 'Kyoto' on the temple part") — wired and schema-checked, not yet tried
+  against the live model.
+- **Checks report, never change** (`overlays.check`, each with its number):
+  cut off by the end of the video, on screen too briefly to read (15 chars/s
+  Latin, 7/s CJK, +0.5 s), two in the same spot at once, more than two on
+  screen, and a middle-of-frame overlay over someone talking to camera
+  (a warning, judged from one still). Thresholds are guesses, like the rest.
+
+The preview draws with the same function the export uses, over a stage with
+the export's aspect ratio, so the player shows what the file will show.
+
+## 口播精剪 · talking to camera (opt-in)
+
+**口播精剪** in the header (or beside *Follow my voiceover…*) is for clips
+where you talk to camera. Pick 中文 or English, optionally paste your script
+(稿子), press **Transcribe & cut**.
+
+1. **Transcribe on this Mac** (`backend/speech.py` → `speech/vibespeech.swift`,
+   Apple SpeechTranscriber, macOS 26+). Timed per character in Chinese, per
+   word in English; the OS downloads the language model once. Cached per
+   clip. `NLTokenizer` gives word boundaries so subtitles don't split words.
+2. **Find what to cut** (`backend/talk.py`):
+   - **气口 pauses** over 0.45 s are cut down to a breath (0.12 s + 0.15 s).
+     The recogniser folds pauses into characters, so each is first shrunk
+     to its loudest burst of sound.
+   - **重说 retakes**: a sentence said again within the next two loses its
+     earlier take — also when only the end of a sentence was repeated.
+     Character-pair matching tolerates mishearing (剧子/句子).
+   - **卡顿 stumbles** ("我觉得我觉得", restarts at a clause start) and
+     **语气词 fillers** (嗯/呃/um/uh).
+   - **With a script**: takes of the same line compete and the most complete
+     stays; lines you never said are listed; off-script asides are flagged,
+     not cut.
+   - **With an API key**, the sentences' *text* (never audio) goes to Claude,
+     whose judgement replaces the rules' for whole sentences; if it can't be
+     reached the rules stand. *Not yet tried against the live model.*
+3. **The gate**: the whole transcript, every cut struck through with its
+   reason; click to put anything back (or keep a pause whole). Click a
+   sentence to hear it.
+4. **Use this cut** → one undoable turn: a storyboard of the kept pieces
+   (parts split at long pauses) with **subtitles** as caption overlays —
+   one line per phrase, broken between words, never starting with 了/的/吗…,
+   timed to the cut, appearing instantly. Edit them in Words on screen;
+   Export renders them.
+
+Measured: a 31 s TTS talking-head test (5 long pauses, a restart, a
+stutter, a filler) → 20.5 s; the exported audio transcribed back contains
+every intended word and none of the removed ones.
+
+## Export
+
+**Export** (header, or the timeline bar) renders the timeline to one MP4 in
+`~/Movies/VibeCut` (`VIBECUT_EXPORTS` to override): 1080p, vertical if most
+of the edit was filmed vertically, 30 fps, H.264 (VideoToolbox on a Mac) +
+AAC, with the words on screen and, if one is in use, the music under the
+original sound (35%, faded out over the last 2 s). The original files are
+only read.
+
+1. The browser draws every *distinct* overlay frame (a title holding still
+   is one PNG with a duration) and uploads it with a schedule.
+2. Each span is rendered to a frame-exact piece (PCM audio, so joins can't
+   drift), joined by stream copy, then overlays and music are composited
+   and encoded once. ffmpeg needs no text renderer.
+
+Measured on the 42 real iPhone 4K HEVC clips: a 6:44 vertical edit with 8
+overlays exported in 139 s on an M5; an 11 s voiceover edit in 4 s.
+`tests/test_export.py` checks frame-exact length, the overlay window to the
+frame, and one audio track through silent clips and gaps.
+
 ## Out of scope
 
-Captions, music, motion graphics, export, rendering, auth, database,
-collaboration, automatic style learning (edits are only learned when the
-creator sorts them — see above). The timeline plays spans of the original files in
-sequence; nothing is re-encoded.
+Auth, database, collaboration, automatic style learning (edits are only
+learned when the creator sorts them — see above), transcription outside
+口播精剪 (vlog captions come only from the creator's own subtitles or
+script), editing by typing into the transcript, animated graphics
+beyond the seven kinds, transitions, colour grading, per-overlay fonts.
 
 ## Known limits
 

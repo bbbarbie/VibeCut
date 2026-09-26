@@ -12,15 +12,15 @@ export const CREATIVE_TOOLS = [
     outputs: ['Story beats and a proposed shot order', 'A reversible list of edits to review'],
     needs: 'Connecting this brief to the existing storyboard operations.', note: 'The current editor already supports storyboards and reversible edits. This brief is not sent to that engine yet.' },
   { id: 'motion-graphics', icon: 'Aa', title: 'Titles & motion', subtitle: 'Make your words part of the story.',
-    source: 'HyperFrames HTML/CSS-to-video', options: ['Opening title', 'Lower third', 'Statistic card', 'Animated captions'],
-    input: 'What should the graphic say?', placeholder: 'Three hidden spots in Boston — a simple opening title with a soft fade.',
-    outputs: ['Graphics using your saved font and color', 'Editable text, placement and animation'],
-    needs: 'A deterministic graphics composition and export renderer.', note: 'Your profile supplies starting style preferences. No graphic is rendered by this panel yet.' },
-  { id: 'reference-style', icon: '◈', title: 'Borrow a feeling', subtitle: 'Bring the details you love into your own video.',
-    source: 'VidMuse reference packaging', options: ['Pacing', 'Captions & layout', 'Color & mood', 'Overall direction'],
-    input: 'What do you like—and what should stay yours?', placeholder: 'I like the calm pacing and small captions. Keep my original sound and warmer colors.',
-    outputs: ['An editable style card for approval', 'Style attributes adapted to your footage'],
-    needs: 'Reference ingestion, transcription and visual style analysis.', note: 'References guide high-level style; their footage, logos and music are not copied.' },
+    source: 'Overlay Studio card library (design reference)', options: ['Titles for the whole video', 'Opening title', 'Part labels', 'Captions from my voiceover'],
+    input: 'What should the opening title say?', placeholder: 'Three hidden spots in Boston',
+    outputs: ['Titles, part labels, dates, captions and an end card in your saved font and colour', 'Each one editable in the editor, and exported with the video'],
+    needs: 'Connected to the words-on-screen engine.', note: 'Only words the edit already knows are used — part names, dates, your voiceover and your profile. Nothing is invented.' },
+  { id: 'reference-style', icon: '◈', title: 'Borrow a feeling', subtitle: 'Learn the style of a video you love — keep your own footage.',
+    source: 'Hypit reference cloning, as analysis only (no generation)', options: ['Pacing', 'Transitions', 'Colour & mood', 'Cutting to the music'],
+    input: 'A link to the video, or drop the file', placeholder: 'https://www.youtube.com/watch?v=… or a path like ~/Movies/favourite-vlog.mp4',
+    outputs: ['A style card: pacing, transitions, cuts on the beat, colour, frame, music feel', 'Applied to your edit as one undoable change'],
+    needs: 'Connected to the measurement layer (cutgrammar/style.py) and export.', note: 'Only measurements are kept. The reference’s frames and music never go into your video.' },
   { id: 'video-variants', icon: '⑂', title: 'Try another version', subtitle: 'Explore a different hook without starting over.',
     source: 'Hypit reference-video variants', options: ['Different hooks', 'Shorter cut', 'Different pacing', 'Different language'],
     input: 'What should change between versions?', placeholder: 'Try a question, a surprising moment, and the result first. Keep the rest of the story consistent.',
@@ -42,6 +42,25 @@ export type CreativeTool = typeof CREATIVE_TOOLS[number]
 export type FeatureBrief = { version: 1; tool: string; option: string; request: string; reference: string; creator: CreatorProfile; savedAt: string }
 export const BRIEFS_KEY = 'vibecut.feature-briefs.v1'
 export const LIVE_TOOL_ID = 'guided-edit'
+export const TITLES_TOOL_ID = 'motion-graphics'
+export const REFERENCE_TOOL_ID = 'reference-style'
+export const LIVE_TOOL_IDS: readonly string[] = [LIVE_TOOL_ID, TITLES_TOOL_ID, REFERENCE_TOOL_ID]
+
+const TITLE_KINDS: Record<string, string[]> = {
+  'Titles for the whole video': ['title', 'part', 'date', 'caption', 'name', 'end'],
+  'Opening title': ['title'],
+  'Part labels': ['part'],
+  'Captions from my voiceover': ['caption'],
+}
+
+/** A Titles & motion brief -> the words-on-screen suggestion request. */
+export function titlesRequest(brief: FeatureBrief): { profile: Record<string, unknown>; title: string; kinds: string[] } {
+  if (brief.tool !== TITLES_TOOL_ID) throw new Error('Only Titles & motion adds words on screen.')
+  const kinds = TITLE_KINDS[brief.option]
+  if (!kinds) throw new Error('Choose an available option.')
+  const { name, handle, font, color, captionPosition } = brief.creator
+  return { profile: { name, handle, font, color, captionPosition }, title: brief.request.slice(0, 60), kinds }
+}
 
 export function guidedEditMessage(brief: FeatureBrief): string {
   if (brief.tool !== LIVE_TOOL_ID) throw new Error('Only Plan my edit can change the storyboard right now.')

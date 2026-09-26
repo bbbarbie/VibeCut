@@ -69,7 +69,27 @@ export type BoardShot = {
   thumb: string; lean: boolean; gap?: boolean
 }
 export type BoardBeat = { id: string; title: string; detail: string; shots: BoardShot[] }
-export type Board = { option: string; name: string; structure: string; beats: BoardBeat[] }
+export type Board = { option: string; name: string; structure: string; beats: BoardBeat[]; style?: BoardStyle | null }
+
+// A borrowed style (restyle.py): timing is already in the beats; the rest is rendered at export.
+export type TransitionPolicy = { between: string; within: string; dur: number; open: boolean; close: boolean }
+export type BoardStyle = {
+  ref: string; name: string; traits: string[]; transitions: TransitionPolicy | null
+  look: { lut: string; strength: number; words: string[] } | null; letterbox: number | null
+  report: { shots: number; median_before: number | null; median_after: number | null; target_median: number | null
+            filmed_too_short: number; on_beat: number; held_by_voice: number } | null
+}
+export type RefSummary = { rid: string; title: string; uploader: string | null; url: string | null; downloaded: boolean
+  duration: number; learnt_from_s: number; learnt_at: number; summary: string[] }
+export type RefJob = { id: string; stage: 'queued' | 'fetching' | 'reading' | 'learning' | 'done' | 'error'; progress: number
+  error: string | null; rid: string; elapsed: number; reference: RefSummary | null }
+export type RefTrait = { key: 'pace' | 'beat' | 'transitions' | 'look' | 'frame' | 'music'; title: string; words: string[]
+  how: string | null; available: boolean; why_not: string | null; on: boolean; evidence: string[]
+  numbers?: Record<string, unknown>; counts?: Record<string, number> }
+export type RefCard = { reference: RefSummary; traits: RefTrait[]; has_story: boolean; music_folder: boolean
+  music: { id: string; title: string; bpm: number | null; score: number; reason: string; audio: string }[] }
+export type LookFit = { lut: string; strength: number; previews: { before: string; after: string }[]; look_words: string[]
+  numbers: Record<'yours' | 'after' | 'reference', { warmth: number; black: number; sat: number }> }
 
 export type DiffLine = {
   kind: 'removed' | 'added' | 'moved' | 'trimmed' | 'retitled' | 'swapped' | 'replaced' | 'none'
@@ -87,10 +107,25 @@ export type Turn = {
 }
 import type { SeqItem } from './sequence'
 import type { Target } from './snap'
-export type TimelineData = { fps: number; total: number; items: SeqItem[]; targets: Target[]; grid: { bpm: number; phase: number } | null }
+export type TimelineData = { fps: number; total: number; items: SeqItem[]; targets: Target[]; grid: { bpm: number; phase: number } | null
+  frame?: { w: number; h: number } }
+
+// Words on screen. Anchored to the edit, its end, a part or a shot; the
+// server resolves each to sequence time (start/end) for drawing.
+export type OverlayKind = 'title' | 'part' | 'name' | 'caption' | 'date' | 'end' | 'chapters'
+export type OverlayPos = 'top-left' | 'top' | 'top-right' | 'left' | 'center' | 'right' | 'bottom-left' | 'bottom' | 'bottom-right'
+export type OverlayAnim = 'fade' | 'rise' | 'slide' | 'type'
+export type Overlay = {
+  id: string; kind: OverlayKind; text: string; sub: string; pos: OverlayPos; size: 'S' | 'M' | 'L'; anim: OverlayAnim
+  dur: number | null; anchor: { to: 'edit' | 'end' | 'beat' | 'shot'; id?: string }; at: number
+  start: number; end: number; shown_end: number
+}
+export type OverlayStyle = { font: 'Clean' | 'Editorial' | 'Rounded'; color: string; accent: string; captions: 'bottom' | 'center'; backing: 'shadow' | 'box' | 'none' }
+export type OverlayFinding = { overlay: string; rule: string; value: number; verdict: 'ok' | 'warn' | 'bad' | 'pending'; basis: string; message: string }
+export type Overlays = { items: Overlay[]; style: OverlayStyle; findings: OverlayFinding[] }
 export type MusicTrack = { id: string; title: string; duration: number; bpm: number | null; audio: string }
 
-export type CutSummary = { clips: number; kept: number; rejected: number; raw: number; cut: number; ratio: number | null; line_zh: string; line_en: string }
+export type CutSummary = { clips: number; kept: number; rejected: number; raw: number; cut: number; ratio: number | null; line_en: string }
 export type Workflow = { state: string; gate: string; decision: string | null; revision: number; history: { action: string; actor: string; note: string; at: number }[] }
 export type CutShot = { id: string; full: [number, number]; auto: [number, number]; window: [number, number]; use: [number, number]
   target: number; whole: boolean; reason_zh: string; reason_en: string; notes: string[]; seconds: number[]; override: string | null }
@@ -112,6 +147,14 @@ export type Session = {
   llm: boolean
   preferences: Preferences
   voiceover: { source: string; timing: 'estimated' | 'text_only'; lines: number; total: number } | null
+  overlays: Overlays
+}
+
+export type ExportJob = {
+  id: string; stage: 'waiting' | 'shots' | 'joining' | 'finishing' | 'done' | 'error' | 'cancelled'
+  done: number; of: number; progress: number; error: string | null; file: string | null; path: string | null
+  size: { w: number; h: number }; total: number; overlays: number; music: boolean; elapsed: number
+  style?: string | null; notes?: string[]
 }
 
 // What edits teach -- only once the creator has sorted them.
@@ -133,3 +176,21 @@ export type Msg = { id: string; role: 'user' | 'app'; text: string; busy?: boole
 
 // What the player is showing: one span of one file.
 export type Segment = { key: string; clipId: string; start: number; end: number; autoplay: boolean }
+
+// Talking-head mode: the transcript, what would be cut and why.
+export type TalkPart = { kind: 'words'; id: string | null; text: string; removed: boolean; code: string | null; zh: string; en: string }
+  | { kind: 'pause'; id: string; len: number; cut: boolean }
+export type TalkItem =
+  | { kind: 'pause'; id: string; len: number; cut: boolean; keeps: number }
+  | { kind: 'sentence'; id: string; clip: string; clip_name: string; start: number; end: number; text: string; removed: boolean
+      auto: boolean; override: boolean; code: string | null; zh: string; en: string; why: string; flag: string | null
+      script_line: number | null; parts: TalkPart[] }
+export type TalkPlan = {
+  locale: string; source: 'rules' | 'agent'; agent_note: string; clips: { id: string; name: string }[]
+  items: TalkItem[]; script: string[]; unsaid: { line: number; text: string }[]
+  summary: { raw: number; cut: number; sentences: number; line_en: string
+    removed: Record<'pause' | 'retake' | 'stumble' | 'filler' | 'other', { n: number; seconds: number }> }
+}
+export type TalkJob = { stage: 'transcribing' | 'reviewing' | 'done' | 'error'; done: number; total: number; current: string
+  error: string | null; silent: string[] }
+export type TalkState = { job: TalkJob | null; plan: TalkPlan | null; llm: boolean }

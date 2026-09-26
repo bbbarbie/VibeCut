@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VibeCut — redesign mockups v1</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+/* ------------------------------------------------------------------ tokens */
+@font-face { font-family: "EB Garamond"; font-weight: 400; src: url(../../web/frontend/node_modules/@fontsource/eb-garamond/files/eb-garamond-latin-400-normal.woff2); }
+@font-face { font-family: "EB Garamond"; font-weight: 500; src: url(../../web/frontend/node_modules/@fontsource/eb-garamond/files/eb-garamond-latin-500-normal.woff2); }
+@font-face { font-family: "EB Garamond"; font-weight: 400; font-style: italic; src: url(../../web/frontend/node_modules/@fontsource/eb-garamond/files/eb-garamond-latin-400-italic.woff2); }
+:root {
+  --bg: #13110e; --surface: #1a1714; --raised: #221e1a; --hover: #2a251f; --line: #322c25; --line-soft: #28231e;
+  --text: #efe8dd; --muted: #a59b8d; --faint: #72695d;
+  --accent: #c9dcc1; --accent-ink: #18221a; --accent-deep: #93b088; --accent-glow: #c9dcc11f;
+  --warn: #e9c78f; --danger: #e59c8f;
+  --serif: "EB Garamond", Georgia, serif;
+  --sans: -apple-system, "SF Pro Text", "Inter", system-ui, sans-serif;
+  --r: 12px; --r-lg: 18px;
+}
+* { box-sizing: border-box; margin: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--text); font: 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+img { display: block; }
+.serif { font-family: var(--serif); }
+.muted { color: var(--muted); } .faint { color: var(--faint); }
+
+/* one button family: primary / quiet / ghost -- nothing else */
+.btn { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 16px; border-radius: 999px; font-weight: 550; font-size: 13.5px; transition: background .15s, opacity .15s; white-space: nowrap; }
+.btn-primary { background: var(--accent); color: var(--accent-ink); }
+.btn-primary:hover { background: #d8e8d1; }
+.btn-quiet { background: var(--raised); color: var(--text); }
+.btn-quiet:hover { background: var(--hover); }
+.btn-ghost { color: var(--muted); padding: 0 10px; }
+.btn-ghost:hover { color: var(--text); }
+.btn-sm { height: 28px; padding: 0 12px; font-size: 12.5px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 999px; background: var(--raised); font-size: 12px; color: var(--muted); }
+.chip b { color: var(--text); font-weight: 600; }
+
+/* ------------------------------------------------------------------ shell */
+.app { display: grid; grid-template-rows: 60px 1fr; height: 100vh; }
+.top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 20px; border-bottom: 1px solid var(--line-soft); }
+.brand { display: flex; align-items: baseline; gap: 14px; min-width: 0; }
+.logo { font-family: var(--serif); font-size: 21px; font-weight: 500; letter-spacing: -.01em; }
+.logo span { color: var(--accent-deep); }
+.project { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.project::before { content: "/"; margin-right: 12px; color: var(--faint); }
+.stepper { display: flex; align-items: center; gap: 4px; }
+.step { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-radius: 999px; color: var(--faint); font-size: 13px; }
+.step i { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; border: 1px solid currentColor; font-style: normal; font-size: 11px; }
+.step.done { color: var(--muted); } .step.done i { background: var(--accent-deep); border-color: var(--accent-deep); color: var(--accent-ink); }
+.step.now { color: var(--text); background: var(--raised); } .step.now i { border-color: var(--accent); color: var(--accent); }
+.step:hover { color: var(--text); }
+.sep { width: 18px; height: 1px; background: var(--line); }
+.top-right { display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
+.privacy { font-size: 12px; color: var(--faint); display: flex; align-items: center; gap: 6px; }
+.privacy::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent-deep); }
+
+.screen { display: none; min-height: 0; }
+.screen.on { display: flex; }
+
+/* ------------------------------------------------------------------ 1 import */
+.center-page { flex: 1; overflow: auto; display: flex; justify-content: center; padding: 72px 24px; }
+.col { width: 100%; max-width: 880px; }
+.eyebrow { font-size: 11.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--faint); }
+h1.display { font-family: var(--serif); font-weight: 400; font-size: 52px; line-height: 1.05; letter-spacing: -.015em; margin-top: 10px; }
+h1.display em { color: var(--accent); }
+.lede { color: var(--muted); font-size: 16px; margin-top: 12px; max-width: 560px; }
+.kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 40px; }
+.kind { text-align: left; border: 1px solid var(--line); border-radius: var(--r-lg); padding: 22px; background: var(--surface); transition: border-color .15s, background .15s; }
+.kind:hover { border-color: #4a4238; }
+.kind.sel { border-color: var(--accent-deep); background: #1b2019; box-shadow: 0 0 0 4px var(--accent-glow); }
+.kind .art { height: 120px; border-radius: 10px; overflow: hidden; display: flex; gap: 4px; }
+.kind .art img { flex: 1; min-width: 0; object-fit: cover; }
+.kind h3 { font-family: var(--serif); font-weight: 500; font-size: 26px; margin-top: 18px; }
+.kind p { color: var(--muted); margin-top: 4px; }
+.wave { flex: 1; display: flex; align-items: center; gap: 3px; padding: 0 18px; background: var(--raised); }
+.wave span { flex: 1; background: var(--accent-deep); border-radius: 2px; opacity: .8; }
+.wave span.cut { background: var(--danger); opacity: .35; }
+.drop { margin-top: 20px; border: 1.5px dashed #463e34; border-radius: var(--r-lg); padding: 34px; text-align: center; transition: border-color .15s, background .15s; cursor: pointer; }
+.drop:hover { border-color: var(--accent-deep); background: #1a1d17; }
+.drop h4 { font-family: var(--serif); font-weight: 500; font-size: 22px; }
+.drop p { color: var(--muted); margin-top: 4px; }
+.drop .btns { margin-top: 16px; display: flex; gap: 8px; justify-content: center; }
+.reading { margin-top: 20px; border-radius: var(--r-lg); background: var(--surface); padding: 22px; display: none; }
+.reading .bar { height: 4px; border-radius: 4px; background: var(--raised); overflow: hidden; margin: 12px 0 16px; }
+.reading .bar div { height: 100%; width: 0; background: var(--accent); transition: width .25s; }
+.thumbs { display: grid; grid-template-columns: repeat(14, 1fr); gap: 4px; }
+.thumbs img { width: 100%; aspect-ratio: 9/16; object-fit: cover; border-radius: 4px; opacity: 0; transform: scale(.96); transition: opacity .3s, transform .3s; }
+.thumbs img.in { opacity: 1; transform: none; }
+
+/* ------------------------------------------------------------------ 2 review */
+.review-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 28px; }
+.out-card { background: var(--surface); border-radius: var(--r-lg); overflow: hidden; border: 1px solid var(--line-soft); }
+.out-card .pic { position: relative; aspect-ratio: 4/3; overflow: hidden; }
+.out-card .pic img { width: 100%; height: 100%; object-fit: cover; filter: saturate(.5) brightness(.75); }
+.out-card.kept .pic img { filter: none; }
+.out-card .pic .play { position: absolute; inset: auto auto 12px 12px; }
+.out-card .body { padding: 14px 16px 16px; }
+.out-card h4 { font-family: var(--serif); font-weight: 500; font-size: 20px; line-height: 1.2; }
+.out-card p { color: var(--muted); font-size: 13px; margin-top: 4px; }
+.out-card .row { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+.flag { font-size: 12px; color: var(--warn); margin-top: 6px; }
+.fine { margin-top: 20px; background: var(--surface); border-radius: var(--r-lg); padding: 18px 20px; display: flex; gap: 20px; align-items: center; }
+.fine .strip { flex: 1; display: grid; grid-template-columns: repeat(20, 1fr); gap: 3px; }
+.fine .strip div { aspect-ratio: 9/16; border-radius: 3px; background-size: cover; background-position: center; position: relative; overflow: hidden; }
+.fine .strip div::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: var(--cut, 30%); background: #13110ecc; }
+.bottom-bar { position: sticky; bottom: 0; margin-top: 28px; padding: 16px 0 20px; display: flex; align-items: center; gap: 16px; background: var(--bg); border-top: 1px solid var(--line-soft); }
+.big-number { font-family: var(--serif); font-size: 26px; }
+
+/* ------------------------------------------------------------------ 3 story: choose */
+.prop-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 28px; }
+.prop { background: var(--surface); border-radius: var(--r-lg); border: 1px solid var(--line-soft); padding: 18px; display: flex; flex-direction: column; transition: border-color .15s; }
+.prop:hover { border-color: #4a4238; }
+.prop .poster { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; border-radius: 10px; overflow: hidden; }
+.prop .poster img { width: 100%; aspect-ratio: 9/16; object-fit: cover; }
+.prop h3 { font-family: var(--serif); font-weight: 500; font-size: 26px; margin-top: 16px; }
+.prop .why { color: var(--muted); margin-top: 2px; }
+.prop .facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.prop ol { list-style: none; padding: 0; margin-top: 14px; border-top: 1px solid var(--line-soft); }
+.prop li { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--line-soft); font-size: 13.5px; }
+.prop li span:last-child { color: var(--faint); font-variant-numeric: tabular-nums; }
+.prop .actions { display: flex; gap: 8px; margin-top: auto; padding-top: 16px; }
+.about { display: flex; gap: 10px; margin-top: 24px; }
+.field { flex: 1; height: 46px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); padding: 0 20px; display: flex; align-items: center; color: var(--text); font-size: 15px; }
+.also { margin-top: 18px; display: flex; gap: 10px; align-items: center; color: var(--muted); font-size: 13px; }
+
+/* ------------------------------------------------------------------ editor shell (story / polish) */
+.editor { flex: 1; display: grid; grid-template-columns: 290px minmax(0, 1fr) 340px; grid-template-rows: minmax(0, 1fr) auto auto; min-height: 0; }
+.rail { grid-column: 1; grid-row: 1 / 4; border-right: 1px solid var(--line-soft); overflow: auto; padding: 18px 14px; }
+.rail h5, .insp h5 { font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); font-weight: 500; padding: 0 6px; }
+.part { margin-top: 10px; border-radius: var(--r); padding: 10px; cursor: pointer; transition: background .12s; }
+.part:hover { background: var(--surface); }
+.part.sel { background: var(--raised); box-shadow: inset 0 0 0 1px #3c352c; }
+.part .t { display: flex; align-items: baseline; gap: 8px; }
+.part .t b { font-family: var(--serif); font-weight: 500; font-size: 18px; }
+.part .t span { margin-left: auto; font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.part .shots { display: flex; gap: 3px; margin-top: 8px; }
+.part .shots img { width: 30px; aspect-ratio: 9/16; object-fit: cover; border-radius: 3px; }
+.part .words { font-size: 12px; color: var(--accent-deep); margin-top: 6px; }
+.stage { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 0; padding: 20px 20px 8px; gap: 14px; }
+.frame { position: relative; height: min(100%, 640px); aspect-ratio: 9/16; border-radius: 14px; overflow: hidden; background: #000; box-shadow: 0 30px 80px #0008; }
+.frame img { width: 100%; height: 100%; object-fit: cover; }
+.frame .safe { position: absolute; inset: 9% 14% 20% 7%; border: 1px dashed #ffffff30; border-radius: 6px; display: none; }
+.frame.show-safe .safe { display: block; }
+.transport { display: flex; align-items: center; gap: 14px; width: min(100%, 560px); }
+.transport .pp { width: 40px; height: 40px; border-radius: 50%; background: var(--text); color: var(--bg); display: grid; place-items: center; font-size: 14px; }
+.scrub { flex: 1; height: 26px; position: relative; display: flex; gap: 2px; align-items: center; }
+.scrub div { height: 6px; border-radius: 3px; background: var(--line); }
+.scrub div.cur { background: var(--accent-deep); }
+.scrub .head { position: absolute; top: 3px; width: 2px; height: 20px; background: var(--text); border-radius: 2px; }
+.time { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ask { grid-column: 2; grid-row: 3; margin: 0 20px 18px; height: 48px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); display: flex; align-items: center; gap: 10px; padding: 0 8px 0 18px; }
+.ask:focus-within { border-color: var(--accent-deep); }
+.ask input { flex: 1; background: none; border: 0; outline: none; color: var(--text); font: 15px var(--sans); }
+.ask input::placeholder { color: var(--faint); }
+.ask .spark { color: var(--accent); }
+.insp { grid-column: 3; grid-row: 1 / 4; border-left: 1px solid var(--line-soft); overflow: auto; padding: 18px 18px 24px; }
+.tabs { display: flex; gap: 2px; background: var(--surface); padding: 3px; border-radius: 999px; }
+.tabs button { flex: 1; height: 30px; border-radius: 999px; font-size: 13px; color: var(--muted); }
+.tabs button.on { background: var(--raised); color: var(--text); }
+.panel { display: none; margin-top: 18px; } .panel.on { display: block; }
+.insp h4 { font-family: var(--serif); font-weight: 500; font-size: 24px; line-height: 1.15; }
+.insp .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.kv { display: grid; grid-template-columns: 80px 1fr; gap: 10px 12px; align-items: center; margin-top: 18px; font-size: 13px; }
+.kv > span { color: var(--faint); }
+.seg { display: inline-flex; background: var(--surface); border-radius: 999px; padding: 2px; }
+.seg button { height: 26px; padding: 0 11px; border-radius: 999px; font-size: 12.5px; color: var(--muted); }
+.seg button.on { background: var(--raised); color: var(--text); }
+.slider { height: 4px; border-radius: 4px; background: var(--raised); position: relative; }
+.slider::after { content: ""; position: absolute; left: var(--v, 50%); top: -6px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; background: var(--text); }
+.shotgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 12px; }
+.shotgrid img { width: 100%; aspect-ratio: 9/16; object-fit: cover; border-radius: 6px; }
+.divider { height: 1px; background: var(--line-soft); margin: 20px 0; }
+.wlist { list-style: none; padding: 0; margin-top: 12px; }
+.w { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border-radius: var(--r); cursor: pointer; }
+.w:hover { background: var(--surface); }
+.w.sel { background: var(--raised); }
+.w .ic { width: 26px; height: 26px; border-radius: 8px; background: var(--surface); display: grid; place-items: center; font-size: 12px; color: var(--accent); flex-shrink: 0; }
+.w .txt { flex: 1; min-width: 0; }
+.w .txt b { font-weight: 550; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.w .txt small { color: var(--faint); }
+.w .warn { color: var(--warn); font-size: 12px; }
+.swatch { width: 26px; height: 26px; border-radius: 50%; box-shadow: inset 0 0 0 1px #ffffff22; display: inline-block; vertical-align: middle; margin-right: 6px; }
+.track { display: flex; gap: 12px; align-items: center; padding: 10px; border-radius: var(--r); }
+.track:hover { background: var(--surface); }
+.track .cover { width: 40px; height: 40px; border-radius: 8px; background: linear-gradient(135deg, #3b4a36, #6b5b3f); }
+.track .fit { height: 3px; width: 50px; border-radius: 3px; background: var(--raised); overflow: hidden; margin-top: 4px; }
+.track .fit div { height: 100%; background: var(--accent-deep); }
+.filmstrip { grid-column: 2; grid-row: 2; margin: 0 20px 12px; }
+.lane { display: flex; gap: 2px; height: 18px; margin-bottom: 4px; }
+.lane div { border-radius: 4px; font-size: 10.5px; color: var(--accent-ink); padding: 0 6px; line-height: 18px; white-space: nowrap; overflow: hidden; }
+.film { display: flex; gap: 2px; height: 54px; border-radius: 8px; overflow: hidden; }
+.film img { height: 100%; flex: 1; min-width: 0; object-fit: cover; }
+.film .gap { background: repeating-linear-gradient(45deg, #1f1b17, #1f1b17 5px, #2a251f 5px, #2a251f 10px); }
+.fine-link { display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; color: var(--faint); }
+
+/* ------------------------------------------------------------------ talk: transcript */
+.doc { flex: 1; overflow: auto; padding: 40px 48px 120px; }
+.doc .col { max-width: 720px; }
+.legend { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
+.legend .chip { cursor: pointer; }
+.legend .chip.on { background: #3a2622; color: var(--danger); }
+.para { font-family: var(--serif); font-size: 22px; line-height: 1.75; margin-top: 26px; }
+.para .ts { font-family: var(--sans); font-size: 11px; color: var(--faint); display: block; line-height: 1; margin-bottom: 4px; }
+.cut { color: var(--faint); text-decoration: line-through; text-decoration-color: #e59c8f99; cursor: pointer; }
+.cut:hover { color: var(--muted); }
+.pause { display: inline-block; font-family: var(--sans); font-size: 11px; color: var(--faint); background: var(--surface); border-radius: 999px; padding: 0 7px; line-height: 20px; vertical-align: 3px; margin: 0 3px; cursor: pointer; }
+.why { font-family: var(--sans); font-size: 12px; color: var(--danger); opacity: .8; margin-left: 4px; }
+.talk-side { width: 360px; border-left: 1px solid var(--line-soft); padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.talk-side .frame { height: 520px; }
+.sub-demo { position: absolute; left: 0; right: 0; bottom: 21%; text-align: center; color: #fff; font-weight: 600; font-size: 17px; text-shadow: 0 1px 8px #000b; }
+
+/* ------------------------------------------------------------------ export sheet */
+.sheet-bg { position: fixed; inset: 0; background: #0009; backdrop-filter: blur(6px); display: none; place-items: center; z-index: 10; }
+.sheet-bg.on { display: grid; }
+.sheet { width: 760px; background: var(--surface); border-radius: 22px; border: 1px solid var(--line); display: grid; grid-template-columns: 250px 1fr; overflow: hidden; box-shadow: 0 40px 120px #000a; }
+.sheet .poster { background: #000; }
+.sheet .poster img { width: 100%; height: 100%; object-fit: cover; }
+.sheet .body { padding: 28px; display: flex; flex-direction: column; }
+.check { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line-soft); font-size: 13.5px; }
+.check .dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 7px; flex-shrink: 0; }
+.progress { height: 6px; border-radius: 6px; background: var(--raised); overflow: hidden; margin-top: 16px; display: none; }
+.progress div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+
+.toast { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%) translateY(20px); opacity: 0; background: #2b261f; border: 1px solid var(--line); padding: 10px 10px 10px 18px; border-radius: 999px; display: flex; gap: 14px; align-items: center; transition: all .25s; z-index: 20; box-shadow: 0 20px 50px #0008; }
+.toast.on { opacity: 1; transform: translateX(-50%); }
+.note { position: fixed; left: 16px; bottom: 16px; z-index: 30; background: #2d2a1c; color: #ece0b8; font-size: 12px; padding: 8px 12px; border-radius: 10px; max-width: 300px; line-height: 1.45; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand"><span class="logo">Vibe<span>Cut</span></span><span class="project" id="projectName">New video</span></div>
+    <nav class="stepper" id="stepper"></nav>
+    <div class="top-right"><span class="privacy">Footage stays on this Mac</span><button class="btn btn-primary btn-sm" id="topAction" style="display:none">Export</button></div>
+  </header>
+
+  <!-- 1 · IMPORT -->
+  <section class="screen on" data-screen="import">
+    <div class="center-page"><div class="col">
+      <div class="eyebrow">New video</div>
+      <h1 class="display">What are we making <em>today?</em></h1>
+      <p class="lede">Pick the kind of video, then bring in your clips. Everything is read on this Mac.</p>
+      <div class="kinds">
+        <button class="kind sel" data-kind="vlog">
+          <div class="art"><img src="assets/t03.jpg"><img src="assets/t08.jpg"><img src="assets/t12.jpg"><img src="assets/t20.jpg"><img src="assets/t27.jpg"><img src="assets/t33.jpg"></div>
+          <h3>A vlog</h3><p>Lots of clips from a day or a trip. I’ll find the story in them.</p>
+        </button>
+        <button class="kind" data-kind="talk">
+          <div class="art"><div class="wave" id="wave"></div></div>
+          <h3>Talking to camera</h3><p>You speaking to the lens. I’ll cut the pauses and retakes, and add subtitles.</p>
+        </button>
+      </div>
+      <div class="drop" id="drop">
+        <h4>Drop a folder or clips here</h4>
+        <p>.mp4 and .mov · nothing is uploaded or changed</p>
+        <div class="btns"><span class="btn btn-primary">Choose a folder</span><span class="btn btn-quiet">Choose clips</span></div>
+      </div>
+      <div class="reading" id="reading">
+        <div style="display:flex;justify-content:space-between"><b id="readTitle">Reading 42 clips…</b><span class="muted" id="readSub">shots · sound · faces</span></div>
+        <div class="bar"><div id="readBar"></div></div>
+        <div class="thumbs" id="readThumbs"></div>
+      </div>
+    </div></div>
+  </section>
+
+  <!-- 2 · REVIEW -->
+  <section class="screen" data-screen="review">
+    <div class="center-page"><div class="col" style="max-width:980px">
+      <div class="eyebrow">Step 2 · the rough cut</div>
+      <h1 class="display">I’d leave out <em>3 clips.</em></h1>
+      <p class="lede">Everything else is trimmed to its best part. Nothing is deleted — change any of it with one click.</p>
+      <div class="review-grid">
+        <div class="out-card"><div class="pic"><img src="assets/t05.jpg"><span class="btn btn-quiet btn-sm play">▶ Play</span></div>
+          <div class="body"><h4>Blurry the whole way through</h4><p>IMG_4412 · 9 seconds</p>
+          <div class="row"><span class="faint" style="font-size:12px">Leaving it out</span><button class="btn btn-quiet btn-sm keep">Keep it</button></div></div></div>
+        <div class="out-card"><div class="pic"><img src="assets/t14.jpg"><span class="btn btn-quiet btn-sm play">▶ Play</span></div>
+          <div class="body"><h4>Same view as the next clip</h4><p>I kept the sharper take of the two.</p>
+          <div class="row"><span class="faint" style="font-size:12px">Leaving it out</span><button class="btn btn-quiet btn-sm keep">Keep it</button></div></div></div>
+        <div class="out-card"><div class="pic"><img src="assets/t22.jpg"><span class="btn btn-quiet btn-sm play">▶ Play</span></div>
+          <div class="body"><h4>Shaking throughout</h4><p>2 seconds, probably a pocket tap.</p><div class="flag">Judged from a few frames — worth a look</div>
+          <div class="row"><span class="faint" style="font-size:12px">Leaving it out</span><button class="btn btn-quiet btn-sm keep">Keep it</button></div></div></div>
+      </div>
+      <div class="fine">
+        <div><div class="big-number">39 look good</div><div class="muted" style="font-size:13px">trimmed to 6:51 of 8:06</div></div>
+        <div class="strip" id="trimStrip"></div>
+        <button class="btn btn-ghost btn-sm">See every trim</button>
+      </div>
+      <div class="bottom-bar"><span class="muted">Nothing is built until you say so.</span><span style="flex:1"></span><button class="btn btn-primary" data-go="choose">Looks right — continue</button></div>
+    </div></div>
+  </section>
+
+  <!-- 3a · STORY: choose -->
+  <section class="screen" data-screen="choose">
+    <div class="center-page"><div class="col" style="max-width:1160px">
+      <div class="eyebrow">Step 3 · the story</div>
+      <h1 class="display">Three ways to <em>tell it.</em></h1>
+      <div class="about"><div class="field">A day out with Sarah</div><button class="btn btn-quiet" style="height:46px">Update</button></div>
+      <div class="prop-grid" id="props"></div>
+      <div class="also">Also: <button class="btn btn-quiet btn-sm">Follow my voiceover…</button><span class="faint">— paste subtitles or a script and the words set the timing</span></div>
+    </div></div>
+  </section>
+
+  <!-- 3b/4 · EDITOR (story + polish share it) -->
+  <section class="screen" data-screen="edit">
+    <div class="editor">
+      <aside class="rail">
+        <h5>Parts</h5>
+        <div id="parts"></div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:8px">+ Add a part</button>
+      </aside>
+      <div class="stage">
+        <div class="frame" id="frame"><img id="frameImg" src="assets/hero.png"><div class="safe"></div></div>
+        <div class="transport">
+          <button class="pp">▶</button>
+          <div class="scrub" id="scrub"></div>
+          <span class="time">0:02 / 6:44</span>
+        </div>
+      </div>
+      <aside class="insp">
+        <div class="tabs" id="tabs"><button class="on" data-tab="part">Part</button><button data-tab="words">Words</button><button data-tab="music">Music</button></div>
+
+        <div class="panel on" data-panel="part">
+          <h4 id="partTitle">Morning drive</h4>
+          <div class="sub" id="partSub">4 shots · 0:20 · 8:35–9:01 AM</div>
+          <div class="shotgrid" id="partShots"></div>
+          <div class="kv">
+            <span>Pace</span><div><div class="slider" style="--v:45%"></div><div style="display:flex;justify-content:space-between;font-size:11px;margin-top:8px" class="faint"><span>Let it breathe</span><span>Punchier</span></div></div>
+            <span>Opens on</span><div class="seg"><button class="on">Best moment</button><button>As filmed</button></div>
+          </div>
+          <div class="divider"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-quiet btn-sm">▶ Watch this part</button><button class="btn btn-quiet btn-sm">Swap a shot</button><button class="btn btn-ghost btn-sm" style="color:var(--danger)">Remove part</button></div>
+        </div>
+
+        <div class="panel" data-panel="words">
+          <div style="display:flex;justify-content:space-between;align-items:center"><h4>Words on screen</h4><button class="btn btn-primary btn-sm">✦ Add for me</button></div>
+          <div class="sub">One look for the whole video.</div>
+          <div class="kv">
+            <span>Font</span><div class="seg"><button class="on">Clean</button><button style="font-family:var(--serif)">Editorial</button><button>Rounded</button></div>
+            <span>Colour</span><div><span class="swatch" style="background:#fff"></span><span class="swatch" style="background:#f2c14e"></span></div>
+            <span>Captions</span><div class="seg"><button class="on">Bottom</button><button>Middle</button></div>
+          </div>
+          <div class="divider"></div>
+          <ul class="wlist" id="wlist"></ul>
+          <button class="btn btn-ghost btn-sm">+ Add words here</button>
+        </div>
+
+        <div class="panel" data-panel="music">
+          <h4>Music that fits</h4>
+          <div class="sub">From ~/Music/Vlog · ranked by how its energy follows your story</div>
+          <div style="margin-top:12px" id="tracks"></div>
+        </div>
+      </aside>
+      <div class="filmstrip">
+        <div class="lane" id="lane"></div>
+        <div class="film" id="film"></div>
+        <div class="fine-link"><span>Tap a part on the left to edit it · everything can be undone</span><button class="btn-ghost" style="font-size:12px">Fine-tune frames ↗</button></div>
+      </div>
+      <label class="ask"><span class="spark">✦</span><input id="askInput" placeholder="Ask VibeCut — “make the opening punchier”, “end on the sunset”"><button class="btn btn-quiet btn-sm">⏎</button></label>
+    </div>
+  </section>
+
+  <!-- TALK · transcript -->
+  <section class="screen" data-screen="transcript">
+    <div class="doc"><div class="col">
+      <div class="eyebrow">Step 2 · what you said</div>
+      <h1 class="display">0:31 → <em>0:20.</em></h1>
+      <p class="lede">Struck-through words are cut. Tap anything to bring it back.</p>
+      <div class="legend">
+        <span class="chip on"><b>8</b> pauses shortened</span><span class="chip on"><b>1</b> retake</span><span class="chip on"><b>2</b> stumbles</span><span class="chip on"><b>1</b> filler</span>
+      </div>
+      <p class="para"><span class="ts">0:00</span>Hi everyone, <span class="pause">1.8s → breath</span> welcome back to my channel.</p>
+      <p class="para"><span class="ts">0:04</span>Today I want to share a day in New York with you.</p>
+      <p class="para"><span class="ts">0:10</span>In the morning I went to class first, <span class="cut">um,</span> and sat through a lecture.</p>
+      <p class="para"><span class="ts">0:15</span><span class="cut">Then we went to the park,</span><span class="why">said again ↓</span> <span class="pause">0.5s</span> then we went to Central Park and took loads of photos.</p>
+      <p class="para"><span class="ts">0:22</span><span class="cut">I think</span> I think today was really full.</p>
+      <p class="para"><span class="ts">0:27</span>If you liked this video, don’t forget to follow.</p>
+      <div class="bottom-bar"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" checked> Add subtitles</label><span style="flex:1"></span><button class="btn btn-primary" data-go="edit">Use this cut</button></div>
+    </div></div>
+    <div class="talk-side">
+      <div class="frame"><img src="assets/t41.jpg" style="filter:blur(.3px)"><div class="sub-demo">then we went to Central Park</div></div>
+      <div class="muted" style="font-size:13px;text-align:center">Tap a sentence to hear it here</div>
+    </div>
+  </section>
+</div>
+
+<!-- EXPORT SHEET -->
+<div class="sheet-bg" id="sheet">
+  <div class="sheet">
+    <div class="poster"><img src="assets/hero.png"></div>
+    <div class="body">
+      <div class="eyebrow">Export</div>
+      <h2 class="serif" style="font-weight:400;font-size:34px;margin-top:6px">A day out with Sarah</h2>
+      <div class="muted" style="margin-top:2px">Vertical 1080 × 1920 · 6:44 · for TikTok and Reels</div>
+      <div style="margin-top:18px">
+        <div class="check"><span class="dot" style="background:var(--accent-deep)"></span><div>8 words on screen · Clean, white and gold</div></div>
+        <div class="check"><span class="dot" style="background:var(--accent-deep)"></span><div>Music: “Slow Sunday” under your own sound</div></div>
+        <div class="check"><span class="dot" style="background:var(--warn)"></span><div>The title may cover your face in the first shot <button class="btn-ghost" style="font-size:12px;color:var(--warn)">Show me</button></div></div>
+      </div>
+      <div class="progress" id="prog"><div></div></div>
+      <div class="muted" id="progText" style="font-size:12px;margin-top:8px"></div>
+      <div style="display:flex;gap:8px;margin-top:auto;padding-top:22px;justify-content:flex-end">
+        <button class="btn btn-ghost" id="sheetClose">Not yet</button>
+        <button class="btn btn-primary" id="doExport">Export video</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span id="toastText"></span><button class="btn btn-quiet btn-sm">Undo</button></div>
+<div class="note">Mockup v1 · click the steps, the kinds, the drop zone, parts, tabs, and try the Ask bar.</div>
+
+<script>
+const T = (n) => `assets/t${String(n % 42).padStart(2, '0')}.jpg`
+let kind = 'vlog'
+const STEPS = {
+  vlog: [['import', 'Import'], ['review', 'Review'], ['choose', 'Story'], ['polish', 'Polish'], ['export', 'Export']],
+  talk: [['import', 'Import'], ['transcript', 'What you said'], ['polish', 'Polish'], ['export', 'Export']],
+}
+let current = 'import'
+const done = new Set()
+
+function renderStepper() {
+  const el = document.getElementById('stepper')
+  const steps = STEPS[kind]
+  const idx = steps.findIndex(([k]) => k === current)
+  el.innerHTML = steps.map(([k, name], i) =>
+    `${i ? '<span class="sep"></span>' : ''}<button class="step ${i < idx ? 'done' : i === idx ? 'now' : ''}" data-step="${k}"><i>${i < idx ? '✓' : i + 1}</i>${name}</button>`).join('')
+  el.querySelectorAll('.step').forEach((b) => b.onclick = () => go(b.dataset.step))
+  const act = document.getElementById('topAction')
+  act.style.display = current === 'polish' ? '' : 'none'
+}
+
+function go(step) {
+  if (step === 'export') { current = 'polish'; openSheet(); renderStepper(); show('edit', 'words'); return }
+  current = step
+  const map = { import: 'import', review: 'review', choose: 'choose', story: 'edit', polish: 'edit', transcript: 'transcript', edit: 'edit' }
+  if (step === 'edit') current = 'polish'
+  show(map[step] ?? step, step === 'polish' || step === 'edit' ? 'words' : 'part')
+  renderStepper()
+  document.getElementById('projectName').textContent = step === 'import' ? 'New video' : kind === 'talk' ? 'A day in New York' : 'A day out with Sarah'
+}
+function show(screen, tab) {
+  document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('on', s.dataset.screen === screen))
+  if (screen === 'edit') setTab(tab || 'part')
+}
+
+// import
+document.querySelectorAll('.kind').forEach((b) => b.onclick = () => {
+  document.querySelectorAll('.kind').forEach((x) => x.classList.toggle('sel', x === b)); kind = b.dataset.kind; renderStepper()
+})
+const wave = document.getElementById('wave')
+wave.innerHTML = Array.from({ length: 48 }, (_, i) => `<span class="${[6,7,8,19,20,31,32,33].includes(i) ? 'cut' : ''}" style="height:${[6,7,8,19,20,31,32,33].includes(i) ? 8 : 18 + Math.round(Math.abs(Math.sin(i * 1.7)) * 60)}%"></span>`).join('')
+document.getElementById('drop').onclick = () => {
+  document.getElementById('drop').style.display = 'none'
+  const r = document.getElementById('reading'); r.style.display = 'block'
+  const th = document.getElementById('readThumbs'); th.innerHTML = Array.from({ length: 42 }, (_, i) => `<img src="${T(i)}">`).join('')
+  const imgs = [...th.children]; let k = 0
+  const tick = setInterval(() => {
+    if (k < imgs.length) { imgs[k].classList.add('in'); k++; document.getElementById('readBar').style.width = `${(k / 42) * 100}%`; document.getElementById('readTitle').textContent = `Reading ${k} of 42 clips…` }
+    else { clearInterval(tick); document.getElementById('readTitle').textContent = 'All 42 read in 4.9 s'; setTimeout(() => { go(kind === 'talk' ? 'transcript' : 'review'); r.style.display = 'none'; document.getElementById('drop').style.display = '' }, 700) }
+  }, 45)
+}
+
+// review
+document.getElementById('trimStrip').innerHTML = Array.from({ length: 20 }, (_, i) => `<div style="background-image:url(${T(i + 3)});--cut:${10 + (i * 37) % 50}%"></div>`).join('')
+document.querySelectorAll('.keep').forEach((b) => b.onclick = () => {
+  const card = b.closest('.out-card'); const kept = card.classList.toggle('kept')
+  b.textContent = kept ? 'Leave it out' : 'Keep it'; b.previousElementSibling.textContent = kept ? 'Keeping it' : 'Leaving it out'
+})
+document.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => go(b.dataset.go))
+
+// proposals
+const PROPS = [
+  { name: 'As it happened', why: 'Morning to night, the way the day unfolded.', facts: ['Opens on you in the car', '6 parts', '6:44'], parts: [['Morning drive', '0:20'], ['Campus', '0:22'], ['Class & library', '1:59'], ['Afternoon walk', '3:37'], ['Evening lights', '0:06'], ['Late dinner', '0:17']], t: [0, 4, 9, 15, 25, 36] },
+  { name: 'Place by place', why: 'Three places, each its own chapter.', facts: ['Opens on the campus', '3 parts', '6:44'], parts: [['The campus', '1:10'], ['Library & streets', '4:31'], ['The park', '1:03']], t: [12, 18, 22, 27, 30, 33] },
+  { name: 'The people', why: 'Built around who you were with, not when.', facts: ['Opens on you talking', '5 parts', '5:58'], parts: [['You, on camera', '1:40'], ['With friends', '1:52'], ['City & sky', '1:02'], ['Food', '0:48'], ['Quiet moments', '0:36']], t: [1, 7, 11, 24, 37, 40] },
+]
+document.getElementById('props').innerHTML = PROPS.map((p, i) => `
+  <div class="prop">
+    <div class="poster">${p.t.map((n) => `<img src="${T(n)}">`).join('')}</div>
+    <h3>${p.name}</h3><div class="why">${p.why}</div>
+    <div class="facts">${p.facts.map((f, k) => `<span class="chip">${k ? `<b>${f}</b>` : f}</span>`).join('')}</div>
+    <ol>${p.parts.map(([n, d]) => `<li><span>${n}</span><span>${d}</span></li>`).join('')}</ol>
+    <div class="actions"><button class="btn btn-quiet btn-sm">▶ Watch</button><span style="flex:1"></span><button class="btn btn-primary btn-sm" data-use="${i}">Start from this</button></div>
+  </div>`).join('')
+document.querySelectorAll('[data-use]').forEach((b) => b.onclick = () => { current = 'polish'; renderStepper(); show('edit', 'part'); toastMsg('Started from “' + PROPS[b.dataset.use].name + '”') })
+
+// editor
+const PARTS = [['Morning drive', '4 shots · 0:20', [0, 1, 2, 3], 'Title · Name tag'], ['Campus', '6 shots · 0:22', [4, 5, 6, 7, 8, 9], 'Part label'], ['Class & library', '16 shots · 1:59', [10, 11, 12, 13, 14, 15], 'Part label'], ['Afternoon walk', '16 shots · 3:37', [16, 17, 18, 19, 20, 21], ''], ['Evening lights', '2 shots · 0:06', [36, 37], 'Part label'], ['Late dinner', '4 shots · 0:17', [38, 39, 40, 41], 'End card']]
+const partsEl = document.getElementById('parts')
+partsEl.innerHTML = PARTS.map(([n, s, t, w], i) => `<div class="part ${i ? '' : 'sel'}" data-i="${i}"><div class="t"><b>${n}</b><span>${s.split('· ')[1]}</span></div><div class="shots">${t.slice(0, 6).map((k) => `<img src="${T(k)}">`).join('')}</div>${w ? `<div class="words">Aa ${w}</div>` : ''}</div>`).join('')
+partsEl.querySelectorAll('.part').forEach((el) => el.onclick = () => {
+  partsEl.querySelectorAll('.part').forEach((x) => x.classList.toggle('sel', x === el))
+  const p = PARTS[el.dataset.i]; document.getElementById('partTitle').textContent = p[0]; document.getElementById('partSub').textContent = p[1]
+  document.getElementById('partShots').innerHTML = p[2].map((k) => `<img src="${T(k)}">`).join('')
+  document.getElementById('frameImg').src = el.dataset.i === '1' ? 'assets/hero2.png' : 'assets/hero.png'
+  setTab('part')
+})
+document.getElementById('partShots').innerHTML = PARTS[0][2].map((k) => `<img src="${T(k)}">`).join('')
+const widths = [3, 3, 18, 34, 2, 4]
+document.getElementById('scrub').innerHTML = widths.map((w, i) => `<div class="${i ? '' : 'cur'}" style="flex:${w}"></div>`).join('') + '<span class="head" style="left:1%"></span>'
+document.getElementById('film').innerHTML = Array.from({ length: 28 }, (_, i) => i === 9 ? '<div class="gap" style="flex:1"></div>' : `<img src="${T(i)}">`).join('')
+document.getElementById('lane').innerHTML = [['#c9dcc1', 'A day out with Sarah', 3], ['transparent', '', 2], ['#e8c39e', 'Sarah · @sarahvlogs', 3], ['transparent', '', 6], ['#a7c4a0', 'Campus', 3], ['transparent', '', 24], ['#f0a8a8', 'Thanks for watching', 3]].map(([c, t, f]) => `<div style="background:${c};flex:${f}">${t}</div>`).join('')
+
+const WORDS = [['T', 'A day out with Sarah', 'Title · start of the video', 'May cover your face'], ['◧', 'Sarah', 'Name tag · after the title', ''], ['§', 'Campus', 'Part label · start of “Campus”', ''], ['§', 'Class & library', 'Part label', ''], ['§', 'Evening lights', 'Part label', ''], ['■', 'Thanks for watching', 'End card · last 3 s', '']]
+document.getElementById('wlist').innerHTML = WORDS.map(([i, t, s, w], k) => `<li class="w ${k ? '' : 'sel'}"><span class="ic">${i}</span><span class="txt"><b>${t}</b><small>${s}</small>${w ? `<div class="warn">▲ ${w}</div>` : ''}</span></li>`).join('')
+document.getElementById('tracks').innerHTML = [['Slow Sunday', 'Builds with your afternoon, eases out at dinner', 82], ['Paper Planes', 'Gentle start, lifts in the middle', 64], ['City Walk', 'Steady — no build', 31]].map(([n, r, f], i) => `<div class="track"><div class="cover"></div><div style="flex:1"><b>${n}</b><div class="muted" style="font-size:12px">${r}</div><div class="fit"><div style="width:${f}%"></div></div></div><button class="btn ${i ? 'btn-quiet' : 'btn-primary'} btn-sm">${i ? 'Use' : 'In use'}</button></div>`).join('')
+
+function setTab(t) {
+  document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t))
+  document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('on', p.dataset.panel === t))
+  document.getElementById('frame').classList.toggle('show-safe', t === 'words')
+}
+document.querySelectorAll('#tabs button').forEach((b) => b.onclick = () => setTab(b.dataset.tab))
+document.getElementById('askInput').onkeydown = (e) => {
+  if (e.key === 'Enter' && e.target.value.trim()) { toastMsg('Tightened “Morning drive”: 0:20 → 0:14'); e.target.value = '' }
+}
+
+// export
+const sheet = document.getElementById('sheet')
+function openSheet() { sheet.classList.add('on') }
+document.getElementById('topAction').onclick = openSheet
+document.getElementById('sheetClose').onclick = () => sheet.classList.remove('on')
+document.getElementById('doExport').onclick = () => {
+  const p = document.getElementById('prog'); p.style.display = 'block'; let v = 0
+  const txt = document.getElementById('progText')
+  const tick = setInterval(() => {
+    v += 2; p.firstElementChild.style.width = v + '%'
+    txt.textContent = v < 30 ? 'Drawing the words on screen…' : v < 85 ? `Rendering shots… ${Math.round(v / 2)} of 48` : 'Adding words and music…'
+    if (v >= 100) { clearInterval(tick); txt.innerHTML = 'Saved to Movies/VibeCut · <u>Show in Finder</u>'; document.getElementById('doExport').textContent = 'Done' }
+  }, 60)
+}
+
+let toastT
+function toastMsg(m) {
+  document.getElementById('toastText').textContent = m
+  const t = document.getElementById('toast'); t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 3500)
+}
+renderStepper()
+const q = new URLSearchParams(location.search).get('s')
+if (q) { if (q === 'talk') { kind = 'talk'; go('transcript') } else go(q) }
+</script>
+</body>
+</html>

@@ -3,6 +3,9 @@
 @import "@fontsource/eb-garamond/500.css";
 @import "@fontsource/eb-garamond/600.css";
 @import "@fontsource/eb-garamond/400-italic.css";
+/* Rounded caption/title face (OFL-1.1); drawn onto the overlay canvas too. */
+@import "@fontsource/nunito/600.css";
+@import "@fontsource/nunito/800.css";
 
 @theme {
   --color-ink: #0c0c0e;

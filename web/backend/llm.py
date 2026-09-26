@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 
 from . import board as bd
+from . import overlays as ov
 from . import storyboard as sb
 
 MODEL = "claude-opus-5"
@@ -74,6 +75,11 @@ Use only ids that appear in the state. Fields you don't need are null.
 - set_pace {beat, direction: tighter|looser, amount: a_little|a_lot}: trims (or relaxes) every shot in the beat around its best moment. "Punchier", "too slow", "drags" → tighter. "Let it breathe", "too rushed" → looser. "A lot", "way", "much" → a_lot.
 - open_with {shot} / end_with {shot}: make a specific shot the very first / very last. To open or end on a whole section, use move_beat instead.
 
+Words on screen (OVERLAYS in the state). They hang off a beat or a shot and move with it; one font and colour for the whole video is set elsewhere, so never try to change fonts per overlay.
+- add_overlay {kind, text, sub, beat | shot}: kind is title (big opening words), part (a part/place label, sub = small line above it), name (a person's name tag, sub = handle or role), caption (a spoken line or short remark), date, end (end card). Give beat or shot to say where it goes; both null = the start of the video (for end: the last seconds). Only write words the user gave you or that are already in the storyboard (beat titles). Never invent names, places or quotes — ask instead.
+- edit_overlay {overlay, text, sub, kind: null}: change the words of an existing overlay (id from OVERLAYS). Give beat or shot to move it there.
+- drop_overlay {overlay}
+
 ## How to decide
 - One user request → the smallest set of operations that does it. "Make the opening punchier and cut the market section" is exactly two operations: set_pace on the first beat, drop_beat on the market beat. Do not also reorder, retitle or tidy anything else.
 - If the target is ambiguous (two beats could be "the market", or none looks like it), don't guess: ask one short question and return no operations.
@@ -110,7 +116,7 @@ SCHEMA = {
             "items": {
                 "type": "object", "additionalProperties": False,
                 "required": ["op", "option", "beat", "shot", "with_shot", "to_index",
-                             "title", "direction", "amount"],
+                             "title", "direction", "amount", "overlay", "kind", "text", "sub"],
                 "properties": {
                     "op": {"type": "string", "enum": list(bd.LLM_OPS)},
                     "option": _nullable({"type": "string", "enum": ["time", "place", "subject", "voice"]}),
@@ -121,6 +127,10 @@ SCHEMA = {
                     "title": _nullable({"type": "string"}),
                     "direction": _nullable({"type": "string", "enum": ["tighter", "looser"]}),
                     "amount": _nullable({"type": "string", "enum": ["a_little", "a_lot"]}),
+                    "overlay": _nullable({"type": "string"}),
+                    "kind": _nullable({"type": "string", "enum": ["title", "part", "name", "caption", "date", "end"]}),
+                    "text": _nullable({"type": "string"}),
+                    "sub": _nullable({"type": "string"}),
                 },
             },
         },
@@ -183,6 +193,17 @@ def render_state(cat: bd.Catalog, session: bd.Session, rules: str = "") -> str:
                     continue
                 used.add(s["id"])
                 out.append("  " + _shot_line(cat, s["id"], s["start"], s["end"], key=bd.key(s)))
+        items = ov.resolve(b)
+        if items:
+            where = {bt["id"]: bt["title"] for bt in b["beats"]}
+            out.append("")
+            out.append(f"OVERLAYS ({len(items)}, one style: {ov.style_of(b)['font']}):")
+            for o in items:
+                a = o["anchor"]
+                on = {"edit": "the video", "end": "the end", "beat": f"beat {a.get('id')} “{where.get(a.get('id'), '')}”",
+                      "shot": f"shot {a.get('id')}"}[a["to"]]
+                sub = f" / {o['sub']}" if o.get("sub") else ""
+                out.append(f"  {o['id']} {o['kind']} “{o['text']}{sub}” on {on}, {_mmss(o['start'])}–{_mmss(o['end'])}")
     else:
         out.append("STORYBOARD: none yet — the user hasn't chosen a proposal.")
     out.append("")
@@ -252,8 +273,21 @@ def interpret(message: str, cat: bd.Catalog, session: bd.Session, rules: str = "
     except json.JSONDecodeError as e:
         raise LLMError("The model's answer wasn't valid JSON.") from e
     out.setdefault("choices", [])
-    out["ops"] = [op for op in out.get("ops") or [] if isinstance(op, dict)]
+    out["ops"] = [_overlay_op(op) for op in out.get("ops") or [] if isinstance(op, dict)]
     return out
+
+
+def _overlay_op(op: dict) -> dict:
+    """The schema's flat fields -> what overlays.py expects."""
+    if op.get("op") == "edit_overlay":
+        for k in ("beat", "shot"):
+            if op.get(k):
+                op["anchor"], op["at"] = {"to": k, "id": op.pop(k)}, 0.3
+        op.pop("kind", None)
+        for k in ("text", "sub"):
+            if op.get(k) is None:
+                op.pop(k, None)
+    return op
 
 
 def interpret_offline(message: str, cat: bd.Catalog, session: bd.Session, rules: str = "") -> dict:
@@ -265,3 +299,57 @@ def interpret_offline(message: str, cat: bd.Catalog, session: bd.Session, rules:
     return {"reply": "", "question": None, "choices": [], "direction": None, "ops": [],
             "error": "Editing by chat needs the language model: add ANTHROPIC_API_KEY=… to "
                      "web/.env and restart the server. Timeline edits, Apply and Undo still work."}
+
+
+# --------------------------------------------------------------------------
+# talking-head mode: which sentences to cut (talk.py)
+# --------------------------------------------------------------------------
+
+TALK_SYSTEM = """You review the transcript of a creator talking to camera (口播), sentence by sentence, and decide which sentences a careful editor would cut. You only see text; timing and pauses are handled elsewhere.
+
+Cut:
+- retake: a sentence the speaker says again shortly after (usually better). Cut the EARLIER take, keep the last complete one.
+- false_start: a sentence started and abandoned ("So the first thing — actually, let me start with…").
+- mistake: a sentence that is immediately corrected ("…it's 30 — sorry, 40 minutes").
+- off_script: only when a SCRIPT is given and the sentence is clearly an aside that isn't part of what they meant to record ("wait, is this recording?", "let me try that again").
+- filler: a sentence that is nothing but filler.
+
+Never cut a sentence just because it's informal, a joke, or not in the script but on topic. When unsure, keep it. The creator reviews every cut, so give a short note in English saying why (e.g. "Same as sentence 7 — keeping the later take").
+
+Each sentence has an id, its text, its length in seconds, `rule` (what VibeCut's simple rules suggested: retake / script_retake / stumble / filler, or null) and, with a script, the script line it matched. You may agree or disagree with the rules. `reply` is one short English sentence summarising what you cut."""
+
+TALK_SCHEMA = {
+    "type": "object", "additionalProperties": False, "required": ["reply", "drops"],
+    "properties": {
+        "reply": {"type": "string"},
+        "drops": {"type": "array", "items": {
+            "type": "object", "additionalProperties": False, "required": ["id", "reason", "note"],
+            "properties": {
+                "id": {"type": "string"},
+                "reason": {"type": "string", "enum": ["retake", "false_start", "mistake", "off_script", "filler"]},
+                "note": {"type": "string"},
+            }}},
+    },
+}
+
+
+def review_talk(sentences: list[dict], script: list[str]) -> dict:
+    """-> {"reply", "drops": [{id, reason, note}]}. Only text leaves the machine."""
+    import anthropic
+
+    body = "SENTENCES:\n" + "\n".join(
+        f"{s['id']} ({s['seconds']}s{', rule: ' + s['rule'] if s.get('rule') else ''}"
+        f"{', script line ' + str(s['script_line']) if s.get('script_line') else ''}): {s['text']}" for s in sentences)
+    if script:
+        body = "SCRIPT:\n" + "\n".join(f"{k + 1}. {ln}" for k, ln in enumerate(script)) + "\n\n" + body
+    try:
+        resp = client().messages.create(
+            model=MODEL, max_tokens=16000,
+            system=[{"type": "text", "text": TALK_SYSTEM, "cache_control": {"type": "ephemeral"}}],
+            messages=[{"role": "user", "content": body}],
+            output_config={"effort": "medium", "format": {"type": "json_schema", "schema": TALK_SCHEMA}},
+        )
+    except anthropic.APIError as e:
+        raise LLMError(str(e)) from e
+    text = next((b.text for b in resp.content if b.type == "text"), "")
+    return json.loads(text)

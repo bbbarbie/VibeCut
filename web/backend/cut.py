@@ -123,7 +123,6 @@ def summary(plan: Plan) -> dict:
     return {
         "clips": len(clips), "kept": len(kept), "rejected": len(clips) - len(kept),
         "raw": round(raw, 1), "cut": round(cut, 1), "ratio": round(cut / raw, 3) if raw else None,
-        "line_zh": f"{len(clips)} 个片段 → 保留 {len(kept)} → 剪出 {mmss(cut)}（原始 {mmss(raw)}）",
         "line_en": f"{len(clips)} clips → {len(kept)} kept → {mmss(cut)} cut (from {mmss(raw)})",
     }
 

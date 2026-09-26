@@ -1,4 +1,18 @@
-import type { CutData, Job, PrefClass, Project, Session } from './types'
+import type { CutData, ExportJob, Job, LookFit, PrefClass, Project, RefCard, RefJob, RefSummary, Session, TalkState } from './types'
+
+export type RemixJob = {
+  id: string
+  stage: 'queued' | 'references' | 'choosing' | 'music' | 'rendering' | 'done' | 'error'
+  progress: number
+  error: string | null
+  lines: string[]
+  elapsed: number
+  file: string | null
+  seconds: number | null
+  music: { title: string; bpm: number; credit: string } | null
+  fingerprint: string | null
+  shots: number | null
+}
 
 async function j<T>(res: Promise<Response>): Promise<T> {
   const r = await res
@@ -36,4 +50,32 @@ export const api = {
   classify: (req: { turn: number; klass: PrefClass; rule?: string; scope?: string; counter?: string; reason?: string }) =>
     j<Session>(post('/api/preferences/classify', req)),
   rule: (id: string, action: 'forget' | 'narrow') => j<Session>(post(`/api/preferences/${id}/${action}`, {})),
+  suggestOverlays: (req: { profile: Record<string, unknown>; title?: string; kinds?: string[] }) =>
+    j<Session>(post('/api/overlays/suggest', req)),
+  exportCreate: (music: boolean) => j<ExportJob>(post('/api/export', { music })),
+  exportFrame: (id: string, n: number, png: Blob) =>
+    j<{ ok: boolean }>(fetch(`/api/export/${id}/frames/${n}`, { method: 'POST', body: png })),
+  exportStart: (id: string, schedule: { frame: number | null; start: number; end: number }[]) =>
+    j<ExportJob>(post(`/api/export/${id}/start`, { schedule })),
+  exportStatus: (id: string) => j<ExportJob>(fetch(`/api/export/${id}`)),
+  exportCancel: (id: string) => j<ExportJob>(post(`/api/export/${id}/cancel`, {})),
+  talkStart: (req: { locale: string; script: string }) => j<TalkState>(post('/api/talk', req)),
+  talkState: () => j<TalkState>(fetch('/api/talk')),
+  talkToggle: (id: string) => j<TalkState>(post('/api/talk/toggle', { id })),
+  talkApply: (captions: boolean, profile: Record<string, unknown>) => j<Session>(post('/api/talk/apply', { captions, profile })),
+  exportReveal: (id: string) => fetch(`/api/export/${id}/reveal`, { method: 'POST' }),
+  // Remix: reference reels + the shelf -> one finished short, then the board
+  remixStart: (req: { refs: string[]; title?: string; sub?: string; length?: number }) =>
+    j<RemixJob>(post('/api/remix', req)),
+  remixStatus: (id: string) => j<RemixJob>(fetch(`/api/remix/${id}`)),
+  // Borrow a feeling: a reference video's style, learnt and applied as one turn
+  refLibrary: () => j<{ references: RefSummary[]; links: boolean }>(fetch('/api/references')),
+  refLearn: (source: string) => j<RefJob>(post('/api/references', { source })),
+  refJob: (id: string) => j<RefJob>(fetch(`/api/references/jobs/${id}`)),
+  refCard: (rid: string) => j<RefCard>(fetch(`/api/references/${rid}`)),
+  refLook: (rid: string, strength: 'subtle' | 'full') => j<LookFit>(post(`/api/references/${rid}/look`, { strength })),
+  refApply: (rid: string, traits: string[], strength: 'subtle' | 'full') =>
+    j<Session>(post(`/api/references/${rid}/apply`, { traits, strength })),
+  refForget: (rid: string) => j<{ references: RefSummary[]; links: boolean }>(fetch(`/api/references/${rid}`, { method: 'DELETE' })),
+  useTrack: (trackId: string | null) => j<Session>(post('/api/music/use', { track_id: trackId })),
 }

@@ -1,0 +1,2103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VibeCut — Motion library v1 · design review</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+/* ------------------------------------------------------------------ fonts (bundled, local only) */
+@font-face { font-family: "EB Garamond"; font-weight: 400; font-style: normal; src: url(../../../web/frontend/node_modules/@fontsource/eb-garamond/files/eb-garamond-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "EB Garamond"; font-weight: 500; font-style: normal; src: url(../../../web/frontend/node_modules/@fontsource/eb-garamond/files/eb-garamond-latin-500-normal.woff2) format("woff2"); }
+@font-face { font-family: "EB Garamond"; font-weight: 600; font-style: normal; src: url(../../../web/frontend/node_modules/@fontsource/eb-garamond/files/eb-garamond-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "EB Garamond"; font-weight: 400; font-style: italic; src: url(../../../web/frontend/node_modules/@fontsource/eb-garamond/files/eb-garamond-latin-400-italic.woff2) format("woff2"); }
+@font-face { font-family: "EB Garamond"; font-weight: 500; font-style: italic; src: url(../../../web/frontend/node_modules/@fontsource/eb-garamond/files/eb-garamond-latin-500-italic.woff2) format("woff2"); }
+/* Nunito stands in for Poppins (Playful) — the only rounded face bundled with the app today */
+@font-face { font-family: "Nunito"; font-weight: 600; src: url(../../../web/frontend/node_modules/@fontsource/nunito/files/nunito-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Nunito"; font-weight: 700; src: url(../../../web/frontend/node_modules/@fontsource/nunito/files/nunito-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "Nunito"; font-weight: 800; src: url(../../../web/frontend/node_modules/@fontsource/nunito/files/nunito-latin-800-normal.woff2) format("woff2"); }
+@font-face { font-family: "Nunito"; font-weight: 900; src: url(../../../web/frontend/node_modules/@fontsource/nunito/files/nunito-latin-900-normal.woff2) format("woff2"); }
+
+/* ------------------------------------------------------------------ tokens (round-1 system + v2 additions) */
+:root {
+  --bg: #13110e; --surface: #1a1714; --raised: #221e1a; --hover: #2a251f; --line: #322c25; --line-soft: #28231e;
+  --text: #efe8dd; --muted: #a59b8d; --faint: #72695d;
+  --accent: #c9dcc1; --accent-ink: #18221a; --accent-deep: #93b088; --accent-glow: #c9dcc11f;
+  --warn: #e9c78f; --danger: #e59c8f;
+  --serif: "EB Garamond", Georgia, serif;
+  --sans: -apple-system, "SF Pro Text", "Inter", system-ui, sans-serif;
+  --r: 12px; --r-lg: 18px; --r-xl: 22px;
+  --stage: #0c0b09;
+  --shadow-video: 0 30px 80px #0008; --shadow-sheet: 0 40px 120px #000a;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1); --dur-1: 150ms; --dur-2: 250ms; --dur-3: 600ms;
+  --part-1: #c9dcc1; --part-2: #e8c39e; --part-3: #a7c4a0; --part-4: #d9b8c4; --part-5: #b9c7d9; --part-6: #e0d3a8;
+  --ok: var(--accent-deep);
+  --focus: 0 0 0 3px var(--accent-glow);
+  --fw: 216px; --gx: 56px;
+}
+
+/* ------------------------------------------------------------------ vibes (looks.css stand-in: filter, palette, faces) */
+.look-clean     { --look-filter: none; --w-1: #FFFFFF; --w-2: #F2C14E; --w-3: #B9D9EB; --f-display: Inter, system-ui, -apple-system, "Helvetica Neue", sans-serif; --f-display-w: 600; }
+.look-cozy      { --look-filter: sepia(.14) saturate(.9) contrast(.9) brightness(1.04); --w-1: #F6EBD9; --w-2: #F3C9A5; --w-3: #C9DCC1; --f-display: Caveat, "Bradley Hand", "Marker Felt", cursive; --f-display-w: 600; }
+.look-quiet     { --look-filter: saturate(.72) contrast(.86) brightness(1.05) sepia(.08); --w-1: #EFE8DD; --w-2: #D8CBB6; --w-3: #FFFFFF; --f-display: "EB Garamond", Georgia, serif; --f-display-w: 400; }
+.look-cinematic { --look-filter: contrast(.94) saturate(.9) brightness(.97); --w-1: #FFFFFF; --w-2: #E9D8B8; --w-3: #BFD0DA; --f-display: Inter, system-ui, -apple-system, "Helvetica Neue", sans-serif; --f-display-w: 300; }
+.look-film      { --look-filter: contrast(.88) saturate(.85) sepia(.22) brightness(1.03); --w-1: #F5EEDC; --w-2: #FF9A3C; --w-3: #E8D5A8; --f-display: "Courier Prime", "Courier New", Courier, monospace; --f-display-w: 700; }
+.look-playful   { --look-filter: saturate(1.3) brightness(1.05) contrast(1.02); --w-1: #FFD84D; --w-2: #FF6FA8; --w-3: #7BD3F7; --f-display: Poppins, Nunito, "Avenir Next Rounded", "Arial Rounded MT Bold", sans-serif; --f-display-w: 800; }
+.look-hype      { --look-filter: contrast(1.18) saturate(1.12) brightness(.96); --w-1: #FFFFFF; --w-2: #FF6A3D; --w-3: #E8FF5A; --f-display: Anton, Impact, Haettenschweiler, "Arial Narrow", sans-serif; --f-display-w: 400; }
+
+* { box-sizing: border-box; margin: 0; }
+[hidden] { display: none !important; }
+html { background: var(--bg); }
+body { min-height: 100vh; background: var(--bg); color: var(--text); font: 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+button:focus-visible, [tabindex]:focus-visible { outline: none; box-shadow: var(--focus), 0 0 0 1px var(--accent-deep); }
+.serif { font-family: var(--serif); }
+.muted { color: var(--muted); } .faint { color: var(--faint); }
+
+/* one button family: primary / quiet / ghost */
+.btn { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 16px; border-radius: 999px; font-weight: 550; font-size: 13.5px; transition: background var(--dur-1), opacity var(--dur-1), color var(--dur-1); white-space: nowrap; }
+.btn-primary { background: var(--accent); color: var(--accent-ink); }
+.btn-primary:hover { background: #d8e8d1; }
+.btn-quiet { background: var(--raised); color: var(--text); }
+.btn-quiet:hover { background: var(--hover); }
+.btn-ghost { color: var(--muted); padding: 0 10px; }
+.btn-ghost:hover { color: var(--text); }
+.btn-sm { height: 28px; padding: 0 12px; font-size: 12.5px; }
+.seg { display: inline-flex; background: var(--surface); border-radius: 999px; padding: 2px; border: 1px solid var(--line-soft); }
+.seg button { height: 26px; padding: 0 11px; border-radius: 999px; font-size: 12.5px; color: var(--muted); white-space: nowrap; transition: background var(--dur-1), color var(--dur-1); }
+.seg button:hover { color: var(--text); }
+.seg button.on { background: var(--raised); color: var(--text); box-shadow: 0 1px 0 #0006; }
+.seg.tiny button { height: 20px; padding: 0 8px; font-size: 11px; }
+
+/* ------------------------------------------------------------------ top bar + control bar */
+.top { position: sticky; top: 0; z-index: 30; height: 60px; display: grid; grid-template-columns: 1fr auto; align-items: center; padding: 0 24px; background: rgba(19, 17, 14, .92); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line-soft); }
+.brand { display: flex; align-items: baseline; gap: 14px; min-width: 0; }
+.logo { font-family: var(--serif); font-size: 21px; font-weight: 500; letter-spacing: -.01em; }
+.logo span { color: var(--accent-deep); }
+.doc-title { font-family: var(--serif); font-size: 21px; color: var(--text); white-space: nowrap; }
+.doc-title::before { content: "/"; margin-right: 14px; color: var(--faint); }
+.doc-title small { font-family: var(--sans); font-size: 12px; color: var(--faint); margin-left: 10px; letter-spacing: .02em; }
+.top-right { display: flex; gap: 8px; align-items: center; }
+
+.bar { position: sticky; top: 60px; z-index: 29; height: 60px; display: flex; align-items: center; gap: 14px; padding: 0 24px; background: rgba(19, 17, 14, .92); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line-soft); }
+.bar-label { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--faint); }
+.vchips { display: flex; gap: 6px; }
+.vchip { height: 32px; padding: 0 12px 0 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line-soft); display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; transition: background var(--dur-1), color var(--dur-1), border-color var(--dur-1), box-shadow var(--dur-2); }
+.vchip:hover { color: var(--text); border-color: #4a4238; }
+.vchip .sw { display: flex; gap: 2px; }
+.vchip .sw i { width: 7px; height: 7px; border-radius: 50%; box-shadow: inset 0 0 0 1px #0003; }
+.vchip.on { background: var(--raised); color: var(--text); border-color: var(--accent-deep); box-shadow: 0 0 0 3px var(--accent-glow), 0 2px 10px #0006; }
+.vchip.on::after { content: "✓"; color: var(--accent); font-size: 11px; margin-left: -2px; }
+.spacer { flex: 1; }
+.toggle { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px 0 8px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line-soft); color: var(--muted); font-size: 12.5px; }
+.toggle:hover { color: var(--text); }
+.toggle .knob { width: 26px; height: 16px; border-radius: 999px; background: var(--line); position: relative; transition: background var(--dur-2); }
+.toggle .knob::after { content: ""; position: absolute; left: 2px; top: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--muted); transition: transform var(--dur-2) var(--ease), background var(--dur-2); }
+.toggle.on { color: var(--text); }
+.toggle.on .knob { background: var(--accent-deep); }
+.toggle.on .knob::after { transform: translateX(10px); background: var(--accent-ink); }
+.beat-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); opacity: .35; }
+.toggle.on .beat-dot { background: var(--warn); opacity: 1; }
+
+/* ------------------------------------------------------------------ page */
+main { padding: 56px 40px 140px; }
+.wrap { max-width: calc(4 * var(--fw) + 3 * var(--gx)); margin: 0 auto; }
+body.wide .wrap { max-width: 1360px; }
+.eyebrow { font-size: 11.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--faint); }
+h1.display { font-family: var(--serif); font-weight: 400; font-size: 52px; line-height: 1.05; letter-spacing: -.015em; margin-top: 10px; }
+h1.display em { color: var(--accent); }
+.lede { color: var(--muted); font-size: 16px; margin-top: 14px; max-width: 660px; }
+.legend { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 22px; font-size: 12.5px; color: var(--muted); align-items: center; }
+.legend .k { color: var(--faint); font-size: 11.5px; }
+.hint { margin-top: 10px; font-size: 12px; color: var(--faint); }
+kbd { font: 11px var(--sans); color: var(--muted); background: var(--raised); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; }
+
+/* the vibe band */
+.vband { margin-top: 40px; display: grid; grid-template-columns: minmax(250px, 300px) 214px minmax(0, 1fr); gap: 28px; padding: 26px 28px; background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-lg); position: relative; overflow: hidden; }
+.vband::before { content: ""; position: absolute; inset: 0; background: radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--w-2) 10%, transparent), transparent 55%); pointer-events: none; transition: background var(--dur-3); }
+.vb-name { position: relative; }
+.vb-title { font-family: var(--f-display); font-weight: var(--f-display-w); font-size: 60px; line-height: 1; margin-top: 12px; color: var(--w-1); letter-spacing: -.01em; }
+.look-cinematic .vb-title { text-transform: uppercase; letter-spacing: .3em; font-size: 40px; margin-top: 22px; }
+.look-quiet .vb-title { font-style: italic; }
+.look-hype .vb-title { text-transform: uppercase; letter-spacing: .01em; }
+.look-film .vb-title { text-transform: lowercase; font-size: 52px; }
+.look-cozy .vb-title { font-size: 66px; }
+.vb-line { font-family: var(--serif); font-style: italic; font-size: 19px; color: var(--muted); margin-top: 12px; line-height: 1.3; }
+.vb-pal { display: flex; gap: 14px; margin-top: 20px; }
+.vb-pal div { display: flex; flex-direction: column; gap: 5px; align-items: flex-start; font: 10.5px Menlo, "SF Mono", monospace; color: var(--faint); }
+.vb-pal i { width: 26px; height: 26px; border-radius: 50%; box-shadow: inset 0 0 0 1px #ffffff22, 0 4px 10px #0005; }
+.vb-fonts { margin-top: 16px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.vb-fonts b { color: var(--text); font-weight: 550; }
+.vb-curve { position: relative; }
+.vb-curve svg { display: block; width: 214px; height: 160px; background: var(--bg); border-radius: var(--r); border: 1px solid var(--line-soft); }
+.vb-curve .cap { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.45; }
+.vb-curve .cap b { color: var(--text); font-weight: 550; }
+.tag { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 999px; font-size: 10.5px; font-weight: 550; vertical-align: 1px; }
+.tag.measured { background: #1f2a1d; color: var(--accent); }
+.tag.prior { background: #2c2517; color: var(--warn); }
+.vb-tokens { position: relative; display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 7px 14px; font-size: 12.5px; align-content: start; }
+.vb-tokens dt { color: var(--faint); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; padding-top: 2px; }
+.vb-tokens dd { color: var(--text); line-height: 1.45; }
+.vb-tokens dd .muted { font-size: 12px; }
+body.wide .vb-tokens { grid-template-columns: 86px minmax(0, 1fr) 86px minmax(0, 1fr); }
+
+/* sections */
+.sec { margin-top: 72px; }
+.sec-head { display: flex; align-items: flex-end; gap: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--line-soft); margin-bottom: 32px; }
+.sec-head h2 { font-family: var(--serif); font-weight: 400; font-size: 34px; line-height: 1.05; letter-spacing: -.01em; }
+.sec-head h2 em { color: var(--accent); }
+.sec-head p { color: var(--muted); font-size: 13px; max-width: 520px; margin-left: auto; text-align: right; }
+
+/* tiles */
+.grid { display: grid; grid-template-columns: repeat(4, var(--fw)); column-gap: var(--gx); row-gap: 52px; }
+body.wide .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); column-gap: 28px; row-gap: 44px; }
+.tile { min-width: 0; }
+.frame { position: relative; width: var(--fw); height: calc(var(--fw) * 16 / 9); border-radius: 12px; overflow: hidden; background: #000; box-shadow: 0 18px 44px #0009, 0 0 0 1px #ffffff0b; isolation: isolate; cursor: zoom-in; transition: transform var(--dur-2) var(--ease), box-shadow var(--dur-2); }
+body.wide .frame { width: 100%; height: auto; aspect-ratio: 16 / 9; }
+.frame:hover { transform: translateY(-3px); box-shadow: 0 24px 54px #000a, 0 0 0 1px #4a4238; }
+.frame canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.cv-foot { filter: var(--look-filter); transition: filter var(--dur-2) linear; }
+.cv-light { mix-blend-mode: screen; }
+.fnote { position: absolute; pointer-events: none; z-index: 2; }
+.fnote[hidden] { display: none !important; }
+.plate { inset: 0; display: grid; place-content: center; text-align: center; padding: 0 16px; gap: 6px; }
+.plate b { font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 19px; line-height: 1.15; color: var(--text); }
+.plate span { font-size: 11.5px; color: #d6ccbd; line-height: 1.4; }
+.pill { left: 50%; bottom: 10px; transform: translateX(-50%); width: max-content; max-width: calc(100% - 20px); padding: 5px 10px; border-radius: 10px; background: rgba(19, 17, 14, .74); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); font-size: 10.5px; color: var(--text); line-height: 1.35; text-align: center; }
+.live { left: 50%; bottom: 10px; transform: translateX(-50%); width: max-content; max-width: calc(100% - 50px); padding: 4px 9px; border-radius: 999px; background: rgba(19, 17, 14, .74); font-size: 10.5px; color: var(--warn); opacity: 0; transition: opacity var(--dur-1); }
+.live.on { opacity: 1; }
+.replay { position: absolute; right: 8px; top: 8px; z-index: 3; width: 28px; height: 28px; border-radius: 50%; background: rgba(19, 17, 14, .55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); color: var(--text); font-size: 15px; display: grid; place-items: center; opacity: .78; transition: opacity var(--dur-1), background var(--dur-1), transform var(--dur-2) var(--ease); }
+.replay:hover { opacity: 1; background: rgba(19, 17, 14, .8); transform: rotate(-40deg); }
+.lanes { display: block; width: 100%; height: 46px; margin-top: 10px; border-radius: 6px; background: var(--surface); }
+
+.tl { position: relative; height: 12px; margin-top: 10px; }
+.tl::before { content: ""; position: absolute; left: 0; right: 0; top: 5px; height: 2px; border-radius: 2px; background: var(--line); }
+.tl-fill { position: absolute; left: 0; right: 0; top: 5px; height: 2px; border-radius: 2px; background: var(--accent-deep); transform-origin: left center; transform: scaleX(0); }
+.tl .kd { position: absolute; top: 3px; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--bg); box-shadow: inset 0 0 0 1.5px var(--muted); }
+.tl .bt { position: absolute; top: 1px; width: 1px; height: 10px; background: #e9c78f55; }
+.tl .sx { position: absolute; top: -5px; font-size: 10px; line-height: 1; color: var(--warn); transform: translateX(-50%); }
+.under { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 2px 8px; margin-top: 6px; font-size: 10.5px; color: var(--faint); white-space: nowrap; }
+.under .sfx { margin-left: auto; }
+.rb { display: inline-flex; align-items: center; gap: 6px; }
+.rb::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.rb.ff::before { background: var(--part-2); }
+.rb.mix::before { background: linear-gradient(90deg, var(--accent) 50%, var(--part-2) 50%); }
+.sfx { overflow: hidden; text-overflow: ellipsis; transition: color var(--dur-1); }
+.sfx.has { color: var(--muted); }
+.sfx.hit { color: var(--warn); }
+.meta { margin-top: 12px; }
+.m-top { display: flex; align-items: baseline; gap: 8px; }
+.m-num { font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.m-top h3 { font-family: var(--serif); font-weight: 500; font-size: 17px; line-height: 1.2; }
+.st { margin-left: auto; font-size: 10.5px; height: 18px; padding: 0 7px; border-radius: 999px; display: inline-flex; align-items: center; white-space: nowrap; align-self: center; }
+.st-exists { background: #1f2a1d; color: var(--accent); }
+.st-extend { background: #2a2419; color: #e8c39e; }
+.st-new { background: #2a2026; color: #e3c4cf; }
+.st-engine { background: #2c2517; color: var(--warn); }
+.m-fam { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); margin-top: 2px; }
+.m-when { font-size: 12px; color: var(--muted); line-height: 1.45; margin-top: 7px; }
+.m-vibe { font-size: 12px; color: var(--text); line-height: 1.45; margin-top: 6px; }
+.m-vibe b { font-weight: 600; color: var(--accent); }
+.m-render { font-size: 11px; color: var(--faint); line-height: 1.4; margin-top: 6px; }
+.m-ctl { margin-top: 8px; }
+
+.note-card { grid-column: span 2; align-self: start; background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-lg); padding: 22px 24px 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.note-card h4 { font-family: var(--serif); font-weight: 500; font-size: 21px; line-height: 1.15; }
+.note-card ul { padding-left: 15px; margin-top: 10px; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.note-card li + li { margin-top: 5px; }
+.note-card li b { color: var(--text); font-weight: 550; }
+.note-card .src { font-size: 11px; color: var(--faint); margin-top: 10px; }
+
+/* ------------------------------------------------------------------ enlarged tile sheet */
+.scrim { position: fixed; inset: 0; z-index: 50; background: #0009; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); display: grid; place-items: center; opacity: 0; pointer-events: none; transition: opacity var(--dur-2) var(--ease); }
+.scrim.on { opacity: 1; pointer-events: auto; }
+.sheet { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-xl); box-shadow: var(--shadow-sheet); padding: 20px 28px 20px; max-width: calc(100vw - 32px); max-height: calc(100vh - 24px); overflow: auto; transform: translateY(14px) scale(.985); transition: transform var(--dur-2) var(--ease); }
+.scrim.on .sheet { transform: none; }
+.sh-head { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+.sh-head .eyebrow { flex: 1; }
+.icon-btn { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); background: var(--raised); font-size: 15px; transition: background var(--dur-1), color var(--dur-1); }
+.icon-btn:hover { background: var(--hover); color: var(--text); }
+.sh-body { display: grid; grid-template-columns: auto 360px; gap: 32px; align-items: start; }
+.sh-frame { position: relative; border-radius: 18px; overflow: hidden; background: #000; box-shadow: var(--shadow-video), 0 0 0 1px #ffffff0b; isolation: isolate; }
+.sh-frame canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.sh-frame .plate b { font-size: 26px; }
+.sh-frame .plate span { font-size: 13px; }
+.sh-frame .pill { font-size: 12px; bottom: 14px; }
+.sh-frame .live { font-size: 12px; bottom: 14px; }
+.sh-side h2 { font-family: var(--serif); font-weight: 400; font-size: 34px; line-height: 1.05; margin-top: 6px; }
+.sh-side .st { margin-left: 0; margin-top: 10px; }
+.sh-dl { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 9px 14px; margin-top: 18px; font-size: 13px; }
+.sh-dl dt { color: var(--faint); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; padding-top: 2px; }
+.sh-dl dd { color: var(--text); line-height: 1.45; }
+.sh-ctl { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; align-items: center; }
+.keys { list-style: none; padding: 0; margin-top: 18px; border-top: 1px solid var(--line-soft); }
+.keys li { display: grid; grid-template-columns: 64px 1fr; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line-soft); font-size: 12.5px; color: var(--muted); transition: color var(--dur-1); }
+.keys li span:first-child { font-variant-numeric: tabular-nums; color: var(--faint); }
+.keys li.now { color: var(--text); }
+.keys li.now span:first-child { color: var(--accent); }
+.sh-lanes { display: block; margin-top: 12px; border-radius: 8px; background: var(--bg); }
+
+.ruler { position: relative; height: 100px; margin-top: 14px; user-select: none; -webkit-user-select: none; cursor: ew-resize; touch-action: none; }
+.r-axis { position: absolute; left: 0; right: 0; top: 58px; height: 1px; background: var(--line); }
+.r-tick { position: absolute; top: 55px; width: 1px; height: 6px; background: var(--line); }
+.r-tick.major { top: 51px; height: 14px; background: #463e34; }
+.r-ms { position: absolute; top: 70px; font-size: 10.5px; color: var(--faint); transform: translateX(-50%); font-variant-numeric: tabular-nums; }
+.r-beat { position: absolute; top: 44px; width: 2px; height: 28px; margin-left: -1px; background: #e9c78f40; border-radius: 1px; }
+.r-key { position: absolute; top: 54px; width: 9px; height: 9px; margin-left: -4.5px; transform: rotate(45deg); background: var(--accent); border-radius: 1.5px; box-shadow: 0 0 0 2px var(--surface); }
+.r-lab { position: absolute; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.r-lab::before { content: ""; position: absolute; left: 50%; width: 1px; background: var(--line); }
+.r-sfx { position: absolute; top: 84px; font-size: 11px; color: var(--warn); transform: translateX(-50%); white-space: nowrap; }
+.r-head { position: absolute; top: 38px; height: 44px; width: 2px; margin-left: -1px; background: var(--text); border-radius: 2px; box-shadow: 0 0 8px #0008; pointer-events: none; }
+.r-head::after { content: ""; position: absolute; left: -4px; top: -6px; width: 10px; height: 10px; border-radius: 50%; background: var(--text); }
+.r-foot { display: flex; justify-content: space-between; margin-top: 2px; font-size: 11.5px; color: var(--faint); }
+
+.toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(16px); opacity: 0; z-index: 60; background: #2b261f; border: 1px solid var(--line); padding: 9px 18px; border-radius: 999px; font-size: 13px; transition: opacity var(--dur-2), transform var(--dur-2) var(--ease); box-shadow: 0 20px 50px #0008; pointer-events: none; }
+.toast.on { opacity: 1; transform: translateX(-50%); }
+</style>
+</head>
+<body class="look-clean">
+
+<header class="top">
+  <div class="brand"><span class="logo">Vibe<span>Cut</span></span><span class="doc-title">Motion library v1 · design review<small>not in the product</small></span></div>
+  <div class="top-right">
+    <button class="btn btn-ghost btn-sm" id="pauseBtn" title="Space">Pause</button>
+    <button class="btn btn-primary btn-sm" id="playAll">▶ Play all</button>
+  </div>
+</header>
+
+<nav class="bar" aria-label="Review controls">
+  <span class="bar-label">Vibe</span>
+  <div class="vchips" id="vchips"></div>
+  <span class="spacer"></span>
+  <div class="seg" id="fmtSeg" role="group" aria-label="Format">
+    <button data-fmt="short" title="Short — Reels, TikTok and Shorts">9:16 Short</button>
+    <button data-fmt="long" title="Long vertical">9:16 Long</button>
+    <button data-fmt="youtube" title="YouTube">16:9</button>
+  </div>
+  <button class="toggle" id="beatBtn" title="B — lock hits to a 100 BPM grid"><span class="knob"></span>Beat<span class="beat-dot" id="beatDot"></span></button>
+  <div class="seg" id="speedSeg" role="group" aria-label="Speed">
+    <button data-speed="1">1×</button><button data-speed="0.5">½×</button><button data-speed="0.25">¼×</button>
+  </div>
+</nav>
+
+<main>
+  <div class="wrap">
+    <section class="intro">
+      <div class="eyebrow">Design review · round 2</div>
+      <h1 class="display">Twenty moves, <em>one vibe</em> at a time.</h1>
+      <p class="lede">Every element runs live over Sarah’s own frames from her day out in New York, 8:35 am to 9:40 pm. Pick a vibe and all twenty restyle together: type, colour, timing, sound and joins. The words come only from her clips’ clocks and places, or from what she typed.</p>
+      <div class="legend">
+        <span class="rb">Drawn on Canvas — the same pixels in preview and export</span>
+        <span class="rb ff">Moves or recolours the footage — simulated here, rendered by ffmpeg in export</span>
+        <span><span class="st st-exists">exists</span> <span class="st st-extend">extend</span> <span class="st st-new">new</span> <span class="st st-engine">engine work</span></span>
+      </div>
+      <p class="hint">Click any frame to enlarge it with its timing ruler. Keys: <kbd>1</kbd>–<kbd>7</kbd> vibes · <kbd>B</kbd> beat · <kbd>Space</kbd> pause · <kbd>←</kbd> <kbd>→</kbd> step through an enlarged tile.</p>
+    </section>
+
+    <section class="vband" id="vband" aria-live="polite"></section>
+
+    <section class="sec">
+      <div class="sec-head">
+        <h2>Words <em>on screen</em></h2>
+        <p>Drawn on Canvas by <code>overlayDraw.ts</code>, so the preview is the export. Held cards stay pixel-still; only entrances and exits move.</p>
+      </div>
+      <div class="grid" id="gridA"></div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head">
+        <h2>Camera, joins <em>and atmosphere</em></h2>
+        <p>These change the footage itself. Here they are canvas stand-ins over the stills; in export ffmpeg renders them from the 4K source.</p>
+      </div>
+      <div class="grid" id="gridB"></div>
+    </section>
+  </div>
+</main>
+
+<div class="scrim" id="scrim" aria-hidden="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="shName">
+    <div class="sh-head">
+      <span class="eyebrow" id="shEyebrow"></span>
+      <button class="icon-btn" id="shPrev" title="Previous (←)">‹</button>
+      <button class="icon-btn" id="shNext" title="Next (→)">›</button>
+      <button class="icon-btn" id="shClose" title="Close (Esc)">×</button>
+    </div>
+    <div class="sh-body">
+      <div>
+        <div class="sh-frame" id="shFrame">
+          <canvas class="cv-foot"></canvas><canvas class="cv-light"></canvas><canvas class="cv-over"></canvas>
+          <div class="fnote plate" hidden><b></b><span></span></div>
+          <div class="fnote pill" hidden></div>
+          <div class="fnote live"></div>
+        </div>
+        <canvas class="sh-lanes" id="shLanes" hidden></canvas>
+      </div>
+      <aside class="sh-side">
+        <h2 id="shName"></h2>
+        <span class="st" id="shStatus"></span>
+        <dl class="sh-dl" id="shDl"></dl>
+        <div class="sh-ctl">
+          <button class="btn btn-quiet btn-sm" id="shReplay">↺ Replay</button>
+          <button class="btn btn-quiet btn-sm" id="shPlay">❚❚ Pause</button>
+          <div class="seg" id="shSpeed"><button data-speed="1">1×</button><button data-speed="0.5">½×</button><button data-speed="0.25">¼×</button></div>
+          <button class="toggle" id="shGuides"><span class="knob"></span>Text box and faces</button>
+          <div class="seg" id="shJL" hidden><button data-jl="J">Sound leads</button><button data-jl="L">Sound trails</button></div>
+        </div>
+        <ol class="keys" id="shKeys"></ol>
+      </aside>
+    </div>
+    <div class="ruler" id="ruler"></div>
+    <div class="r-foot"><span id="rFootL"></span><span id="rFootR">Drag the ruler to scrub</span></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict'
+/* =====================================================================
+   VibeCut motion library v1 — live gallery (design review only).
+   Every frame is computed from t, never accumulated — the same rule
+   overlayDraw.ts follows so the export can render any frame in any order.
+   ===================================================================== */
+
+// ------------------------------------------------------------------ small maths
+const clamp = (x, a = 0, b = 1) => (x < a ? a : x > b ? b : x)
+const lerp = (a, b, u) => a + (b - a) * u
+const RAD = Math.PI / 180
+const smooth = (u) => u * u * (3 - 2 * u)
+const rnd = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x) }
+function bez(x1, y1, x2, y2) {
+  const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx
+  const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by
+  const sx = (t) => ((ax * t + bx) * t + cx) * t
+  const sy = (t) => ((ay * t + by) * t + cy) * t
+  const dx = (t) => (3 * ax * t + 2 * bx) * t + cx
+  return (x) => {
+    if (x <= 0) return 0
+    if (x >= 1) return 1
+    let t = x
+    for (let i = 0; i < 8; i++) { const e = sx(t) - x; if (Math.abs(e) < 1e-5) break; const d = dx(t); if (Math.abs(d) < 1e-6) break; t -= e / d }
+    if (Math.abs(sx(t) - x) > 1e-4) { let lo = 0, hi = 1; t = x; for (let i = 0; i < 30; i++) { if (sx(t) < x) lo = t; else hi = t; t = (lo + hi) / 2 } }
+    return sy(t)
+  }
+}
+const CURVE = {
+  quint: bez(0.22, 1, 0.36, 1), expo: bez(0.16, 1, 0.3, 1), inout: bez(0.45, 0, 0.55, 1),
+  back: bez(0.34, 1.56, 0.64, 1), linear: (u) => u,
+}
+
+// ------------------------------------------------------------------ the seven vibes (§4.3–4.4)
+const KIND = { fast_day: 'a day, told fast', quiet_day: 'a quiet day', trip: 'a trip, place by place', places_guide: 'places worth saving', talking: 'you, talking to camera', story_day: 'a story over your day' }
+const LOOKS = {
+  clean: { id: 'clean', name: 'Clean', line: 'Crisp and simple, nothing extra.', fn: CURVE.quint, curve: 'quint-out', bez: '(0.22, 1, 0.36, 1)', dur: 800, steps: 0, stagger: 160, overshoot: '0', hold: 2.0, maxOn: 1, measured: false,
+    pal: ['#FFFFFF', '#F2C14E', '#B9D9EB'], fonts: 'Inter 600 / Inter 500', here: 'the system sans stands in for Inter',
+    joins: 'Straight cuts; dip to black at day changes (long formats)', camera: 'Slow push to 1.04 on held shots; zoom-ins to 110%', texture: 'None', sounds: 'None',
+    music: '“Calm piano and soft electronic” · 90–110 beats a minute', spend: '0 special joins · few zoom-ins · 0 sounds',
+    fit: { star: ['fast_day', 'places_guide', 'talking'], card: ['story_day'], more: ['quiet_day', 'trip'] }, vignette: 0, glow: false, grain: false },
+  cozy: { id: 'cozy', name: 'Cozy', line: 'Warm and soft, your own sounds up front.', fn: CURVE.expo, curve: 'expo-out', bez: '(0.16, 1, 0.3, 1)', dur: 1150, steps: 14, stepNote: 'stepped at 12 fps', stagger: 150, overshoot: '0 (measured)', hold: 2.0, maxOn: 2, measured: true,
+    pal: ['#F6EBD9', '#F3C9A5', '#C9DCC1'], fonts: 'Caveat 600 / EB Garamond italic', here: 'Bradley Hand stands in for Caveat',
+    joins: 'Soft fade, 8 frames, at part changes → warm leak; cream dip at day changes', camera: 'Slow push to 1.05 over 4–5 s', texture: 'Vignette and a warm leak (no grain)', sounds: 'Paper rustle, pencil, wood knock (≤ 3)',
+    music: '“Lo-fi and acoustic, warm and even” · 70–90', spend: 'A leak ≤ 1 per 30 s · no zoom-ins · 3 sounds',
+    fit: { star: ['quiet_day', 'story_day'], card: ['places_guide', 'talking'], more: ['fast_day', 'trip'] }, vignette: 0.35, glow: false, grain: false },
+  quiet: { id: 'quiet', name: 'Quiet', line: 'Still and spare, lots of air.', fn: CURVE.inout, curve: 'in-out', bez: '(0.45, 0, 0.55, 1)', dur: 1200, steps: 0, stagger: 240, overshoot: '0', hold: 3.0, maxOn: 1, measured: false,
+    pal: ['#EFE8DD', '#D8CBB6', '#FFFFFF'], fonts: 'EB Garamond italic / Inter 300 caps (+.2em)', here: 'the system sans stands in for Inter',
+    joins: 'Straight cuts; a long soft fade (36 frames) only between matching compositions → dip to black', camera: 'None — the frame holds still', texture: 'A faint vignette', sounds: 'None',
+    music: '“Ambient, neo-classical, soft jazz” · 60–90', spend: '0 special joins · 0 zoom-ins · 0 sounds',
+    fit: { star: [], card: ['quiet_day', 'talking'], more: ['trip', 'story_day'] }, vignette: 0.2, glow: false, grain: false },
+  cinematic: { id: 'cinematic', name: 'Cinematic', line: 'Slow and wide, like a film.', fn: CURVE.inout, curve: 'in-out', bez: '(0.45, 0, 0.55, 1)', dur: 1000, steps: 0, stagger: 240, overshoot: '0', hold: 2.5, maxOn: 1, measured: false,
+    pal: ['#FFFFFF', '#E9D8B8', '#BFD0DA'], fonts: 'Inter 300 caps (+.3em) / EB Garamond', here: 'the system sans stands in for Inter',
+    joins: 'Straight cuts; dip to black between parts; a silent whip (10 f) at place changes → dip', camera: 'Slow push to 1.06 over 5–7 s, one direction', texture: 'Vignette; grain on twos on 16:9 only', sounds: 'Low riser, sub hit (≤ 2, at peaks)',
+    music: '“Ambient and orchestral, builds to a late peak” · 70–100', spend: '≤ 1 special join per 30 s · 0 zoom-ins · 2 sounds',
+    fit: { star: ['trip'], card: [], more: ['quiet_day', 'places_guide', 'story_day'] }, vignette: 0.35, glow: false, grain: true },
+  film: { id: 'film', name: 'Film', line: 'An old camera: light leaks and real dates.', fn: CURVE.linear, curve: 'stepped linear', bez: 'steps(3) over 375 ms', dur: 375, steps: 3, stepNote: 'stepped at 8 fps', stagger: 40, staggerNote: 'per character (typing)', overshoot: '0', hold: 2.0, maxOn: 2, measured: false,
+    pal: ['#F5EEDC', '#FF9A3C', '#E8D5A8'], fonts: 'Courier Prime / DSEG7 (the date only)', here: 'Courier New stands in for Courier Prime; the date’s seven segments are drawn',
+    joins: 'A light leak over the cut (no spare footage needed); warm flash only on real flash or night clips; grey fade at day changes', camera: 'None — the handheld stays', texture: 'Leak and vignette; grain on twos on 16:9 only', sounds: 'Shutter, tape click (≤ 4)',
+    music: '“Indie and lo-fi hip-hop” · 80–100', spend: '≤ 1 special join per 30 s · 0 zoom-ins · 4 sounds',
+    fit: { star: [], card: ['fast_day', 'quiet_day', 'trip', 'story_day'], more: ['places_guide'] }, vignette: 0.35, glow: false, grain: true },
+  playful: { id: 'playful', name: 'Playful', line: 'Bright and bouncy, a little silly.', fn: CURVE.back, curve: 'back-out', bez: '(0.34, 1.56, 0.64, 1)', dur: 500, steps: 0, stagger: 70, overshoot: '~10%', hold: 1.0, maxOn: 2, measured: false,
+    pal: ['#FFD84D', '#FF6FA8', '#7BD3F7'], fonts: 'Poppins 700 / Poppins 600', here: 'Nunito (bundled) stands in for Poppins',
+    joins: 'A pastel flash on a downbeat at part changes', camera: 'Zoom-in to 110%, ≤ 1 per 8 shots', texture: 'Highlight glow', sounds: 'Bubble pop, boing, ding (≤ 5)',
+    music: '“Bouncy dance-pop” · 120–150', spend: '≤ 2 special joins per 30 s · few zoom-ins · 5 sounds',
+    fit: { star: [], card: ['fast_day', 'places_guide'], more: ['trip', 'talking', 'story_day'] }, vignette: 0, glow: true, grain: false },
+  hype: { id: 'hype', name: 'Hype', line: 'Fast and loud, hits on the drop.', fn: CURVE.expo, curve: 'slam · expo-out', bez: 'scale 1.5 → 1.0 in 150 ms', dur: 150, steps: 0, stagger: 70, overshoot: '0', hold: 1.0, maxOn: 2, measured: true, slam: true,
+    pal: ['#FFFFFF', '#FF6A3D', '#E8FF5A'], fonts: 'Anton / Inter 700', here: 'Impact stands in for Anton',
+    joins: 'Whip (8 f) with a whoosh → white flash (3 f); flash on drops', camera: 'Zoom-in to 115–125% on drop beats, face-anchored; a decaying shake on drop hits only', texture: 'None', sounds: 'Whoosh, impact — on drops only (≤ 5)',
+    music: '“Phonk, trap, EDM — builds then drops” · 130–160', spend: '≤ 3 special joins per 30 s · many zoom-ins · 5 sounds',
+    fit: { star: [], card: ['trip'], more: ['fast_day'] }, vignette: 0, glow: false, grain: false },
+}
+const ORDER = ['clean', 'cozy', 'quiet', 'cinematic', 'film', 'playful', 'hype']
+
+// ------------------------------------------------------------------ state + deep links
+const Q = new URLSearchParams(location.search)
+const env = {
+  look: LOOKS[Q.get('look')] || LOOKS.clean,
+  fmt: ['short', 'long', 'youtube'].includes(Q.get('fmt')) ? Q.get('fmt') : 'short',
+  beat: ['on', '1', 'true'].includes(Q.get('beat')),
+  speed: [1, 0.5, 0.25].includes(Number(Q.get('speed'))) ? Number(Q.get('speed')) : 1,
+  jl: Q.get('jl') === 'L' ? 'L' : 'J',
+  guides: Q.get('guides') === 'on',
+  paused: false,
+  get wide() { return this.fmt === 'youtube' },
+  get L() { return this.beat ? 4200 : 4000 },
+}
+let urlT
+function syncURL() { clearTimeout(urlT); urlT = setTimeout(writeURL, 120) }
+function writeURL() {
+  const p = new URLSearchParams()
+  p.set('s', 'gallery')
+  if (env.look.id !== 'clean') p.set('look', env.look.id)
+  if (env.fmt !== 'short') p.set('fmt', env.fmt)
+  if (env.beat) p.set('beat', 'on')
+  if (env.speed !== 1) p.set('speed', String(env.speed))
+  if (env.jl === 'L') p.set('jl', 'L')
+  if (sheet.open) { p.set('tile', String(sheet.id)); if (env.guides) p.set('guides', 'on') }
+  try { history.replaceState(null, '', '?' + p.toString()) } catch (e) { /* file:// in some browsers */ }
+}
+
+// ------------------------------------------------------------------ beat lock (§5 rules)
+const BEAT = 600 // 100 BPM
+function inProg(look, t, t0, dur = look.dur) {
+  let u = (t - t0) / dur
+  if (u <= 0) return 0
+  if (u >= 1) return 1
+  if (look.id === 'film') u = Math.ceil(u * 3) / 3
+  else if (look.steps) u = Math.floor(u * look.steps) / look.steps
+  return look.fn(u)
+}
+function outDur(look) { return look.id === 'film' ? 0 : look.id === 'hype' ? 150 : Math.round(look.dur * 0.6) }
+function outProg(look, t, t1) {
+  if (t < t1) return 0
+  const d = outDur(look)
+  if (!d) return 1
+  let u = (t - t1) / d
+  if (u >= 1) return 1
+  if (look.id === 'hype') return u
+  if (look.steps) u = Math.floor(u * look.steps) / look.steps
+  return clamp(look.fn(u))
+}
+/** ms from a card's onset to its hit frame: t50, or t90 for slams */
+function tHit(look) {
+  const target = look.slam ? 0.9 : 0.5
+  for (let ms = 0; ms <= look.dur; ms += 2) if (inProg(look, ms, 0) >= target) return ms
+  return look.dur
+}
+/** hit frames snap to the nearest beat only if that moves them 3 frames (100 ms) or fewer */
+function snapHit(t, look = env.look) {
+  if (!env.beat) return t
+  const h = t + tHit(look), b = Math.round(h / BEAT) * BEAT
+  return Math.abs(b - h) <= 100 ? t + (b - h) : t
+}
+/** holds end on a beat */
+const snapEnd = (t) => (env.beat ? Math.round(t / BEAT) * BEAT : t)
+/** cuts move onto a beat when it is ≤ 0.35 s away (restyle.MAX_SNAP_S) */
+function snapCut(t) { if (!env.beat) return t; const b = Math.round(t / BEAT) * BEAT; return Math.abs(b - t) <= 350 ? b : t }
+/** stagger = beat ÷ n, with n chosen closest to the vibe's own stagger */
+function stag(ms) {
+  if (!env.beat) return ms
+  let bn = 1, best = 1e9
+  for (let n = 1; n <= 24; n++) { const d = Math.abs(BEAT / n - ms); if (d < best) { best = d; bn = n } }
+  return BEAT / bn
+}
+
+// ------------------------------------------------------------------ the creator's stills
+const ASSET = '../assets/'
+const IMG = {}
+function img(file) {
+  if (!IMG[file]) { const i = new Image(); i.decoding = 'async'; i.src = ASSET + file; IMG[file] = i }
+  return IMG[file]
+}
+const ready = (im) => im.complete && im.naturalWidth > 0
+// Sharp 16:9 crops taken above the burned-in words of the exported frames (hero3: well above its subtitle).
+const HERO = {
+  heroA: { f: 'hero.png', r: [0, 40 / 960, 1, 304 / 960], faces: [[0.36, 0.1, 0.9, 1]] },
+  heroB: { f: 'hero2.png', r: [0, 250 / 960, 1, 304 / 960], faces: [[0.3, 0.26, 0.72, 1]] },
+  heroC: { f: 'hero3.png', r: [0, 100 / 960, 1, 304 / 960], faces: [[0.58, 0, 1, 1]] },
+}
+// Face boxes (0–1 of the upright still), marked by hand for the guides overlay.
+const FACES = {
+  t00: [[0.42, 0.16, 0.8, 0.44]], t05: [[0.35, 0.05, 0.8, 0.35]], t06: [[0.46, 0.19, 0.8, 0.43]], t10: [[0.36, 0.22, 0.5, 0.33]],
+  t12: [[0.68, 0.1, 1, 0.4], [0.38, 0.39, 0.63, 0.54]], t14: [[0.33, 0.37, 0.56, 0.58], [0.56, 0.42, 0.74, 0.57]],
+  t15: [[0.19, 0.3, 0.51, 0.48], [0.53, 0.35, 0.83, 0.59]], t16: [[0.12, 0.29, 0.42, 0.52], [0.53, 0.29, 0.9, 0.56]],
+  t27: [[0.28, 0.2, 0.74, 0.5]], t28: [[0.2, 0.2, 0.66, 0.52]], t29: [[0.43, 0.31, 1, 0.56]], t34: [[0.19, 0.17, 0.42, 0.37]],
+}
+const FOCUS = { t23: 0.4, t03: 0.36, t04: 0.42, t07: 0.42, t13: 0.4, t17: 0.4, t32: 0.52, t33: 0.45, t36: 0.55, t37: 0.52, t38: 0.38, t39: 0.42, t40: 0.55, t41: 0.3, t24: 0.35, t06: 0.34, t10: 0.3 }
+function focusY(key) {
+  if (FOCUS[key] != null) return FOCUS[key]
+  const f = FACES[key]
+  return f ? (f[0][1] + f[0][3]) / 2 : 0.45
+}
+function srcOf(key) {
+  const h = HERO[key]
+  if (h) { const im = img(h.f); const W = im.naturalWidth || 540, H = im.naturalHeight || 960; return { im, sx: h.r[0] * W, sy: h.r[1] * H, sw: h.r[2] * W, sh: h.r[3] * H } }
+  const im = img(key + '.jpg'); const W = im.naturalWidth || 216, H = im.naturalHeight || 384
+  if (!env.wide) return { im, sx: 0, sy: 0, sw: W, sh: H }
+  const sh = (W * 9) / 16
+  return { im, sx: 0, sy: clamp(focusY(key) * H - sh / 2, 0, H - sh), sw: W, sh }
+}
+/** face boxes in frame coordinates (0–1), after the 16:9 crop */
+function facesIn(key) {
+  if (HERO[key]) return HERO[key].faces
+  const f = FACES[key]
+  if (!f) return []
+  if (!env.wide) return f
+  const s = srcOf(key), H = s.im.naturalHeight || 384
+  return f.map(([x0, y0, x1, y1]) => [x0, (y0 * H - s.sy) / s.sh, x1, (y1 * H - s.sy) / s.sh]).filter((b) => b[3] > 0 && b[1] < 1)
+}
+function faceCentre(key) {
+  const f = facesIn(key)[0]
+  return f ? { x: (f[0] + f[2]) / 2, y: clamp((f[1] + f[3]) / 2, 0.1, 0.9) } : { x: 0.5, y: 0.45 }
+}
+const GLOW = new Map()
+function glowOf(key) {
+  const id = (env.wide ? 'w' : 'p') + key
+  let c = GLOW.get(id)
+  if (c) return c
+  const s = srcOf(key)
+  if (!ready(s.im)) return null
+  c = document.createElement('canvas'); c.width = env.wide ? 64 : 36; c.height = env.wide ? 36 : 64
+  const x = c.getContext('2d')
+  x.drawImage(s.im, s.sx, s.sy, s.sw, s.sh, 0, 0, c.width, c.height)
+  x.globalCompositeOperation = 'multiply'
+  x.drawImage(s.im, s.sx, s.sy, s.sw, s.sh, 0, 0, c.width, c.height); x.drawImage(s.im, s.sx, s.sy, s.sw, s.sh, 0, 0, c.width, c.height)
+  x.globalCompositeOperation = 'lighter'; x.drawImage(c, 0, 0)
+  GLOW.set(id, c)
+  return c
+}
+// Grain: four noise tiles, re-seeded every 83 ms (on twos at 24 fps). Only ever drawn on 16:9.
+const NOISE = []
+function noiseTiles() {
+  if (NOISE.length) return NOISE
+  for (let n = 0; n < 4; n++) {
+    const c = document.createElement('canvas'); c.width = c.height = 160
+    const x = c.getContext('2d'), d = x.createImageData(160, 160)
+    for (let i = 0; i < d.data.length; i += 4) { const v = Math.random() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 22 }
+    x.putImageData(d, 0, 0); NOISE.push(c)
+  }
+  return NOISE
+}
+
+// ------------------------------------------------------------------ drawing helpers
+const SANS = 'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif'
+const F = {
+  int: (w, s) => `${w} ${s}px ${SANS}`,
+  cav: (w, s) => `${w} ${s}px Caveat, "Bradley Hand", "Marker Felt", "Chalkboard SE", cursive`,
+  gar: (w, s, it) => `${it ? 'italic ' : ''}${w} ${s}px "EB Garamond", Georgia, serif`,
+  cou: (w, s) => `${w} ${s}px "Courier Prime", "Courier New", Courier, monospace`,
+  pop: (w, s) => `${w} ${s}px Poppins, Nunito, "Avenir Next Rounded", "Arial Rounded MT Bold", sans-serif`,
+  ant: (s) => `400 ${s}px Anton, Impact, Haettenschweiler, "Arial Narrow", sans-serif`,
+  mono: (w, s) => `${w} ${s}px Menlo, "SF Mono", Monaco, monospace`,
+}
+function rr(c, x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, w / 2, h / 2))
+  c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath()
+}
+function shadow(g, c, blur, col, oy = 0) { c.shadowColor = col; c.shadowBlur = blur * g.k; c.shadowOffsetX = 0; c.shadowOffsetY = oy * g.k }
+function noShadow(c) { c.shadowColor = 'transparent'; c.shadowBlur = 0; c.shadowOffsetY = 0 }
+function tw(c, s, track = 0) {
+  if (!track) return c.measureText(s).width
+  let w = 0
+  for (const ch of s) w += c.measureText(ch).width
+  return w + track * (s.length - 1)
+}
+/** fillText with manual tracking (canvas letterSpacing isn't everywhere yet) */
+function text(c, s, x, y, o = {}) {
+  const track = o.track || 0, w = tw(c, s, track)
+  let x0 = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x
+  c.textAlign = 'left'
+  if (!track) { c.fillText(s, x0, y); return w }
+  for (const ch of s) { c.fillText(ch, x0, y); x0 += c.measureText(ch).width + track }
+  return w
+}
+/** a path drawn on over time (dash-offset trick); len is a generous path length */
+function drawOn(c, u, len, pathFn) {
+  if (u <= 0) return
+  c.save(); c.setLineDash([len, len]); c.lineDashOffset = len * (1 - clamp(u)); pathFn(); c.stroke(); c.restore()
+}
+/** the vibe's card movement: p = entrance progress (eased), q = exit progress */
+function cardXf(look, p, q, o = {}) {
+  const id = look.id, e = Math.max(0, p * (1 - q))
+  switch (id) {
+    case 'clean': return { a: clamp(e * 1.3), dy: (1 - e) * (o.rise ?? 16), s: 1, r: 0 }
+    case 'cozy': return { a: clamp(e * 2.2), dy: (1 - e) * 26, s: lerp(0.88, 1, e), r: lerp(5, o.rest ?? -2, e) }
+    case 'quiet': return { a: clamp(e), dy: (1 - e) * 10, s: 1, r: 0 }
+    case 'cinematic': return { a: clamp(e), dy: (1 - e) * 6, s: 1, r: 0 }
+    case 'film': return { a: q >= 1 ? 0 : p > 0 ? 1 : 0, dy: (1 - p) * 14, s: 1, r: 0 }
+    case 'playful': return { a: clamp(e * 3), dy: (1 - e) * 30, s: lerp(0.62, 1, e), r: lerp(-7, o.rest ?? 0, e) }
+    case 'hype': return { a: q > 0 ? 1 - q : clamp(p * 6), dy: 0, s: lerp(1.5, 1, p), r: 0 }
+  }
+}
+function applyXf(c, xf, ax, ay) {
+  c.translate(ax, ay + (xf.dy || 0))
+  if (xf.r) c.rotate(xf.r * RAD)
+  if (xf.s !== 1) c.scale(xf.s, xf.s)
+  c.translate(-ax, -ay)
+  c.globalAlpha *= clamp(xf.a)
+}
+function tbox(g) { return g.wide ? { x0: 96, x1: 1824, y0: 54, y1: 810 } : { x0: 120, x1: 888, y0: 288, y1: 1248 } }
+
+/** draws a still (cover-fit, optional camera move) onto the footage layer, and its glow onto the light layer */
+function still(g, key, o = {}) {
+  const s = srcOf(key)
+  if (!ready(s.im)) return
+  const { W, H } = g, sc = o.s ?? 1, ox = (o.ox ?? 0.5) * W, oy = (o.oy ?? 0.5) * H
+  const one = (c, im, sx, sy, sw, sh, a) => {
+    c.save(); c.globalAlpha = a
+    c.translate(ox + (o.dx || 0), oy + (o.dy || 0)); c.scale(sc, sc); c.translate(-ox, -oy)
+    c.drawImage(im, sx, sy, sw, sh, 0, 0, W, H)
+    c.restore()
+  }
+  one(g.f, s.im, s.sx, s.sy, s.sw, s.sh, o.alpha ?? 1)
+  if (g.look.glow) { const gl = glowOf(key); if (gl) one(g.l, gl, 0, 0, gl.width, gl.height, 0.4 * (o.alpha ?? 1)) }
+}
+function fillAll(c, g, col, a) { if (a <= 0) return; c.save(); c.globalAlpha = clamp(a); c.fillStyle = col; c.fillRect(0, 0, g.W, g.H); c.restore() }
+function blend(c, g, op, col, a) { if (a <= 0) return; c.save(); c.globalCompositeOperation = op; c.globalAlpha = clamp(a); c.fillStyle = col; c.fillRect(0, 0, g.W, g.H); c.restore() }
+
+// ------------------------------------------------------------------ glyphs
+function pin(c, x, y, col, s = 1, dot = 'rgba(0,0,0,.35)') {
+  c.save(); c.translate(x, y); c.scale(s, s)
+  c.beginPath(); c.moveTo(0, 30); c.bezierCurveTo(-4, 20, -17, 10, -17, -2); c.arc(0, -2, 17, Math.PI, 0); c.bezierCurveTo(17, 10, 4, 20, 0, 30); c.closePath()
+  c.fillStyle = col; c.fill()
+  c.beginPath(); c.arc(0, -2, 6.5, 0, Math.PI * 2); c.fillStyle = dot; c.fill()
+  c.restore()
+}
+const SEG = { 0: 'abcdef', 1: 'bc', 2: 'abged', 3: 'abgcd', 4: 'fgbc', 5: 'afgcd', 6: 'afgedc', 7: 'abc', 8: 'abcdefg', 9: 'abcdfg' }
+/** a camera-back date in seven segments (the DSEG7 stand-in), right-aligned at rx, bottom at by */
+function dateStamp(g, c, str, rx, by, h) {
+  const w = h * 0.52, th = h * 0.13, gap = h * 0.18, sp = h * 0.3, ap = h * 0.34
+  let total = 0
+  for (const ch of str) total += ch === ' ' ? sp : ch === "'" ? ap : w + gap
+  let x = rx - total, y = by - h
+  c.save(); c.fillStyle = '#FF9A3C'; shadow(g, c, 7, 'rgba(255,128,32,.95)')
+  c.transform(1, 0, -0.08, 1, 0.08 * by, 0)
+  for (const ch of str) {
+    if (ch === ' ') { x += sp; continue }
+    if (ch === "'") { c.beginPath(); c.moveTo(x + th * 0.8, y); c.lineTo(x + th * 2.2, y); c.lineTo(x + th * 1.3, y + h * 0.34); c.lineTo(x + th * 0.3, y + h * 0.34); c.closePath(); c.fill(); x += ap; continue }
+    const on = SEG[ch] || '', hh = h / 2
+    const hs = (sx, sy) => { c.beginPath(); c.moveTo(sx + th * 0.6, sy); c.lineTo(sx + w - th * 0.6, sy); c.lineTo(sx + w - th * 1.1, sy + th * 0.5); c.lineTo(sx + w - th * 0.6, sy + th); c.lineTo(sx + th * 0.6, sy + th); c.lineTo(sx + th * 1.1, sy + th * 0.5); c.closePath(); c.fill() }
+    const vs = (sx, sy, len) => { c.beginPath(); c.moveTo(sx, sy + th * 0.6); c.lineTo(sx + th * 0.5, sy + th * 1.1); c.lineTo(sx + th, sy + th * 0.6); c.lineTo(sx + th, sy + len - th * 0.6); c.lineTo(sx + th * 0.5, sy + len - th * 0.1); c.lineTo(sx, sy + len - th * 0.6); c.closePath(); c.fill() }
+    if (on.includes('a')) hs(x, y - th * 0.5 + th * 0.5)
+    if (on.includes('g')) hs(x, y + hh - th / 2)
+    if (on.includes('d')) hs(x, y + h - th)
+    if (on.includes('f')) vs(x, y, hh)
+    if (on.includes('b')) vs(x + w - th, y, hh)
+    if (on.includes('e')) vs(x, y + hh - th * 0.3, hh)
+    if (on.includes('c')) vs(x + w - th, y + hh - th * 0.3, hh)
+    x += w + gap
+  }
+  c.restore()
+}
+/** hand-drawn check mark */
+function tick(c, x, y, s, col, u, lw = 6) {
+  c.save(); c.strokeStyle = col; c.lineWidth = lw; c.lineCap = 'round'; c.lineJoin = 'round'
+  drawOn(c, u, 120 * s, () => { c.beginPath(); c.moveTo(x - 16 * s, y); c.quadraticCurveTo(x - 8 * s, y + 6 * s, x - 3 * s, y + 14 * s); c.quadraticCurveTo(x + 6 * s, y - 8 * s, x + 22 * s, y - 20 * s) })
+  c.restore()
+}
+/** hand-drawn arrow toward (x1, y1) */
+function doodleArrow(c, x0, y0, x1, y1, col, u, lw = 7) {
+  c.save(); c.strokeStyle = col; c.lineWidth = lw; c.lineCap = 'round'; c.lineJoin = 'round'
+  const mx = (x0 + x1) / 2 + 90, my = Math.min(y0, y1) - 40
+  drawOn(c, u / 0.8, 900, () => { c.beginPath(); c.moveTo(x0, y0); c.quadraticCurveTo(mx, my, x1, y1) })
+  if (u > 0.8) {
+    const a = Math.atan2(y1 - my, x1 - mx), k = clamp((u - 0.8) / 0.2)
+    c.beginPath(); c.moveTo(x1, y1); c.lineTo(x1 - 40 * k * Math.cos(a - 0.5), y1 - 40 * k * Math.sin(a - 0.5))
+    c.moveTo(x1, y1); c.lineTo(x1 - 40 * k * Math.cos(a + 0.5), y1 - 40 * k * Math.sin(a + 0.5)); c.stroke()
+  }
+  c.restore()
+}
+/** a wavy hand underline from x0 to x1 */
+function underline(c, x0, x1, y, col, u, lw = 7) {
+  c.save(); c.strokeStyle = col; c.lineWidth = lw; c.lineCap = 'round'
+  drawOn(c, u, (x1 - x0) * 1.3, () => { c.beginPath(); c.moveTo(x0, y + 4); const n = 4, st = (x1 - x0) / n; for (let i = 0; i < n; i++) c.quadraticCurveTo(x0 + st * (i + 0.5), y + (i % 2 ? 9 : -5), x0 + st * (i + 1), y + (i === n - 1 ? -6 : 2)) })
+  c.restore()
+}
+/** Name tag in the active vibe (used by #8 and the Freeze label) */
+function nameTag(g, c, t, t0, r0, out, x, y, name, role, opts = {}) {
+  const look = g.look, id = look.id
+  const p = inProg(look, t, t0), p2 = inProg(look, t, r0), q = outProg(look, t, out)
+  if (p <= 0 || q >= 1) return
+  c.save(); c.textBaseline = 'top'
+  const e = Math.max(0, p * (1 - q)), e2 = Math.max(0, p2 * (1 - q))
+  const clipW = (w, u) => { c.beginPath(); c.rect(x - 30, y - 40, (w + 90) * clamp(u), 260); c.clip() }
+  if (id === 'clean' || id === 'quiet' || id === 'cinematic') {
+    const cfg = {
+      clean: { nf: F.int(700, 54), nt: 0, rf: F.int(600, 34), rt: 0, nc: '#fff', rc: 'rgba(255,255,255,.82)', N: name, R: role },
+      quiet: { nf: F.int(300, 42), nt: 8.4, rf: F.gar(400, 42, 1), rt: 0, nc: '#EFE8DD', rc: '#D8CBB6', N: name.toUpperCase(), R: role },
+      cinematic: { nf: F.int(300, 42), nt: 12.6, rf: F.gar(400, 40, 1), rt: 0, nc: '#fff', rc: 'rgba(255,255,255,.8)', N: name.toUpperCase(), R: role },
+    }[id]
+    shadow(g, c, 16, 'rgba(0,0,0,.55)', 2)
+    c.save(); c.font = cfg.nf; const nw = tw(c, cfg.N, cfg.nt)
+    c.globalAlpha = id === 'clean' ? clamp(e * 1.4) : e; clipW(nw, id === 'clean' ? e : 1)
+    const sc = id === 'clean' ? lerp(0.95, 1, e) : 1
+    c.translate(x - 24 * (1 - e), y); c.scale(sc, sc); c.fillStyle = cfg.nc; text(c, cfg.N, 0, 0, { track: cfg.nt }); c.restore()
+    c.save(); c.font = cfg.rf; c.globalAlpha = id === 'clean' ? clamp(e2 * 1.4) : e2; clipW(tw(c, cfg.R), id === 'clean' ? e2 : 1)
+    c.fillStyle = cfg.rc; text(c, cfg.R, x - 24 * (1 - e2), y + (id === 'clean' ? 64 : 58)); c.restore()
+  } else if (id === 'cozy') {
+    c.font = F.cav(700, 80); const nw = c.measureText(name).width
+    shadow(g, c, 12, 'rgba(40,20,0,.35)', 2)
+    c.save(); c.globalAlpha = clamp(e * 2); clipW(nw, e); c.fillStyle = '#F6EBD9'; c.fillText(name, x - 24 * (1 - e), y - 14); c.restore()
+    noShadow(c); c.globalAlpha = 1
+    underline(c, x - 4, x + nw + 10, y + 66, '#F3C9A5', clamp((t - t0 - 300) / 400) * (1 - q), 6)
+    c.save(); shadow(g, c, 12, 'rgba(40,20,0,.5)'); c.globalAlpha = e2; c.font = F.gar(400, 42, 1); c.fillStyle = '#F3C9A5'; c.fillText(role, x - 24 * (1 - e2), y + 86); c.restore()
+  } else if (id === 'film') {
+    if (q >= 1) { c.restore(); return }
+    const tape = (label, ty, rot, start, fs) => {
+      if (t < start) return
+      c.save(); c.font = F.cou(700, fs); const w = c.measureText(label).width + 52
+      c.translate(x, ty); c.rotate(rot * RAD)
+      shadow(g, c, 8, 'rgba(0,0,0,.35)', 3); c.fillStyle = '#EDE3CC'
+      c.beginPath(); c.moveTo(0, 0); for (let i = 0; i <= 6; i++) c.lineTo(w + (i % 2 ? 6 : 0), (fs + 26) * i / 6); c.lineTo(0, fs + 26); for (let i = 6; i >= 0; i--) c.lineTo(i % 2 ? -6 : 0, (fs + 26) * i / 6); c.closePath(); c.fill()
+      noShadow(c); c.fillStyle = '#2B2520'
+      const n = Math.min(label.length, Math.floor((t - start) / stag(40)) + 1)
+      c.fillText(label.slice(0, n), 26, 13)
+      c.restore()
+    }
+    tape(name.toLowerCase(), y - 6, -1, t0, 42)
+    tape(role, y + 66, 0.8, r0 + name.length * stag(40), 30)
+  } else if (id === 'playful') {
+    c.font = F.pop(900, 52); const nw = c.measureText(name).width
+    c.font = F.pop(700, 30); const rw = c.measureText(role).width
+    const w = Math.max(nw, rw) + 104, h = 128, cx = x + w / 2, cy = y + h / 2
+    const xf = cardXf(look, p, q, { rest: -3 }); c.save(); applyXf(c, xf, cx, cy)
+    shadow(g, c, 16, 'rgba(0,0,0,.35)', 6); rr(c, x - 10, y - 10, w + 20, h + 20, 36); c.fillStyle = '#fff'; c.fill(); noShadow(c)
+    rr(c, x, y, w, h, 28); c.fillStyle = '#FF6FA8'; c.fill()
+    c.beginPath(); c.arc(x + 30, cy, 10, 0, Math.PI * 2); c.fillStyle = '#fff'; c.fill()
+    c.fillStyle = '#fff'; c.font = F.pop(900, 52); c.fillText(name, x + 60, y + 14); c.font = F.pop(700, 30); c.globalAlpha *= 0.92; c.fillText(role, x + 60, y + 78)
+    c.restore()
+  } else if (id === 'hype') {
+    const pa = CURVE.expo(clamp((t - t0) / 150)), pb = CURVE.expo(clamp((t - r0) / 150)), fade = 1 - clamp((t - out) / 150)
+    c.globalAlpha = fade
+    c.font = F.ant(88); const nw = c.measureText(name.toUpperCase()).width
+    c.fillStyle = '#FF6A3D'; c.fillRect(lerp(-nw - 120, x - 24, pa), y - 10, nw + 48, 104)
+    c.fillStyle = '#fff'; if (pa > 0.6) c.fillText(name.toUpperCase(), lerp(-nw - 96, x, pa), y - 2)
+    c.font = F.int(800, 30); const rw = tw(c, role.toUpperCase(), 4)
+    c.fillStyle = '#0d0d0d'; if (pb > 0) c.fillRect(lerp(-rw - 120, x - 24, pb), y + 98, rw + 48, 50)
+    c.fillStyle = '#fff'; if (pb > 0.6) text(c, role.toUpperCase(), lerp(-rw - 96, x, pb), y + 108, { track: 4 })
+    c.globalAlpha = 1
+    const hit = t0 + tHit(look); if (t >= hit && t < hit + 100) fillAll(c, g, '#fff', 0.7 * (1 - (t - hit) / 100))
+  }
+  c.restore()
+}
+
+// ------------------------------------------------------------------ the twenty elements (§5)
+const NOT = (title, why) => ({ plate: [title, why] })
+const VNAME = (id) => LOOKS[id].name
+const EL = {}
+
+// 1 · Hook line --------------------------------------------------------
+EL[1] = {
+  name: 'Hook line', fam: 'Text', badge: 'canvas', status: 'extend',
+  when: 'Short only, in the first 2.5 s, when the kind opens on a clock or premise. Seven words at most.',
+  from: 'The creator, or the clock and place from her clips', render: 'Canvas · overlayDraw.ts — extends the title card',
+  img: { p: 't03', w: 't03' },
+  style: { clean: 'White on a black rounded box, on at once', cozy: 'Lowercase handwriting in cream, no box', quiet: 'Small serif italic', cinematic: 'Small serif, on at once', film: 'Typewriter, switched on hard, no box', playful: 'Rounded bold on a yellow box at −2°', hype: 'Condensed caps; each word slams in, 70 ms apart' },
+  sfx: { film: 'tape click', playful: 'bubble pop', hype: 'impact' },
+  plan() {
+    if (env.fmt !== 'short') return { ...NOT('Short only.', 'Long videos open on the first part title instead.'), byFormat: true }
+    const out = snapEnd(2500), keys = [{ t: 0, l: 'On · 120 ms — no slow entrance' }]
+    if (env.look.id === 'hype') keys.push({ t: 5 * stag(70), l: 'Last word lands' })
+    keys.push({ t: out, l: env.look.id === 'film' ? 'Off — hard' : 'Off · 150 ms' })
+    return { out, keys, sfxT: 0 }
+  },
+  draw(g, t, P) {
+    const c = g.c, id = g.look.id, cx = 540, cy = 610
+    let a = id === 'film' || id === 'cinematic' ? 1 : clamp(t / 120)
+    if (t >= P.out) a *= id === 'film' ? 0 : 1 - clamp((t - P.out) / 150)
+    if (a <= 0) return
+    c.save(); c.globalAlpha = a; c.textBaseline = 'middle'; c.textAlign = 'center'
+    if (id === 'clean' || id === 'playful') {
+      const lines = ['8:35 am', 'first day of term'], lh = 96, y0 = cy - lh / 2
+      c.font = id === 'clean' ? F.int(600, 64) : F.pop(900, 66)
+      c.translate(cx, cy)
+      if (id === 'clean') { const s = lerp(0.96, 1, CURVE.expo(clamp(t / 120))); c.scale(s, s) } else c.rotate(-2 * RAD)
+      c.translate(-cx, -cy)
+      if (id === 'playful') shadow(g, c, 18, 'rgba(0,0,0,.3)', 6)
+      lines.forEach((s, i) => { const w = c.measureText(s).width, y = y0 + i * lh; rr(c, cx - w / 2 - 30, y - 44, w + 60, 88, id === 'clean' ? 16 : 26); c.fillStyle = id === 'clean' ? 'rgba(0,0,0,.62)' : '#FFD84D'; c.fill() })
+      noShadow(c); c.fillStyle = id === 'clean' ? '#fff' : '#241a00'
+      lines.forEach((s, i) => c.fillText(s, cx, y0 + i * lh + 3))
+    } else if (id === 'hype') {
+      const rows = [['8:35', 'AM'], ['FIRST', 'DAY'], ['OF', 'TERM']], lh = 138, y0 = cy - lh, st = stag(70)
+      c.font = F.ant(132); const sp = c.measureText(' ').width
+      shadow(g, c, 22, 'rgba(0,0,0,.4)', 4); c.fillStyle = '#fff'
+      let k = 0
+      rows.forEach((ws, i) => {
+        const wd = ws.map((w) => c.measureText(w).width), tot = wd.reduce((u, v) => u + v) + sp * (ws.length - 1)
+        let x = cx - tot / 2
+        ws.forEach((w, j) => {
+          const t0 = k++ * st
+          if (t >= t0) { const s = lerp(1.5, 1, CURVE.expo(clamp((t - t0) / 150))); c.save(); c.translate(x + wd[j] / 2, y0 + i * lh); c.scale(s, s); c.fillText(w, 0, 6); c.restore() }
+          x += wd[j] + sp
+        })
+      })
+    } else {
+      const cfg = {
+        cozy: { f: F.cav(700, 96), col: '#F6EBD9', lines: ['8:35 am', 'first day of term'], lh: 100, sh: 'rgba(40,20,0,.6)' },
+        quiet: { f: F.gar(400, 58, 1), col: '#EFE8DD', lines: ['8:35 am · first day of term'], lh: 0 },
+        cinematic: { f: F.gar(400, 56), col: '#FFFFFF', lines: ['8:35 am · first day of term'], lh: 0 },
+        film: { f: F.cou(700, 60), col: '#F5EEDC', lines: ['8:35 am', 'first day of term'], lh: 74 },
+      }[id]
+      c.font = cfg.f; c.fillStyle = cfg.col; shadow(g, c, 18, cfg.sh || 'rgba(0,0,0,.55)', 2)
+      const y0 = cy - (cfg.lh * (cfg.lines.length - 1)) / 2
+      cfg.lines.forEach((s, i) => c.fillText(s, cx, y0 + i * cfg.lh))
+    }
+    c.restore()
+  },
+}
+
+// 2 · Clock / date stamp -----------------------------------------------
+EL[2] = {
+  name: 'Clock / date stamp', fam: 'Text', badge: 'canvas', status: 'extend',
+  when: 'On a time spine, at each new session, at most 1 per 8 s. Film: a date on every shot.',
+  from: 'capture_time, corrected for the time zone', render: 'Canvas · overlayDraw.ts — extends the date card',
+  img: { p: 't00', w: 'heroA' }, bright: true,
+  style: { clean: 'Clock at 60% white', cozy: 'Handwritten clock fading up — never boxed, no typing sounds', quiet: 'Light caps, tracked wide', cinematic: 'Light caps tracked wider, with a hairline', film: 'An amber camera-back date, no animation', playful: 'On a highlighter swipe', hype: '' },
+  plan() {
+    const look = env.look
+    if (look.id === 'hype') return NOT('Not used in Hype.', 'Hype saves its words for the drop — no clock stamps.')
+    if (look.id === 'film') return { on: 0, off: 3600, keys: [{ t: 0, l: 'Date on — hard' }, { t: 3600, l: 'Date off — hard' }] }
+    const tIn = snapHit(400), od = outDur(look), out = snapEnd(Math.min(tIn + look.dur + 2000, env.L - od - 60))
+    const keys = [{ t: tIn, l: look.id === 'playful' ? 'Highlighter swipes · 300 ms' : `In · rise 12 px · ${look.dur} ms` }, { t: out, l: `Out · ${od} ms` }]
+    return { tIn, out, keys }
+  },
+  draw(g, t, P) {
+    const c = g.c, look = g.look, id = look.id
+    if (id === 'film') {
+      if (t < P.on || t >= P.off) return
+      c.save(); c.globalAlpha = rnd(Math.floor(t / 83)) > 0.5 ? 1 : 0.97
+      dateStamp(g, c, "9 25 '26", g.wide ? 1824 : 780, g.wide ? 810 : 1240, g.wide ? 58 : 56)
+      c.restore(); return
+    }
+    const p = inProg(look, t, P.tIn), q = outProg(look, t, P.out), e = Math.max(0, p * (1 - q))
+    if (e <= 0) return
+    const x = g.wide ? 96 : 120, y = g.wide ? 84 : 300
+    c.save(); c.textBaseline = 'top'; c.globalAlpha = clamp(e * 1.3); c.translate(0, (1 - e) * 12)
+    shadow(g, c, 18, 'rgba(0,0,0,.55)', 1)
+    if (id === 'clean') { c.font = F.int(500, 46); const w = c.measureText('8:35 am').width; if (g.bright) { noShadow(c); rr(c, x - 18, y - 12, w + 36, 72, 14); c.fillStyle = 'rgba(0,0,0,.6)'; c.fill() } c.fillStyle = 'rgba(255,255,255,.62)'; c.fillText('8:35 am', x, y + 1) }
+    else if (id === 'cozy') { shadow(g, c, 20, 'rgba(40,20,0,.65)', 2); c.font = F.cav(700, 76); c.fillStyle = '#F6EBD9'; c.fillText('8:35 am', x, y - 10) }
+    else if (id === 'quiet') { c.font = F.int(300, 40); c.fillStyle = '#EFE8DD'; text(c, '8:35 AM', x, y + 4, { track: 8 }) }
+    else if (id === 'cinematic') { c.fillStyle = 'rgba(255,255,255,.85)'; c.fillRect(x, y + 21, 88 * e, 2); c.font = F.int(300, 40); c.fillStyle = '#fff'; text(c, '8:35 AM', x + 112, y + 1, { track: 12 }) }
+    else if (id === 'playful') {
+      noShadow(c); c.globalAlpha = 1 - q
+      c.font = F.pop(900, 52); const w = c.measureText('8:35 am').width, sw = CURVE.expo(clamp((t - P.tIn) / 300))
+      c.save(); c.translate(x - 16, y - 4); c.rotate(-2 * RAD); rr(c, 0, 0, (w + 32) * sw, 74, 10); c.fillStyle = '#FFD84D'; c.fill(); c.restore()
+      c.globalAlpha = clamp(sw * 2) * (1 - q); c.fillStyle = '#2a1f00'; c.fillText('8:35 am', x, y + 4)
+    }
+    c.restore()
+  },
+}
+
+// 3 · Place stamp ------------------------------------------------------
+const PLACE = 'Morningside Heights', CITY = 'New York, United States'
+EL[3] = {
+  name: 'Place stamp', fam: 'Location', badge: 'canvas', status: 'new',
+  when: 'Once per place, right after the hook.',
+  from: 'GPS → offline GeoNames (credited); editable', render: 'Canvas · overlayDraw.ts — new kind: place',
+  img: { p: 't07', w: 't07' }, bright: true,
+  style: { clean: 'Pin and bold sans with a soft shadow', cozy: 'Round pin on a cream pill, handwritten', quiet: 'No pin; light caps; fade only', cinematic: 'Tracked caps, a hairline and the coordinates; 800 ms fade', film: 'Amber ink stamp in three steps, 1 px jitter', playful: 'Bouncing red pin on a sticker at −4°', hype: 'Condensed caps slam in with a short shake' },
+  sfx: { cozy: 'paper rustle', film: 'tape click', playful: 'boing', hype: 'impact' },
+  plan() {
+    const id = env.look.id, tIn = snapHit(400), out = snapEnd(3200)
+    const K = {
+      clean: [[tIn, 'Pin drops 40 px'], [tIn + 150, 'Name wipes in · 400 ms'], [tIn + 230, 'Second line · 250 ms']],
+      cozy: [[tIn, 'Pill: rise 26 px, +5° → −2°, .88 → 1'], [tIn + 150, 'Name wipes in'], [tIn + 230, 'Second line']],
+      quiet: [[tIn, 'Name fades in · 1200 ms'], [tIn + 230, 'Second line fades in']],
+      cinematic: [[tIn, 'Caps and hairline · 800 ms fade'], [tIn + 230, 'Coordinates fade in']],
+      film: [[tIn, 'Stamp: 1.15 → 1 in 3 steps'], [tIn + 375, '1 px jitter while it holds']],
+      playful: [[tIn, 'Pin bounces in'], [tIn + 150, 'Sticker pops in at −4°'], [tIn + 230, 'Second line']],
+      hype: [[tIn, 'Slam 1.5 → 1 in 150 ms'], [tIn + 150, '4 px shake, gone by 200 ms']],
+    }[id]
+    const keys = K.map(([t, l]) => ({ t, l }))
+    keys.push({ t: out, l: id === 'film' ? 'Off — hard' : 'Fade out · 300 ms' })
+    return { pin: tIn, name: tIn + 150, sub: tIn + 230, out, keys, sfxT: tIn }
+  },
+  draw(g, t, P) {
+    const c = g.c, look = g.look, id = look.id
+    if (t < P.pin) return
+    const fade = id === 'film' ? (t >= P.out ? 0 : 1) : 1 - clamp((t - P.out) / 300)
+    if (fade <= 0) return
+    const x0 = g.wide ? 96 : 120, y0 = g.wide ? 72 : 288
+    c.save(); c.globalAlpha = fade; c.textBaseline = 'top'
+    if (id === 'clean') {
+      if (g.bright) { c.font = F.int(600, 52); const bw = Math.max(c.measureText(PLACE).width, 0) + 96, u = look.fn(clamp((t - P.pin) / 400)); rr(c, x0 - 18, y0 - 18, (bw + 20) * u, 136, 16); c.fillStyle = 'rgba(0,0,0,.6)'; c.fill() }
+      shadow(g, c, 12, 'rgba(0,0,0,.45)', 2)
+      const pp = inProg(look, t, P.pin); pin(c, x0 + 18, y0 + 22 - (1 - pp) * 40, '#fff', 1.05)
+      c.font = F.int(600, 52); const w = c.measureText(PLACE).width, pn = look.fn(clamp((t - P.name) / 400))
+      c.save(); c.beginPath(); c.rect(x0 + 50, y0 - 20, (w + 30) * pn, 100); c.clip(); c.fillStyle = '#fff'; c.fillText(PLACE, x0 + 54, y0); c.restore()
+      c.globalAlpha = fade * clamp((t - P.sub) / 250); c.font = F.int(600, 32); c.fillStyle = 'rgba(255,255,255,.85)'; c.fillText(CITY, x0 + 56, y0 + 66)
+    } else if (id === 'cozy') {
+      c.font = F.cav(700, 60); const w = c.measureText(PLACE).width, pw = w + 120, ph = 94
+      const xf = cardXf(look, inProg(look, t, P.pin), 0); c.save(); applyXf(c, xf, x0 + pw / 2, y0 + ph / 2)
+      shadow(g, c, 18, 'rgba(60,35,10,.35)', 5); rr(c, x0, y0, pw, ph, ph / 2); c.fillStyle = '#F3E6CF'; c.fill(); noShadow(c)
+      c.beginPath(); c.arc(x0 + 48, y0 + ph / 2, 20, 0, Math.PI * 2); c.fillStyle = '#C8764F'; c.fill()
+      c.beginPath(); c.arc(x0 + 48, y0 + ph / 2, 7, 0, Math.PI * 2); c.fillStyle = '#F3E6CF'; c.fill()
+      c.save(); c.beginPath(); c.rect(x0 + 80, y0, (w + 20) * CURVE.expo(clamp((t - P.name) / 400)), ph); c.clip(); c.fillStyle = '#3A2E22'; c.fillText(PLACE, x0 + 82, y0 + 12); c.restore()
+      c.restore()
+      c.globalAlpha = fade * clamp((t - P.sub) / 250); shadow(g, c, 16, 'rgba(40,20,0,.6)'); c.font = F.cav(700, 44); c.fillStyle = '#F6EBD9'; c.fillText('new york', x0 + 34, y0 + ph + 14)
+    } else if (id === 'quiet') {
+      shadow(g, c, 18, 'rgba(0,0,0,.5)')
+      c.globalAlpha = fade * inProg(look, t, P.pin); c.font = F.int(300, 40); c.fillStyle = '#EFE8DD'; text(c, PLACE.toUpperCase(), x0, y0 + 10, { track: 8 })
+      c.globalAlpha = fade * inProg(look, t, P.sub); c.font = F.gar(400, 44, 1); c.fillText('New York', x0, y0 + 64)
+    } else if (id === 'cinematic') {
+      shadow(g, c, 18, 'rgba(0,0,0,.5)')
+      const a = inProg(look, t, P.pin, 800); c.globalAlpha = fade * a
+      c.font = F.int(300, 40); c.fillStyle = '#fff'; text(c, PLACE.toUpperCase(), x0, y0 + 8, { track: 12 })
+      c.fillStyle = 'rgba(255,255,255,.8)'; c.fillRect(x0, y0 + 68, 120 * a, 2)
+      c.globalAlpha = fade * inProg(look, t, P.sub, 800); c.font = F.mono(700, 26); c.fillStyle = 'rgba(255,255,255,.8)'; text(c, '40.8075° N   73.9626° W', x0, y0 + 88, { track: 2 })
+    } else if (id === 'film') {
+      const s = lerp(1.15, 1, inProg(look, t, P.pin)), j = Math.floor(t / 83)
+      const jx = (rnd(j) - 0.5) * 3, jy = (rnd(j + 99) - 0.5) * 3
+      c.font = F.cou(700, 38); const w = c.measureText(PLACE.toUpperCase()).width + 48, h = 108
+      c.translate(x0 + w / 2 + jx, y0 + h / 2 + jy); c.rotate(-3 * RAD); c.scale(s, s); c.translate(-w / 2, -h / 2)
+      c.globalAlpha = fade * 0.95; c.strokeStyle = '#FF9A3C'; c.fillStyle = '#FF9A3C'; shadow(g, c, 6, 'rgba(40,15,0,.55)', 1)
+      c.lineWidth = 5; rr(c, 0, 0, w, h, 6); c.stroke(); c.lineWidth = 1.5; rr(c, 9, 9, w - 18, h - 18, 3); c.stroke()
+      c.fillText(PLACE.toUpperCase(), 24, 18); c.font = F.cou(700, 24); c.fillText('NEW YORK · SEP 25 2026', 24, 62)
+    } else if (id === 'playful') {
+      const pp = inProg(look, t, P.pin)
+      shadow(g, c, 10, 'rgba(0,0,0,.35)', 4)
+      pin(c, x0 + 26, y0 + 30 - (1 - pp) * 70, '#FF4D4D', 1.35, '#fff')
+      const pn = inProg(look, t, P.name)
+      if (pn > 0) {
+        c.font = F.pop(900, 44); const w = c.measureText(PLACE).width + 56, h = 80, px = x0 + 66
+        c.save(); c.translate(px + w / 2, y0 + 40); c.rotate(-4 * RAD); c.scale(lerp(0.5, 1, pn), lerp(0.5, 1, pn)); c.translate(-w / 2, -40)
+        rr(c, -9, -9, w + 18, h + 18, 26); c.fillStyle = '#fff'; c.fill(); noShadow(c)
+        rr(c, 0, 0, w, h, 20); c.fillStyle = '#7BD3F7'; c.fill(); c.fillStyle = '#0f2833'; c.fillText(PLACE, 28, 14)
+        c.restore()
+      }
+      c.globalAlpha = fade * clamp((t - P.sub) / 250); shadow(g, c, 10, 'rgba(0,0,0,.45)'); c.font = F.pop(800, 32); c.fillStyle = '#fff'; c.fillText(CITY, x0 + 76, y0 + 110)
+    } else if (id === 'hype') {
+      const hitT = P.pin + tHit(look), u = t - hitT
+      const shake = u > 0 && u < 200 ? 16 * Math.exp(-u / 60) * Math.sin((2 * Math.PI * u) / 33) : 0
+      const s = lerp(1.5, 1, CURVE.expo(clamp((t - P.pin) / 150)))
+      c.font = F.ant(g.wide ? 104 : 116); c.fillStyle = '#fff'; shadow(g, c, 20, 'rgba(0,0,0,.4)', 3)
+      const w = c.measureText('MORNINGSIDE').width
+      c.translate(x0 + w / 2 + shake, y0 + 110); c.scale(s, s); c.translate(-(x0 + w / 2), -(y0 + 110))
+      c.fillText('MORNINGSIDE', x0, y0); c.fillText('HEIGHTS', x0, y0 + 118)
+      c.font = F.int(800, 36); c.fillStyle = '#FF6A3D'; shadow(g, c, 10, 'rgba(0,0,0,.4)'); text(c, 'NEW YORK', x0 + 4, y0 + 252, { track: 7 })
+    }
+    c.restore()
+  },
+}
+
+// 4 · Part title ------------------------------------------------------
+EL[4] = {
+  name: 'Part title', fam: 'Chapter', badge: 'canvas', status: 'extend',
+  when: 'Each part on long formats; a 1 s corner kicker on Short.',
+  from: 'Part names — editable', render: 'Canvas · overlayDraw.ts — restyles the part card',
+  img: { p: 't04', w: 't04' }, bright: true,
+  style: { clean: 'Bold sans, numeral in gold, no dim', cozy: 'Handwritten, underline drawn in 400 ms; 20% dim', quiet: 'Serif italic; 20% dim', cinematic: 'Tracked caps; 40% dim', film: 'An intertitle: a black card for 1.5 s', playful: 'Letters bounce in, 40 ms apart', hype: 'Slam plus a 3-frame white flash' },
+  sfx: { cozy: 'pencil', cinematic: 'sub hit', film: 'tape click', playful: 'bubble pop', hype: 'impact' },
+  plan() {
+    const id = env.look.id
+    if (env.fmt === 'short') {
+      const tIn = snapHit(400), out = snapEnd(1400)
+      return { short: true, tIn, out, keys: [{ t: tIn, l: 'Corner kicker in · 200 ms' }, { t: out, l: id === 'film' ? 'Off — hard' : 'Out · 200 ms' }], sfxT: tIn }
+    }
+    if (id === 'film') return { card: 400, off: 1900, keys: [{ t: 400, l: 'Intertitle on — hard' }, { t: 1900, l: 'Back to the picture' }], sfxT: 400 }
+    const dim = { clean: 0, cozy: 0.2, quiet: 0.2, cinematic: 0.4, playful: 0, hype: 0 }[id]
+    const k = snapHit(400), ti = k + 150, out = snapEnd(3000)
+    const keys = []
+    if (dim) keys.push({ t: 400, l: `Dim 0 → ${dim * 100}% by 800` })
+    keys.push({ t: k, l: 'Kicker fades in · 250 ms' })
+    keys.push({ t: ti, l: id === 'playful' ? 'Letters bounce in, 40 ms apart' : id === 'hype' ? 'Slam + 3-frame flash' : 'Title rises 16 px, tracking closes' })
+    if (id !== 'playful' && id !== 'hype') keys.push({ t: 700, l: id === 'cozy' ? 'Underline draws · 400 ms' : 'Hairline grows to 120 px' })
+    keys.push({ t: out, l: 'Everything out · 400 ms' })
+    return { dim, k, ti, out, keys, sfxT: ti }
+  },
+  draw(g, t, P) {
+    const c = g.c, look = g.look, id = look.id, W = g.W, H = g.H
+    c.save()
+    if (P.short) {
+      if (t < P.tIn) { c.restore(); return }
+      const a = id === 'film' ? (t < P.out ? 1 : 0) : clamp((t - P.tIn) / 200) * (1 - clamp((t - P.out) / 200))
+      if (a <= 0) { c.restore(); return }
+      c.globalAlpha = a; c.textBaseline = 'top'; shadow(g, c, 20, 'rgba(0,0,0,.62)', 2)
+      const x = 120, y = 300
+      if (id === 'clean') { noShadow(c); rr(c, x - 20, y - 16, 230, 112, 14); c.fillStyle = 'rgba(0,0,0,.6)'; c.fill(); c.font = F.int(600, 26); c.fillStyle = 'rgba(255,255,255,.85)'; const w = text(c, 'PART ', x, y, { track: 4 }); c.fillStyle = '#F2C14E'; c.fillText('2', x + w + 4, y); c.font = F.int(600, 46); c.fillStyle = '#fff'; c.fillText('Campus', x, y + 36) }
+      else if (id === 'cozy') { shadow(g, c, 22, 'rgba(40,20,0,.7)', 2); c.font = F.cav(700, 60); c.fillStyle = '#F6EBD9'; c.fillText('part 2 · campus', x, y) }
+      else if (id === 'quiet') { c.font = F.int(300, 40); c.fillStyle = '#EFE8DD'; text(c, 'CAMPUS', x, y, { track: 8 }) }
+      else if (id === 'cinematic') { c.fillStyle = 'rgba(255,255,255,.85)'; c.fillRect(x, y + 21, 60, 2); c.font = F.int(300, 40); c.fillStyle = '#fff'; text(c, 'CAMPUS', x + 80, y, { track: 12 }) }
+      else if (id === 'film') { c.font = F.cou(700, 38); c.fillStyle = '#F5EEDC'; c.fillText('part 2 — campus', x, y) }
+      else if (id === 'playful') { noShadow(c); c.font = F.pop(900, 38); const w = c.measureText('2 · Campus').width; rr(c, x, y, w + 44, 64, 32); c.fillStyle = '#FF6FA8'; c.fill(); c.fillStyle = '#fff'; c.fillText('2 · Campus', x + 22, y + 10) }
+      else if (id === 'hype') { c.font = F.ant(72); c.fillStyle = '#FF6A3D'; c.fillText('02', x, y); c.fillStyle = '#fff'; c.fillText('CAMPUS', x + c.measureText('02 ').width, y) }
+      c.restore(); return
+    }
+    const cx = W / 2, cy = H * (g.wide ? 0.44 : 0.47)
+    if (id === 'film') {
+      if (t >= P.card && t < P.off) {
+        fillAll(c, g, '#0b0a08', 1)
+        const fl = 0.9 + 0.1 * rnd(Math.floor(t / 83))
+        c.globalAlpha = fl; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#F5EEDC'
+        c.font = F.cou(700, 40); c.fillText('— 2 —', cx, cy - 70); c.font = F.cou(700, 76); c.fillText('campus', cx, cy + 20)
+        c.strokeStyle = 'rgba(245,238,220,.25)'; c.lineWidth = 2; c.strokeRect(W * 0.08, H * 0.08, W * 0.84, H * 0.84)
+      }
+      c.restore(); return
+    }
+    const outA = 1 - clamp((t - P.out) / 400)
+    if (P.dim) fillAll(c, g, id === 'cozy' ? '#28190a' : '#000', P.dim * clamp((t - 400) / 400) * outA)
+    c.globalAlpha = outA; c.textAlign = 'center'; c.textBaseline = 'middle'
+    const ka = clamp((t - P.k) / 250)
+    const tp = inProg(look, t, P.ti)
+    if (id === 'clean') {
+      shadow(g, c, 18, 'rgba(0,0,0,.4)', 2)
+      c.globalAlpha = outA * ka; c.font = F.int(600, 30); c.fillStyle = 'rgba(255,255,255,.88)'
+      const wP = tw(c, 'PART ', 5); text(c, 'PART ', cx - (wP + 18) / 2, cy - 112, { track: 5 }); c.fillStyle = '#F2C14E'; c.fillText('2', cx + (wP + 18) / 2 - 9, cy - 112)
+      c.globalAlpha = outA * clamp(tp * 1.3); c.font = F.int(600, 136); c.fillStyle = '#fff'; text(c, 'Campus', cx, cy + 16 * (1 - tp), { align: 'center', track: 136 * 0.08 * (1 - tp) })
+      noShadow(c); c.globalAlpha = outA; const hw = 120 * smooth(clamp((t - 700) / 500)); c.fillStyle = '#fff'; c.fillRect(cx - hw / 2, cy + 92, hw, 3)
+    } else if (id === 'cozy') {
+      shadow(g, c, 14, 'rgba(40,20,0,.35)', 2)
+      c.globalAlpha = outA * ka; c.font = F.cav(700, 58); c.fillStyle = '#F3C9A5'; c.fillText('part 2', cx, cy - 128)
+      c.globalAlpha = outA * clamp(tp * 1.4); c.font = F.cav(700, 176); c.fillStyle = '#F6EBD9'; text(c, 'campus', cx, cy + 16 * (1 - tp), { align: 'center', track: 14 * (1 - tp) })
+      noShadow(c); c.globalAlpha = outA; underline(c, cx - 200, cx + 200, cy + 92, '#F3C9A5', clamp((t - 700) / 400), 8)
+    } else if (id === 'quiet') {
+      shadow(g, c, 14, 'rgba(0,0,0,.3)')
+      c.globalAlpha = outA * ka; c.font = F.int(300, 40); c.fillStyle = '#EFE8DD'; text(c, 'PART TWO', cx, cy - 124, { align: 'center', track: 8 })
+      c.globalAlpha = outA * tp; c.font = F.gar(400, 140, 1); text(c, 'Campus', cx, cy + 16 * (1 - tp), { align: 'center', track: 11 * (1 - tp) })
+      noShadow(c); c.globalAlpha = outA * 0.7; const hw = 120 * smooth(clamp((t - 700) / 500)); c.fillStyle = '#EFE8DD'; c.fillRect(cx - hw / 2, cy + 96, hw, 1.5)
+    } else if (id === 'cinematic') {
+      shadow(g, c, 14, 'rgba(0,0,0,.3)')
+      c.globalAlpha = outA * ka; c.font = F.gar(400, 44, 1); c.fillStyle = 'rgba(255,255,255,.88)'; c.fillText('Part two', cx, cy - 108)
+      c.globalAlpha = outA * tp; c.font = F.int(300, 88); c.fillStyle = '#fff'; text(c, 'CAMPUS', cx, cy + 10 * (1 - tp), { align: 'center', track: 88 * lerp(0.38, 0.3, tp) })
+      noShadow(c); c.globalAlpha = outA * 0.8; const hw = 120 * smooth(clamp((t - 700) / 500)); c.fillStyle = '#fff'; c.fillRect(cx - hw / 2, cy + 74, hw, 1.5)
+    } else if (id === 'playful') {
+      c.globalAlpha = outA * ka; c.font = F.pop(900, 30); const kw = tw(c, 'PART 2', 3) + 44
+      rr(c, cx - kw / 2, cy - 150, kw, 54, 27); c.fillStyle = '#FF6FA8'; c.fill(); c.fillStyle = '#fff'; text(c, 'PART 2', cx, cy - 122, { align: 'center', track: 3 })
+      c.globalAlpha = outA; c.font = F.pop(900, 156); c.textAlign = 'center'; const word = 'Campus', st = stag(40)
+      const total = tw(c, word); let x = cx - total / 2
+      shadow(g, c, 0, 'rgba(70,30,0,.45)', 9); c.shadowOffsetX = 4 * g.k
+      for (let i = 0; i < word.length; i++) {
+        const ch = word[i], w = c.measureText(ch).width, lp = inProg(look, t, P.ti + i * st)
+        if (lp > 0) { c.save(); c.translate(x + w / 2, cy + 20 + (1 - lp) * 50); c.scale(lerp(0.2, 1, lp), lerp(0.2, 1, lp)); c.globalAlpha = outA * clamp(lp * 3); c.fillStyle = '#FFD84D'; c.fillText(ch, 0, 0); c.restore() }
+        x += w
+      }
+    } else if (id === 'hype') {
+      c.globalAlpha = outA * ka; c.font = F.int(800, 32); c.fillStyle = '#FF6A3D'; text(c, 'PART 2', cx, cy - 150, { align: 'center', track: 6.4 })
+      const s = lerp(1.5, 1, CURVE.expo(clamp((t - P.ti) / 150)))
+      if (t >= P.ti) { c.globalAlpha = outA; c.textAlign = 'center'; shadow(g, c, 24, 'rgba(0,0,0,.4)', 4); c.font = F.ant(g.wide ? 230 : 250); c.fillStyle = '#fff'; c.save(); c.translate(cx, cy + 20); c.scale(s, s); c.fillText('CAMPUS', 0, 8); c.restore() }
+      const hit = P.ti + tHit(look); if (t >= hit && t < hit + 100) { c.globalAlpha = 1; fillAll(c, g, '#fff', 0.85 * (1 - (t - hit) / 100)) }
+    }
+    c.restore()
+  },
+}
+
+// 5 · Diary line ------------------------------------------------------
+const DIARY = 'slow start. coffee first.'
+EL[5] = {
+  name: 'Diary line', fam: 'Caption', badge: 'canvas', status: 'exists',
+  when: 'Quiet days and story days. Eight words at most, one every 10–15 s.',
+  from: 'The creator, or her clips’ metadata', render: 'Canvas · overlayDraw.ts — the caption card',
+  img: { p: 't16', w: 't16' },
+  style: { clean: 'Small sans, sentence case', cozy: 'Serif italic, lowercase, cream', quiet: 'Small serif italic at 90%', cinematic: 'Light sans, sentence case, small', film: 'Typed at 40 ms a character, silent', playful: 'Rounded on a soft pill', hype: '' },
+  plan() {
+    const look = env.look
+    if (look.id === 'hype') return NOT('Not used in Hype.', 'Diary lines belong to quiet days and story days, which never get Hype.')
+    const t0 = snapHit(400), typed = look.id === 'film', inD = typed ? DIARY.length * stag(40) : look.dur
+    const hold = Math.max(look.hold, 4 / 3 + 1) * 1000
+    const out = snapEnd(Math.min(t0 + inD + hold, env.L - 340))
+    return { t0, out, keys: [{ t: t0, l: typed ? 'Typing · 40 ms a character' : `In · ${look.dur} ms` }, { t: t0 + inD, l: `Holds · max(${look.hold.toFixed(1)} s, words ÷ 3 + 1 s)` }, { t: out, l: typed ? 'Off — hard' : 'Fade out · 300 ms' }] }
+  },
+  draw(g, t, P) {
+    const c = g.c, look = g.look, id = look.id
+    if (t < P.t0) return
+    const fade = id === 'film' ? (t < P.out ? 1 : 0) : 1 - clamp((t - P.out) / 300)
+    if (fade <= 0) return
+    const cx = g.W / 2, cy = g.wide ? 752 : 1168, p = inProg(look, t, P.t0)
+    c.save(); c.globalAlpha = fade; c.textAlign = 'center'; c.textBaseline = 'middle'
+    shadow(g, c, 14, 'rgba(0,0,0,.5)', 2)
+    if (id === 'clean') { c.globalAlpha *= clamp(p * 1.3); c.font = F.int(500, 46); c.fillStyle = '#fff'; c.fillText('Slow start. Coffee first.', cx, cy + 16 * (1 - p)) }
+    else if (id === 'cozy') { c.globalAlpha *= clamp(p * 1.6); c.font = F.gar(400, 62, 1); c.fillStyle = '#F6EBD9'; c.fillText(DIARY, cx, cy + 26 * (1 - p)) }
+    else if (id === 'quiet') { c.globalAlpha *= 0.9 * p; c.font = F.gar(400, 50, 1); c.fillStyle = '#EFE8DD'; c.fillText(DIARY, cx, cy + 10 * (1 - p)) }
+    else if (id === 'cinematic') { c.globalAlpha *= p; c.font = F.int(300, 44); c.fillStyle = '#fff'; c.fillText('Slow start. Coffee first.', cx, cy + 6 * (1 - p)) }
+    else if (id === 'film') {
+      c.font = F.cou(700, 46); c.fillStyle = '#F5EEDC'; c.textAlign = 'left'
+      const n = Math.min(DIARY.length, Math.floor((t - P.t0) / stag(40)) + 1), full = c.measureText(DIARY).width, x = cx - full / 2
+      c.fillText(DIARY.slice(0, n), x, cy)
+      const done = P.t0 + DIARY.length * stag(40)
+      if (t < done + 500 && Math.floor(t / 250) % 2 === 0) { noShadow(c); c.fillRect(x + c.measureText(DIARY.slice(0, n)).width + 4, cy - 24, 24, 48) }
+    } else if (id === 'playful') {
+      const xf = cardXf(look, p, 0)
+      c.font = F.pop(800, 44); const w = c.measureText(DIARY).width + 64
+      applyXf(c, xf, cx, cy); noShadow(c); shadow(g, c, 14, 'rgba(0,0,0,.25)', 4)
+      rr(c, cx - w / 2, cy - 42, w, 84, 42); c.fillStyle = '#7BD3F7'; c.fill(); noShadow(c); c.fillStyle = '#0d2a36'; c.fillText(DIARY, cx, cy + 2)
+    }
+    c.restore()
+  },
+}
+
+// 6 · Word-group captions ---------------------------------------------
+const GROUPS = [['we', 'finally'], ['made', 'it'], ['to', 'the'], ['top']], GT = [400, 1300, 2200, 3100]
+EL[6] = {
+  name: 'Word-group captions', fam: 'Caption', badge: 'canvas', status: 'extend',
+  when: 'Talking: 1–4 words on Short, sentences on long formats, always in one fixed band.',
+  from: 'The transcript, made on this Mac', render: 'Canvas · overlayDraw.ts — extends talk.caption_overlays',
+  img: { p: 't28', w: 't28' },
+  style: { clean: 'Current word 100%, the rest 70%; shadow, no box', cozy: 'Static lowercase serif lines', quiet: 'A static italic sentence', cinematic: '', film: '', playful: 'Current word pops to 112% on a coloured pill', hype: 'Condensed caps; the current word at 110%' },
+  plan() {
+    const id = env.look.id
+    if (id === 'cinematic' || id === 'film') return NOT(`Not used in ${VNAME(id)}.`, `${VNAME(id)} is never offered for talking to camera.`)
+    if (id === 'quiet') return { keys: [{ t: 400, l: 'The whole sentence, static' }] }
+    return { keys: GT.map((t, i) => ({ t, l: `“${GROUPS[i].join(' ')}” — swaps, no animation` })) }
+  },
+  draw(g, t, P) {
+    const c = g.c, id = g.look.id, W = g.W, cx = W / 2, cy = g.H * 0.6
+    if (t < GT[0]) return
+    let gi = 0
+    for (let i = 0; i < GT.length; i++) if (t >= GT[i]) gi = i
+    const gEnd = gi < GT.length - 1 ? GT[gi + 1] : env.L, gw = GROUPS[gi], wi = Math.min(gw.length - 1, Math.floor(((t - GT[gi]) / (gEnd - GT[gi])) * gw.length))
+    const wordStart = GT[gi] + ((gEnd - GT[gi]) * wi) / gw.length
+    const long = env.fmt !== 'short'
+    c.save(); c.textBaseline = 'middle'; c.textAlign = 'left'
+    shadow(g, c, 14, 'rgba(0,0,0,.5)', 2)
+    if (id === 'quiet') {
+      c.font = F.gar(400, 56, 1); c.fillStyle = '#EFE8DD'; c.textAlign = 'center'
+      if (g.wide) c.fillText('we finally made it to the top', cx, cy)
+      else { c.fillText('we finally made it', cx, cy - 36); c.fillText('to the top', cx, cy + 36) }
+      c.restore(); return
+    }
+    // which words show, and which is current
+    const all = GROUPS.flat(), cur = GROUPS.slice(0, gi).flat().length + wi
+    let lines
+    if (long) lines = g.wide ? [all.map((w, i) => [w, i])] : [all.slice(0, 4).map((w, i) => [w, i]), all.slice(4).map((w, i) => [w, i + 4])]
+    else { const base = GROUPS.slice(0, gi).flat().length; lines = [gw.map((w, i) => [w, base + i])] }
+    const fmt = (w, i) => (id === 'hype' ? w.toUpperCase() : id === 'clean' && i === 0 ? 'We' : w)
+    const font = { clean: F.int(600, 74), cozy: F.gar(400, 68), playful: F.pop(900, 74), hype: F.ant(long && !g.wide ? 108 : 136) }[id]
+    c.font = font; const sp = c.measureText(' ').width, lh = id === 'hype' ? 140 : 96
+    lines.forEach((ln, li) => {
+      const y = cy + (li - (lines.length - 1) / 2) * lh
+      const ws = ln.map(([w, i]) => [fmt(w, i), i]), widths = ws.map(([w]) => c.measureText(w).width)
+      let x = cx - (widths.reduce((u, v) => u + v, 0) + sp * (ws.length - 1)) / 2
+      ws.forEach(([w, i], k) => {
+        const on = i === cur, mid = x + widths[k] / 2
+        c.save()
+        if (id === 'clean') { c.globalAlpha = on ? 1 : 0.7; c.fillStyle = '#fff'; c.fillText(w, x, y) }
+        else if (id === 'cozy') { c.fillStyle = '#F6EBD9'; c.fillText(w, x, y) }
+        else if (id === 'hype') { c.fillStyle = '#fff'; const s = on ? 1.1 : 1; c.translate(mid, y); c.scale(s, s); c.fillText(w, -widths[k] / 2, 4) }
+        else if (id === 'playful') {
+          if (on) {
+            const s = 1 + 0.12 * Math.sin(Math.PI * clamp((t - wordStart) / 220)), col = ['#FFD84D', '#FF6FA8', '#7BD3F7', '#FFD84D'][gi]
+            c.translate(mid, y); c.scale(s, s); noShadow(c); shadow(g, c, 12, 'rgba(0,0,0,.25)', 4)
+            rr(c, -widths[k] / 2 - 18, -48, widths[k] + 36, 96, 26); c.fillStyle = col; c.fill(); noShadow(c)
+            c.fillStyle = col === '#FF6FA8' ? '#fff' : '#1d1400'; c.fillText(w, -widths[k] / 2, 4)
+          } else { c.fillStyle = '#fff'; c.fillText(w, x, y + 4) }
+        }
+        c.restore()
+        x += widths[k] + sp
+      })
+    })
+    c.restore()
+  },
+}
+
+// 7 · Big word ---------------------------------------------------------
+EL[7] = {
+  name: 'Big word', fam: 'Emphasis', badge: 'canvas', status: 'new',
+  when: 'Talking: one key word per idea, at most one every 30 s. Never over a face.',
+  from: 'The transcript', render: 'Canvas · overlayDraw.ts — new kind: word',
+  img: { p: 't10', w: 't34' },
+  style: { clean: 'Heavy sans, 1.1 → 1 in 200 ms, no shake', cozy: 'Handwritten, fades in — no slam', quiet: '', cinematic: 'Thin tracked caps, 600 ms fade', film: 'Typewriter, stamped with jitter', playful: 'Rounded heavy with a colour pop and overshoot', hype: 'Condensed caps, slam 1.5 → 1' },
+  sfx: { playful: 'boing', hype: 'impact' },
+  plan() {
+    const id = env.look.id
+    if (id === 'quiet') return NOT('Not used in Quiet.', 'Quiet keeps to one small line — no big words.')
+    const inD = { clean: 200, cozy: env.look.dur, cinematic: 600, film: 375, playful: 500, hype: 150 }[id]
+    const t0 = snapHit(800), out = snapEnd(t0 + inD + 800)
+    return { t0, inD, out, keys: [{ t: t0, l: `In · ${inD} ms` }, { t: t0 + inD, l: 'Holds 800 ms' }, { t: out, l: 'Out: 1 → 1.05, fade 150 ms' }], sfxT: t0 }
+  },
+  draw(g, t, P) {
+    const c = g.c, look = g.look, id = look.id
+    if (t < P.t0) return
+    const qq = clamp((t - P.out) / 150)
+    if (qq >= 1) return
+    const cx = g.wide ? 1270 : 450, cy = g.wide ? 560 : 830
+    const u = clamp((t - P.t0) / P.inD)
+    let s = 1, a = 1
+    c.save(); c.textAlign = 'center'; c.textBaseline = 'middle'; shadow(g, c, 26, 'rgba(0,0,0,.4)', 4)
+    let word = 'NEVER', font = F.int(800, 176), fill = '#fff', track = 0
+    if (id === 'clean') { s = lerp(1.1, 1, CURVE.expo(u)); a = clamp(u * 3) }
+    else if (id === 'cozy') { word = 'never'; font = F.cav(700, 250); fill = '#F6EBD9'; a = inProg(look, t, P.t0) }
+    else if (id === 'cinematic') { font = F.int(300, 116); track = 116 * 0.3; a = CURVE.inout(u) }
+    else if (id === 'film') { word = 'never'; font = F.cou(700, 176); fill = '#F5EEDC'; s = lerp(1.15, 1, inProg(look, t, P.t0)); const j = Math.floor(t / 83); c.translate((rnd(j) - 0.5) * 3, (rnd(j + 7) - 0.5) * 3) }
+    else if (id === 'playful') { font = F.pop(900, 180); s = lerp(0.5, 1, CURVE.back(u)); a = clamp(u * 4); fill = t - P.t0 < 140 ? '#FF6FA8' : '#FFD84D' }
+    else if (id === 'hype') { font = F.ant(g.wide ? 250 : 280); s = lerp(1.5, 1, CURVE.expo(u)) }
+    s *= lerp(1, 1.05, qq); a *= 1 - qq
+    c.globalAlpha = a; c.translate(cx, cy); c.scale(s, s); c.font = font
+    if (id === 'playful') { noShadow(c); c.lineJoin = 'round'; c.lineWidth = 16; c.strokeStyle = '#fff'; c.strokeText(word, 0, 0); shadow(g, c, 0, 'rgba(60,20,0,.5)', 10) }
+    c.fillStyle = fill; text(c, word, 0, 0, { align: 'center', track })
+    c.restore()
+  },
+}
+
+// 8 · Name tag ---------------------------------------------------------
+EL[8] = {
+  name: 'Name tag', fam: 'Lower third', badge: 'canvas', status: 'exists',
+  when: '0.5 s after a person first speaks or appears.',
+  from: 'Her profile, or typed', render: 'Canvas · overlayDraw.ts — the name card',
+  img: { p: 't05', w: 'heroB' },
+  style: { clean: 'Bold name, lighter handle, 95 → 100%', cozy: 'Handwritten with a doodled underline', quiet: 'Light caps, tracked', cinematic: 'Tracked caps, no box', film: 'Typed on paper tape at −1°', playful: 'A die-cut sticker tag at −3°', hype: 'A coloured slab slides in, 3-frame flash' },
+  sfx: { cozy: 'paper rustle', film: 'tape click', playful: 'bubble pop', hype: 'whoosh' },
+  plan() {
+    const look = env.look, t0 = snapHit(900), r0 = t0 + stag(100), od = outDur(look)
+    const out = snapEnd(Math.min(t0 + look.dur + 3000, env.L - od - 60))
+    return { t0, r0, out, keys: [{ t: t0, l: look.id === 'film' ? 'Tape on — typed' : 'Name slides 24 px in, clip wipe' }, { t: r0, l: 'Handle follows 100 ms later' }, { t: out, l: look.id === 'film' ? 'Off — hard' : 'Mirrored out' }], sfxT: t0 }
+  },
+  draw(g, t, P) { nameTag(g, g.c, t, P.t0, P.r0, P.out, g.wide ? 96 : 120, g.wide ? 650 : 1090, 'Sarah', '@sarahvlogs') },
+}
+
+// 9 · Numbered place + recap ------------------------------------------
+const ITEMS = ['The library steps', 'Tea on Broadway', 'Riverside Park']
+EL[9] = {
+  name: 'Numbered place + recap', fam: 'List', badge: 'canvas', status: 'new',
+  when: 'Places worth saving: one card per place, then a 1.5–2.5 s recap, in pages of 3 on 9:16.',
+  from: 'Place names she kept or typed', render: 'Canvas · overlayDraw.ts — new kind: list',
+  img: { p: 't32', w: 't13' },
+  style: { clean: 'White notes card, tabular numerals, round ticks', cozy: 'Notebook scrap at −2°, hand-drawn ticks', quiet: '', cinematic: 'Numbered serif, no card', film: 'Index card with a red-pen tick', playful: 'Coloured number circles, bouncing ticks', hype: '' },
+  sfx: { cozy: 'pencil', film: 'tape click', playful: 'ding' },
+  plan() {
+    const id = env.look.id
+    if (id === 'quiet' || id === 'hype') return NOT(`Not used in ${VNAME(id)}.`, `${VNAME(id)} is never offered for places worth saving.`)
+    const t1 = snapHit(400), at = [t1, t1 + 600, t1 + 1200], out = snapEnd(3400)
+    return { at, out, keys: [{ t: at[0], l: '“1 · The library steps”' }, { t: at[1], l: 'Item 2 · item 1 dims to 45%' }, { t: at[2], l: 'Item 3 · item 2 dims' }, { t: out, l: id === 'film' ? 'All off — hard' : 'All leave together' }], sfxT: at[0] }
+  },
+  draw(g, t, P) {
+    const c = g.c, look = g.look, id = look.id
+    if (t < P.at[0]) return
+    const q = outProg(look, t, P.out)
+    if (q >= 1) return
+    const x = g.wide ? 96 : 120, y = g.wide ? 70 : 300, n = P.at.filter((a) => t >= a).length
+    const dimOf = (i) => (i < 2 && t >= P.at[i + 1] ? lerp(1, 0.45, clamp((t - P.at[i + 1]) / 200)) : 1)
+    const tickU = (i) => (i < 2 ? clamp((t - P.at[i + 1]) / 250) : 0)
+    c.save(); c.textBaseline = 'middle'
+    const rowH = 92
+    if (id === 'clean') {
+      const cp = inProg(look, t, P.at[0]), xf = cardXf(look, cp, q), w = 640
+      const hNow = 40 + rowH * lerp(n - 1, n, CURVE.quint(clamp((t - P.at[n - 1]) / 300)))
+      c.save(); applyXf(c, xf, x + w / 2, y + 100)
+      shadow(g, c, 30, 'rgba(0,0,0,.3)', 10); rr(c, x, y, w, hNow, 34); c.fillStyle = 'rgba(255,255,255,.95)'; c.fill(); noShadow(c)
+      c.beginPath(); c.rect(x, y, w, hNow); c.clip()
+      ITEMS.forEach((s, i) => {
+        if (t < P.at[i]) return
+        const ry = y + 20 + rowH * i + rowH / 2, a = clamp((t - P.at[i]) / 250)
+        c.globalAlpha = xf.a * a * dimOf(i)
+        c.font = F.int(700, 40); c.fillStyle = '#B58A14'; c.fillText(String(i + 1), x + 36, ry)
+        c.font = F.int(600, 40); c.fillStyle = '#1c1c1e'; c.fillText(s, x + 86, ry)
+        c.beginPath(); c.arc(x + w - 52, ry, 20, 0, Math.PI * 2)
+        const tk = tickU(i)
+        if (tk > 0) { c.fillStyle = '#F2C14E'; c.fill(); c.save(); c.globalAlpha = xf.a; tick(c, x + w - 54, ry + 2, 0.6, '#fff', tk, 5); c.restore() } else { c.lineWidth = 3; c.strokeStyle = '#cfcfd4'; c.stroke() }
+      })
+      c.restore()
+    } else if (id === 'cozy') {
+      const cp = inProg(look, t, P.at[0]), xf = cardXf(look, cp, q), w = 660, h = 40 + rowH * 3
+      c.save(); applyXf(c, xf, x + w / 2, y + h / 2)
+      shadow(g, c, 22, 'rgba(50,30,10,.4)', 8); c.fillStyle = '#F3E6CF'; c.fillRect(x, y, w, h); noShadow(c)
+      c.strokeStyle = 'rgba(111,143,176,.35)'; c.lineWidth = 2; for (let i = 1; i <= 3; i++) { c.beginPath(); c.moveTo(x, y + 20 + rowH * i); c.lineTo(x + w, y + 20 + rowH * i); c.stroke() }
+      c.strokeStyle = 'rgba(217,140,122,.7)'; c.beginPath(); c.moveTo(x + 78, y); c.lineTo(x + 78, y + h); c.stroke()
+      ITEMS.forEach((s, i) => {
+        if (t < P.at[i]) return
+        const ry = y + 20 + rowH * i + rowH / 2
+        c.globalAlpha = xf.a * clamp((t - P.at[i]) / 200) * dimOf(i)
+        c.font = F.cav(700, 58); c.fillStyle = '#3A2E22'; c.fillText(`${i + 1}. ${s.toLowerCase()}`, x + 100, ry)
+        c.globalAlpha = xf.a; tick(c, x + 40, ry + 4, 0.9, '#C8764F', tickU(i), 6)
+      })
+      c.restore()
+    } else if (id === 'cinematic') {
+      shadow(g, c, 14, 'rgba(0,0,0,.4)')
+      ITEMS.forEach((s, i) => {
+        if (t < P.at[i]) return
+        const a = inProg(look, t, P.at[i]), ry = y + 40 + rowH * i
+        c.globalAlpha = a * dimOf(i) * (1 - q)
+        c.font = F.gar(500, 54, 1); c.fillStyle = '#E9D8B8'; c.fillText(String(i + 1), x, ry)
+        c.font = F.gar(400, 54); c.fillStyle = '#fff'; c.fillText(s, x + 58, ry)
+        c.fillStyle = 'rgba(255,255,255,.5)'; c.fillRect(x + 58, ry + 38, 120 * a, 1.5)
+      })
+    } else if (id === 'film') {
+      const w = 680, h = 70 + rowH * 3
+      c.save(); c.translate(x + w / 2, y + h / 2); c.rotate(1 * RAD); c.scale(lerp(1.1, 1, inProg(look, t, P.at[0])), lerp(1.1, 1, inProg(look, t, P.at[0]))); c.translate(-(x + w / 2), -(y + h / 2))
+      shadow(g, c, 16, 'rgba(0,0,0,.4)', 6); c.fillStyle = '#F5EEDC'; c.fillRect(x, y, w, h); noShadow(c)
+      c.fillStyle = '#D2412E'; c.fillRect(x, y + 58, w, 3)
+      c.strokeStyle = 'rgba(120,150,190,.45)'; c.lineWidth = 1.5; for (let i = 1; i <= 3; i++) { c.beginPath(); c.moveTo(x, y + 58 + rowH * i); c.lineTo(x + w, y + 58 + rowH * i); c.stroke() }
+      c.font = F.cou(700, 26); c.fillStyle = '#8a8070'; c.fillText('9.25.26', x + 30, y + 32)
+      ITEMS.forEach((s, i) => {
+        if (t < P.at[i]) return
+        const ry = y + 58 + rowH * i + rowH / 2
+        c.globalAlpha = dimOf(i); c.font = F.cou(700, 40); c.fillStyle = '#2B2520'; c.fillText(`${i + 1}. ${s.toLowerCase()}`, x + 90, ry)
+        c.globalAlpha = 1; tick(c, x + 46, ry + 4, 0.9, '#D2412E', Math.ceil(tickU(i) * 3) / 3, 7)
+      })
+      c.restore()
+    } else if (id === 'playful') {
+      const cols = ['#FF6FA8', '#7BD3F7', '#FFD84D']
+      ITEMS.forEach((s, i) => {
+        if (t < P.at[i]) return
+        const p = inProg(look, t, P.at[i]), e = Math.max(0, p * (1 - q)), ry = y + 50 + (rowH + 10) * i
+        c.save(); c.globalAlpha = clamp(e * 3) * dimOf(i); c.translate(x + 40, ry); c.scale(lerp(0.4, 1, e), lerp(0.4, 1, e)); c.translate(-(x + 40), -ry)
+        shadow(g, c, 12, 'rgba(0,0,0,.3)', 4)
+        c.beginPath(); c.arc(x + 40, ry, 38, 0, Math.PI * 2); c.fillStyle = cols[i]; c.fill(); noShadow(c)
+        c.font = F.pop(900, 42); c.textAlign = 'center'; c.fillStyle = i === 2 ? '#1d1400' : '#fff'; c.fillText(String(i + 1), x + 40, ry + 2)
+        c.textAlign = 'left'; shadow(g, c, 12, 'rgba(0,0,0,.5)', 2); c.font = F.pop(800, 46); c.fillStyle = '#fff'; c.fillText(s, x + 98, ry + 2)
+        const tk = tickU(i)
+        if (tk > 0) { const b = CURVE.back(tk), tx = x + 120 + c.measureText(s).width; noShadow(c); c.beginPath(); c.arc(tx, ry, 24 * b, 0, Math.PI * 2); c.fillStyle = '#fff'; c.fill(); tick(c, tx - 2, ry + 2, 0.55 * b, '#2eb872', 1, 6) }
+        c.restore()
+      })
+    }
+    c.restore()
+  },
+}
+
+// 10 · Closing title ---------------------------------------------------
+EL[10] = {
+  name: 'Closing title', fam: 'Close', badge: 'canvas', status: 'extend',
+  when: 'Long vertical: the last 2 s. Never on Short, never in YouTube’s last 20 s.',
+  from: 'The video’s title', render: 'Canvas · overlayDraw.ts — restyles the end card',
+  img: { p: 't41', w: 't41' },
+  style: { clean: 'Bold sans', cozy: 'Handwritten', quiet: 'Serif italic', cinematic: 'Serif, slow fade', film: 'Typewriter, running out like a projector', playful: 'Rounded bold', hype: 'Condensed caps' },
+  sfx: { cinematic: 'low riser' },
+  plan() {
+    if (env.fmt === 'short') return { ...NOT('Short ends on the payoff.', 'No closing title and no end card — the last shot is the ending.'), byFormat: true }
+    const t0 = snapHit(2000)
+    const keys = [{ t: 2000, l: 'Dim 0 → 20% over 400 ms' }, { t: t0, l: 'Title in' }]
+    if (env.look.id === 'film') keys.push({ t: 3100, l: 'Runs out — flicker' })
+    keys.push({ t: 3600, l: 'Fades to black by 4000' })
+    return { t0, keys, sfxT: t0 }
+  },
+  draw(g, t, P) {
+    // the title sits in the night sky, above the lit library
+    const c = g.c, look = g.look, id = look.id, cx = g.W / 2, cy = g.wide ? 230 : 390
+    fillAll(c, g, '#000', 0.2 * clamp((t - 2000) / 400))
+    if (t >= P.t0) {
+      const p = id === 'cinematic' ? CURVE.inout(clamp((t - P.t0) / 1400)) : inProg(look, t, P.t0), xf = cardXf(look, p, 0)
+      c.save(); c.textAlign = 'center'; c.textBaseline = 'middle'; shadow(g, c, 18, 'rgba(0,0,0,.45)', 2)
+      applyXf(c, xf, cx, cy)
+      if (id === 'film' && t > 3100) c.globalAlpha *= clamp(1 - (t - 3100) / 500) * (0.55 + 0.45 * rnd(Math.floor(t / 42)))
+      if (id === 'clean') { c.font = F.int(600, g.wide ? 84 : 72); c.fillStyle = '#fff'; c.fillText('A day out with Sarah', cx, cy) }
+      else if (id === 'cozy') { c.font = F.cav(700, 118); c.fillStyle = '#F6EBD9'; if (g.wide) c.fillText('a day out with sarah', cx, cy); else { c.fillText('a day out', cx, cy - 62); c.fillText('with sarah', cx, cy + 62) } }
+      else if (id === 'quiet') { c.font = F.gar(400, 84, 1); c.fillStyle = '#EFE8DD'; c.fillText('A day out with Sarah', cx, cy) }
+      else if (id === 'cinematic') { c.font = F.gar(400, 70); c.fillStyle = '#fff'; c.fillText('A day out with Sarah', cx, cy); c.fillStyle = 'rgba(255,255,255,.6)'; c.fillRect(cx - 60 * p, cy + 64, 120 * p, 1.5) }
+      else if (id === 'film') { c.font = F.cou(700, 60); c.fillStyle = '#F5EEDC'; c.fillText('a day out with sarah', cx, cy) }
+      else if (id === 'playful') { noShadow(c); shadow(g, c, 0, 'rgba(70,30,0,.45)', 9); c.font = F.pop(900, 84); c.fillStyle = '#FFD84D'; if (g.wide) c.fillText('A day out with Sarah', cx, cy); else { c.fillText('A day out', cx, cy - 50); c.fillText('with Sarah', cx, cy + 50) } }
+      else if (id === 'hype') { c.font = F.ant(g.wide ? 150 : 160); c.fillStyle = '#fff'; if (g.wide) c.fillText('A DAY OUT WITH SARAH', cx, cy); else { c.fillText('A DAY OUT', cx, cy - 84); c.fillText('WITH SARAH', cx, cy + 84) } }
+      c.restore()
+    }
+    fillAll(c, g, '#000', clamp((t - 3600) / 400))
+  },
+}
+
+// 11 · Slow push -------------------------------------------------------
+const PUSH = { clean: { to: 1.04, d: 4000 }, cozy: { to: 1.05, d: 4500 }, cinematic: { to: 1.06, d: 6000 }, playful: { to: 1.06, d: 2500 }, hype: { to: 1.06, d: 2000 } }
+EL[11] = {
+  name: 'Slow push', fam: 'Camera', badge: 'ffmpeg', status: 'engine',
+  when: 'Held shots of 2.5 s or more; one direction for the whole video.',
+  from: '—', render: 'ffmpeg perspective (cubic) from the 4K source — replaces remix PUNCH and zoompan',
+  img: { p: 't24', w: 'heroC' },
+  style: { clean: '1.00 → 1.04 over 4 s', cozy: '1.00 → 1.05 over 4.5 s', quiet: '', cinematic: '1.00 → 1.06 over 6 s — the tile shows the first 4 s', film: '', playful: '1.00 → 1.06 over 2.5 s', hype: '1.00 → 1.06 over 2 s' },
+  plan() {
+    const id = env.look.id
+    if (id === 'quiet') return NOT('Not used in Quiet.', 'Quiet holds the frame still.')
+    if (id === 'film') return NOT('Not used in Film.', 'Film keeps the handheld as it was filmed.')
+    const pu = PUSH[id], end = Math.min(pu.d, env.L)
+    const reach = 1 + (pu.to - 1) * CURVE.inout(clamp(env.L / pu.d))
+    return { pu, keys: [{ t: 0, l: '1.00 · origin 50% 40%' }, { t: end, l: pu.d <= env.L ? `${pu.to.toFixed(2)} — then holds` : `${reach.toFixed(3)} at the loop (→ ${pu.to} at ${pu.d / 1000} s)` }] }
+  },
+  foot(g, t, P) { const s = P.plate ? 1 : 1 + (P.pu.to - 1) * CURVE.inout(clamp(t / P.pu.d)); still(g, this.key(), { s, ox: 0.5, oy: 0.4 }) },
+}
+
+// 12 · Zoom-in ---------------------------------------------------------
+const ZOOM = { clean: 1.1, playful: 1.1, hype: 1.2 }
+EL[12] = {
+  name: 'Zoom-in', fam: 'Camera', badge: 'ffmpeg', status: 'engine',
+  when: 'Talking, at idea changes; Hype and Playful on beats.',
+  from: '—', render: 'ffmpeg crop from the 4K source (free), anchored on the face',
+  img: { p: ['t28', 't29'], w: ['t28', 't29'] },
+  style: { clean: '110%, alternating with 100%', cozy: '', quiet: '', cinematic: '', film: '', playful: '110%', hype: '120%, with a decaying shake on the drop' },
+  sfx: { playful: 'bubble pop', hype: 'impact' },
+  plan() {
+    const id = env.look.id
+    if (!ZOOM[id]) return NOT(`Not used in ${VNAME(id)}.`, { cozy: 'Cozy never zooms in.', quiet: 'Quiet never zooms in.', cinematic: 'Cinematic moves slowly — no zoom-ins.', film: 'Film keeps the handheld as it was filmed.' }[id])
+    const J = 1200, C = snapCut(3200), keys = [{ t: 0, l: 'Shot A at 1.00' }, { t: J, l: `Jumps to ${ZOOM[id].toFixed(2)} on the beat — no easing` }]
+    if (id === 'hype') keys.push({ t: J + 267, l: 'Shake decays by 1467' })
+    keys.push({ t: C, l: 'Cut to shot B at 1.00' })
+    return { J, C, z: ZOOM[id], keys, sfxT: J }
+  },
+  foot(g, t, P) {
+    const [A, B] = this.key()
+    if (P.plate) { still(g, A); return }
+    if (t >= P.C) { still(g, B); return }
+    const fc = faceCentre(A), s = t >= P.J ? P.z : 1
+    let dx = 0
+    if (g.look.id === 'hype' && t >= P.J && t < P.J + 267) { const u = t - P.J; dx = 20 * Math.exp(-u / 80) * Math.sin((2 * Math.PI * 11 * u) / 1000) }
+    still(g, A, { s, ox: fc.x, oy: fc.y, dx })
+  },
+}
+
+// 13 · Freeze + label --------------------------------------------------
+EL[13] = {
+  name: 'Freeze + label', fam: 'Peak', badge: 'mix', status: 'new',
+  when: 'Only when the creator adds it — proposed in the Part tab under Moments.',
+  from: 'A typed name or place', render: 'ffmpeg loop (source span shortens, frame count unchanged) + Canvas label',
+  img: { p: ['t12', 't13'], w: ['t12', 't13'] },
+  style: { clean: 'Dim, plus a small sans label', cozy: 'Sepia, a handwritten name and a doodle arrow', quiet: '', cinematic: 'Slow desaturate, serif name, silent', film: 'Black and white, typed name', playful: 'Record scratch, sticker tag, doodle arrow', hype: 'Name slams in with a 2-frame flash' },
+  sfx: { cozy: 'pencil', film: 'shutter', playful: 'record scratch', hype: 'impact' },
+  plan() {
+    const look = env.look, id = look.id
+    if (id === 'quiet') return NOT('Not used in Quiet.', 'Quiet never stops the moment.')
+    const F0 = snapCut(1000), lab = snapHit(F0 + 150), back = snapCut(2600)
+    const keys = [{ t: 0, l: 'A slow push stands in for motion' }, { t: F0, l: id === 'cinematic' ? 'Freeze · slow desaturate' : 'Freeze · colour drops over 200 ms' }, { t: lab, l: 'Name label in' }]
+    if (id === 'cozy' || id === 'playful') keys.push({ t: lab + look.dur, l: 'Doodle arrow draws · 300 ms' })
+    keys.push({ t: back, l: 'Colour snaps back · cut to B' })
+    return { F0, lab, back, keys, sfxT: F0 }
+  },
+  foot(g, t, P) {
+    const [A, B] = this.key()
+    if (P.plate) { still(g, A); return }
+    if (t >= P.back) { still(g, B); return }
+    still(g, A, { s: 1 + 0.04 * CURVE.inout(clamp(t / 2600)), ox: 0.62, oy: 0.35 })
+    if (t < P.F0) return
+    const id = g.look.id, u = clamp((t - P.F0) / 200), f = g.f
+    if (id === 'clean') { blend(f, g, 'saturation', '#808080', 0.45 * u); fillAll(f, g, '#000', 0.3 * u) }
+    else if (id === 'cozy') { blend(f, g, 'saturation', '#808080', 0.6 * u); blend(f, g, 'color', '#a07a4c', 0.55 * u); fillAll(f, g, '#1a0f05', 0.15 * u) }
+    else if (id === 'cinematic') { const v = clamp((t - P.F0) / 600); blend(f, g, 'saturation', '#808080', 0.85 * v); fillAll(f, g, '#000', 0.2 * v) }
+    else if (id === 'film') { blend(f, g, 'saturation', '#808080', u); fillAll(f, g, '#000', 0.08 * u) }
+    else if (id === 'playful') { blend(f, g, 'saturation', '#808080', 0.3 * u); fillAll(f, g, '#000', 0.15 * u) }
+    else if (id === 'hype') { blend(f, g, 'saturation', '#808080', 0.7 * u); fillAll(f, g, '#000', 0.3 * u) }
+  },
+  draw(g, t, P) {
+    if (t >= P.back) return
+    const c = g.c, id = g.look.id, x = g.wide ? 96 : 120, y = g.wide ? 690 : 1130
+    if (id === 'hype' && t >= P.F0 && t < P.F0 + 67) fillAll(c, g, '#fff', 0.8 * (1 - (t - P.F0) / 67))
+    if (id === 'film') {
+      if (t >= P.lab) { c.save(); c.textBaseline = 'top'; c.font = F.cou(700, 48); c.fillStyle = '#F5EEDC'; shadow(g, c, 10, 'rgba(0,0,0,.6)'); const n = Math.min(5, Math.floor((t - P.lab) / stag(40)) + 1); c.fillText('sarah'.slice(0, n), x, y); c.restore() }
+    } else if (id === 'cinematic') {
+      const a = CURVE.inout(clamp((t - P.lab) / 1000))
+      if (a > 0) { c.save(); c.textBaseline = 'top'; c.globalAlpha = a; shadow(g, c, 12, 'rgba(0,0,0,.5)'); c.font = F.gar(400, 64, 1); c.fillStyle = '#fff'; c.fillText('Sarah', x, y); c.restore() }
+    } else {
+      nameTag(g, c, t, P.lab, P.lab + stag(100), P.back + 100, x, y, 'Sarah', '@sarahvlogs')
+    }
+    if (id === 'cozy' || id === 'playful') {
+      const tg = g.wide ? { x: 0.8 * g.W, y: 0.3 * g.H } : { x: 0.8 * g.W, y: 0.31 * g.H }
+      const x0 = id === 'cozy' ? x + 250 : x + 380, y0 = y - 20
+      doodleArrow(c, x0, y0, tg.x, tg.y, id === 'cozy' ? '#F6EBD9' : '#FFD84D', clamp((t - P.lab - g.look.dur) / 300), 8)
+    }
+  },
+}
+
+// 14 · Soft fade -------------------------------------------------------
+const FADE = { cozy: { n: 8, fb: 'a warm light leak' }, quiet: { n: 36, fb: 'a dip to black' }, cinematic: { n: 36, fb: 'a dip to black' }, film: { n: 12, fb: 'a light leak', grey: true } }
+EL[14] = {
+  name: 'Soft fade', fam: 'Join', badge: 'ffmpeg', status: 'exists',
+  when: 'Part changes (Cozy); the long fade only between matching compositions (Quiet, Cinematic).',
+  from: '—', render: 'ffmpeg xfade=fade — needs spare footage, otherwise the vibe’s fallback',
+  img: { p: ['t14', 't15'], w: ['t14', 't15'] },
+  style: { clean: '', cozy: '8 frames', quiet: '36 frames, matching compositions only', cinematic: '36 frames, matching compositions only', film: 'A grey fade, 12 frames', playful: '', hype: '' },
+  plan() {
+    const id = env.look.id, C = snapCut(2000), v = FADE[id]
+    if (!v) return { C, pill: 'A straight cut', note: { clean: 'Clean never softens a join — a straight cut.', playful: 'Playful saves its one special join for a pastel flash — a straight cut here.', hype: 'Hype’s special join is the whip — a straight cut here.' }[id], keys: [{ t: C, l: 'Straight cut' }] }
+    const d = (v.n / 30) * 1000
+    return { C, v, s: C - d / 2, e: C + d / 2, fallback: `Needs ${v.n} frames of spare footage each side — otherwise: ${v.fb}.`, keys: [{ t: C - d / 2, l: `${v.grey ? 'Grey fade' : 'Fade'} starts · ${v.n} f` }, { t: C, l: 'Midpoint' }, { t: C + d / 2, l: 'Shot B, full' }] }
+  },
+  foot(g, t, P) {
+    const [A, B] = this.key()
+    if (!P.v) { still(g, t < P.C ? A : B); return }
+    const u = clamp((t - P.s) / (P.e - P.s))
+    if (u <= 0) { still(g, A); return }
+    if (u >= 1) { still(g, B); return }
+    still(g, A); still(g, B, { alpha: u })
+    if (P.v.grey) blend(g.f, g, 'saturation', '#808080', Math.sin(Math.PI * u))
+  },
+}
+
+// 15 · Dip -------------------------------------------------------------
+const DIP = { clean: { col: '#000', name: 'black', n: 14, longOnly: true }, cozy: { col: '#F3E6CF', name: 'cream', n: 14 }, quiet: { col: '#000', name: 'black', n: 18 }, cinematic: { col: '#000', name: 'black', n: 18 }, film: { col: '#77716a', name: 'grey', n: 14 } }
+EL[15] = {
+  name: 'Dip', fam: 'Join', badge: 'ffmpeg', status: 'exists',
+  when: 'Day or chapter changes, and the fallback when there’s no spare footage.',
+  from: '—', render: 'ffmpeg fade color= — needs no spare footage',
+  img: { p: ['t36', 't37'], w: ['t36', 't37'] },
+  style: { clean: 'Black, 14 frames (long formats)', cozy: 'Cream, 14 frames', quiet: 'Black, 18 frames', cinematic: 'Black, 18 frames', film: 'Grey, 14 frames', playful: '', hype: '' },
+  plan() {
+    const id = env.look.id, C = snapCut(2000), v = DIP[id]
+    if (!v) return { C, pill: 'A straight cut', note: id === 'playful' ? 'Playful never dips — its part change is a pastel flash.' : 'Hype never dips — its part change is a whip or a white flash.', keys: [{ t: C, l: 'Straight cut' }] }
+    if (v.longOnly && env.fmt === 'short') return { C, pill: 'A straight cut on Short', note: 'Clean dips to black only at day changes in long videos; a Short gets a straight cut.', keys: [{ t: C, l: 'Straight cut' }] }
+    const side = v.n === 18 ? 8 : 6, o = (side / 30) * 1000
+    return { C, v, o, keys: [{ t: C - o, l: `A fades to ${v.name} · ${side} f` }, { t: C, l: `Holds ${v.name} · 2 f` }, { t: C + 67, l: `B fades up · ${side} f` }, { t: C + 67 + o, l: 'Shot B, full' }] }
+  },
+  foot(g, t, P) {
+    const [A, B] = this.key()
+    if (!P.v) { still(g, t < P.C ? A : B); return }
+    if (t < P.C) { still(g, A); fillAll(g.f, g, P.v.col, clamp((t - (P.C - P.o)) / P.o)) }
+    else if (t < P.C + 67) fillAll(g.f, g, P.v.col, 1)
+    else { still(g, B); fillAll(g.f, g, P.v.col, 1 - clamp((t - P.C - 67) / P.o)) }
+  },
+}
+
+// 16 · Flash -----------------------------------------------------------
+const FLASH = { film: { col: '#FFF1DC', n: 4, name: 'Warm white' }, playful: { col: '#FFF4D6', n: 4, name: 'Pastel' }, hype: { col: '#FFFFFF', n: 3, name: 'White' } }
+EL[16] = {
+  name: 'Flash', fam: 'Join / peak', badge: 'canvas', status: 'exists',
+  when: 'Playful and Hype on downbeats; Film only on real flash or night clips. At most 3 a second.',
+  from: '—', render: 'Canvas alpha-white frames',
+  img: { p: ['t40', 't41'], w: ['t40', 't41'] },
+  style: { clean: '', cozy: '', quiet: '', cinematic: '', film: 'Warm white, 4 frames — night clips only (these are)', playful: 'Pastel, 4 frames, on a downbeat', hype: 'White, 3 frames, on the drop' },
+  sfx: { film: 'shutter', playful: 'ding', hype: 'impact' },
+  plan() {
+    const id = env.look.id, C = snapCut(2000), v = FLASH[id]
+    if (!v) return { C, pill: 'A straight cut', note: { clean: 'Clean doesn’t flash — a straight cut.', cozy: 'Cozy doesn’t flash — it uses a warm leak.', quiet: 'Quiet doesn’t flash — a straight cut.', cinematic: 'Cinematic doesn’t flash — it dips to black.' }[id], keys: [{ t: C, l: 'Straight cut' }] }
+    const down = (v.n - 1) * 33.3
+    return { C, v, down, keys: [{ t: C, l: `Cut to B · ${v.name.toLowerCase()} up in 1 f` }, { t: C + 33, l: `Down over ${v.n - 1} f` }], sfxT: C }
+  },
+  foot(g, t, P) { const [A, B] = this.key(); still(g, t < P.C ? A : B) },
+  draw(g, t, P) {
+    if (!P.v || t < P.C || t >= P.C + 33 + P.down) return
+    fillAll(g.c, g, P.v.col, t < P.C + 33 ? (t - P.C) / 33 : 1 - (t - P.C - 33) / P.down)
+  },
+}
+
+// 17 · Light leak ------------------------------------------------------
+const LEAK = { cozy: { rgb: [255, 179, 138], a: 0.5, name: 'Peach at 50%' }, cinematic: { rgb: [255, 186, 90], a: 0.35, name: 'Amber at 35%, rare' }, film: { rgb: [255, 122, 26], a: 0.8, name: 'Orange-red at 80%' } }
+function leakBlob(c, g, cx, cy, r, rgb, a) {
+  if (a <= 0) return
+  const [R, G, B] = rgb
+  let gr = c.createRadialGradient(cx, cy, 0, cx, cy, r)
+  gr.addColorStop(0, `rgba(${R},${G},${B},${a})`); gr.addColorStop(0.45, `rgba(${R},${Math.round(G * 0.8)},${Math.round(B * 0.6)},${a * 0.55})`); gr.addColorStop(1, `rgba(${R},${G},${B},0)`)
+  c.fillStyle = gr; c.fillRect(0, 0, g.W, g.H)
+  gr = c.createRadialGradient(cx, cy, 0, cx, cy, r * 0.35)
+  gr.addColorStop(0, `rgba(255,238,205,${a * 0.7})`); gr.addColorStop(1, 'rgba(255,238,205,0)')
+  c.fillStyle = gr; c.fillRect(0, 0, g.W, g.H)
+}
+EL[17] = {
+  name: 'Light leak', fam: 'Join / texture', badge: 'ffmpeg', status: 'new',
+  when: 'Film and Cozy, over a cut at part changes. Needs no spare footage.',
+  from: '—', render: 'ffmpeg procedural gradients, screen blend in RGB — finish pass',
+  img: { p: ['t37', 't40'], w: ['t37', 't40'] },
+  style: { clean: '', cozy: 'Peach at 50%', quiet: '', cinematic: 'Amber at 35%, rare', film: 'Orange-red at 80%', playful: '', hype: '' },
+  plan() {
+    const id = env.look.id, C = snapCut(2000), v = LEAK[id]
+    if (!v) return { C, pill: 'A straight cut', note: { clean: 'Clean uses no light leaks — a straight cut.', quiet: 'Quiet uses no light leaks — a straight cut.', playful: 'Playful uses no leaks — a pastel flash at part changes instead.', hype: 'Hype uses no leaks — a white flash instead.' }[id], keys: [{ t: C, l: 'Straight cut' }] }
+    const s = C - 300
+    return { C, v, s, keys: [{ t: s, l: `Enters from the ${env.wide ? 'left' : 'top'} edge` }, { t: s + 250, l: `Reaches ${v.a}` }, { t: C, l: 'Peak · cut to B under it' }, { t: C + 350, l: 'Gone' }] }
+  },
+  foot(g, t, P) { const [A, B] = this.key(); still(g, t < P.C ? A : B) },
+  light(g, t, P) {
+    if (!P.v || t < P.s || t > P.C + 350) return
+    const u = t - P.s, a = P.v.a * (t < P.s + 250 ? u / 250 : t < P.C ? 1 : 1 - (t - P.C) / 350), dr = smooth(clamp(u / 600)) * 0.3
+    if (g.wide) leakBlob(g.l, g, (-0.12 + dr) * g.W, 0.42 * g.H, 0.62 * g.W, P.v.rgb, a)
+    else leakBlob(g.l, g, 0.62 * g.W, (-0.12 + dr) * g.H, 0.95 * g.W, P.v.rgb, a)
+  },
+}
+
+// 18 · Whip ------------------------------------------------------------
+const WHIP = { cinematic: { n: 10, sound: 'silent', fb: 'a dip to black' }, hype: { n: 8, sound: 'with a whoosh', fb: 'a white flash' } }
+EL[18] = {
+  name: 'Whip', fam: 'Join', badge: 'ffmpeg', status: 'new',
+  when: 'Trips, at a change of place, when both shots move the same way.',
+  from: '—', render: 'ffmpeg hstack + eased crop + avgblur via sendcmd — costs the same as a cut',
+  img: { p: ['t33', 't37'], w: ['t33', 't37'] },
+  style: { clean: '', cozy: '', quiet: '', cinematic: '10 frames, silent', film: '', playful: '', hype: '8 frames with a whoosh' },
+  sfx: { hype: 'whoosh' },
+  plan() {
+    const id = env.look.id, C = snapCut(2000), v = WHIP[id]
+    if (!v) return { C, pill: 'A straight cut', note: id === 'film' ? 'Film doesn’t whip — it lays a light leak over the cut instead.' : `${VNAME(id)} doesn’t whip — a straight cut.`, keys: [{ t: C, l: 'Straight cut' }] }
+    const d = (v.n / 30) * 1000
+    return { C, v, s: C - d / 2, e: C + d / 2, fallback: `Needs 0.3 s of spare footage — otherwise: ${v.fb}.`, keys: [{ t: C - d / 2, l: `Whip starts · ${v.n} f, smoothstep` }, { t: C, l: 'Blur peaks — the cut hides in it' }, { t: C + d / 2, l: 'Lands on B' }], sfxT: id === 'hype' ? C : null }
+  },
+  foot(g, t, P) {
+    const [A, B] = this.key()
+    if (!P.v) { still(g, t < P.C ? A : B); return }
+    if (t < P.s) { still(g, A); return }
+    if (t >= P.e) { still(g, B); return }
+    const u = (t - P.s) / (P.e - P.s), off = -g.W * smooth(u), v = (g.W * 6 * u * (1 - u)) / P.v.n, blur = v * 0.5, N = 9
+    for (let i = 0; i < N; i++) {
+      const o = off + (i / (N - 1) - 0.5) * blur, a = 1 / (i + 1)
+      still(g, A, { dx: o, alpha: a }); still(g, B, { dx: o + g.W, alpha: a })
+    }
+  },
+}
+
+// 19 · The sound carries across the cut ------------------------------
+function wave(seed, i) { const env2 = 0.35 + 0.65 * Math.abs(Math.sin(i * 0.23 + seed) * Math.sin(i * 0.071 + seed * 2)); return clamp(env2 * (0.55 + 0.45 * rnd(i * 3.1 + seed))) }
+EL[19] = {
+  name: 'The sound carries across the cut', fam: 'Join (sound)', badge: 'ffmpeg', status: 'engine',
+  when: 'Where speech or place sound goes on across a cut — possible at about half of cuts after trims.',
+  from: '—', render: 'ffmpeg audio from source handles — the picture is unchanged (P10)',
+  img: { p: ['t38', 't39'], w: ['t38', 't39'] },
+  style: { clean: 'The same in every vibe', cozy: 'The same in every vibe', quiet: 'The same in every vibe', cinematic: 'The same in every vibe', film: 'The same in every vibe', playful: 'The same in every vibe', hype: 'The same in every vibe' },
+  plan() {
+    const C = snapCut(2000)
+    if (env.jl === 'J') return { C, a1: C, b0: C - 333, lead: 'Sound leads by 0.33 s', keys: [{ t: C - 333, l: 'Shot B’s sound starts under A' }, { t: C, l: 'Picture cuts' }] }
+    return { C, a1: C + 500, b0: C, lead: 'Sound trails by 0.5 s', keys: [{ t: C, l: 'Picture cuts' }, { t: C + 500, l: 'Shot A’s sound ends' }] }
+  },
+  foot(g, t, P) { const [A, B] = this.key(); still(g, t < P.C ? A : B) },
+  live(t, P) { if (env.jl === 'J') return t >= P.b0 && t < P.C ? 'You hear shot B before you see it' : ''; return t >= P.C && t < P.a1 ? 'You still hear shot A' : '' },
+}
+function drawLanes(cv, t, P, L, big) {
+  if (!cv || !P) return
+  const dpr = Math.min(2, window.devicePixelRatio || 1), w = cv.clientWidth, h = cv.clientHeight
+  if (!w) return
+  if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr) }
+  const c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h)
+  const lab = big ? 62 : 0, X = (ms) => lab + ((w - lab - 6) * ms) / L
+  const py = big ? 10 : 5, ph = big ? 18 : 12, sy = big ? 38 : 22, sh = big ? 28 : 18
+  c.font = `600 ${big ? 10 : 9}px ${SANS}`; c.fillStyle = '#72695d'
+  if (big) { c.fillText('PICTURE', 8, py + 12); c.fillText('SOUND', 8, sy + sh / 2 + 4) }
+  c.fillStyle = '#3a342c'; rr(c, X(0), py, X(P.C) - X(0) - 1, ph, 3); c.fill()
+  c.fillStyle = '#4d4539'; rr(c, X(P.C) + 1, py, X(L) - X(P.C) - 1, ph, 3); c.fill()
+  c.fillStyle = '#efe8dd'; c.font = `600 ${big ? 11 : 9}px ${SANS}`; c.fillText('A', X(0) + 6, py + ph / 2 + 4); c.fillText('B', X(P.C) + 7, py + ph / 2 + 4)
+  const bars = (from, to, col, seed, a) => { c.fillStyle = col; c.globalAlpha = a; for (let x = X(from); x < X(to) - 1; x += 3) { const v = wave(seed, Math.round(x)); c.fillRect(x, sy + sh / 2 - (v * sh) / 2, 2, Math.max(1.5, v * sh)) } c.globalAlpha = 1 }
+  bars(0, P.a1, '#c9dcc1', 1.3, 0.9); bars(P.b0, L, '#e8c39e', 4.1, 0.9)
+  c.strokeStyle = '#e9c78f'; c.setLineDash([2, 2]); c.beginPath(); c.moveTo(X(P.C) + 0.5, py - 2); c.lineTo(X(P.C) + 0.5, sy + sh + 2); c.stroke(); c.setLineDash([])
+  if (big) { c.fillStyle = '#e9c78f'; c.font = `500 11px ${SANS}`; c.textAlign = 'right'; c.fillText(P.lead, w - 8, py + ph / 2 + 4); c.textAlign = 'left' }
+  c.fillStyle = '#efe8dd'; c.fillRect(X(t) - 1, 0, 2, h)
+}
+
+// 20 · Atmosphere ------------------------------------------------------
+EL[20] = {
+  name: 'Atmosphere', fam: 'Texture', badge: 'mix', status: 'new',
+  when: 'The whole video, per vibe and format.',
+  from: '—', render: 'Vignette: one Canvas PNG · leak and glow: ffmpeg finish pass after the LUT · grain on twos, 16:9 only',
+  img: { p: 't17', w: 't17' },
+  style: { clean: 'None', cozy: 'Vignette and a warm leak drifting on a 13 s loop', quiet: 'A faint vignette (20%)', cinematic: 'Vignette; grain on twos on 16:9', film: 'Leak and vignette; grain on twos on 16:9', playful: 'Highlight glow', hype: 'None' },
+  plan() {
+    const id = env.look.id
+    if (id === 'clean' || id === 'hype') return { pill: 'No texture', note: `${VNAME(id)} adds no texture — just the footage, graded.`, keys: [{ t: 0, l: 'Nothing on top' }] }
+    const drift = id === 'cozy' || id === 'film'
+    const keys = []
+    if (drift) { keys.push({ t: 0, l: 'Leak drifts · 13 s loop' }, { t: 4700, l: 'Opacity .15 ↔ .3 every 4.7 s' }, { t: 9400, l: 'Opacity peaks again' }) }
+    else keys.push({ t: 0, l: id === 'playful' ? 'Glow: blur + brighten, screen at .4' : 'Static vignette — one PNG' })
+    if ((id === 'cinematic' || id === 'film') && env.wide) keys.push({ t: 83, l: 'Grain re-seeds every 83 ms' })
+    if ((id === 'cinematic' || id === 'film') && !env.wide) keys.push({ t: 1000, l: 'No grain on 9:16' })
+    return { drift, L: drift ? (env.beat ? 13200 : 13000) : undefined, keys }
+  },
+  light(g, t, P) {
+    if (!P.drift) return
+    const film = g.look.id === 'film', ph = (2 * Math.PI * t) / 13000
+    const a = 0.15 + 0.15 * (0.5 - 0.5 * Math.cos((2 * Math.PI * t) / 4700))
+    const cx = g.W * (0.52 + 0.4 * Math.sin(ph)), cy = g.H * (0.26 + 0.2 * Math.sin(ph * 2 + 1))
+    leakBlob(g.l, g, cx, cy, (g.wide ? 0.55 : 0.85) * g.W, film ? [255, 110, 36] : [255, 164, 96], a * (film ? 1.4 : 1))
+  },
+}
+
+// ------------------------------------------------------------------ element bookkeeping
+for (const id in EL) {
+  const E = EL[id]; E.id = Number(id)
+  E.key = function () { return env.wide ? this.img.w : this.img.p }
+}
+const RENDER_BADGE = { canvas: ['rb', 'Drawn on Canvas'], ffmpeg: ['rb ff', 'Rendered by ffmpeg in export'], mix: ['rb mix', 'ffmpeg in export + Canvas'] }
+const STATUS = { exists: ['st st-exists', 'exists'], extend: ['st st-extend', 'extend'], new: ['st st-new', 'new'], engine: ['st st-engine', 'engine work'] }
+function styleLine(E) {
+  const id = env.look.id, s = E.style[id]
+  const P = planOf(E)
+  if (P.plate) return P.plate[1]
+  if (P.pill) return P.note || P.pill
+  let out = s || ''
+  if (P.fallback) out += (out ? '. ' : '') + P.fallback
+  return out
+}
+/** the caption's vibe line, with the vibe's name leading once */
+function vibeHTML(E) {
+  const n = env.look.name, s = styleLine(E), P = planOf(E)
+  if (P.byFormat) return `<b>${P.plate[0]}</b> ${s}`
+  if (s.startsWith(n)) return `<b>${n}</b>${s.slice(n.length)}`
+  if (P.plate) return `<b>${n}</b>${P.plate[0].startsWith('Not used') ? ' — not used. ' : ' ' + P.plate[0] + ' '}${s}`
+  return `<b>${n}</b> ${s}`
+}
+function planOf(E) {
+  const P = E.plan() || {}
+  P.L = P.L || env.L
+  P.keys = P.keys || []
+  P.sfx = E.sfx && E.sfx[env.look.id] && P.sfxT != null ? E.sfx[env.look.id] : null
+  return P
+}
+
+// ------------------------------------------------------------------ one live tile
+class Tile {
+  constructor(E, frame, extra = {}) {
+    this.E = E; this.frame = frame
+    const [f, l, c] = frame.querySelectorAll('canvas')
+    this.cv = { f, l, c }; this.ctx = { f: f.getContext('2d'), l: l.getContext('2d'), c: c.getContext('2d') }
+    this.plateEl = frame.querySelector('.plate'); this.pillEl = frame.querySelector('.pill'); this.liveEl = frame.querySelector('.live')
+    this.fill = extra.fill; this.marks = extra.marks; this.sfxEl = extra.sfxEl; this.lanes = extra.lanes; this.big = !!extra.big
+    this.t0 = performance.now(); this.pt = 0; this.visible = true; this.guides = false; this.k = 1; this.lastHit = null; this.lastLive = null
+    this.replan()
+  }
+  replan() {
+    this.P = planOf(this.E)
+    const P = this.P
+    if (this.plateEl) { this.plateEl.hidden = !P.plate; if (P.plate) { this.plateEl.querySelector('b').textContent = P.plate[0]; this.plateEl.querySelector('span').textContent = P.plate[1] } }
+    if (this.pillEl) { this.pillEl.hidden = !P.pill; if (P.pill) this.pillEl.textContent = P.pill }
+    if (this.marks) {
+      const L = P.L, parts = []
+      if (env.beat) for (let b = BEAT; b < L; b += BEAT) parts.push(`<span class="bt" style="left:${(b / L) * 100}%"></span>`)
+      for (const k of P.keys) parts.push(`<span class="kd" style="left:${(clamp(k.t, 0, L) / L) * 100}%" title="${k.t} ms · ${k.l.replace(/"/g, '&quot;')}"></span>`)
+      if (P.sfx) parts.push(`<span class="sx" style="left:${(P.sfxT / L) * 100}%" title="Sound: ${P.sfx}">♪</span>`)
+      this.marks.innerHTML = parts.join('')
+    }
+    if (this.sfxEl) { this.sfxEl.textContent = P.sfx ? `♪ ${P.sfx}` : 'Silent'; this.sfxEl.classList.toggle('has', !!P.sfx); this.sfxEl.title = P.sfx ? `Sound: ${P.sfx} — its attack lands on the hit` : 'No sound in this vibe' }
+    this.lastHit = null
+  }
+  resize() {
+    const r = this.frame.getBoundingClientRect()
+    if (!r.width) return
+    const dpr = Math.min(2, window.devicePixelRatio || 1), w = Math.round(r.width * dpr), h = Math.round(r.height * dpr)
+    for (const k of ['f', 'l', 'c']) if (this.cv[k].width !== w || this.cv[k].height !== h) { this.cv[k].width = w; this.cv[k].height = h }
+    this.k = w / (env.wide ? 1920 : 1080)
+  }
+  time(now) { if (env.paused || this.paused) return this.pt; return (((now - this.t0) * env.speed) % this.P.L + this.P.L) % this.P.L }
+  restart(now = performance.now()) { this.t0 = now; this.pt = 0; this.paused = false }
+  setTime(t) { this.pt = clamp(t, 0, this.P.L - 1); this.paused = true }
+  render(now) {
+    const E = this.E, P = this.P, t = this.time(now)
+    this.pt = t
+    const W = env.wide ? 1920 : 1080, H = env.wide ? 1080 : 1920
+    const g = { f: this.ctx.f, l: this.ctx.l, c: this.ctx.c, k: this.k, W, H, wide: env.wide, look: env.look, bright: !!E.bright }
+    for (const x of [g.f, g.l, g.c]) { x.setTransform(g.k, 0, 0, g.k, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = 'source-over'; x.textAlign = 'left'; x.textBaseline = 'alphabetic'; x.setLineDash([]); noShadow(x); x.clearRect(0, 0, W, H) }
+    g.f.fillStyle = '#000'; g.f.fillRect(0, 0, W, H)
+    if (E.foot) E.foot(g, t, P); else still(g, E.key())
+    // grain belongs to the finish pass: 16:9 only (§4.7)
+    if (env.wide && env.look.grain) { const n = noiseTiles()[Math.floor(t / 83) % 4]; g.f.save(); g.f.setTransform(1, 0, 0, 1, 0, 0); const pat = g.f.createPattern(n, 'repeat'); g.f.translate(Math.floor(rnd(Math.floor(t / 83)) * 160), 0); g.f.fillStyle = pat; g.f.fillRect(-160, 0, this.cv.f.width + 160, this.cv.f.height); g.f.restore() }
+    if (E.light) E.light(g, t, P)
+    // vignette: one static Canvas PNG, under the words
+    const vg = env.look.vignette
+    if (vg) { const c = g.c; c.save(); c.translate(W / 2, H / 2); c.scale(W / 2, H / 2); const gr = c.createRadialGradient(0, 0, 0, 0, 0, Math.SQRT2); gr.addColorStop(0.55, 'rgba(0,0,0,0)'); gr.addColorStop(1, `rgba(0,0,0,${vg})`); c.fillStyle = gr; c.fillRect(-1, -1, 2, 2); c.restore() }
+    if (P.plate) fillAll(g.f, g, '#0c0b09', 0.58)
+    else if (E.draw) E.draw(g, t, P)
+    if (this.guides) drawGuides(g, E)
+    if (this.fill) this.fill.style.transform = `scaleX(${t / P.L})`
+    if (this.sfxEl && P.sfx) { const hit = t >= P.sfxT && t < P.sfxT + 260; if (hit !== this.lastHit) { this.sfxEl.classList.toggle('hit', hit); this.lastHit = hit } }
+    if (this.liveEl) { const s = E.live ? E.live(t, P) : ''; if (s !== this.lastLive) { this.liveEl.textContent = s; this.liveEl.classList.toggle('on', !!s); this.lastLive = s } }
+    if (this.lanes) drawLanes(this.lanes, t, P, P.L, this.big)
+    return t
+  }
+}
+function drawGuides(g, E) {
+  const c = g.c, b = tbox(g), lw = 3 / Math.max(0.2, g.k) * 0.5
+  c.save(); c.lineWidth = Math.max(2, lw); c.setLineDash([14, 10])
+  c.strokeStyle = 'rgba(201,220,193,.9)'; c.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0)
+  c.setLineDash([])
+  c.font = `600 30px ${SANS}`; c.textBaseline = 'bottom'; c.fillStyle = 'rgba(201,220,193,.95)'; c.fillText('Words stay inside', b.x0, b.y0 - 8)
+  c.fillStyle = 'rgba(233,199,143,.16)'
+  if (!g.wide) { c.fillRect(780, 840, 300, 1080); c.fillStyle = 'rgba(233,199,143,.9)'; c.save(); c.translate(1050, 1500); c.rotate(-Math.PI / 2); c.textAlign = 'center'; c.fillText('App buttons', 0, 0); c.restore() }
+  else { c.fillRect(0, 810, g.W, 108); c.fillStyle = 'rgba(233,199,143,.9)'; c.textBaseline = 'middle'; c.fillText('YouTube’s own subtitles', 96, 864) }
+  if (E.id <= 10 || E.id === 13) {
+    const key = Array.isArray(E.key()) ? E.key()[0] : E.key()
+    c.strokeStyle = 'rgba(229,156,143,.95)'; c.setLineDash([10, 8]); c.fillStyle = 'rgba(229,156,143,.95)'; c.textBaseline = 'top'
+    for (const [x0, y0, x1, y1] of facesIn(key)) { c.strokeRect(x0 * g.W, clamp(y0) * g.H, (x1 - x0) * g.W, (clamp(y1) - clamp(y0)) * g.H); c.fillText('Face', x0 * g.W + 8, clamp(y0) * g.H + 8) }
+  }
+  c.restore()
+}
+
+// ------------------------------------------------------------------ build the page
+const $ = (s, el = document) => el.querySelector(s)
+const tiles = []
+function tileHTML(E) {
+  const [rbc, rbt] = RENDER_BADGE[E.badge], [stc, stt] = STATUS[E.status]
+  return `
+  <article class="tile" data-id="${E.id}">
+    <div class="frame" tabindex="0" role="button" aria-label="Enlarge ${E.name}">
+      <canvas class="cv-foot"></canvas><canvas class="cv-light"></canvas><canvas class="cv-over"></canvas>
+      <div class="fnote plate" hidden><b></b><span></span></div>
+      <div class="fnote pill" hidden></div>
+      <div class="fnote live"></div>
+      <button class="replay" title="Replay" aria-label="Replay ${E.name}">↺</button>
+    </div>
+    ${E.id === 19 ? '<canvas class="lanes"></canvas>' : ''}
+    <div class="tl"><div class="tl-fill"></div><div class="tl-marks"></div></div>
+    <div class="under"><span class="${rbc}">${rbt}</span><span class="sfx"></span></div>
+    <div class="meta">
+      <div class="m-top"><span class="m-num">${String(E.id).padStart(2, '0')}</span><h3>${E.name}</h3><span class="${stc}">${stt}</span></div>
+      <div class="m-fam">${E.fam}</div>
+      <p class="m-when">${E.when}</p>
+      <p class="m-vibe"></p>
+      <p class="m-render">${E.render}</p>
+      ${E.id === 19 ? '<div class="m-ctl"><div class="seg tiny jl"><button data-jl="J">Sound leads (J)</button><button data-jl="L">Sound trails (L)</button></div></div>' : ''}
+    </div>
+  </article>`
+}
+const NOTE_A = `
+  <aside class="note-card">
+    <div><h4>Beat lock</h4><ul>
+      <li>A card’s <b>hit frame</b> is its onset + t50 (t90 for slams). It moves onto the nearest beat only if that is <b>3 frames or fewer</b> away.</li>
+      <li>Staggers become beat ÷ n, with n closest to the vibe’s own stagger.</li>
+      <li>Holds end on a beat and last at least max(min hold, 2 beats). A sound’s attack lands on the beat.</li>
+    </ul><p class="src">Turn on <b>Beat</b> above: the ruler ticks every 600 ms and the tiles loop on 7 beats.</p></div>
+    <div><h4>Density</h4><ul>
+      <li>Never two cards of the same kind in a row; one part’s cards leave together.</li>
+      <li>Covered list items dim to 45% instead of leaving.</li>
+      <li>Nothing goes over a face box. Held cards are one still PNG; anything that keeps moving loops in 2 s or less.</li>
+    </ul><p class="src">The kind decides how often; the vibe only decides how it looks.</p></div>
+  </aside>`
+const NOTE_B = `
+  <aside class="note-card">
+    <div><h4>When there’s no spare footage</h4><ul>
+      <li>A join falls back to one of the <b>same vibe</b> that needs none — dip, flash or leak — never silently to a plain cut.</li>
+      <li>Each export reports how many joins fell back.</li>
+    </ul><p class="src">Research 07 found spare footage on both sides at only 1 of 16 part boundaries.</p></div>
+    <div><h4>What was measured</h4><ul>
+      <li><b>Measured:</b> Cozy’s paper-card path, Hype’s slam (t90 ≈ 120 ms), staggers clustering at 110–130 ms.</li>
+      <li><b>Rendered and timed:</b> perspective push, 0.025 px jitter; a whip costs the same as a cut; grain is invisible after VideoToolbox, so 9:16 never gets it.</li>
+      <li>Every other number here is a prior, like a <code>grammar.py</code> threshold.</li>
+    </ul></div>
+  </aside>`
+function build() {
+  $('#gridA').innerHTML = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => tileHTML(EL[i])).join('') + NOTE_A
+  $('#gridB').innerHTML = [11, 12, 13, 14, 15, 16, 17, 18, 19, 20].map((i) => tileHTML(EL[i])).join('') + NOTE_B
+  document.querySelectorAll('.tile').forEach((el) => {
+    const E = EL[el.dataset.id], frame = $('.frame', el)
+    const T = new Tile(E, frame, { fill: $('.tl-fill', el), marks: $('.tl-marks', el), sfxEl: $('.sfx', el), lanes: $('.lanes', el) })
+    T.el = el; tiles.push(T)
+    $('.replay', el).addEventListener('click', (ev) => { ev.stopPropagation(); T.restart() })
+    frame.addEventListener('click', () => openSheet(E.id))
+    frame.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openSheet(E.id) } })
+    el.querySelectorAll('[data-jl]').forEach((b) => b.addEventListener('click', () => setJL(b.dataset.jl)))
+  })
+  const io = new IntersectionObserver((es) => es.forEach((e) => { const T = tiles.find((x) => x.frame === e.target); if (T) T.visible = e.isIntersecting }), { rootMargin: '240px 0px' })
+  tiles.forEach((T) => io.observe(T.frame))
+  const ro = new ResizeObserver(() => { tiles.forEach((T) => T.resize()); if (sheet.open) sheet.tile.resize() })
+  tiles.forEach((T) => ro.observe(T.frame)); ro.observe($('#shFrame'))
+}
+
+// ------------------------------------------------------------------ vibe band + chips
+function curvePath(look) {
+  const X = (u) => 12 + u * 190, Y = (v) => 128 - v * 88
+  let d = ''
+  for (let i = 0; i <= 120; i++) { const u = i / 120, v = inProg(look, u * look.dur, 0); d += `${i ? 'L' : 'M'}${X(u).toFixed(1)},${Y(v).toFixed(1)}` }
+  return d
+}
+function renderBand() {
+  const L = LOOKS[env.look.id], hitU = tHit(L) / L.dur
+  const kinds = (arr) => arr.map((k) => KIND[k]).join(' · ')
+  const offered = []
+  if (L.fit.star.length) offered.push(`<b>Default</b> for ${kinds(L.fit.star)}`)
+  if (L.fit.card.length) offered.push(`<b>Shown</b> for ${kinds(L.fit.card)}`)
+  if (L.fit.more.length) offered.push(`<b>Under More vibes</b> for ${kinds(L.fit.more)}`)
+  $('#vband').innerHTML = `
+    <div class="vb-name">
+      <div class="eyebrow">The vibe</div>
+      <div class="vb-title">${L.name}</div>
+      <p class="vb-line">${L.line}</p>
+      <div class="vb-pal">${L.pal.map((c) => `<div><i style="background:${c}"></i>${c}</div>`).join('')}</div>
+      <p class="vb-fonts"><b>Words:</b> ${L.fonts}<br><span class="faint">Here ${L.here}.</span></p>
+    </div>
+    <div class="vb-curve">
+      <svg viewBox="0 0 214 160" aria-label="Entrance curve">
+        <line x1="12" y1="128" x2="202" y2="128" stroke="#322c25"/>
+        <line x1="12" y1="40" x2="202" y2="40" stroke="#322c25" stroke-dasharray="3 4"/>
+        <line x1="${(12 + hitU * 190).toFixed(1)}" y1="24" x2="${(12 + hitU * 190).toFixed(1)}" y2="136" stroke="#e9c78f" stroke-opacity=".55" stroke-dasharray="2 3"/>
+        <text x="${(hitU > 0.6 ? 8 + hitU * 190 : 16 + hitU * 190).toFixed(1)}" y="18" fill="#e9c78f" font-size="9.5" text-anchor="${hitU > 0.6 ? 'end' : 'start'}" font-family="-apple-system, system-ui, sans-serif">hit · ${tHit(L)} ms</text>
+        <text x="12" y="152" fill="#72695d" font-size="9.5" font-family="-apple-system, system-ui, sans-serif">0</text>
+        <text x="202" y="152" fill="#72695d" font-size="9.5" text-anchor="end" font-family="-apple-system, system-ui, sans-serif">${L.dur} ms</text>
+        <path d="${curvePath(L)}" fill="none" stroke="#c9dcc1" stroke-width="2" stroke-linejoin="round"/>
+        <circle id="curveDot" r="4.5" cx="12" cy="128" fill="#efe8dd"/>
+      </svg>
+      <p class="cap"><b>Entrance:</b> ${L.curve}${L.stepNote ? ', ' + L.stepNote : ''} · ${L.dur} ms <span class="tag ${L.measured ? 'measured' : 'prior'}">${L.measured ? 'measured' : 'prior'}</span><br><span class="faint">${L.bez}</span></p>
+    </div>
+    <dl class="vb-tokens">
+      <dt>Exit</dt><dd>${L.id === 'film' ? 'Switches off hard' : L.id === 'hype' ? 'Fades out over 150 ms' : `Mirrors the entrance at 0.6× — ${Math.round(L.dur * 0.6)} ms`}</dd>
+      <dt>Stagger</dt><dd>${L.stagger} ms${L.staggerNote ? ' ' + L.staggerNote : ''} · overshoot ${L.overshoot}</dd>
+      <dt>Holds</dt><dd>At least ${L.hold.toFixed(1)} s · up to ${L.maxOn} on screen</dd>
+      <dt>Joins</dt><dd>${L.joins}</dd>
+      <dt>Camera</dt><dd>${L.camera}</dd>
+      <dt>Texture</dt><dd>${L.texture}</dd>
+      <dt>Sounds</dt><dd>${L.sounds} <span class="muted">· CC0, 18 dB under a voice</span></dd>
+      <dt>Music</dt><dd>${L.music}</dd>
+      <dt>Spends</dt><dd>${L.spend} <span class="muted">· capped by the kind’s budget</span></dd>
+      <dt>Offered</dt><dd>${offered.join('<br>')}</dd>
+    </dl>`
+}
+function renderChips() {
+  $('#vchips').innerHTML = ORDER.map((id, i) => `<button class="vchip ${env.look.id === id ? 'on' : ''}" data-look="${id}" title="${LOOKS[id].line} (${i + 1})"><span class="sw">${LOOKS[id].pal.map((c) => `<i style="background:${c}"></i>`).join('')}</span>${LOOKS[id].name}</button>`).join('')
+  document.querySelectorAll('.vchip').forEach((b) => b.addEventListener('click', () => setLook(b.dataset.look)))
+}
+function renderMeta() {
+  tiles.forEach((T) => { $('.m-vibe', T.el).innerHTML = vibeHTML(T.E) })
+  document.querySelectorAll('[data-jl]').forEach((b) => b.classList.toggle('on', b.dataset.jl === env.jl))
+}
+function syncControls() {
+  document.body.className = `look-${env.look.id}${env.wide ? ' wide' : ''}`
+  document.querySelectorAll('#fmtSeg button').forEach((b) => b.classList.toggle('on', b.dataset.fmt === env.fmt))
+  document.querySelectorAll('[data-speed]').forEach((b) => b.classList.toggle('on', Number(b.dataset.speed) === env.speed))
+  $('#beatBtn').classList.toggle('on', env.beat)
+  $('#pauseBtn').textContent = env.paused ? 'Resume' : 'Pause'
+  $('#shGuides').classList.toggle('on', env.guides)
+  $('#shPlay').textContent = sheet.tile && (env.paused || sheet.tile.paused) ? '▶ Play' : '❚❚ Pause'
+}
+
+// ------------------------------------------------------------------ state changes
+let globalT0 = performance.now()
+function restartAll() { const now = performance.now(); globalT0 = now; tiles.forEach((T) => T.restart(now)); if (sheet.tile) sheet.tile.restart(now) }
+function replanAll() { tiles.forEach((T) => T.replan()); if (sheet.tile) { sheet.tile.replan(); renderSheetInfo() } renderMeta() }
+function setLook(id) {
+  if (!LOOKS[id] || env.look.id === id) return
+  env.look = LOOKS[id]; syncControls(); renderChips(); renderBand(); replanAll(); restartAll(); syncURL()
+}
+function setFmt(f) {
+  if (env.fmt === f) return
+  const was = env.wide; env.fmt = f; syncControls(); GLOW.clear()
+  if (was !== env.wide) { renderBand(); requestAnimationFrame(() => { tiles.forEach((T) => T.resize()); if (sheet.open) sizeSheet() }) }
+  replanAll(); restartAll(); syncURL()
+}
+function setBeat(on) { env.beat = on; syncControls(); replanAll(); restartAll(); syncURL(); toast(on ? 'Beat on — 100 BPM. Hits within 3 frames snap to the grid.' : 'Beat off — cards keep their own timing.') }
+function setSpeed(s) {
+  const now = performance.now(), all = sheet.tile ? [...tiles, sheet.tile] : tiles
+  const ts = all.map((T) => T.time(now)); env.speed = s
+  all.forEach((T, i) => { T.t0 = now - ts[i] / s })
+  syncControls(); syncURL()
+}
+function setPaused(p) {
+  const now = performance.now(), all = sheet.tile ? [...tiles, sheet.tile] : tiles
+  if (p) all.forEach((T) => { T.pt = T.time(now) })
+  env.paused = p
+  if (!p) all.forEach((T) => { if (!T.paused) T.t0 = now - T.pt / env.speed })
+  syncControls()
+}
+function setJL(v) { env.jl = v; replanAll(); syncURL() }
+
+// ------------------------------------------------------------------ the enlarged sheet
+const sheet = { open: false, id: 1, tile: null }
+function sizeSheet() {
+  const fr = $('#shFrame'), vh = window.innerHeight
+  if (env.wide) { const w = Math.min(720, window.innerWidth - 32 - 56 - 360 - 32); fr.style.width = w + 'px'; fr.style.height = Math.round((w * 9) / 16) + 'px' }
+  else { const h = Math.max(380, Math.min(560, vh - 250)); fr.style.height = h + 'px'; fr.style.width = Math.round((h * 9) / 16) + 'px' }
+  const ln = $('#shLanes'); ln.style.width = fr.style.width; ln.style.height = '66px'
+  if (sheet.tile) sheet.tile.resize()
+}
+function openSheet(id) {
+  sheet.id = id; sheet.open = true
+  const E = EL[id], fr = $('#shFrame')
+  sizeSheet()
+  sheet.tile = new Tile(E, fr, { lanes: id === 19 ? $('#shLanes') : null, big: true })
+  sheet.tile.guides = env.guides
+  $('#shLanes').hidden = id !== 19
+  requestAnimationFrame(() => sheet.tile && sheet.tile.resize())
+  renderSheetInfo()
+  $('#scrim').classList.add('on'); $('#scrim').setAttribute('aria-hidden', 'false')
+  syncControls(); syncURL()
+  setTimeout(() => $('#shClose').focus({ preventScroll: true }), 30)
+}
+function closeSheet() {
+  sheet.open = false; sheet.tile = null
+  $('#scrim').classList.remove('on'); $('#scrim').setAttribute('aria-hidden', 'true')
+  const now = performance.now(); tiles.forEach((T) => { if (!env.paused) T.t0 = now - T.pt / env.speed })
+  syncURL()
+  const f = document.querySelector(`.tile[data-id="${sheet.id}"] .frame`); if (f) f.focus({ preventScroll: true })
+}
+function stepSheet(d) { openSheet(((sheet.id - 1 + d + 20) % 20) + 1) }
+function renderSheetInfo() {
+  const E = EL[sheet.id], P = sheet.tile.P, [stc, stt] = STATUS[E.status], [, rbt] = RENDER_BADGE[E.badge]
+  $('#shEyebrow').textContent = `${String(E.id).padStart(2, '0')} · ${E.fam} · ${rbt}`
+  $('#shName').textContent = E.name
+  $('#shStatus').className = stc; $('#shStatus').textContent = stt
+  const sl = styleLine(E)
+  $('#shDl').innerHTML = `
+    <dt>Used when</dt><dd>${E.when}</dd>
+    <dt>Words from</dt><dd>${E.from}</dd>
+    <dt>Render</dt><dd>${E.render}</dd>
+    <dt>In ${env.look.name}</dt><dd>${sl || '—'}</dd>
+    <dt>Sound</dt><dd>${P.sfx ? `♪ ${P.sfx} — its attack lands on the hit` : E.id === 19 ? P.lead : 'None'}</dd>
+    ${E.id <= 10 || E.id === 13 ? `<dt>Timing</dt><dd>${env.look.curve} · ${env.look.dur} ms in · ${env.look.id === 'film' ? 'off hard' : env.look.id === 'hype' ? '150 ms fade out' : `${Math.round(env.look.dur * 0.6)} ms out`}${env.beat ? ' · beat-locked' : ''}</dd>` : `<dt>Timing</dt><dd>Frame counts at 30 fps — see the keyframes${env.beat ? ' · cuts move onto a beat within 0.35 s' : ''}</dd>`}`
+  $('#shKeys').innerHTML = P.keys.slice().sort((a, b) => a.t - b.t).map((k) => `<li data-t="${k.t}"><span>${Math.round(k.t)} ms</span><span>${k.l}</span></li>`).join('')
+  $('#shJL').hidden = E.id !== 19
+  document.querySelectorAll('#shJL [data-jl]').forEach((b) => b.classList.toggle('on', b.dataset.jl === env.jl))
+  buildRuler()
+}
+function buildRuler() {
+  const P = sheet.tile.P, L = P.L, r = $('#ruler'), minor = L > 6000 ? 500 : 100, major = L > 6000 ? 1000 : 500
+  const pct = (t) => `${(clamp(t, 0, L) / L) * 100}%`
+  const out = ['<div class="r-axis"></div>']
+  for (let t = 0; t <= L; t += minor) out.push(`<span class="r-tick ${t % major === 0 ? 'major' : ''}" style="left:${pct(t)}"></span>`)
+  for (let t = 0; t <= L; t += major) out.push(`<span class="r-ms" style="left:${pct(t)}">${t}</span>`)
+  if (env.beat) for (let b = 0; b <= L; b += BEAT) out.push(`<span class="r-beat" style="left:${pct(b)}"></span>`)
+  const keys = P.keys.slice().sort((a, b) => a.t - b.t)
+  keys.forEach((k, i) => {
+    out.push(`<span class="r-key" style="left:${pct(k.t)}" title="${k.l.replace(/"/g, '&quot;')}"></span>`)
+    out.push(`<span class="r-lab" data-t="${clamp(k.t, 0, L)}">${k.l}</span>`)
+  })
+  if (P.sfx) out.push(`<span class="r-sfx" style="left:${pct(P.sfxT)}">♪ ${P.sfx}</span>`)
+  out.push('<span class="r-head" id="rHead"></span>')
+  r.innerHTML = out.join('')
+  // place each label on the lowest row where it clears its neighbours
+  const W = r.clientWidth || 700, rows = []
+  r.querySelectorAll('.r-lab').forEach((el) => {
+    const w = el.offsetWidth, cx = (Number(el.dataset.t) / L) * W
+    let left = Math.max(0, Math.min(W - w, cx - w / 2))
+    let row = rows.findIndex((end) => end < left - 10)
+    if (row < 0) { row = rows.length; rows.push(0) }
+    if (row > 2) { row = 2 }
+    rows[row] = left + w
+    el.style.left = left + 'px'; el.style.top = (36 - row * 17) + 'px'
+  })
+  $('#rFootL').textContent = `Loop ${(L / 1000).toFixed(1)} s${env.beat ? ` · ${Math.round(L / BEAT)} beats at 100 BPM` : ''} · ms from the start of the tile`
+}
+function scrubAt(ev) {
+  const r = $('#ruler').getBoundingClientRect(), u = clamp((ev.clientX - r.left) / r.width)
+  sheet.tile.setTime(u * sheet.tile.P.L); syncControls()
+}
+function renderSheetFrame(now) {
+  const T = sheet.tile, t = T.render(now), L = T.P.L
+  const h = $('#rHead'); if (h) h.style.left = `${(t / L) * 100}%`
+  let cur = null
+  document.querySelectorAll('#shKeys li').forEach((li) => { if (Number(li.dataset.t) <= t) cur = li })
+  document.querySelectorAll('#shKeys li').forEach((li) => li.classList.toggle('now', li === cur))
+}
+
+// ------------------------------------------------------------------ main loop
+function frame(now) {
+  requestAnimationFrame(frame)
+  if (sheet.open && sheet.tile) renderSheetFrame(now)
+  else for (const T of tiles) if (T.visible) T.render(now)
+  // beat dot + curve dot
+  const bd = $('#beatDot')
+  if (env.beat && !env.paused) { const ph = (((now - globalT0) * env.speed) % BEAT) / BEAT, k = Math.pow(1 - ph, 3); bd.style.transform = `scale(${1 + 0.9 * k})`; bd.style.opacity = String(0.45 + 0.55 * k) } else { bd.style.transform = ''; bd.style.opacity = '' }
+  const cd = document.getElementById('curveDot')
+  if (cd) { const L = env.look, cyc = L.dur + 900, u = ((((now - globalT0) * env.speed) % cyc) + cyc) % cyc, v = inProg(L, u, 0); cd.setAttribute('cx', (12 + clamp(u / L.dur) * 190).toFixed(1)); cd.setAttribute('cy', (128 - v * 88).toFixed(1)) }
+}
+
+// ------------------------------------------------------------------ wiring
+let toastT
+function toast(m) { const el = $('#toast'); el.textContent = m; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 2600) }
+function wire() {
+  document.querySelectorAll('#fmtSeg button').forEach((b) => b.addEventListener('click', () => setFmt(b.dataset.fmt)))
+  document.querySelectorAll('[data-speed]').forEach((b) => b.addEventListener('click', () => setSpeed(Number(b.dataset.speed))))
+  $('#beatBtn').addEventListener('click', () => setBeat(!env.beat))
+  $('#playAll').addEventListener('click', () => { env.paused = false; restartAll(); syncControls() })
+  $('#pauseBtn').addEventListener('click', () => setPaused(!env.paused))
+  $('#shClose').addEventListener('click', closeSheet)
+  $('#shPrev').addEventListener('click', () => stepSheet(-1))
+  $('#shNext').addEventListener('click', () => stepSheet(1))
+  $('#scrim').addEventListener('click', (ev) => { if (ev.target === $('#scrim')) closeSheet() })
+  $('#shReplay').addEventListener('click', () => { sheet.tile.restart(); if (env.paused) setPaused(false); syncControls() })
+  $('#shPlay').addEventListener('click', () => {
+    const T = sheet.tile
+    if (env.paused) { setPaused(false); T.paused = false; T.t0 = performance.now() - T.pt / env.speed }
+    else if (T.paused) { T.paused = false; T.t0 = performance.now() - T.pt / env.speed }
+    else { T.pt = T.time(performance.now()); T.paused = true }
+    syncControls()
+  })
+  $('#shGuides').addEventListener('click', () => { env.guides = !env.guides; if (sheet.tile) sheet.tile.guides = env.guides; syncControls(); syncURL() })
+  document.querySelectorAll('#shJL [data-jl]').forEach((b) => b.addEventListener('click', () => setJL(b.dataset.jl)))
+  const ru = $('#ruler')
+  ru.addEventListener('pointerdown', (ev) => { ru.setPointerCapture(ev.pointerId); scrubAt(ev) })
+  ru.addEventListener('pointermove', (ev) => { if (ru.hasPointerCapture(ev.pointerId)) scrubAt(ev) })
+  window.addEventListener('resize', () => { if (sheet.open) sizeSheet() })
+  document.addEventListener('keydown', (ev) => {
+    if (ev.metaKey || ev.ctrlKey || ev.altKey) return
+    const k = ev.key
+    if (k === 'Escape' && sheet.open) { closeSheet(); return }
+    if (sheet.open && k === 'ArrowLeft') { stepSheet(-1); return }
+    if (sheet.open && k === 'ArrowRight') { stepSheet(1); return }
+    if (k >= '1' && k <= '7') { setLook(ORDER[Number(k) - 1]); return }
+    if (k === 'b' || k === 'B') { setBeat(!env.beat); return }
+    if (k === ' ' && !(ev.target instanceof HTMLButtonElement) && !(ev.target.classList && ev.target.classList.contains('frame'))) { ev.preventDefault(); setPaused(!env.paused) }
+  })
+}
+
+// ------------------------------------------------------------------ start
+function start() {
+  syncControls(); renderChips(); renderBand(); build(); renderMeta(); wire()
+  // preload every still in use
+  for (const id in EL) { const im = EL[id].img; [im.p, im.w].flat().forEach((k) => (HERO[k] ? img(HERO[k].f) : img(k + '.jpg'))) }
+  // canvas-only faces must be asked for explicitly
+  if (document.fonts && document.fonts.load) ['400 20px "EB Garamond"', 'italic 400 20px "EB Garamond"', '500 20px "EB Garamond"', '700 20px Nunito', '800 20px Nunito', '900 20px Nunito'].forEach((f) => document.fonts.load(f).catch(() => {}))
+  requestAnimationFrame(() => { tiles.forEach((T) => T.resize()); restartAll(); requestAnimationFrame(frame) })
+  const tq = Number(Q.get('tile'))
+  if (tq >= 1 && tq <= 20) setTimeout(() => openSheet(tq), 60)
+  syncURL()
+}
+start()
+</script>
+</body>
+</html>
