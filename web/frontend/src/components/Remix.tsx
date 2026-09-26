@@ -47,7 +47,7 @@ export function Remix({ onClose, onDone }: { onClose: () => void; onDone: () => 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60" onClick={() => { if (!busy) onClose() }}>
       <div className="w-[560px] max-w-[94vw] rounded-2xl border border-line bg-panel p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-1 font-serif text-[20px] font-semibold text-zinc-100">Make it like a reel</div>
+        <div className="mb-1 font-serif text-[20px] font-semibold text-zinc-100">Style reference</div>
         <p className="mb-4 text-[12px] text-muted">
           Paste one to three videos you want yours to feel like. Nothing of theirs ends up in your video —
           only their pace, their length, the way they hold the first shot, and the kind of music they build on.

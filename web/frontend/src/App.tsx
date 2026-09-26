@@ -704,7 +704,7 @@ export default function App() {
         }} className="shrink-0 rounded-lg border border-accent/30 px-3 py-1 text-[12px] text-accent hover:bg-raised">Creative tools</button>
         {clips.length > 0 && (
           <button type="button" onClick={openRemix} title="Paste reels you like — get a finished short in their style, from your clips"
-                  className="shrink-0 rounded-lg bg-accent px-3 py-1 text-[12px] font-medium text-accent-ink hover:brightness-110">Make it like a reel</button>
+                  className="shrink-0 rounded-lg border border-accent/30 px-3 py-1 text-[12px] text-accent hover:bg-raised">Style reference</button>
         )}
         {clips.length > 0 && (
           <button type="button" onClick={openTalk} title="Talking to camera? Transcribe on this Mac, cut pauses and retakes, add subtitles"
