@@ -51,6 +51,10 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState(window.location.hash === '#profile')
   const [toolsOpen, setToolsOpen] = useState(window.location.hash === '#tools')
   const profileButton = useRef<HTMLButtonElement>(null)
+  // Re-read when the profile page closes, so a new name shows at once.
+  const profileInitial = useMemo(() => {
+    try { return loadProfile(window.localStorage).profile.name.trim().charAt(0).toUpperCase() || '☺' } catch { return '☺' }
+  }, [profileOpen])
   useEffect(() => {
     const change = () => { setProfileOpen(window.location.hash === '#profile'); setToolsOpen(window.location.hash === '#tools'); transport.stop() }
     window.addEventListener('hashchange', change)
@@ -710,15 +714,19 @@ export default function App() {
           <button type="button" onClick={openTalk} title="Talking to camera? Transcribe on this Mac, cut pauses and retakes, add subtitles"
                   className="shrink-0 rounded-lg border border-accent/30 px-3 py-1 text-[12px] text-accent hover:bg-raised">Talking to camera</button>
         )}
-        <button ref={profileButton} type="button" onClick={() => {
+        {importing && <span className="text-[11px] text-accent">indexing…</span>}
+        {/* You, not this edit: the profile sits apart from the editing tools. */}
+        <span className="mx-1 h-5 w-px shrink-0 bg-line" aria-hidden />
+        <button ref={profileButton} type="button" title="Creator profile" aria-label="Creator profile" onClick={() => {
           transport.stop(); videoRef.current?.pause(); setMenu(null); setSwap(null); setHelp(false)
           window.location.hash = 'profile'
-        }} className="shrink-0 rounded-lg border border-accent/30 px-3 py-1 text-[12px] text-accent hover:bg-raised">Creator profile</button>
+        }} className="grid size-8 shrink-0 place-items-center rounded-full bg-zinc-700 font-serif text-[15px] font-semibold text-zinc-100 ring-1 ring-zinc-500/40 hover:ring-accent">
+          {profileInitial}
+        </button>
         {session?.board && (
           <button type="button" onClick={openExport} title="Render the edit, its words on screen and its music to one video file"
                   className="shrink-0 rounded-lg bg-accent px-3 py-1 text-[12px] font-semibold text-accent-ink hover:opacity-90">Export</button>
         )}
-        {importing && <span className="text-[11px] text-accent">indexing…</span>}
       </header>
 
       <div className={`grid min-h-0 ${level === 'story' ? 'grid-cols-[320px_minmax(0,1fr)_440px]' : 'grid-cols-[320px_minmax(0,1fr)]'}`}>
