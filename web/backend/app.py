@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import board as bd
-from . import brief, cut, export, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, brief, cut, export, looks, seams, smooth, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import Workflow, WorkflowError
 
@@ -96,13 +96,17 @@ def _session() -> dict:
         "style": b.get("style"),
         "beats": [{**bt, "shots": [shot(x) for x in bt["shots"]]} for bt in b["beats"]],
     }
-    tl = timeline.build(b, CLIPS, musiclib.current())
+    tl = timeline.build(b, CLIPS, _track())
     tl["frame"] = export.frame_size(tl["items"], CLIPS)
     last = SESSION.last_active()
     ghosts = []
+    cuts = seams.check(tl["items"], CLIPS) if b else []
+    review: list[dict] = []
     if last and last.diff and not last.diff["replaced"]:
         # What the latest turn removed, so the board can show it struck through.
         prev = _board_before(last)
+        # A second look at the turn: did it make any cut rougher (or fix one)?
+        review = seams.review(seams.check(timeline.build(prev, CLIPS, _track())["items"], CLIPS) if prev else [], cuts)
         for r in last.diff["beats"]["removed"]:
             old = next((x for x in (prev or {}).get("beats", []) if x["id"] == r["id"]), None)
             idx = [x["id"] for x in (prev or {}).get("beats", [])].index(r["id"]) if old else 0
@@ -112,7 +116,8 @@ def _session() -> dict:
     return {
         "board": board,
         "structure_note": _structure_note(b),
-        "last": {"turn": last.id, "diff": last.diff, "ghosts": ghosts} if last else None,
+        "last": {"turn": last.id, "diff": last.diff, "ghosts": ghosts, "review": review} if last else None,
+        "seams": cuts,
         "turns": [{
             "id": t.id, "kind": t.kind, "text": t.text, "reply": t.reply, "question": t.question,
             "choices": t.choices, "lines": _with_thumbs(t.lines, cat), "skipped": t.skipped,
@@ -122,14 +127,124 @@ def _session() -> dict:
         "proposals": SESSION.proposals,
         "llm": llm.available(),
         "timeline": tl,
-        "overlays": {"items": overlays.resolve(b), "style": overlays.style_of(b),
-                     "findings": overlays.check(b, cat)},
+        "overlays": _overlays_public(b, cat, tl),
         "workflow": WORKFLOW.public(),
         "cut": cut.summary(PLAN["plan"]) if PLAN["plan"] else None,
-        "music": musiclib.current_public(),
+        "music": _music_public(),
+        "mix": _mix_public(b, tl),
         "preferences": PREFS.public(SESSION),
         "voiceover": _voiceover_public(),
     }
+
+
+# --------------------------------------------------------------------------
+# smoother cuts: asked for, one undoable turn (smooth.py)
+# --------------------------------------------------------------------------
+
+class SmoothReq(BaseModel):
+    order: bool = True
+    nudge: bool = True
+
+
+@app.post("/api/smooth")
+def api_smooth(req: SmoothReq) -> dict:
+    with LOCK:
+        if not SESSION.board:
+            raise HTTPException(409, "Choose a story first — there are no cuts to smooth yet.")
+        ops, said = smooth.propose(SESSION.board, CLIPS, CATALOG["cat"], order=req.order, nudge=req.nudge)
+        if not ops:
+            raise HTTPException(409, said)
+        SESSION.add({"kind": "direct", "text": "Smoother cuts", "ops": ops, "reply": said},
+                    CATALOG["cat"], _make_proposals)
+        return _session()
+
+
+# --------------------------------------------------------------------------
+# the sound under the edit: the board's own music, and one mixed track
+# --------------------------------------------------------------------------
+
+def _track():
+    """The track under the edit: the storyboard's (set_music -- undoable,
+    replayed), else whatever the music card last put under it."""
+    m = (SESSION.board or {}).get("music")
+    if m is not None and "track" in m:
+        return next((t for t in musiclib.STATE["tracks"] if t.id == m["track"]), None)
+    return musiclib.current()
+
+
+def _music_public() -> dict | None:
+    t = _track()
+    return None if t is None else {"id": t.id, "title": t.title, "duration": round(t.duration, 2),
+                                   "bpm": t.bpm, "audio": f"/api/music/audio/{t.id}"}
+
+
+# Specs of mixes the UI has been told about, by key; the file is rendered
+# on first request, so a session poll never waits for audio.
+MIXES: dict[str, dict] = {}
+
+
+def _mix_spec(b: dict | None, items: list[dict]) -> dict | None:
+    if not b or not items:
+        return None
+    t = _track()
+    sp = export.spans(items)
+    plan, _ = export.plan_transitions(sp, CLIPS, b.get("style"))
+    music = export.music_spec(t.path if t else None, b.get("music"))
+    return audiomix.spec(sp, CLIPS, b.get("joins"), plan, music)
+
+
+def _mix_public(b: dict | None, tl: dict) -> dict | None:
+    """What the preview plays: the same sound export will write."""
+    sp = _mix_spec(b, tl["items"])
+    if sp is None:
+        return None
+    k = audiomix.key_of(sp)
+    MIXES[k] = sp
+    while len(MIXES) > 64:   # only recent edits can still be asked for
+        MIXES.pop(next(iter(MIXES)))
+    joins = audiomix.joins_for(sp["items"], sp["joins"])
+    # The picture side of the same plan export renders (plan_transitions):
+    # per shot, frames of handle for a dissolve and any dip or flash, so the
+    # player can show the join the file will have. Only non-trivial entries.
+    trans = [{"key": it["key"], "head": p["head"], "tail": p["tail"],
+              "fade_in": list(p["fade_in"]) if p["fade_in"] else None,
+              "fade_out": list(p["fade_out"]) if p["fade_out"] else None}
+             for it, p in zip(sp["items"], sp["transitions"] or [])
+             if p["head"] or p["tail"] or p["fade_in"] or p["fade_out"]]
+    size = tl.get("frame") or {"w": 1920, "h": 1080}
+    bar = export._bar(size, (b or {}).get("style"))
+    return {"key": k, "audio": f"/api/mix/{k}.wav", "transitions": trans,
+            "bars": round(bar / size["h"], 4) if bar else 0.0,
+            # `fits`: False where a carry was asked for but the shot wasn't
+            # filmed long enough past the cut -- it plays as a clean break, and says so
+            "joins": [{"after": it["key"], "at": sp["items"][i + 1]["seq_start"], **j,
+                       "fits": audiomix.fits(sp["items"], CLIPS, i, j["sound"])}
+                      for i, (it, j) in enumerate(zip(sp["items"], joins))]}
+
+
+@app.get("/api/mix/{name}")
+def api_mix(name: str) -> FileResponse:
+    k = name.removesuffix(".wav")
+    sp = MIXES.get(k)
+    if sp is None:
+        raise HTTPException(404, "that mix is out of date")
+    try:
+        path = audiomix.preview_file(sp, dict(CLIPS))
+    except (OSError, subprocess.CalledProcessError) as e:
+        raise HTTPException(500, f"couldn't mix the sound: {e}") from e
+    return FileResponse(path, media_type="audio/wav",
+                        headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
+def _overlays_public(b: dict | None, cat, tl: dict) -> dict:
+    """Words on screen as both preview and export draw them: resolved times
+    (on the beat, if the look says so), one style with the look's motion."""
+    style = overlays.style_of(b)
+    items = overlays.resolve(b)
+    if (style.get("motion") or {}).get("beat_lock"):
+        items = looks.beat_lock(items, tl.get("grid"), tl.get("total", 0.0))
+    return {"items": items, "style": style, "findings": overlays.check(b, cat),
+            "look": {"id": (b or {}).get("look"), "overrides": looks.overrides(b), "all": looks.public()}}
 
 
 def _voiceover_public() -> dict | None:
@@ -638,7 +753,7 @@ def api_overlays_suggest(req: SuggestReq) -> dict:
         ops, notes = overlays.suggest(b, CATALOG["cat"], req.profile, req.title, req.kinds)
         style = overlays.style_from_profile(req.profile)
         if style and not b.get("overlay_style"):
-            ops.insert(0, {"op": "overlay_style", **style})
+            ops.insert(0, {"op": "overlay_style", **style, "source": "profile"})
         if not ops:
             raise HTTPException(409, "Nothing to add — " + (notes[0][0].lower() + notes[0][1:] if notes
                                                               else "every part already has its words."))
@@ -665,13 +780,14 @@ def api_export(req: ExportReq) -> dict:
     with LOCK:
         if not SESSION.board:
             raise HTTPException(409, "Choose a story first — there's nothing to export yet.")
-        tl = timeline.build(SESSION.board, CLIPS, musiclib.current())
-        track = musiclib.current() if req.music else None
+        tl = timeline.build(SESSION.board, CLIPS, _track())
+        track = _track() if req.music else None
         try:
             # Named after what the video says it is: its title, else the story.
             title = next((o["text"] for o in SESSION.board.get("overlays", []) if o["kind"] == "title"), None)
             job = export.create(tl["items"], dict(CLIPS), title or SESSION.board.get("name", ""),
-                                track.path if track else None, SESSION.board.get("style"))
+                                track.path if track else None, SESSION.board.get("style"),
+                                mix=SESSION.board.get("music"), joins=SESSION.board.get("joins"))
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
         return job.public()
@@ -768,6 +884,12 @@ def api_music_use(req: MusicUseReq) -> dict:
     except ValueError as e:
         raise HTTPException(404, str(e)) from e
     with LOCK:
+        if SESSION.board is not None:
+            # On the board, so it's in the log: undoable, and a Remix's own
+            # mix (in-point, levels) is replaced rather than silently kept.
+            t = musiclib.current()
+            SESSION.add({"kind": "direct", "text": f"Music: {t.title}" if t else "No music",
+                         "ops": [{"op": "set_music", "track": req.track_id}]}, CATALOG["cat"], _make_proposals)
         return _session()
 
 
@@ -885,7 +1007,7 @@ def api_ref_job(jid: str) -> dict:
 
 
 def _grid() -> dict | None:
-    return timeline.build(SESSION.board, CLIPS, musiclib.current()).get("grid")
+    return timeline.build(SESSION.board, CLIPS, _track()).get("grid")
 
 
 @app.get("/api/references/{rid}")

@@ -178,7 +178,7 @@ function Card({ card, onBack, onApplied, onReload }: { card: RefCard; onBack: ()
     </ul>
     {error && <p className="creator-error" role="alert">{error}</p>}
     <div className="tool-actions tool-actions-live">
-      <p className="borrow-fine">One change in your edit history — Undo takes all of it back. Grade, transitions and bars appear in the export.</p>
+      <p className="borrow-fine">One change in your edit history — Undo takes all of it back. Transitions and bars show as you play; the grade appears in the export.</p>
       <button type="button" className={`creator-primary ${busy ? '' : 'borrow-blocked'}`} disabled={busy || !picked.length || !card.has_story}
               onClick={() => void apply()}>
         {busy ? 'Applying…' : !card.has_story ? 'Choose a story first'

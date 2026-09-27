@@ -35,5 +35,5 @@ export function OverlayCanvas({ view, width, height }: { view: OverlayView; widt
     return () => { live = false; off(); cancelAnimationFrame(raf) }
   }, [width, height, view])
 
-  return <canvas ref={ref} className="pointer-events-none absolute inset-0 size-full" aria-hidden="true" />
+  return <canvas ref={ref} className="pointer-events-none absolute inset-0 z-[5] size-full" aria-hidden="true" />
 }

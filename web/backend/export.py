@@ -47,13 +47,13 @@ from pathlib import Path
 
 from cutgrammar import media
 
-from . import indexer
+from . import audiomix, indexer
 from . import timeline as tlm
 
 FPS = tlm.FPS
 OUT_DIR = Path(os.environ.get("VIBECUT_EXPORTS", str(Path.home() / "Movies" / "VibeCut")))
 WORK = indexer.CACHE / "exports"
-MUSIC_GAIN = 0.35   # music under the original sound, not over it
+MUSIC_GAIN = audiomix.MUSIC_GAIN   # music under the original sound, not over it
 MAX_FRAMES = 20000  # overlay PNGs per export -- far above what titles need
 
 _probe_cache: dict[str, dict] = {}
@@ -132,6 +132,8 @@ class Job:
     # start, how loud, where to duck under the original sound, and any sound
     # effects to drop in. None keeps the plain mix.
     mix: dict | None = None
+    # How the sound crosses each cut ({entry key: {"sound"}}, board.set_join).
+    joins: dict | None = None
 
     @property
     def dir(self) -> Path:
@@ -155,7 +157,7 @@ def _safe_name(s: str) -> str:
 
 
 def create(items: list[dict], clips: dict[str, dict], name: str, music: str | None,
-           style: dict | None = None, mix: dict | None = None) -> Job:
+           style: dict | None = None, mix: dict | None = None, joins: dict | None = None) -> Job:
     sp = spans(items)
     if not sp:
         raise ValueError("the timeline is empty — choose a story first")
@@ -169,7 +171,7 @@ def create(items: list[dict], clips: dict[str, dict], name: str, music: str | No
         raise ValueError("the borrowed look's file is gone — apply the style again")
     job = Job(id=uuid.uuid4().hex[:10], items=sp, clips=clips, size=frame_size(sp, clips),
               total=sum(s["frames"] for s in sp) / FPS, name=_safe_name(name), music=music, style=style,
-              mix=mix)
+              mix=mix, joins=joins)
     job.dir.mkdir(parents=True, exist_ok=True)
     (job.dir / "frames").mkdir(exist_ok=True)
     JOBS[job.id] = job
@@ -457,6 +459,9 @@ def _overlay_input(job: Job) -> Path | None:
     def entry(p: Path, dur: float) -> None:
         if dur > 1e-4:
             lines.append(f"file '{p.name}'")
+            # without it each PNG is read at the image demuxer's 25 fps and
+            # its timestamps snap to a 40 ms grid (research 07: 600 of 1800 wrong)
+            lines.append(f"option framerate {FPS}")
             lines.append(f"duration {dur:.6f}")
 
     for s in job.schedule:
@@ -468,6 +473,7 @@ def _overlay_input(job: Job) -> Path | None:
         t = z
     entry(blank, job.total - t)
     lines.append(f"file '{blank.name}'")   # the last entry's duration needs a successor
+    lines.append(f"option framerate {FPS}")
     out = frames / "overlay.ffconcat"
     out.write_text("\n".join(lines) + "\n")
     return out
@@ -487,27 +493,15 @@ def _blank_png(path: Path, size: dict) -> None:
     path.write_bytes(png)
 
 
-DUCK_RAMP_S = 0.25   # attack/release of a duck; a step would be heard
-
-
-def _duck_expr(ducks: list) -> str:
-    """A volume expression: 1 outside the ducks, `gain` inside, ramped over DUCK_RAMP_S.
-
-    Each duck is (start, end, gain) in sequence seconds. Overlaps take the
-    quieter of the two.
-    """
-    terms = []
-    for a, b, g in ducks:
-        a, b, g = float(a), float(b), float(g)
-        if b <= a or not 0 <= g < 1:
-            continue
-        # distance outside [a,b], clipped to the ramp -> 0 inside, 1 a ramp away.
-        # The expression sits inside '...' in the filtergraph, so commas are literal.
-        terms.append(f"({g:.3f}+{1 - g:.3f}*clip(max({a:.3f}-t,t-{b:.3f})/{DUCK_RAMP_S},0,1))")
-    out = ""
-    for t in terms:
-        out = t if not out else f"min({out},{t})"
-    return out
+def music_spec(path: str | None, mix: dict | None) -> dict | None:
+    """The bed under the edit, as audiomix takes it."""
+    if not path:
+        return None
+    m = mix or {}
+    return {"path": path, "in": float(m.get("in") or 0.0), "gain": float(m.get("gain", MUSIC_GAIN)),
+            "original": float(m["original"]) if m.get("original") is not None else 1.0,
+            "fade_out": float(m.get("fade_out", 2.0)), "duck": m.get("duck") or [],
+            "sfx": m.get("sfx") or [], "level": bool(m.get("level"))}
 
 
 def _run(job: Job) -> None:
@@ -548,37 +542,18 @@ def _run(job: Job) -> None:
             args += ["-f", "concat", "-safe", "0", "-i", str(ov)]
             filters.append("[1:v]format=rgba[ov];[0:v][ov]overlay=0:0:eof_action=pass:format=auto,format=yuv420p[v]")
             vmap = "[v]"
-        if job.music:
-            mi = 2 if ov else 1
-            mix = job.mix or {}
-            if mix.get("in"):
-                args += ["-ss", f"{float(mix['in']):.3f}"]
-            args += ["-i", job.music]
-            fade_d = float(mix.get("fade_out", 2.0))
-            fade = max(0.0, job.total - fade_d)
-            gain = float(mix.get("gain", MUSIC_GAIN))
-            duck = _duck_expr(mix.get("duck") or [])
-            chain = (f"[{mi}:a]aresample=48000,aformat=channel_layouts=stereo,volume={gain}"
-                     + (f",volume='{duck}':eval=frame" if duck else "")
-                     + f",afade=t=out:st={fade:.3f}:d={fade_d:.3f},apad[m]")
-            filters.append(chain)
-            mixers = ["[0:a]", "[m]"]
-            if mix.get("original") is not None:
-                # a music-led edit keeps the phone's own sound under the track, not level with it
-                filters.append(f"[0:a]volume={float(mix['original']):.3f}[o]")
-                mixers[0] = "[o]"
-            for k, fx in enumerate(mix.get("sfx") or []):
-                # a short sound at a cut: one input each, delayed into place
-                fi = mi + 1 + k
-                args += ["-i", fx["path"]]
-                filters.append(f"[{fi}:a]aresample=48000,aformat=channel_layouts=stereo,"
-                               f"volume={float(fx.get('gain', 0.5))},adelay={int(fx['at'] * 1000)}:all=1,"
-                               f"apad=whole_dur={job.total:.3f}[fx{k}]")
-                mixers.append(f"[fx{k}]")
-            # loudnorm works (and would output) at 192 kHz; players expect 48 kHz AAC
-            level = ",loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000" if mix.get("level") else ""
-            filters.append(f"{''.join(mixers)}amix=inputs={len(mixers)}:duration=first:normalize=0{level}[a]")
-            amap = "[a]"
+        # The sound is the same track the preview plays (audiomix): joins
+        # carried or cut, micro-fades at every join, the music bed and its
+        # ducks. The shots' own PCM above only keeps the join a valid file.
+        music = music_spec(job.music, job.mix)
+        buf, sound_notes = audiomix.render(job.items, job.clips,
+                                           joins=audiomix.joins_for(job.items, job.joins),
+                                           transitions=plan, music=music)
+        job.notes += sound_notes
+        wav = job.dir / "mix.wav"
+        audiomix.write_wav(buf, wav, level=bool((music or {}).get("level")))
+        args += ["-i", str(wav)]
+        amap = f"{2 if ov else 1}:a"
         if filters:
             args += ["-filter_complex", ";".join(filters)]
         venc = _venc(False, job.size) if ov else ["-c:v", "copy"]

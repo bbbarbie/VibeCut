@@ -12,8 +12,12 @@ import { OverlayCanvas, type OverlayView } from './OverlayCanvas'
 // When the transport drives it, the picture sits in a stage with the
 // export's shape (scaled to fit and padded, as the export does) and the
 // words on screen are drawn over it -- so the preview is the export.
-export function Player({ videoRef, segment, label, gap, onTime, onEnd, onPlayingChange, overlay, frame }: {
+export function Player({ videoRef, backRef, veilRef, bars, segment, label, gap, onTime, onEnd, onPlayingChange, overlay, frame }: {
   videoRef: RefObject<HTMLVideoElement | null>
+  // the next shot, waiting (transport.ts), and the dip/flash veil -- the join as the export renders it
+  backRef?: RefObject<HTMLVideoElement | null>
+  veilRef?: RefObject<HTMLDivElement | null>
+  bars?: number                    // cinematic bars, each as a share of the frame's height
   segment: Segment | null
   label: string
   gap: boolean
@@ -85,8 +89,16 @@ export function Player({ videoRef, segment, label, gap, onTime, onEnd, onPlaying
             onPlay={() => onPlayingChange(true)}
             onPause={() => onPlayingChange(false)}
           />
+          {backRef && <video ref={backRef} muted playsInline aria-hidden
+                             className={`pointer-events-none absolute inset-0 size-full object-contain ${gap ? 'invisible' : ''}`}
+                             style={{ opacity: 0 }} />}
+          {veilRef && <div ref={veilRef} className="pointer-events-none absolute inset-0 z-[3]" style={{ opacity: 0, background: 'black' }} />}
+          {staged && !!bars && <>
+            <div className="pointer-events-none absolute inset-x-0 top-0 z-[3] bg-black" style={{ height: `${bars * 100}%` }} />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[3] bg-black" style={{ height: `${bars * 100}%` }} />
+          </>}
           {/* the last frame, held while the next clip loads (hold.ts) */}
-          <canvas data-hold className={`pointer-events-none absolute inset-0 size-full object-contain ${gap ? 'hidden' : ''}`} style={{ visibility: 'hidden' }} />
+          <canvas data-hold className={`pointer-events-none absolute inset-0 z-[4] size-full object-contain ${gap ? 'hidden' : ''}`} style={{ visibility: 'hidden' }} />
           {gap && <div className="absolute inset-0 grid place-items-center text-[11px] text-zinc-700">gap</div>}
           {staged && overlay && overlay.items.length > 0 && <OverlayCanvas view={overlay} width={stage.w} height={stage.h} />}
         </div>

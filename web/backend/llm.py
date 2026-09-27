@@ -80,6 +80,12 @@ Words on screen (OVERLAYS in the state). They hang off a beat or a shot and move
 - edit_overlay {overlay, text, sub, kind: null}: change the words of an existing overlay (id from OVERLAYS). Give beat or shot to move it there.
 - drop_overlay {overlay}
 
+The look (vibe) of the words on screen, for the whole video — font, colours and how words move:
+- set_look {look}: one of clean (crisp, simple), cozy (warm, handwritten, soft), quiet (still, spare), cinematic (slow, wide, small caps), film (old camera, typewriter), playful (bright, bouncy, on the beat), hype (fast, loud, slams on the beat). "Make it feel cozier" → set_look cozy. Anything the creator set by hand (a font, a colour) is kept.
+
+How the sound crosses a cut. Between parts the place's sound already carries a beat past the cut; inside a part the sound cuts with the picture.
+- set_join {shot, sound}: the cut *after* that shot. sound is carry_out (the sound runs on under the next shot — "let the sound flow into the next part", "don't let it cut off"), carry_in (the next shot's sound starts early — "hear the next place before we see it"), cut (hard — "a clean break"), or default (back to the automatic choice).
+
 ## How to decide
 - One user request → the smallest set of operations that does it. "Make the opening punchier and cut the market section" is exactly two operations: set_pace on the first beat, drop_beat on the market beat. Do not also reorder, retitle or tidy anything else.
 - If the target is ambiguous (two beats could be "the market", or none looks like it), don't guess: ask one short question and return no operations.
@@ -116,7 +122,7 @@ SCHEMA = {
             "items": {
                 "type": "object", "additionalProperties": False,
                 "required": ["op", "option", "beat", "shot", "with_shot", "to_index",
-                             "title", "direction", "amount", "overlay", "kind", "text", "sub"],
+                             "title", "direction", "amount", "overlay", "kind", "text", "sub", "sound", "look"],
                 "properties": {
                     "op": {"type": "string", "enum": list(bd.LLM_OPS)},
                     "option": _nullable({"type": "string", "enum": ["time", "place", "subject", "voice"]}),
@@ -131,6 +137,9 @@ SCHEMA = {
                     "kind": _nullable({"type": "string", "enum": ["title", "part", "name", "caption", "date", "end"]}),
                     "text": _nullable({"type": "string"}),
                     "sub": _nullable({"type": "string"}),
+                    "sound": _nullable({"type": "string", "enum": ["cut", "carry_out", "carry_in", "default"]}),
+                    "look": _nullable({"type": "string", "enum": ["clean", "cozy", "quiet", "cinematic", "film",
+                                                                   "playful", "hype"]}),
                 },
             },
         },

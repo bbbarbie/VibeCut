@@ -26,6 +26,7 @@ import { fromDataTransfer, fromInput, type Picked } from './drop'
 import { bytes, dur, uid } from './format'
 import { clock, locate, toSource } from './sequence'
 import { cutWhilePlaying, step } from './snap'
+import { byKey } from './joinView'
 import { phStore, snapStore, transport, transportStore, useStore } from './transport'
 import type { Clip, CutData, Msg, Option, Overlay, OverlayKind, Overlays as OverlayData, Segment, Session, Shot, StyleAnswers, StyleQuestion, TimelineData } from './types'
 
@@ -101,7 +102,14 @@ export default function App() {
   }
   const dragDepth = useRef(0)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const backRef = useRef<HTMLVideoElement>(null)
+  const veilRef = useRef<HTMLDivElement>(null)
   const musicRef = useRef<HTMLAudioElement>(null)
+  const mixRef = useRef<HTMLAudioElement>(null)
+  // "Watch it all" plays the story through the transport, so it is heard
+  // with its mixed sound (joins, music bed) exactly as it will export.
+  const [boardPlay, setBoardPlay] = useState(false)
+  const [boardShot, setBoardShot] = useState<string | null>(null)
   const tr = useStore(transportStore)
   const tl = session?.timeline ?? EMPTY_TL
   const fr = 1 / tl.fps
@@ -118,7 +126,7 @@ export default function App() {
   useEffect(() => {
     api.project().then((p) => setClips(p.clips)).catch(() => {})
     api.session().then(setSession).catch(() => {})
-    transport.video = videoRef.current
+    transport.attach(videoRef.current, backRef.current, veilRef.current)
   }, [])
   useEffect(() => { transport.setItems(tl.items, tl.total) }, [tl])
   const wfState = session?.workflow?.state
@@ -137,12 +145,27 @@ export default function App() {
     if (brief) { const b = brief; setBrief(null); send(b.message, b.style) }
   }
   useEffect(() => {
-    transport.video = videoRef.current
+    transport.attach(videoRef.current, backRef.current, veilRef.current)
     if (level === 'frames') transport.seek(phStore.get())
     else transport.stop()
     setMenu(null)
   }, [level])
   useEffect(() => { transport.audio = session?.music ? musicRef.current : null }, [session?.music])
+  const mixKey = session?.mix?.key
+  const transList = session?.mix?.transitions
+  useEffect(() => { transport.setTransitions(byKey(transList), tl.fps) }, [transList, tl.fps])
+  useEffect(() => { transport.mix = mixKey ? mixRef.current : null; transport.mixBroken = false }, [mixKey])
+  useEffect(() => { if (!tr.playing) setBoardPlay(false) }, [tr.playing])
+  useEffect(() => {
+    if (!boardPlay) { setBoardShot(null); return }
+    const show = () => {
+      const k = locate(tl.items, phStore.get())
+      const it = k < 0 ? null : tl.items[k]
+      setBoardShot(it && it.kind === 'shot' ? it.key : null)
+    }
+    show()
+    return phStore.subscribe(show)
+  }, [boardPlay, tl.items])
 
   const say = useCallback((text: string, busy = false) => {
     const id = uid()
@@ -338,6 +361,17 @@ export default function App() {
     setSegment({ key: uid(), clipId: it.clipId, start: it.start, end: it.end, autoplay: true })
   }
   const playSource = (source: string, list: PlayItem[]) => {
+    if (source === 'board') {
+      if (boardPlay) { transport.stop(); return }
+      stopQueue()
+      setSegment(null)
+      transport.attach(videoRef.current, backRef.current, veilRef.current)
+      transport.seek(0)
+      transport.play(1)
+      setBoardPlay(true)
+      return
+    }
+    if (boardPlay) transport.stop()
     if (queue?.source === source) { stopQueue(); videoRef.current?.pause(); return }
     if (list.length) playAt({ source, items: list, index: 0 }, 0)
   }
@@ -732,7 +766,8 @@ export default function App() {
       <div className={`grid min-h-0 ${level === 'story' ? 'grid-cols-[320px_minmax(0,1fr)_440px]' : 'grid-cols-[320px_minmax(0,1fr)]'}`}>
         <Chat items={chatItems} pending={pending} onSend={send} onToggle={toggle}
               disabled={!!pending} llm={session?.llm ?? false} hasBoard={!!session?.board}
-              prefs={session?.preferences ?? null} onClassify={classify} onRule={changeRule} />
+              prefs={session?.preferences ?? null} onClassify={classify} onRule={changeRule}
+              review={session?.last ? { turn: session.last.turn, items: session.last.review ?? [] } : null} />
 
         {level === 'story' ? (
           <>
@@ -750,8 +785,8 @@ export default function App() {
                 session={session}
                 clips={clips}
                 asking={!!pending}
-                playing={queue?.source ?? null}
-                nowShot={queue ? queue.items[queue.index]?.id ?? null : null}
+                playing={boardPlay ? 'board' : queue?.source ?? null}
+                nowShot={boardPlay ? (boardShot && entry(boardShot)?.id) ?? null : queue ? queue.items[queue.index]?.id ?? null : null}
                 selected={storySel}
                 onPick={(fl) => importPicked(fromInput(fl))}
                 onAsk={send}
@@ -768,6 +803,9 @@ export default function App() {
                 onMoveBeat={moveBeat}
                 onRetitle={retitle}
                 onBeatAction={beatAction}
+                onSmooth={async (order, nudge) => { const s = await api.smooth(order, nudge); setSession(s); offerUndo(s) }}
+                onJoin={(after, sound) => run([{ op: 'set_join', shot: after, sound }],
+                  sound === 'default' ? 'Sound back to automatic' : 'Changed how the sound crosses a cut')}
               />
               )}
               {undoable && <UndoToast text={undoable.text} onUndo={() => { toggle(undoable.turn); setUndoable(null) }} />}
@@ -775,7 +813,7 @@ export default function App() {
             <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto border-l border-line bg-panel p-3">
               <div className="flex aspect-[16/10] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-line"
                    onClick={() => { if (tr.playing && !segment) transport.stop() }}>
-                <Player videoRef={videoRef} segment={segment} label={tr.playing && !segment ? 'Your story, with its words on screen — click to pause' : storyLabel}
+                <Player videoRef={videoRef} backRef={backRef} veilRef={veilRef} bars={session?.mix?.bars} segment={segment} label={tr.playing && !segment ? 'Your story, with its words on screen — click to pause' : storyLabel}
                         gap={tr.gap && !segment} overlay={overlayView} frame={tl.frame}
                         onTime={() => {}} onEnd={() => { if (queue) playAt(queue, queue.index + 1) }} onPlayingChange={() => {}} />
               </div>
@@ -813,6 +851,9 @@ export default function App() {
               <div className="flex w-[44%] min-w-[320px] flex-col">
                 <Player
                   videoRef={videoRef}
+                  backRef={backRef}
+                  veilRef={veilRef}
+                  bars={session?.mix?.bars}
                   segment={segment}
                   label={label}
                   gap={tr.gap && !segment}
@@ -858,6 +899,8 @@ export default function App() {
                     onPick={(w) => { doSwap(swap.key, w); setSwap(null) }} onClose={() => setSwap(null)} />
       )}
       {session?.music && <audio ref={musicRef} src={session.music.audio} preload="auto" />}
+      {session?.mix && <audio ref={mixRef} src={session.mix.audio} preload="auto"
+                              onError={() => { transport.mixBroken = true }} />}
       {help && <Keys onClose={() => setHelp(false)} />}
       {exporting && <Export tl={tl} overlays={ovData} parts={parts} music={session?.music?.title ?? null} style={session?.board?.style} onClose={() => setExporting(false)} />}
       {remixing && <Remix onClose={() => setRemixing(false)} onDone={remixDone} />}

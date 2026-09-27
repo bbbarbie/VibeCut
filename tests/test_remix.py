@@ -27,7 +27,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from web.backend import export, remix, select as sel, storyboard as sb  # noqa: E402
+from web.backend import board as bd, export, remix, select as sel, storyboard as sb  # noqa: E402
 
 failures: list[str] = []
 
@@ -168,24 +168,41 @@ def words() -> None:
 
 
 def duck() -> None:
-    print("the duck (ffmpeg)")
-    expr = export._duck_expr([(1.0, 2.0, 0.2)])
-    check("no ducks, no expression", export._duck_expr([]) == "", repr(export._duck_expr([])))
-    p = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=3",
-                        "-af", f"volume='{expr}':eval=frame", "-f", "f32le", "-ac", "1", "-ar", "16000", "-"],
-                       capture_output=True)
-    x = np.frombuffer(p.stdout, dtype=np.float32)
+    print("the duck (audiomix, shared by preview and export)")
+    from web.backend import audiomix
+    sr = audiomix.SR
+    check("no ducks, no change", bool(np.all(audiomix.duck_envelope(sr, []) == 1.0)), "all ones")
+    env = audiomix.duck_envelope(3 * sr, [(1.0, 2.0, 0.2)])
 
-    def rms(a, b):
-        s = x[int(a * 16000):int(b * 16000)]
-        return float(np.sqrt(np.mean(s * s)))
+    def level(a, b):
+        return float(env[int(a * sr):int(b * sr)].mean())
 
-    inside, before, after = rms(1.3, 1.7), rms(0.2, 0.6), rms(2.4, 2.8)
+    inside, before, after = level(1.3, 1.7), level(0.2, 0.6), level(2.4, 2.8)
     check("music is at the duck gain inside the interval and full outside",
           abs(inside / before - 0.2) < 0.03 and abs(after / before - 1) < 0.03,
           f"inside/outside = {inside / before:.2f}, after = {after / before:.2f}")
-    mid = rms(0.9, 1.0)
+    mid = level(0.9, 1.0)
     check("the edges ramp rather than step", 0.25 < mid / before < 0.95, f"{mid / before:.2f}")
+
+
+def kept_on_board() -> None:
+    print("the remix, once on the board, keeps its sound and grade")
+    from types import SimpleNamespace
+    board = {"option": "remix", "name": "Remix", "structure": "", "beats": [
+        {"id": "r1", "title": "Hook", "detail": "", "shots": [{"id": "a:0", "start": 0.0, "end": 2.0}]}]}
+    mix = {"in": 31.2, "gain": 0.85, "original": 0.12, "level": True, "fade_out": 2.0, "duck": [], "sfx": []}
+    result = {"board": board, "captions": [], "music": {"track": SimpleNamespace(id="trk1")}, "mix": mix,
+              "style": {"ref": "ref1", "look": {"lut": "/tmp/x.cube", "strength": 0.6, "words": ["warm"]}}}
+    ops = remix.session_ops(result)
+    s = bd.Session()
+    s.add({"kind": "direct", "text": "remix", "ops": ops}, bd.Catalog({}, {}), lambda d: None)
+    check("its music, in-point and levels are on the board",
+          s.board.get("music") == {"track": "trk1", **{k: mix[k] for k in ("in", "gain", "original", "level",
+                                                                          "fade_out", "duck", "sfx")}},
+          str(s.board.get("music")))
+    check("its grade is on the board", (s.board.get("style") or {}).get("look", {}).get("lut") == "/tmp/x.cube",
+          str(s.board.get("style")))
+    check("nothing was skipped", not s.turns[-1].skipped, str(s.turns[-1].skipped))
 
 
 def frames() -> None:
@@ -214,6 +231,7 @@ def main() -> int:
     beats()
     words()
     duck()
+    kept_on_board()
     frames()
     print()
     if failures:

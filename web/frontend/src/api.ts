@@ -46,6 +46,7 @@ export const api = {
   chat: (message: string, style?: StyleAnswers) => j<Session>(post('/api/chat', { message, style: style ?? null })),
   questions: (message: string) => j<{ questions: StyleQuestion[]; tailored: boolean }>(post('/api/brief/questions', { message })),
   ops: (ops: Record<string, unknown>[], label: string) => j<Session>(post('/api/ops', { ops, label })),
+  smooth: (order: boolean, nudge: boolean) => j<Session>(post('/api/smooth', { order, nudge })),
   toggle: (turn: number) => j<Session>(post(`/api/turns/${turn}/toggle`, {})),
   voiceover: (text: string) => j<Session>(post('/api/voiceover', { text })),
   classify: (req: { turn: number; klass: PrefClass; rule?: string; scope?: string; counter?: string; reason?: string }) =>

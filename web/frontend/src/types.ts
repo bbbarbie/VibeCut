@@ -92,7 +92,7 @@ export type LookFit = { lut: string; strength: number; previews: { before: strin
   numbers: Record<'yours' | 'after' | 'reference', { warmth: number; black: number; sat: number }> }
 
 export type DiffLine = {
-  kind: 'removed' | 'added' | 'moved' | 'trimmed' | 'retitled' | 'swapped' | 'replaced' | 'none'
+  kind: 'removed' | 'added' | 'moved' | 'trimmed' | 'retitled' | 'swapped' | 'replaced' | 'style' | 'sound' | 'none'
   text: string; beat?: string; shot?: string; thumb?: string
 }
 export type Diff = {
@@ -106,6 +106,7 @@ export type Turn = {
   undone: boolean; at: number; has_ops: boolean; direction: { themes: string[] } | null
 }
 import type { SeqItem } from './sequence'
+import type { Trans } from './joinView'
 import type { Target } from './snap'
 export type TimelineData = { fps: number; total: number; items: SeqItem[]; targets: Target[]; grid: { bpm: number; phase: number } | null
   frame?: { w: number; h: number } }
@@ -120,9 +121,15 @@ export type Overlay = {
   dur: number | null; anchor: { to: 'edit' | 'end' | 'beat' | 'shot'; id?: string }; at: number
   start: number; end: number; shown_end: number
 }
-export type OverlayStyle = { font: 'Clean' | 'Editorial' | 'Rounded'; color: string; accent: string; captions: 'bottom' | 'center'; backing: 'shadow' | 'box' | 'none' }
+export type OverlayStyle = { font: 'Clean' | 'Editorial' | 'Rounded' | 'Mono' | 'Condensed'; color: string; accent: string; captions: 'bottom' | 'center'; backing: 'shadow' | 'box' | 'none'
+  look?: string; motion?: Motion | null }
+// How a look moves words (backend looks/*.json): one curve and timing for the whole video.
+export type Motion = { curve: [number, number, number, number]; in_s: number; step_fps: number; stagger_s: number
+  enter: 'card' | 'slam' | null; case: 'sentence' | 'lower' | 'upper'; track: number; beat_lock: boolean }
+export type LookInfo = { id: string; name: string; line: string; font: OverlayStyle['font']; palette: string[]; status: string; review_by: string }
 export type OverlayFinding = { overlay: string; rule: string; value: number; verdict: 'ok' | 'warn' | 'bad' | 'pending'; basis: string; message: string }
-export type Overlays = { items: Overlay[]; style: OverlayStyle; findings: OverlayFinding[] }
+export type Overlays = { items: Overlay[]; style: OverlayStyle; findings: OverlayFinding[]
+  look?: { id: string | null; overrides: string[]; all: LookInfo[] } }
 export type MusicTrack = { id: string; title: string; duration: number; bpm: number | null; audio: string }
 
 export type CutSummary = { clips: number; kept: number; rejected: number; raw: number; cut: number; ratio: number | null; line_en: string }
@@ -139,9 +146,13 @@ export type Session = {
   cut: CutSummary | null
   timeline: TimelineData
   music: MusicTrack | null
+  // The edit's sound as one track (backend/audiomix.py) -- what preview plays and export writes.
+  mix: { key: string; audio: string; joins: JoinInfo[]; transitions: Trans[]; bars: number } | null
   board: Board | null
   structure_note: string | null
-  last: { turn: number; diff: Diff | null; ghosts: { index: number; title: string; thumbs: string[] }[] } | null
+  last: { turn: number; diff: Diff | null; ghosts: { index: number; title: string; thumbs: string[] }[]; review: Review[] } | null
+  // Every cut, checked (backend cutgrammar/joins.py) -- report only.
+  seams: Seam[]
   turns: Turn[]
   proposals: Proposals | null
   llm: boolean
@@ -199,3 +210,12 @@ export type TalkState = { job: TalkJob | null; plan: TalkPlan | null; llm: boole
 export type StyleChoice = { key: string; label: string; hint?: string }
 export type StyleQuestion = { id: string; question: string; multi: boolean; hint?: string; choices: StyleChoice[] }
 export type StyleAnswers = { length?: string; pace?: string; opening?: string }
+
+// How the sound crosses a cut: carried out (L cut), carried in (J cut), or a clean break.
+export type JoinSound = 'cut' | 'carry_out' | 'carry_in' | 'default'
+export type JoinInfo = { after: string; at: number; sound: Exclude<JoinSound, 'default'>; set: boolean; fits: boolean }
+
+export type SeamFinding = { key: string; label: string; value: number | null; unit: string; verdict: 'ok' | 'warn' | 'bad' | 'pending'; detail: string }
+export type Seam = { after: string; before: string; at: number; verdict: 'ok' | 'warn' | 'bad'; findings: SeamFinding[] }
+// What a turn did to the cuts: a second look, shown under it.
+export type Review = { kind: 'worse' | 'better'; text: string; after?: string; at?: number; verdict?: string }

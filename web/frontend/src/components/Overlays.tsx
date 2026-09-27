@@ -68,8 +68,33 @@ export function Overlays({ data, items, level, selected, busy, onSelect, onRun, 
 
       {/* one look for the whole video */}
       <div className="mt-2.5 space-y-1.5 border-t border-line pt-2 text-[11px]">
+        {data.look && (
+          <>
+            <Row label="Look">
+              <div className="flex flex-wrap gap-1">
+                {data.look.all.map((l) => (
+                  <button key={l.id} type="button" title={`${l.line} (${l.status === 'prior' ? 'first guess' : 'calibrated'})`}
+                          onClick={() => onRun([{ op: 'set_look', look: data.look!.id === l.id ? null : l.id }],
+                            data.look!.id === l.id ? 'You took the look off' : `You chose the ${l.name} look`)}
+                          className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 ${data.look!.id === l.id ? 'border-accent text-zinc-100' : 'border-line text-zinc-400 hover:text-zinc-200'}`}>
+                    <span className="flex">{l.palette.slice(0, 2).map((c) => <i key={c} className="block size-2 rounded-full" style={{ background: c }} />)}</span>
+                    {l.name}
+                  </button>
+                ))}
+              </div>
+            </Row>
+            {data.look.id && data.look.overrides.length > 0 && (
+              <p className="pl-16 text-[10px] text-amber-200/80">
+                Your {data.look.overrides.join(' and ')} differ{data.look.overrides.length === 1 ? 's' : ''} from the look.{' '}
+                <button type="button" className="underline" onClick={() => onRun([{ op: 'set_look', look: data.look!.id, reset: true }], 'You went back to the look’s own style')}>
+                  Use the look’s
+                </button>
+              </p>
+            )}
+          </>
+        )}
         <Row label="Font">
-          <Seg value={style.font} options={[['Clean', 'Clean'], ['Editorial', 'Editorial'], ['Rounded', 'Rounded']]}
+          <Seg value={style.font} options={[['Clean', 'Clean'], ['Editorial', 'Editorial'], ['Rounded', 'Rounded'], ['Mono', 'Typewriter'], ['Condensed', 'Condensed']]}
                onChange={(v) => style1({ font: v }, 'font')} fonts />
         </Row>
         <Row label="Colour">
@@ -219,7 +244,8 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 function Seg<T extends string>({ value, options, onChange, fonts }: {
   value: T; options: readonly (readonly [T | string, string])[]; onChange: (v: T) => void; fonts?: boolean
 }) {
-  const family = (k: string) => (!fonts ? undefined : k === 'Editorial' ? 'var(--font-serif)' : k === 'Rounded' ? 'Nunito, sans-serif' : undefined)
+  const family = (k: string) => (!fonts ? undefined : k === 'Editorial' ? 'var(--font-serif)' : k === 'Rounded' ? 'Nunito, sans-serif'
+    : k === 'Mono' ? '"Courier New", ui-monospace, monospace' : k === 'Condensed' ? 'Impact, "Arial Narrow", sans-serif' : undefined)
   return (
     <div className="flex rounded-md border border-line bg-panel p-px">
       {options.map(([k, name]) => (

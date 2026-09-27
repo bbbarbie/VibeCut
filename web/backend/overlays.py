@@ -51,7 +51,7 @@ SIZES = ("S", "M", "L")
 ANIMS = ("fade", "rise", "slide", "type", "none")
 ANCHORS = ("edit", "end", "beat", "shot")
 
-FONTS = ("Clean", "Editorial", "Rounded")
+FONTS = ("Clean", "Editorial", "Rounded", "Mono", "Condensed")
 BACKINGS = ("shadow", "box", "none")
 DEFAULT_STYLE = {"font": "Clean", "color": "#ffffff", "accent": "#b9d9eb", "captions": "bottom",
                  "backing": "shadow"}
@@ -65,7 +65,10 @@ class OverlayError(Exception):
 
 
 def style_of(board: dict | None) -> dict:
-    return {**DEFAULT_STYLE, **((board or {}).get("overlay_style") or {})}
+    """The one style for the whole video: defaults, the look (looks.py),
+    then whatever the creator set by hand."""
+    from . import looks
+    return looks.style(board, DEFAULT_STYLE)
 
 
 def _hex(v: object) -> str | None:
@@ -302,7 +305,12 @@ def set_style(b: dict, op: dict) -> None:
     patch = clean_style({k: op[k] for k in ("font", "color", "accent", "captions", "backing") if k in op})
     if not patch:
         raise OverlayError("nothing to change")
-    b["overlay_style"] = {**style_of(b), **patch}
+    b["overlay_style"] = {**(b.get("overlay_style") or {}), **patch}
+    # Remembered as set by hand, so a later look fills in only the rest. The
+    # profile's saved defaults (source "profile") are a starting point, not
+    # a choice made on this video: a look replaces them.
+    if op.get("source") != "profile":
+        b["style_set"] = sorted(set(b.get("style_set") or []) | set(patch))
 
 
 def prune(b: dict) -> None:

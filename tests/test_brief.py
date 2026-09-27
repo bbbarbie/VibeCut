@@ -105,6 +105,34 @@ def main() -> int:
           set(offered) == {k for k, n in counts.items() if n >= brief.MIN_FOCUS_SHOTS}, f"{offered} from {dict(counts)}")
     check("one theme alone isn't a question", brief.fixed_questions(Counter(food=9)) == brief.fixed_questions())
 
+    print("look-alikes, every proposal")
+    from test_board import _clip
+    emb = lambda k: [1.0 if j == k else 0.0 for j in range(8)]  # noqa: E731
+
+    def clip(cid, minute, k, q):
+        c = _clip(cid, 10, ["outdoor"], 1, q=q)
+        c["capture_time"] = f"2026-05-02T10:{minute:02d}:00+0900"
+        c["shots"][0]["embedding"] = emb(k)
+        return c
+    # five takes of one view, a minute apart (the last is best-made), and two other views
+    dupes = [clip(f"take{i:08d}", i, 0, 0.5 + 0.05 * i) for i in range(5)]
+    others = [clip("other0000001", 6, 3, 0.6), clip("other0000002", 7, 5, 0.6)]
+    opts = sb.build(dupes + others, "", vision=True)["options"]
+    for o in opts:
+        ids = shot_ids(o)
+        kept = [x for x in ids if x.startswith("take")]
+        check(f"{o['key']}: one of five look-alike takes stays, the best-made",
+              kept == ["take00000004:0"], str(kept))
+        check(f"{o['key']}: different views all stay", {"other0000001:0", "other0000002:0"} <= set(ids))
+    check("the proposal says what it left out", any("look-alike" in n for n in opts[0]["notes"]), str(opts[0]["notes"]))
+    later = clip("take0000late", 59, 0, 0.55)
+    later["capture_time"] = "2026-05-02T18:00:00+0900"      # the same view, that evening
+    ids = shot_ids(sb.build(dupes + [later], "", vision=True)["options"][0])
+    check("the same view hours later is a new moment, not a retake", "take0000late:0" in ids, str(ids))
+    no_vision = sb.build(dupes + others, "", vision=False)["options"]
+    check("without Vision (colour only) nothing is collapsed",
+          sum(x.startswith("take") for x in shot_ids(no_vision[0])) == 5)
+
     print(f"\n{'all passed' if not failures else f'{len(failures)} failed'}")
     return 1 if failures else 0
 

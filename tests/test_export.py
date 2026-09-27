@@ -50,6 +50,19 @@ def red_png(path: Path, w: int, h: int) -> None:
                      + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
 
 
+def shade_png(path: Path, w: int, h: int, g: int) -> None:
+    """An opaque frame of one grey level in the green channel."""
+    img = np.zeros((h, w, 4), np.uint8)
+    img[..., 1] = g
+    img[..., 3] = 255
+    raw = b"".join(b"\x00" + img[y].tobytes() for y in range(h))
+
+    def chunk(tag, data):
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+    path.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0))
+                     + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+
 def frame_at(path: str, t: float, w: int, h: int) -> np.ndarray:
     raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{t:.3f}", "-i", path, "-frames:v", "1",
                           "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], capture_output=True, check=True).stdout
@@ -111,6 +124,27 @@ def main() -> int:
     gap = frame_at(out, 1.6, W, H)[10, 10]
     check("a gap is black", int(gap.max()) < 20, str(gap.tolist()))
     check("the export is named from the edit, safely", Path(out).name.startswith("Test edit"), Path(out).name)
+
+    # Frame-exact words on screen: 30 overlay frames, one per video frame,
+    # each a different shade. Every output frame must show its own shade --
+    # an animation that skips or repeats frames judders.
+    job2 = export.create(items[:1], clips, "frames", None)
+    W2, H2 = job2.size["w"], job2.size["h"]
+    sched = []
+    for k in range(30):
+        img = TMP / f"shade{k}.png"
+        shade_png(img, W2, H2, 40 + 6 * k)
+        export.save_frame(job2, k, img.read_bytes())
+        sched.append({"frame": k, "start": k / 30, "end": (k + 1) / 30})
+    export.start(job2, sched)
+    while job2.stage not in ("done", "error"):
+        time.sleep(0.2)
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", job2.path, "-frames:v", "30", "-vf", "scale=64:36",
+                          "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], capture_output=True, check=True).stdout
+    got = np.frombuffer(raw, np.uint8).reshape(-1, 36, 64, 3)[:, 18, 32, 1].astype(int)
+    want = np.array([40 + 6 * k for k in range(len(got))])
+    wrong = int((np.abs(got - want) > 3).sum())
+    check("each overlay frame lands on its own video frame", wrong == 0, f"{wrong} of {len(got)} frames wrong")
 
     print()
     if failures:

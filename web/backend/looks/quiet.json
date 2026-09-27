@@ -1,0 +1,45 @@
+{
+  "id": "quiet",
+  "name": "Quiet",
+  "line": "Still and spare, lots of air.",
+  "type": {
+    "display": "EB Garamond italic / Inter 300 caps (+.2em)",
+    "font": "Editorial",
+    "case": "sentence",
+    "track": 0.0,
+    "backing": "none",
+    "palette": [
+      "#efe8dd",
+      "#d8cbb6",
+      "#ffffff"
+    ]
+  },
+  "motion": {
+    "curve": [
+      0.45,
+      0,
+      0.55,
+      1
+    ],
+    "in_s": 1.2,
+    "step_fps": 0,
+    "stagger_s": 0.24,
+    "enter": null,
+    "min_hold_s": 3.0,
+    "max_on_screen": 1,
+    "beat_lock": false,
+    "measured": []
+  },
+  "status": "prior",
+  "first_seen": "2026-09-27",
+  "review_by": "2027-03-31",
+  "source": "design/specs/redesign-v2.md §4.3–4.4 (values [prior] unless research 07 measured them)",
+  "not_yet": [
+    "colour grade",
+    "joins",
+    "camera moves",
+    "texture",
+    "sounds",
+    "music"
+  ]
+}

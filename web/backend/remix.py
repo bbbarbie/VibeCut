@@ -594,7 +594,7 @@ def make(refs: list[str], footage: str | None = None, name: str = "Remix", lengt
     credits.write_text("\n".join(lines) + "\n")
     say(f"done in {time.time() - t0:.0f} s → {out}")
     stage("done", 1.0)
-    return {"path": str(out), "credits": str(credits), "board": board, "plan": plan, "music": mx,
+    return {"path": str(out), "credits": str(credits), "board": board, "plan": plan, "music": mx, "mix": mix,
             "fingerprint": fp, "captions": caps, "style": style, "seconds": round(time.time() - t0, 1)}
 
 
@@ -664,6 +664,16 @@ def session_ops(result: dict) -> list[dict]:
     """The finished remix as ops on the working storyboard: the board itself,
     and its words as overlays, so the editor shows what the file shows."""
     ops: list[dict] = [{"op": "choose_option", "option": "remix", "snapshot": result["board"]}]
+    # The sound and the grade go onto the board too, so editing the remix
+    # and exporting again gives the same film, not a quieter, ungraded one.
+    mx, mix = result.get("music"), result.get("mix")
+    if mx and mix:
+        ops.append({"op": "set_music", "track": mx["track"].id,
+                    **{k: mix[k] for k in ("in", "gain", "original", "level", "fade_out", "duck", "sfx") if k in mix}})
+    look = (result.get("style") or {}).get("look")
+    if look:
+        ops.append({"op": "apply_style", "traits": ["look"], "name": "remix", "ref": result["style"].get("ref"),
+                    "lut": look["lut"], "strength": look.get("strength", 1.0), "look_words": look.get("words", [])})
     for c in result.get("captions", []):
         if c["kind"] == "title":
             ops.append({"op": "add_overlay", "kind": "title", "text": c["text"], "sub": c.get("sub", ""),

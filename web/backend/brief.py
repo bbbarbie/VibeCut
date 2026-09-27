@@ -27,6 +27,10 @@ MIN_SHOT_S = 1.5
 # clip, or look-alikes (same cosine cut-off as remix's select.py), are one
 # moment, and only its strongest shot stays. Longer, calmer edits keep them.
 SIMILAR = 0.78
+# Look-alikes only count as one moment when filmed close together, as
+# retakes are (same window as cutgrammar.reject's duplicate rule): the same
+# café in the morning and again at night is two moments, not a stutter.
+RETAKE_WINDOW_S = 15 * 60
 OPENINGS = ("hook", "start")
 STYLE_KEYS = {"length": tuple(LENGTH_S), "pace": tuple(PACE_CAP_S), "opening": OPENINGS}
 
@@ -111,6 +115,38 @@ def one_per_moment(shots: list, rank) -> list:
         if not any(s.clip_id == k.clip_id or float(s.vec @ k.vec) >= SIMILAR for k in keep):
             keep.append(s)
     return [s for s in shots if s in keep]
+
+
+def one_per_look(options: list) -> None:
+    """Every proposal, whatever the answers: look-alike shots in one part --
+    the same view filmed twice, a retake -- keep only their strongest. A
+    viewer reads two near-identical shots in a row as a stutter, not a
+    story, and it's the most common reason an auto-edit feels like a pile of
+    clips. Different shots of one clip are left alone here (a walk filmed in
+    one take is several moments); short and fast edits still collapse those
+    too (`one_per_moment`). Only for proposals built with on-device Vision:
+    the colour-histogram fallback calls far too much "alike"."""
+    rank = lambda s: s.score + (0.15 if s.lean else 0.0)  # noqa: E731
+    for o in options:
+        dropped = 0
+        for b in o.beats:
+            keep: list = []
+            for s in sorted(b.shots, key=rank, reverse=True):
+                if not any(s.clip_id != k.clip_id and s.vec.shape == k.vec.shape
+                           and float(s.vec @ k.vec) >= SIMILAR and _close(s, k) for k in keep):
+                    keep.append(s)
+            dropped += len(b.shots) - len(keep)
+            b.shots = [s for s in b.shots if s in keep]
+        o.beats = [b for b in o.beats if b.shots]
+        if dropped:
+            o.notes.append(f"Kept the best of each look-alike: {dropped} near-repeat shot"
+                           f"{'s' * (dropped != 1)} left on the shelf.")
+
+
+def _close(a, b) -> bool:
+    if a.when is None or b.when is None:
+        return True
+    return abs((a.when - b.when).total_seconds()) <= RETAKE_WINDOW_S
 
 
 def shape(options: list, style: dict | None, best: dict[str, float]) -> None:

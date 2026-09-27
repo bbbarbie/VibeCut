@@ -7,6 +7,7 @@ import { useSyncExternalStore } from 'react'
 import { locate, toSource, type SeqItem } from './sequence'
 import type { Target } from './snap'
 import { swapSource } from './hold'
+import { dissolveAfter, mixAt, preloadAt, veilAt, type TransMap } from './joinView'
 
 export function createStore<T>(initial: T) {
   let v = initial
@@ -30,10 +31,29 @@ export type SnapInfo = { target: Target; snapped: boolean } | null
 export const snapStore = createStore<SnapInfo>(null)
 
 const EPS = 0.5 / 30
+// Same as the export's (backend audiomix.MUSIC_GAIN): the preview must not
+// sound louder than the file. Only used when the mixed track can't play.
+export const MUSIC_GAIN = 0.35
 
 export class Transport {
   video: HTMLVideoElement | null = null
-  audio: HTMLAudioElement | null = null   // music under the edit, if any
+  audio: HTMLAudioElement | null = null   // music under the edit, if any (fallback)
+  // The edit's whole sound, mixed by the backend exactly as export will write
+  // it: joins carried or cut, micro-fades, the music bed. While it plays the
+  // picture is muted, so every cut stops cutting the sound.
+  mix: HTMLAudioElement | null = null
+  mixBroken = false
+  // A second <video> for the next shot, loaded and parked on its first frame
+  // before the cut: the cut is a swap, not a seek, and a dissolve plays both.
+  // `primary` is the element the rest of the app (previews) knows about;
+  // whenever playback stops it is put back in front.
+  primary: HTMLVideoElement | null = null
+  back: HTMLVideoElement | null = null
+  veil: HTMLDivElement | null = null
+  trans: TransMap = new Map()
+  fps = 30
+  private pre: { k: number; clip: string; t: number; ready: boolean } | null = null
+  private leaving: { el: HTMLVideoElement; from: number; to: number } | null = null
   items: SeqItem[] = []
   total = 0
   private raf = 0
@@ -43,6 +63,22 @@ export class Transport {
   private seekQueued: number | null = null
   private seeking = false
   private lastDrift = 0
+
+  /** The player's two pictures and its veil (Player.tsx). */
+  attach(primary: HTMLVideoElement | null, back: HTMLVideoElement | null, veil: HTMLDivElement | null) {
+    if (!transportStore.get().playing) this.video = primary
+    this.primary = primary
+    this.back = back
+    this.veil = veil
+    if (back) back.muted = true
+    this.paint(phStore.get())
+  }
+
+  setTransitions(trans: TransMap, fps: number) {
+    this.trans = trans
+    this.fps = fps
+    this.pre = null
+  }
 
   setItems(items: SeqItem[], total: number) {
     const changed = items !== this.items
@@ -97,6 +133,7 @@ export class Transport {
         this.state({ gap: false })
         await this.ensureClip(it.clip_id!)
         if (this.video) this.video.currentTime = Math.min(toSource(it, at), it.src_end - EPS)
+        this.paint(at)
       }
       this.seeking = false
     })()
@@ -113,8 +150,93 @@ export class Transport {
   stop() {
     cancelAnimationFrame(this.raf)
     this.video?.pause()
+    this.back?.pause()
     this.audio?.pause()
+    this.mix?.pause()
+    this.front()
+    if (this.video) this.video.muted = false   // shelf previews play their own sound
     this.state({ playing: false, rate: 0 })
+    this.paint(phStore.get())
+  }
+
+  /** Put the primary element back in front (previews and scrubbing use it). */
+  private front() {
+    this.leaving = null
+    this.pre = null
+    if (this.primary && this.video !== this.primary) {
+      this.back = this.video
+      this.video = this.primary
+      if (this.back) this.back.muted = true
+      // the primary takes over the picture at the playhead (held while it loads)
+      this.showFrame(phStore.get())
+      return
+    }
+    if (this.back) this.back.muted = true
+  }
+
+  /** Which picture is on top, how see-through, and the dip veil, at t. */
+  private paint(t: number) {
+    const v = this.video, b = this.back
+    let top = v, alpha = 1, under: HTMLVideoElement | null = null
+    if (this.leaving && v) {
+      top = v; under = this.leaving.el; alpha = mixAt(this.leaving, t)
+    } else if (b && v && !b.paused) {
+      const d = dissolveAfter(this.items, this.cur, this.trans, this.fps)
+      if (d) { top = b; under = v; alpha = mixAt(d, t) }
+    }
+    for (const el of [v, b]) {
+      if (!el) continue
+      if (el === top) { el.style.zIndex = '2'; el.style.opacity = String(alpha) }
+      else if (el === under) { el.style.zIndex = '1'; el.style.opacity = '1' }
+      else { el.style.zIndex = '0'; el.style.opacity = '0' }
+    }
+    if (this.veil) {
+      const k = locate(this.items, t)
+      const w = k < 0 ? null : veilAt(this.items, k, this.trans, t, this.fps)
+      this.veil.style.opacity = w ? String(w.alpha) : '0'
+      if (w) this.veil.style.background = w.color
+    }
+  }
+
+  /** Have the shot after item k waiting in the back element. */
+  private preload(k: number) {
+    const b = this.back
+    if (!b || this.leaving) return
+    const target = preloadAt(this.items, k, this.trans, this.fps)
+    const it = this.items[k], nx = this.items[k + 1]
+    if (!target || (it && nx && it.kind === 'shot' && nx.clip_id === it.clip_id && Math.abs(nx.src_start - it.src_end) < 0.02)) {
+      return   // nothing next, or the other half of a cut: the front keeps playing
+    }
+    if (this.pre && this.pre.k === k + 1 && this.pre.clip === target.clip && Math.abs(this.pre.t - target.t) < 1e-3) return
+    const pre = { k: k + 1, clip: target.clip, t: target.t, ready: false }
+    this.pre = pre
+    b.pause()
+    const url = `/api/video/${target.clip}`
+    const park = () => {
+      if (this.pre !== pre) return
+      b.addEventListener('seeked', () => { if (this.pre === pre) pre.ready = true }, { once: true })
+      b.currentTime = target.t
+    }
+    if (b.getAttribute('src') !== url) {
+      b.addEventListener('loadedmetadata', park, { once: true })
+      b.setAttribute('src', url)
+      b.load()
+    } else park()
+  }
+
+  private mixUsable() {
+    return !!this.mix && !this.mixBroken && !this.mix.error && !!this.mix.getAttribute('src') && this.mix.readyState >= 2
+  }
+
+  /** The bed that follows the playhead: the mix if it plays, else the plain music. */
+  private bed(rate: number): HTMLAudioElement | null {
+    const useMix = rate === 1 && this.mixUsable()
+    if (this.video) this.video.muted = useMix
+    if (this.back) this.back.muted = true   // the waiting (or leaving) picture never speaks
+    if (useMix) { this.audio?.pause(); return this.mix }
+    this.mix?.pause()
+    if (this.audio) this.audio.volume = MUSIC_GAIN
+    return this.audio
   }
 
   private async enter(k: number, t: number, rate: number) {
@@ -129,22 +251,37 @@ export class Transport {
   }
 
   private syncMusic(t: number, rate: number, force = false) {
-    const a = this.audio
+    const a = this.bed(rate)
     if (!a) return
     if (rate !== 1) { a.pause(); return }
     const now = performance.now()
-    if (force || (now - this.lastDrift > 500 && Math.abs(a.currentTime - t) > 0.12)) {
+    const drift = a.currentTime - t
+    if (a === this.mix) {
+      // The mix is the whole sound: a seek is heard as a skip, so small drift
+      // (the picture pausing to change file at a cut) is absorbed by playing
+      // the sound a touch slower or faster; only a big one is re-seeked.
+      if (force || Math.abs(drift) > 0.3) {
+        a.currentTime = t
+        a.playbackRate = 1
+        this.lastDrift = now
+      } else {
+        a.playbackRate = Math.abs(drift) < 0.02 ? 1 : Math.max(0.94, Math.min(1.06, 1 - drift * 0.6))
+      }
+    } else if (force || (now - this.lastDrift > 500 && Math.abs(drift) > 0.12)) {
       a.currentTime = t
       this.lastDrift = now
     }
-    if (a.paused) a.play().catch(() => {})
+    if (a.paused) a.play().catch(() => { if (a === this.mix) this.mixBroken = true })
   }
 
   private async forward(rate: number) {
     let t = phStore.get()
     if (t >= this.total - EPS) { t = 0; phStore.set(0) }
+    this.back?.pause()
+    this.front()
     this.cur = locate(this.items, t)
     this.switching = true
+    this.bed(rate)   // mute the picture before it starts if the mix will carry the sound
     await this.enter(this.cur, t, rate)
     this.switching = false
     this.syncMusic(t, rate, true)
@@ -165,6 +302,17 @@ export class Transport {
           pos = it.seq_start + (ct - it.src_start)
           done = ct >= it.src_end - EPS || this.video!.ended
         }
+        this.preload(this.cur)
+        // a dissolve starts the next shot early, under the end of this one
+        const d = rate === 1 ? dissolveAfter(this.items, this.cur, this.trans, this.fps) : null
+        if (d && pos >= d.from && this.pre?.k === this.cur + 1 && this.pre.ready && this.back?.paused) {
+          // start where the playhead already is inside the window, not at its edge
+          this.back.currentTime = d.inFrom + Math.max(0, pos - d.from)
+          this.back.playbackRate = rate
+          this.back.play().catch(() => {})
+        }
+        // the outgoing shot of a dissolve plays out its tail under the new one
+        if (this.leaving && phStore.get() >= this.leaving.to) { this.leaving.el.pause(); this.leaving = null }
         if (done) {
           const next = this.cur + 1
           if (next >= this.items.length) { phStore.set(this.total); this.stop(); return }
@@ -174,13 +322,28 @@ export class Transport {
           // the other half of a cut, straight after: keep playing, no seek
           const seamless = it.kind === 'shot' && nx.kind === 'shot' && nx.clip_id === it.clip_id
             && Math.abs(nx.src_start - it.src_end) < 0.02
-          if (!seamless) {
+          const pre = this.pre
+          if (nx.kind === 'shot' && !seamless && pre && pre.k === next && pre.ready && this.back) {
+            // the next shot is already waiting: swap pictures, no seek, no flash
+            const out = this.video!
+            this.video = this.back
+            this.back = out
+            this.pre = null
+            this.state({ gap: false })
+            if (this.video.paused) {
+              this.video.playbackRate = rate
+              this.video.play().catch(() => {})
+            }
+            if (d && d.to > d.cut && it.kind === 'shot') this.leaving = { el: out, from: d.from, to: d.to }
+            else out.pause()
+          } else if (!seamless) {
             this.switching = true
             this.enter(next, nx.seq_start, rate).then(() => { this.switching = false; this.last = performance.now() })
           }
         } else {
           phStore.set(Math.min(pos, it.seq_end))
         }
+        this.paint(phStore.get())
         this.syncMusic(phStore.get(), rate)
       }
       this.raf = requestAnimationFrame(tick)
@@ -192,6 +355,7 @@ export class Transport {
   private reverse(rate: number) {
     this.video?.pause()
     this.audio?.pause()
+    this.mix?.pause()
     this.last = performance.now()
     let lastShown = 0
     const tick = (now: number) => {
