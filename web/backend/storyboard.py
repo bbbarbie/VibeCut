@@ -540,11 +540,12 @@ def order_overlap(a: list[str], b: list[str]) -> float:
 
 def build(clips: list[dict], direction: str, vision: bool,
           lean: tuple[list[str], list[str]] | None = None, cut: tuple[set, dict] | None = None,
-          voiceover: dict | None = None) -> dict:
+          voiceover: dict | None = None, style: dict | None = None) -> dict:
     """Three proposals. `lean` = (theme names, Vision labels) when the chat
     model has already read the direction; otherwise keyword matching.
     With the creator's `voiceover` (voiceover.parse), a fourth comes first:
-    one part per spoken line."""
+    one part per spoken line. `style` is the creator's answers to the
+    style questions (brief.py): length, pace, opening."""
     everyone = shots_from_clips(clips, cut)
     shots, notes = usable(everyone)
     if lean is not None:
@@ -555,6 +556,10 @@ def build(clips: list[dict], direction: str, vision: bool,
         s.lean = bool(d.labels) and matches(s, d)
 
     options = [by_time(shots, d), by_place(shots, d, everyone), by_subject(shots, d, everyone, vision)]
+    best = {f"{c['id']}:{s['index']}": s["best_t"] for c in clips for s in c["shots"] if "best_t" in s}
+    if style:
+        from . import brief
+        brief.shape(options, style, best)
 
     base = [s.id for b in options[0].beats for s in b.shots]
     out = []
@@ -573,7 +578,6 @@ def build(clips: list[dict], direction: str, vision: bool,
 
     if voiceover and voiceover.get("lines"):
         from . import voiceover as vo
-        best = {f"{c['id']}:{s['index']}": s["best_t"] for c in clips for s in c["shots"]}
         out.insert(0, vo.propose(voiceover, shots, best))
 
     n_lean = sum(s.lean for s in shots)

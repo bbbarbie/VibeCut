@@ -353,3 +353,49 @@ def review_talk(sentences: list[dict], script: list[str]) -> dict:
         raise LLMError(str(e)) from e
     text = next((b.text for b in resp.content if b.type == "text"), "")
     return json.loads(text)
+
+
+# --------------------------------------------------------------------------
+# style questions (brief.py): one or two more, tailored to the description
+# --------------------------------------------------------------------------
+
+QUESTIONS_SYSTEM = """A vlogger has just dropped their clips into VibeCut and described the video in one line. Before anything is cut they answer a few multiple-choice style questions. These are already asked (don't repeat or rephrase them): {asked}.
+
+Add at most two more questions that are specific to THIS description and would change which moments the edit keeps or how it's ordered — for example, for "my trip to Tokyo" you might ask which part of the trip matters most. Each question is short and friendly, with 2–4 short choices (a few words each). No questions about music, fonts, colour, captions or length — those are handled elsewhere. If the description is too vague for a useful extra question, return none."""
+
+QUESTIONS_SCHEMA = {
+    "type": "object", "additionalProperties": False, "required": ["questions"],
+    "properties": {"questions": {"type": "array", "items": {
+        "type": "object", "additionalProperties": False, "required": ["question", "choices"],
+        "properties": {
+            "question": {"type": "string"},
+            "choices": {"type": "array", "items": {"type": "string"}},
+        }}}},
+}
+
+
+def tailor_questions(message: str, asked: list[dict]) -> list[dict]:
+    """-> extra questions in brief.py's shape. Only the description leaves the machine."""
+    import anthropic
+
+    try:
+        resp = client().messages.create(
+            model=MODEL, max_tokens=2000,
+            system=QUESTIONS_SYSTEM.format(asked="; ".join(q["question"] for q in asked)),
+            messages=[{"role": "user", "content": message[:1000]}],
+            output_config={"effort": "low", "format": {"type": "json_schema", "schema": QUESTIONS_SCHEMA}},
+        )
+    except anthropic.APIError as e:
+        raise LLMError(str(e)) from e
+    text = next((b.text for b in resp.content if b.type == "text"), "")
+    try:
+        raw = json.loads(text).get("questions", [])
+    except (json.JSONDecodeError, AttributeError) as e:
+        raise LLMError("unreadable questions") from e
+    out = []
+    for i, q in enumerate(raw[:2]):
+        choices = [c.strip()[:60] for c in q.get("choices", []) if c.strip()][:4]
+        if q.get("question", "").strip() and len(choices) >= 2:
+            out.append({"id": f"extra{i + 1}", "question": q["question"].strip()[:140], "multi": False,
+                        "choices": [{"key": c, "label": c} for c in choices]})
+    return out

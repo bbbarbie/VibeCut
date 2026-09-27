@@ -341,10 +341,64 @@ def load_index(path: str, audio: bool = True, verbose: bool = False) -> Media:
         frames=area_resize(frames, FRAME_W, FRAME_H),
         audio=snd,
         meta={"tags": tags, "codec": v.get("codec_name"), "rotation": rot,
-              "sampling": sampling},
+              "sampling": sampling, "transfer": v.get("color_transfer"),
+              "primaries": v.get("color_primaries")},
         times=times,
         preview=frames,
     )
+
+
+# iPhones film HDR (HLG, often with Dolby Vision on top) by default. Decoded
+# straight to 8-bit RGB with no tone mapping, that signal looks flat and
+# milky -- lifted blacks, no highlights, washed-out colour -- which is not
+# what the creator saw on their phone. Only pictures a person looks at
+# (thumbnails, samples) are mapped; the measurement frames stay as decoded,
+# so no threshold moves.
+HDR_TRANSFERS = {"arib-std-b67": "hlg", "smpte2084": "pq"}
+_HLG_A, _HLG_B, _HLG_C = 0.17883277, 0.28466892, 0.55991073
+_REF_WHITE_NITS = 203.0      # BT.2408 HDR reference white -> SDR white
+_BT2020_TO_709 = np.array([[1.6605, -0.5876, -0.0728],
+                           [-0.1246, 1.1329, -0.0083],
+                           [-0.0182, -0.1006, 1.1187]], dtype=np.float32)
+
+
+def is_hdr(meta: dict) -> bool:
+    return meta.get("transfer") in HDR_TRANSFERS
+
+
+def to_sdr(images: np.ndarray, meta: dict) -> np.ndarray:
+    """HDR-coded (..., 3) uint8 RGB -> what an SDR screen should show.
+    Anything not flagged HLG or PQ comes back unchanged."""
+    kind = HDR_TRANSFERS.get(meta.get("transfer") or "")
+    if kind is None:
+        return images
+    if images.ndim == 4 and len(images) > 16:   # a clip's worth of float32 is too much at once
+        return np.concatenate([to_sdr(images[i:i + 16], meta) for i in range(0, len(images), 16)])
+    e = images.astype(np.float32) / 255.0
+    if kind == "hlg":
+        # Inverse OETF to scene light, then the BT.2100 OOTF for a 1000-nit display.
+        scene = np.where(e <= 0.5, e * e / 3.0,
+                         (np.exp((e - _HLG_C) / _HLG_A) + _HLG_B) / 12.0)
+        ys = scene @ np.array([0.2627, 0.6780, 0.0593], dtype=np.float32)
+        nits = 1000.0 * scene * np.power(np.maximum(ys, 1e-6), 0.2)[..., None]
+    else:
+        m1, m2, c1, c2, c3 = 0.1593017578125, 78.84375, 0.8359375, 18.8515625, 18.6875
+        p = np.power(e, 1 / m2)
+        nits = 10000.0 * np.power(np.maximum(p - c1, 0) / (c2 - c3 * p), 1 / m1)
+    lin = nits / _REF_WHITE_NITS
+    if (meta.get("primaries") or "bt2020") == "bt2020":
+        lin = np.maximum(lin @ _BT2020_TO_709.T, 0.0)
+    # Keep everything up to reference white as is; roll the highlights off
+    # smoothly into the top of the range instead of clipping them flat.
+    # (Extended Reinhard above the knee: the brightest the source can be
+    # lands exactly on white.)
+    peak = lin.max(axis=-1, keepdims=True)
+    knee, top = 0.8, (10000.0 if kind == "pq" else 1000.0) / _REF_WHITE_NITS
+    x, w = (peak - knee) / (1 - knee), (top - knee) / (1 - knee)
+    rolled = knee + (1 - knee) * x * (1 + x / (w * w)) / (1 + x)
+    lin = lin * np.where(peak > knee, rolled / np.maximum(peak, 1e-6), 1.0)
+    srgb = np.where(lin <= 0.0031308, 12.92 * lin, 1.055 * np.power(np.clip(lin, 0, 1), 1 / 2.4) - 0.055)
+    return np.clip(srgb * 255.0 + 0.5, 0, 255).astype(np.uint8)
 
 
 def loudness_lufs(path: str) -> float | None:

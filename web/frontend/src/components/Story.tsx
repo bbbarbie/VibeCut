@@ -116,7 +116,7 @@ function Ask({ clips, asking, onAsk, voiceover }: { clips: Clip[]; asking: boole
       <div className="mx-auto max-w-2xl">
         <p className="text-[12px] text-muted">{clips.length} clips loaded</p>
         <h2 className="mt-1 font-serif text-[26px] text-zinc-100">What’s this video about?</h2>
-        <p className="mt-1 text-[13px] text-zinc-400">One line is enough. You’ll get three different ways to put it together.</p>
+        <p className="mt-1 text-[13px] text-zinc-400">One line is enough. I’ll ask a few quick questions about the style, then show you three ways to put it together.</p>
         <div className="mt-4 flex gap-2">
           <input autoFocus value={text} onChange={(e) => setText(e.target.value)} disabled={asking}
                  onKeyDown={(e) => { if (e.key === 'Enter') go(text) }}
@@ -134,7 +134,7 @@ function Ask({ clips, asking, onAsk, voiceover }: { clips: Clip[]; asking: boole
           ))}
         </div>
         <div className="mt-5 flex">{voiceover}</div>
-        <div className="mt-8 grid grid-cols-6 gap-1.5 opacity-80">
+        <div className="mt-8 grid grid-cols-6 gap-1.5">
           {shots.slice(0, 24).map((s) => (
             <img key={s.id} src={s.thumb} className="aspect-video w-full rounded object-cover" />
           ))}
