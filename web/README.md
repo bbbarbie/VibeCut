@@ -382,14 +382,33 @@ Measured: a 31 s TTS talking-head test (5 long pauses, a restart, a
 stutter, a filler) → 20.5 s; the exported audio transcribed back contains
 every intended word and none of the removed ones.
 
+## The sound holds the edit together
+
+Most of what makes an auto-edit feel like a pile of clips is heard, not
+seen: every cut used to cut the sound too. Now the edit's sound is built
+once (`backend/audiomix.py`) and both **Watch it all** and **Export** use
+that same track, so the preview sounds exactly like the file:
+
+- no join is a raw step (a 15 ms fade hides the click);
+- **between parts the place's sound carries on** for half a second under
+  the next part (an L cut) — the chip between two parts says so and offers
+  *Let the sound flow on*, *Hear the next part first* (a J cut) or *Clean
+  break*; chat can do the same ("let the market sound flow into dinner").
+  Where the shot wasn't filmed long enough past the cut, the chip says
+  "no footage to carry" and it plays as a clean break;
+- the music sits at the export's level, ducks where a Remix asked, and is
+  part of the storyboard (`set_music`), so it's undoable and a Remix's
+  track, in-point, levels and grade survive editing.
+
+The picture is untouched: every shot keeps its frame count.
+
 ## Export
 
 **Export** (header, or the timeline bar) renders the timeline to one MP4 in
 `~/Movies/VibeCut` (`VIBECUT_EXPORTS` to override): 1080p, vertical if most
 of the edit was filmed vertically, 30 fps, H.264 (VideoToolbox on a Mac) +
-AAC, with the words on screen and, if one is in use, the music under the
-original sound (35%, faded out over the last 2 s). The original files are
-only read.
+AAC, with the words on screen and the edit's mixed sound (above: joins,
+music at 35% faded out over the last 2 s). The original files are only read.
 
 1. The browser draws every *distinct* overlay frame (a title holding still
    is one PNG with a duration) and uploads it with a schedule.

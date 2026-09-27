@@ -38,10 +38,14 @@ MIN_SHOT_S = 1.5
 # What the chat model may emit.
 LLM_OPS = ("choose_option", "move_beat", "drop_beat", "drop_shot", "swap_shot",
            "add_shot", "move_shot", "retitle_beat", "set_pace", "open_with", "end_with",
-           "add_overlay", "edit_overlay", "drop_overlay")
+           "add_overlay", "edit_overlay", "drop_overlay", "set_join")
 # Plus the precise timeline edits, which come from the keyboard, never from
 # a sentence: cut at a point, trim an edge to a point, remove a range.
-OPS = LLM_OPS + ("split", "trim", "drop_range", "overlay_style", "apply_style")
+OPS = LLM_OPS + ("split", "trim", "drop_range", "overlay_style", "apply_style", "set_music")
+# How the sound crosses a cut (audiomix.py): hard, carried out (L), carried in (J).
+JOIN_SOUNDS = ("cut", "carry_out", "carry_in", "default")
+# What set_music may record about the bed under the edit (export and preview mix it the same).
+MUSIC_KEYS = ("track", "in", "gain", "original", "level", "fade_out", "duck", "sfx")
 # Words on screen (overlays.py): same log, same undo, but they never touch a shot.
 OVERLAY_OPS = ("add_overlay", "edit_overlay", "drop_overlay", "overlay_style")
 
@@ -249,6 +253,29 @@ def apply(board: dict | None, op: dict, cat: Catalog, proposals: dict | None,
             restyle.apply(b, op, cat)
         except restyle.StyleError as e:
             raise OpError(str(e)) from e
+        return b, op
+
+    if kind == "set_join":
+        # The join *after* this shot. Addressed by entry key, like every
+        # other op, so it travels with the shot and survives replay.
+        k, sound = op.get("shot"), op.get("sound", "default")
+        if sound not in JOIN_SOUNDS:
+            raise OpError(f"a join's sound is one of {', '.join(JOIN_SOUNDS)}, not {sound!r}")
+        beat, i = _where(b, k)
+        if beat is b["beats"][-1] and i == len(beat["shots"]) - 1:
+            raise OpError("that's the last shot — there's no cut after it")
+        joins = dict(b.get("joins") or {})
+        if sound == "default":
+            joins.pop(k, None)
+        else:
+            joins[k] = {"sound": sound}
+        b["joins"] = joins
+        return b, op
+
+    if kind == "set_music":
+        # The bed under the whole edit: which track, where it starts, how
+        # loud, where it ducks. From the music card or a Remix, never chat.
+        b["music"] = {k: op[k] for k in MUSIC_KEYS if k in op}
         return b, op
 
     if kind == "move_beat":
@@ -593,8 +620,35 @@ def describe(d: dict, a: dict | None, b: dict | None, ops: list[dict] | None = N
         lines.append({"kind": "moved", "text": f"Moved {n(len(shot_moves))} within “{'”, “'.join(sorted(where))}”"})
     lines += ov.describe(a, b)
     lines += restyle.describe(a, b)
+    lines += _describe_sound(a, b)
     if not lines:
         lines.append({"kind": "none", "text": "No change"})
+    return lines
+
+
+SOUND_WORDS = {"carry_out": "the sound now flows on past", "carry_in": "the next sound now starts before",
+               "cut": "the sound now cuts cleanly at"}
+
+
+def _describe_sound(a: dict | None, b: dict | None) -> list[dict]:
+    """Joins and music, in words. Computed from the boards, like the rest."""
+    if a is None or b is None:
+        return []
+    lines = []
+    ja, jb = a.get("joins") or {}, b.get("joins") or {}
+    where = {key(s): bt for bt in b["beats"] for s in bt["shots"]}
+    for k in sorted(set(ja) | set(jb)):
+        if ja.get(k) == jb.get(k):
+            continue
+        bt = where.get(k)
+        place = f"the cut after a shot in “{bt['title']}”" if bt else "a cut"
+        text = (f"At {place}, {SOUND_WORDS[jb[k]['sound']]} it" if k in jb
+                else f"At {place}, the sound is back to automatic")
+        lines.append({"kind": "sound", "beat": bt["id"] if bt else None, "shot": k, "text": text})
+    if (a.get("music") or None) != (b.get("music") or None):
+        m = b.get("music") or {}
+        lines.append({"kind": "sound", "text": "Music taken off the edit" if "track" in m and not m["track"]
+                      else "Music under the edit changed"})
     return lines
 
 

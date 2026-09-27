@@ -92,7 +92,7 @@ export type LookFit = { lut: string; strength: number; previews: { before: strin
   numbers: Record<'yours' | 'after' | 'reference', { warmth: number; black: number; sat: number }> }
 
 export type DiffLine = {
-  kind: 'removed' | 'added' | 'moved' | 'trimmed' | 'retitled' | 'swapped' | 'replaced' | 'none'
+  kind: 'removed' | 'added' | 'moved' | 'trimmed' | 'retitled' | 'swapped' | 'replaced' | 'style' | 'sound' | 'none'
   text: string; beat?: string; shot?: string; thumb?: string
 }
 export type Diff = {
@@ -139,6 +139,8 @@ export type Session = {
   cut: CutSummary | null
   timeline: TimelineData
   music: MusicTrack | null
+  // The edit's sound as one track (backend/audiomix.py) -- what preview plays and export writes.
+  mix: { key: string; audio: string; joins: JoinInfo[] } | null
   board: Board | null
   structure_note: string | null
   last: { turn: number; diff: Diff | null; ghosts: { index: number; title: string; thumbs: string[] }[] } | null
@@ -199,3 +201,7 @@ export type TalkState = { job: TalkJob | null; plan: TalkPlan | null; llm: boole
 export type StyleChoice = { key: string; label: string; hint?: string }
 export type StyleQuestion = { id: string; question: string; multi: boolean; hint?: string; choices: StyleChoice[] }
 export type StyleAnswers = { length?: string; pace?: string; opening?: string }
+
+// How the sound crosses a cut: carried out (L cut), carried in (J cut), or a clean break.
+export type JoinSound = 'cut' | 'carry_out' | 'carry_in' | 'default'
+export type JoinInfo = { after: string; at: number; sound: Exclude<JoinSound, 'default'>; set: boolean; fits: boolean }

@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react'
-import type { Board, BoardBeat, BoardShot, Clip, Option, Session } from '../types'
+import type { Board, BoardBeat, BoardShot, Clip, JoinInfo, JoinSound, Option, Session } from '../types'
 import { dur } from '../format'
 import { Voiceover } from './Voiceover'
 
@@ -16,7 +16,7 @@ const playItems = (beats: { shots: { id: string; clip_id: string | null; start: 
   beats.flatMap((b) => b.shots.filter((s) => !s.gap && s.clip_id).map((s) => ({ id: s.id, clipId: s.clip_id!, start: s.start, end: s.end })))
 
 export function Story({ session, clips, asking, playing, nowShot, selected, onPick, onAsk, onVoiceover, onTalk, onUse, onPlay,
-  onSelect, onMoveBeat, onRetitle, onBeatAction, matchStyle }: {
+  onSelect, onMoveBeat, onRetitle, onBeatAction, matchStyle, onJoin }: {
   session: Session | null
   clips: Clip[]
   asking: boolean
@@ -34,6 +34,7 @@ export function Story({ session, clips, asking, playing, nowShot, selected, onPi
   onRetitle: (beat: string, title: string) => void
   onBeatAction: (action: 'play' | 'up' | 'down' | 'remove' | 'frames', beat: string) => void
   matchStyle?: ReactNode
+  onJoin?: (after: string, sound: JoinSound) => void
 }) {
   const board = session?.board ?? null
   const proposals = session?.proposals ?? null
@@ -74,7 +75,7 @@ export function Story({ session, clips, asking, playing, nowShot, selected, onPi
   return (
     <BoardRows session={session!} board={board} playing={playing} nowShot={nowShot} selected={selected}
                onPlay={onPlay} onSelect={onSelect} onMoveBeat={onMoveBeat} onRetitle={onRetitle}
-               onBeatAction={onBeatAction} onOthers={() => setShowOthers(true)} matchStyle={matchStyle} />
+               onBeatAction={onBeatAction} onOthers={() => setShowOthers(true)} matchStyle={matchStyle} onJoin={onJoin} />
   )
 }
 
@@ -206,8 +207,9 @@ function OptionCard({ o, current, playing, onPlay, onUse }: {
 // ---- the chosen story: one row per part --------------------------------------
 
 function BoardRows({ session, board, playing, nowShot, selected, onPlay, onSelect, onMoveBeat, onRetitle,
-  onBeatAction, onOthers, matchStyle }: {
+  onBeatAction, onOthers, matchStyle, onJoin }: {
   session: Session; board: Board; playing: string | null; nowShot: string | null; selected: Selection
+  onJoin?: (after: string, sound: JoinSound) => void
   onPlay: (source: string, items: PlayItem[]) => void
   onSelect: (sel: Selection, anchor: DOMRect | null) => void
   onMoveBeat: (beat: string, to: number) => void
@@ -277,6 +279,11 @@ function BoardRows({ session, board, playing, nowShot, selected, onPlay, onSelec
           return (
             <li key={b.id} className="relative">
               {ghost.map((g) => <Ghost key={g.title} title={g.title} thumbs={g.thumbs} />)}
+              {i > 0 && onJoin && (() => {
+                const prev = board.beats[i - 1].shots.at(-1)
+                const j = prev && session.mix?.joins.find((x) => x.after === prev.key)
+                return j ? <JoinChip join={j} onPick={(sound) => onJoin(j.after, sound)} /> : null
+              })()}
               {dropAt === i && dragBeat && <div className="absolute -top-1.5 inset-x-0 h-0.5 rounded bg-accent" />}
               <div
                 data-row
@@ -352,6 +359,43 @@ function ShotThumb({ s, selected, now, ring, onClick }: {
       )}
       <span className="absolute bottom-0.5 right-0.5 rounded bg-black/70 px-1 text-[10px] tabular-nums text-zinc-200">{len < 10 ? len.toFixed(1) : Math.round(len)}s</span>
     </button>
+  )
+}
+
+// ---- how the sound crosses from one part to the next ---------------------------
+
+const JOIN_WORDS: Record<Exclude<JoinSound, 'default'>, { chip: string; menu: string; hint: string }> = {
+  carry_out: { chip: '♪ sound flows on', menu: 'Let the sound flow on', hint: 'This part’s sound keeps going for a moment under the next — the change feels like one movement' },
+  carry_in: { chip: '♪ next sound first', menu: 'Hear the next part first', hint: 'The next part’s sound starts a moment before its picture — it pulls you forward' },
+  cut: { chip: '✂ clean break', menu: 'Clean break', hint: 'Sound and picture change together, softened so it doesn’t click' },
+}
+
+function JoinChip({ join, onPick }: { join: JoinInfo; onPick: (s: JoinSound) => void }) {
+  const [open, setOpen] = useState(false)
+  const w = JOIN_WORDS[join.sound]
+  return (
+    <div className="relative -mt-1 mb-1 flex justify-center">
+      <button type="button" onClick={() => setOpen((o) => !o)}
+              title={join.fits ? w.hint : 'There’s no footage past this cut to carry the sound with, so it plays as a clean break. Trim the shot a little earlier to make room.'}
+              className={`rounded-full border px-2 py-0.5 text-[10px] ${join.set ? 'border-accent/50 text-accent' : 'border-line text-muted hover:text-zinc-300'}`}>
+        {join.fits ? w.chip : `${JOIN_WORDS.cut.chip} — no footage to carry`}{join.set ? '' : ' · auto'}
+      </button>
+      {open && (
+        <div className="absolute top-6 z-20 w-64 rounded-lg border border-line bg-panel p-1 shadow-xl">
+          {(Object.keys(JOIN_WORDS) as (keyof typeof JOIN_WORDS)[]).map((k) => (
+            <button key={k} type="button" onClick={() => { setOpen(false); onPick(k) }}
+                    className={`block w-full rounded-md px-2 py-1.5 text-left text-[12px] hover:bg-raised ${join.sound === k ? 'text-accent' : 'text-zinc-200'}`}>
+              {JOIN_WORDS[k].menu}
+              <span className="block text-[10px] leading-snug text-muted">{JOIN_WORDS[k].hint}</span>
+            </button>
+          ))}
+          {join.set && (
+            <button type="button" onClick={() => { setOpen(false); onPick('default') }}
+                    className="block w-full rounded-md px-2 py-1.5 text-left text-[12px] text-muted hover:bg-raised">Back to automatic</button>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 

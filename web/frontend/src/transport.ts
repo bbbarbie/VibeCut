@@ -30,10 +30,18 @@ export type SnapInfo = { target: Target; snapped: boolean } | null
 export const snapStore = createStore<SnapInfo>(null)
 
 const EPS = 0.5 / 30
+// Same as the export's (backend audiomix.MUSIC_GAIN): the preview must not
+// sound louder than the file. Only used when the mixed track can't play.
+export const MUSIC_GAIN = 0.35
 
 export class Transport {
   video: HTMLVideoElement | null = null
-  audio: HTMLAudioElement | null = null   // music under the edit, if any
+  audio: HTMLAudioElement | null = null   // music under the edit, if any (fallback)
+  // The edit's whole sound, mixed by the backend exactly as export will write
+  // it: joins carried or cut, micro-fades, the music bed. While it plays the
+  // picture is muted, so every cut stops cutting the sound.
+  mix: HTMLAudioElement | null = null
+  mixBroken = false
   items: SeqItem[] = []
   total = 0
   private raf = 0
@@ -114,7 +122,23 @@ export class Transport {
     cancelAnimationFrame(this.raf)
     this.video?.pause()
     this.audio?.pause()
+    this.mix?.pause()
+    if (this.video) this.video.muted = false   // shelf previews play their own sound
     this.state({ playing: false, rate: 0 })
+  }
+
+  private mixUsable() {
+    return !!this.mix && !this.mixBroken && !this.mix.error && !!this.mix.getAttribute('src') && this.mix.readyState >= 2
+  }
+
+  /** The bed that follows the playhead: the mix if it plays, else the plain music. */
+  private bed(rate: number): HTMLAudioElement | null {
+    const useMix = rate === 1 && this.mixUsable()
+    if (this.video) this.video.muted = useMix
+    if (useMix) { this.audio?.pause(); return this.mix }
+    this.mix?.pause()
+    if (this.audio) this.audio.volume = MUSIC_GAIN
+    return this.audio
   }
 
   private async enter(k: number, t: number, rate: number) {
@@ -129,15 +153,27 @@ export class Transport {
   }
 
   private syncMusic(t: number, rate: number, force = false) {
-    const a = this.audio
+    const a = this.bed(rate)
     if (!a) return
     if (rate !== 1) { a.pause(); return }
     const now = performance.now()
-    if (force || (now - this.lastDrift > 500 && Math.abs(a.currentTime - t) > 0.12)) {
+    const drift = a.currentTime - t
+    if (a === this.mix) {
+      // The mix is the whole sound: a seek is heard as a skip, so small drift
+      // (the picture pausing to change file at a cut) is absorbed by playing
+      // the sound a touch slower or faster; only a big one is re-seeked.
+      if (force || Math.abs(drift) > 0.3) {
+        a.currentTime = t
+        a.playbackRate = 1
+        this.lastDrift = now
+      } else {
+        a.playbackRate = Math.abs(drift) < 0.02 ? 1 : Math.max(0.94, Math.min(1.06, 1 - drift * 0.6))
+      }
+    } else if (force || (now - this.lastDrift > 500 && Math.abs(drift) > 0.12)) {
       a.currentTime = t
       this.lastDrift = now
     }
-    if (a.paused) a.play().catch(() => {})
+    if (a.paused) a.play().catch(() => { if (a === this.mix) this.mixBroken = true })
   }
 
   private async forward(rate: number) {
@@ -145,6 +181,7 @@ export class Transport {
     if (t >= this.total - EPS) { t = 0; phStore.set(0) }
     this.cur = locate(this.items, t)
     this.switching = true
+    this.bed(rate)   // mute the picture before it starts if the mix will carry the sound
     await this.enter(this.cur, t, rate)
     this.switching = false
     this.syncMusic(t, rate, true)
@@ -192,6 +229,7 @@ export class Transport {
   private reverse(rate: number) {
     this.video?.pause()
     this.audio?.pause()
+    this.mix?.pause()
     this.last = performance.now()
     let lastShown = 0
     const tick = (now: number) => {

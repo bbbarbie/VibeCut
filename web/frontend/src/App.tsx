@@ -102,6 +102,11 @@ export default function App() {
   const dragDepth = useRef(0)
   const videoRef = useRef<HTMLVideoElement>(null)
   const musicRef = useRef<HTMLAudioElement>(null)
+  const mixRef = useRef<HTMLAudioElement>(null)
+  // "Watch it all" plays the story through the transport, so it is heard
+  // with its mixed sound (joins, music bed) exactly as it will export.
+  const [boardPlay, setBoardPlay] = useState(false)
+  const [boardShot, setBoardShot] = useState<string | null>(null)
   const tr = useStore(transportStore)
   const tl = session?.timeline ?? EMPTY_TL
   const fr = 1 / tl.fps
@@ -143,6 +148,19 @@ export default function App() {
     setMenu(null)
   }, [level])
   useEffect(() => { transport.audio = session?.music ? musicRef.current : null }, [session?.music])
+  const mixKey = session?.mix?.key
+  useEffect(() => { transport.mix = mixKey ? mixRef.current : null; transport.mixBroken = false }, [mixKey])
+  useEffect(() => { if (!tr.playing) setBoardPlay(false) }, [tr.playing])
+  useEffect(() => {
+    if (!boardPlay) { setBoardShot(null); return }
+    const show = () => {
+      const k = locate(tl.items, phStore.get())
+      const it = k < 0 ? null : tl.items[k]
+      setBoardShot(it && it.kind === 'shot' ? it.key : null)
+    }
+    show()
+    return phStore.subscribe(show)
+  }, [boardPlay, tl.items])
 
   const say = useCallback((text: string, busy = false) => {
     const id = uid()
@@ -338,6 +356,17 @@ export default function App() {
     setSegment({ key: uid(), clipId: it.clipId, start: it.start, end: it.end, autoplay: true })
   }
   const playSource = (source: string, list: PlayItem[]) => {
+    if (source === 'board') {
+      if (boardPlay) { transport.stop(); return }
+      stopQueue()
+      setSegment(null)
+      transport.video = videoRef.current
+      transport.seek(0)
+      transport.play(1)
+      setBoardPlay(true)
+      return
+    }
+    if (boardPlay) transport.stop()
     if (queue?.source === source) { stopQueue(); videoRef.current?.pause(); return }
     if (list.length) playAt({ source, items: list, index: 0 }, 0)
   }
@@ -750,8 +779,8 @@ export default function App() {
                 session={session}
                 clips={clips}
                 asking={!!pending}
-                playing={queue?.source ?? null}
-                nowShot={queue ? queue.items[queue.index]?.id ?? null : null}
+                playing={boardPlay ? 'board' : queue?.source ?? null}
+                nowShot={boardPlay ? (boardShot && entry(boardShot)?.id) ?? null : queue ? queue.items[queue.index]?.id ?? null : null}
                 selected={storySel}
                 onPick={(fl) => importPicked(fromInput(fl))}
                 onAsk={send}
@@ -768,6 +797,8 @@ export default function App() {
                 onMoveBeat={moveBeat}
                 onRetitle={retitle}
                 onBeatAction={beatAction}
+                onJoin={(after, sound) => run([{ op: 'set_join', shot: after, sound }],
+                  sound === 'default' ? 'Sound back to automatic' : 'Changed how the sound crosses a cut')}
               />
               )}
               {undoable && <UndoToast text={undoable.text} onUndo={() => { toggle(undoable.turn); setUndoable(null) }} />}
@@ -858,6 +889,8 @@ export default function App() {
                     onPick={(w) => { doSwap(swap.key, w); setSwap(null) }} onClose={() => setSwap(null)} />
       )}
       {session?.music && <audio ref={musicRef} src={session.music.audio} preload="auto" />}
+      {session?.mix && <audio ref={mixRef} src={session.mix.audio} preload="auto"
+                              onError={() => { transport.mixBroken = true }} />}
       {help && <Keys onClose={() => setHelp(false)} />}
       {exporting && <Export tl={tl} overlays={ovData} parts={parts} music={session?.music?.title ?? null} style={session?.board?.style} onClose={() => setExporting(false)} />}
       {remixing && <Remix onClose={() => setRemixing(false)} onDone={remixDone} />}

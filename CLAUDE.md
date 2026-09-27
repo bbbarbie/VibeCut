@@ -137,6 +137,22 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   - **Voiceover mode** (`web/backend/voiceover.py`): opt-in fourth proposal
     from the creator's SRT or script. See the amended non-goal below.
 
+- **Sound as glue** (`web/backend/audiomix.py`; research
+  `design/research/08-fluency-and-motion-ux.md`, P0/P1). One numpy mixer builds the
+  edit's whole sound; the preview plays it (picture muted, rate-nudged to
+  stay in sync) and export muxes the same samples, so they can't disagree.
+  Every join is micro-faded (15 ms); joins are per cut on the board
+  (`set_join`: cut / carry_out = L / carry_in = J; default carry_out between
+  parts, cut inside), carried only where the source has footage past the
+  cut, else a clean break reported at the join. Music is board state
+  (`set_music`: track, in-point, gains, ducks, sfx, level) — Remix writes it
+  (and its grade via `apply_style`), so editing a remix no longer loses its
+  mix. Default proposals keep one of each look-alike group filmed within
+  15 min (Vision only). Overlay ffconcat gets `option framerate 30` (10 of
+  30 frames were wrong). CARRY_S 0.5 s and MICRO_S are priors — calibrate.
+  Tests: `tests/test_audiomix.py`, additions in `test_export.py`,
+  `test_brief.py`, `test_remix.py`.
+
 ## The rule that matters most
 
 **Do not build the fixer until the thresholds are calibrated against real

@@ -557,8 +557,10 @@ def build(clips: list[dict], direction: str, vision: bool,
 
     options = [by_time(shots, d), by_place(shots, d, everyone), by_subject(shots, d, everyone, vision)]
     best = {f"{c['id']}:{s['index']}": s["best_t"] for c in clips for s in c["shots"] if "best_t" in s}
+    from . import brief
+    if vision:
+        brief.one_per_look(options)
     if style:
-        from . import brief
         brief.shape(options, style, best)
 
     base = [s.id for b in options[0].beats for s in b.shots]

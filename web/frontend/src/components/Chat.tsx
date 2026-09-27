@@ -14,6 +14,8 @@ const MARK: Record<DiffLine['kind'], { sym: string; cls: string }> = {
   trimmed: { sym: '⟷', cls: 'text-sky-300 bg-sky-400/10' },
   retitled: { sym: 'Aa', cls: 'text-violet-300 bg-violet-400/10' },
   replaced: { sym: '▸', cls: 'text-zinc-300 bg-zinc-700/40' },
+  style: { sym: '✦', cls: 'text-violet-300 bg-violet-400/10' },
+  sound: { sym: '♪', cls: 'text-sky-300 bg-sky-400/10' },
   none: { sym: '·', cls: 'text-zinc-500 bg-zinc-800/40' },
 }
 
@@ -183,7 +185,7 @@ function TurnView({ t, onToggle, onChoice, candidate, onClassify }: {
             <ul className={`mt-2 space-y-1 ${t.undone ? 'line-through decoration-zinc-600' : ''}`}>
               {t.lines.filter((l) => l.kind !== 'none' || !t.direction).map((l, i) => (
                 <li key={i} className="flex items-center gap-2 text-[12px]">
-                  <span className={`grid h-5 min-w-5 place-items-center rounded px-1 text-[11px] font-semibold ${MARK[l.kind].cls}`}>{MARK[l.kind].sym}</span>
+                  <span className={`grid h-5 min-w-5 place-items-center rounded px-1 text-[11px] font-semibold ${(MARK[l.kind] ?? MARK.none).cls}`}>{(MARK[l.kind] ?? MARK.none).sym}</span>
                   <span className="min-w-0 flex-1 text-zinc-300">{l.text}</span>
                   {l.thumb && <img src={l.thumb} className="h-5 w-9 shrink-0 rounded-sm object-cover" />}
                 </li>
