@@ -437,6 +437,26 @@ next shot is loaded in a second, hidden player before each cut, so cuts
 don't flash black while a new file loads. The borrowed colour grade is
 still export-only.
 
+## Polish: point at a moment of a finished video (`#polish`)
+
+For an edit that's already cut. Open the video (it's read once: cuts,
+movement, beat — and faces on a Mac), click the picture where you want
+something, say it:
+
+- 「这里写上东京第一天」 / `write "Day one"` — words at that moment, in your
+  recipe
+- 「这里加个 boom」 — a punch-in that starts on the nearest movement (or beat),
+  not on the frame you happened to click; it says which
+- 「这段字大一点 / 小一点」, 「改成「…」」, 「删掉这条字幕」
+- 「把这条字幕存成配方」 — the caption's font, size, colour, stroke, position
+  and entrance become your recipe; new words use it. 「用我的配方」 puts it on
+  the caption you clicked.
+
+Words never cover a face (they move above it, below it or to the top, and
+the change says so), never leave the safe area, and never end on a lonely
+character. Every change is listed with Undo. Fonts: your Mac's own, or a
+font file you point at — nothing is bundled.
+
 ## Export
 
 **Export** (header, or the timeline bar) renders the timeline to one MP4 in

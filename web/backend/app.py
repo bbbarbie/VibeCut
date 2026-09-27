@@ -1113,6 +1113,11 @@ def api_thumb(clip_id: str, name: str) -> FileResponse:
                         headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
+# polish: a finished video, the creator pointing at it (polish_api.py)
+from . import polish_api  # noqa: E402
+
+app.include_router(polish_api.router)
+
 DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 if DIST.exists():
     app.mount("/", StaticFiles(directory=DIST, html=True), name="ui")

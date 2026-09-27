@@ -181,6 +181,34 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   flashes are a colour veil at the same opacity as the export's fade, and
   cinematic bars are drawn. The grade (LUT) still appears only in export.
 
+- **polish/** (`polish/`, `web/backend/polish_api.py`, `Polish.tsx`,
+  `polishDraw.ts`; page `#polish`). Assisting an edit that is already cut:
+  input is one finished video, never raw clips; no auto-editing, no
+  storyboard, no selection, no music, no export, no login. One interaction:
+  click the picture → anchor `{t on a frame, x, y in the picture, shot}` →
+  one sentence → ops on caption/effect layers (turn log, computed diff,
+  undo by replay, like `board.py`). Sentences are read by rules first
+  (`parse.py`: 写上「…」 / boom / 大一点 小一点 / 删掉 / 改成 / 用我的配方 /
+  存成配方); the model is asked only when no rule matches (key only).
+  Captions use the creator's **recipe** (`recipe.py`, `$VIBECUT_CACHE/
+  polish/recipes.json`): saved *from* a tuned caption, first = default.
+  Layout (`layout.py`) is decided once, server-side, and the browser draws
+  exactly those lines in that box (shrinking only if its real font is
+  wider): off every face over the caption's span (moves above / below /
+  top and says so), inside the safe area, no one-character last line.
+  Effects snap to a movement onset (±0.4 s, frame-accurate from one
+  `media.load()` of the finished video) or a beat (±0.25 s). Face boxes
+  come from on-device Vision over the index's samples (macOS only);
+  elsewhere the face rule reports `pending`, never "clear". Tests:
+  `tests/test_polish.py`, `test_polish_api.py` (face in the lower third vs
+  the top, through the API), `polishDraw.test.ts`. Windows and margins are
+  priors.
+- **Fonts: only what's already on the creator's machine.** A system family,
+  or a font file the creator points at (served back only if a saved recipe
+  names it). Never bundle or ship a font. **Recognising a font in a
+  reference image or video is not a licence to render it** — naming it is
+  fine, drawing with it needs the creator's own licensed copy.
+
 ## The rule that matters most
 
 **Do not build the fixer until the thresholds are calibrated against real
