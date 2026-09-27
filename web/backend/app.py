@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import board as bd
-from . import audiomix, brief, cut, export, seams, smooth, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, brief, cut, export, looks, seams, smooth, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import Workflow, WorkflowError
 
@@ -127,8 +127,7 @@ def _session() -> dict:
         "proposals": SESSION.proposals,
         "llm": llm.available(),
         "timeline": tl,
-        "overlays": {"items": overlays.resolve(b), "style": overlays.style_of(b),
-                     "findings": overlays.check(b, cat)},
+        "overlays": _overlays_public(b, cat, tl),
         "workflow": WORKFLOW.public(),
         "cut": cut.summary(PLAN["plan"]) if PLAN["plan"] else None,
         "music": _music_public(),
@@ -224,6 +223,17 @@ def api_mix(name: str) -> FileResponse:
         raise HTTPException(500, f"couldn't mix the sound: {e}") from e
     return FileResponse(path, media_type="audio/wav",
                         headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
+def _overlays_public(b: dict | None, cat, tl: dict) -> dict:
+    """Words on screen as both preview and export draw them: resolved times
+    (on the beat, if the look says so), one style with the look's motion."""
+    style = overlays.style_of(b)
+    items = overlays.resolve(b)
+    if (style.get("motion") or {}).get("beat_lock"):
+        items = looks.beat_lock(items, tl.get("grid"), tl.get("total", 0.0))
+    return {"items": items, "style": style, "findings": overlays.check(b, cat),
+            "look": {"id": (b or {}).get("look"), "overrides": looks.overrides(b), "all": looks.public()}}
 
 
 def _voiceover_public() -> dict | None:
@@ -732,7 +742,7 @@ def api_overlays_suggest(req: SuggestReq) -> dict:
         ops, notes = overlays.suggest(b, CATALOG["cat"], req.profile, req.title, req.kinds)
         style = overlays.style_from_profile(req.profile)
         if style and not b.get("overlay_style"):
-            ops.insert(0, {"op": "overlay_style", **style})
+            ops.insert(0, {"op": "overlay_style", **style, "source": "profile"})
         if not ops:
             raise HTTPException(409, "Nothing to add — " + (notes[0][0].lower() + notes[0][1:] if notes
                                                               else "every part already has its words."))

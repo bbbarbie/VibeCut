@@ -38,7 +38,7 @@ MIN_SHOT_S = 1.5
 # What the chat model may emit.
 LLM_OPS = ("choose_option", "move_beat", "drop_beat", "drop_shot", "swap_shot",
            "add_shot", "move_shot", "retitle_beat", "set_pace", "open_with", "end_with",
-           "add_overlay", "edit_overlay", "drop_overlay", "set_join")
+           "add_overlay", "edit_overlay", "drop_overlay", "set_join", "set_look")
 # Plus the precise timeline edits, which come from the keyboard, never from
 # a sentence: cut at a point, trim an edge to a point, remove a range.
 OPS = LLM_OPS + ("split", "trim", "drop_range", "overlay_style", "apply_style", "set_music")
@@ -270,6 +270,15 @@ def apply(board: dict | None, op: dict, cat: Catalog, proposals: dict | None,
         else:
             joins[k] = {"sound": sound}
         b["joins"] = joins
+        return b, op
+
+    if kind == "set_look":
+        # The vibe of the words on screen, for the whole video (looks.py).
+        from . import looks
+        try:
+            looks.apply(b, op)
+        except ValueError as e:
+            raise OpError(str(e)) from e
         return b, op
 
     if kind == "set_music":
@@ -621,6 +630,8 @@ def describe(d: dict, a: dict | None, b: dict | None, ops: list[dict] | None = N
     lines += ov.describe(a, b)
     lines += restyle.describe(a, b)
     lines += _describe_sound(a, b)
+    from . import looks
+    lines += looks.describe(a, b)
     if not lines:
         lines.append({"kind": "none", "text": "No change"})
     return lines

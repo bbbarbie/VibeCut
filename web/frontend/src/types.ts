@@ -120,9 +120,15 @@ export type Overlay = {
   dur: number | null; anchor: { to: 'edit' | 'end' | 'beat' | 'shot'; id?: string }; at: number
   start: number; end: number; shown_end: number
 }
-export type OverlayStyle = { font: 'Clean' | 'Editorial' | 'Rounded'; color: string; accent: string; captions: 'bottom' | 'center'; backing: 'shadow' | 'box' | 'none' }
+export type OverlayStyle = { font: 'Clean' | 'Editorial' | 'Rounded' | 'Mono' | 'Condensed'; color: string; accent: string; captions: 'bottom' | 'center'; backing: 'shadow' | 'box' | 'none'
+  look?: string; motion?: Motion | null }
+// How a look moves words (backend looks/*.json): one curve and timing for the whole video.
+export type Motion = { curve: [number, number, number, number]; in_s: number; step_fps: number; stagger_s: number
+  enter: 'card' | 'slam' | null; case: 'sentence' | 'lower' | 'upper'; track: number; beat_lock: boolean }
+export type LookInfo = { id: string; name: string; line: string; font: OverlayStyle['font']; palette: string[]; status: string; review_by: string }
 export type OverlayFinding = { overlay: string; rule: string; value: number; verdict: 'ok' | 'warn' | 'bad' | 'pending'; basis: string; message: string }
-export type Overlays = { items: Overlay[]; style: OverlayStyle; findings: OverlayFinding[] }
+export type Overlays = { items: Overlay[]; style: OverlayStyle; findings: OverlayFinding[]
+  look?: { id: string | null; overrides: string[]; all: LookInfo[] } }
 export type MusicTrack = { id: string; title: string; duration: number; bpm: number | null; audio: string }
 
 export type CutSummary = { clips: number; kept: number; rejected: number; raw: number; cut: number; ratio: number | null; line_en: string }

@@ -152,6 +152,26 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   30 frames were wrong). CARRY_S 0.5 s and MICRO_S are priors — calibrate.
   Tests: `tests/test_audiomix.py`, additions in `test_export.py`,
   `test_brief.py`, `test_remix.py`.
+- **Every cut checked** (`cutgrammar/joins.py`, `web/backend/seams.py`;
+  research 08 P2). Report only: per cut, brightness jump, colour change
+  (best-frame proxy), same view again, energy step, loudness step, going
+  back in time, shot size — each a Finding declared in `grammar.NEEDS`,
+  from the index (no pixel decode). Story marks rough cuts (! + numbers on
+  hover); each turn gets a second look in chat. The place axis now gives a
+  return visit its own chapter in day order. Thresholds are priors.
+- **Smoother cuts** (`web/backend/smooth.py`, P3-1/P3-2). Only when asked,
+  one undoable turn: beam search over join roughness + filming-order
+  penalty inside a part (move_shot), and window nudges ≤2 s onto movement,
+  never onto a word (trim). Never runs by default — that would be cutfix.
+- **Looks** (`web/backend/looks.py`, `looks/*.json`, P3-3). The spec's 7
+  vibes as dated records (type + motion only; grade, joins, camera, sounds
+  listed as `not_yet`). `set_look` (chat too) keeps what was set by hand and
+  shows it; the profile's saved style is a default, not a choice.
+  `overlayDraw.ts` reads the look's curve, entrance time, stepping, stagger,
+  slam/card entrances, case and tracking; beat lock moves words onto a beat
+  ≤0.25 s away. `overlayLooks.test.ts` checks every look keeps every word in
+  the safe area on every intro frame. Tests: `test_joins.py`,
+  `test_axes.py`, `test_smooth.py`, `test_looks.py`.
 
 ## The rule that matters most
 

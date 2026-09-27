@@ -402,6 +402,32 @@ that same track, so the preview sounds exactly like the file:
 
 The picture is untouched: every shot keeps its frame count.
 
+## Which cuts feel rough, and smoothing them on request
+
+Every cut of the story is checked from the index (`cutgrammar/joins.py`):
+a brightness or colour jump, the same view again from another take, a busy
+second slammed into a still one, a jump in loudness, the day running
+backwards, the same framing of a face. A rough cut gets a **!** between its
+shots (the numbers on hover) and colours the chip between parts; after
+each change the chat says which cuts it made rougher or fixed. Nothing is
+changed by this — it's a report.
+
+**Smoother cuts** (Story header) is the one place it acts, and only when
+pressed: it can reorder shots inside a part (parts stay put; the day only
+runs backwards if that clearly pays) and slide a shot a second or two so
+the cut lands on movement (never on a word). One turn, one Undo; the
+weights are first guesses.
+
+## Looks
+
+**Look** (in Words on screen, or "make it cozy" in chat) sets the vibe of
+the words for the whole video: Clean, Cozy, Quiet, Cinematic, Film,
+Playful, Hype — font, case, colours, backing, and how words move (Cozy's
+stepped paper card, Hype's slam, Playful's bounce). Playful and Hype put
+words on the music's beat when one is under the edit. Anything you set by
+hand is kept and shown ("Your font differs from the look · Use the
+look's"). Looks don't grade the picture yet.
+
 ## Export
 
 **Export** (header, or the timeline bar) renders the timeline to one MP4 in

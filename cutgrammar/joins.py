@@ -103,7 +103,7 @@ def measure(a: Side, b: Side) -> list[Finding]:
                            else "Brightness carries across the cut.", {"from": round(la, 1), "to": round(lb, 1)}))
 
     if a.hist and b.hist and len(a.hist) == len(b.hist):
-        d = 1.0 - float(np.minimum(np.asarray(a.hist), np.asarray(b.hist)).sum())
+        d = max(0.0, 1.0 - float(np.minimum(np.asarray(a.hist), np.asarray(b.hist)).sum()))
         out.append(Finding("join_colour", "Colour change", round(d, 3), "", _grade(d, COLOUR_WARN, COLOUR_BAD),
                            "The two shots look like different cameras or light." if d >= COLOUR_WARN
                            else "The colours sit together.", {"proxy": "best frames, not the cut frames"}))
