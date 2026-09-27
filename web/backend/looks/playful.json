@@ -1,0 +1,45 @@
+{
+  "id": "playful",
+  "name": "Playful",
+  "line": "Bright and bouncy, a little silly.",
+  "type": {
+    "display": "Poppins 700 / Poppins 600",
+    "font": "Rounded",
+    "case": "sentence",
+    "track": 0.0,
+    "backing": "box",
+    "palette": [
+      "#ffd84d",
+      "#ff6fa8",
+      "#7bd3f7"
+    ]
+  },
+  "motion": {
+    "curve": [
+      0.34,
+      1.56,
+      0.64,
+      1
+    ],
+    "in_s": 0.5,
+    "step_fps": 0,
+    "stagger_s": 0.07,
+    "enter": null,
+    "min_hold_s": 1.0,
+    "max_on_screen": 2,
+    "beat_lock": true,
+    "measured": []
+  },
+  "status": "prior",
+  "first_seen": "2026-09-27",
+  "review_by": "2027-03-31",
+  "source": "design/specs/redesign-v2.md §4.3–4.4 (values [prior] unless research 07 measured them)",
+  "not_yet": [
+    "colour grade",
+    "joins",
+    "camera moves",
+    "texture",
+    "sounds",
+    "music"
+  ]
+}

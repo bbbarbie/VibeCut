@@ -19,3 +19,6 @@ web/frontend/dist/
 
 # design mockups use real footage stills — never commit them
 design/mockups/assets/
+
+# look records are source, not generated data
+!web/backend/looks/*.json

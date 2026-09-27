@@ -1,0 +1,50 @@
+{
+  "id": "cozy",
+  "name": "Cozy",
+  "line": "Warm and soft, your own sounds up front.",
+  "type": {
+    "display": "Caveat 600 / EB Garamond italic",
+    "font": "Editorial",
+    "case": "lower",
+    "track": 0.0,
+    "backing": "none",
+    "palette": [
+      "#f6ebd9",
+      "#f3c9a5",
+      "#c9dcc1"
+    ]
+  },
+  "motion": {
+    "curve": [
+      0.16,
+      1,
+      0.3,
+      1
+    ],
+    "in_s": 1.15,
+    "step_fps": 12,
+    "stagger_s": 0.15,
+    "enter": "card",
+    "min_hold_s": 2.0,
+    "max_on_screen": 2,
+    "beat_lock": false,
+    "measured": [
+      "curve",
+      "in_s",
+      "step_fps",
+      "enter"
+    ]
+  },
+  "status": "prior",
+  "first_seen": "2026-09-27",
+  "review_by": "2027-03-31",
+  "source": "design/specs/redesign-v2.md §4.3–4.4 (values [prior] unless research 07 measured them)",
+  "not_yet": [
+    "colour grade",
+    "joins",
+    "camera moves",
+    "texture",
+    "sounds",
+    "music"
+  ]
+}
