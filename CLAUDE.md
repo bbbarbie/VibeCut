@@ -172,6 +172,14 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   ≤0.25 s away. `overlayLooks.test.ts` checks every look keeps every word in
   the safe area on every intro frame. Tests: `test_joins.py`,
   `test_axes.py`, `test_smooth.py`, `test_looks.py`.
+- **Joins you can see while playing** (P4; `web/frontend/src/joinView.ts`,
+  `transport.ts`, `Player.tsx`). The player has two `<video>`s: the next
+  shot is loaded and parked on its first frame before the cut, so a cut is
+  a swap, not a seek (no black flash; `hold.ts` is only the fallback). A
+  dissolve plays both over the export's own overlap window
+  (`export.plan_transitions`, sent in `session.mix.transitions`), dips and
+  flashes are a colour veil at the same opacity as the export's fade, and
+  cinematic bars are drawn. The grade (LUT) still appears only in export.
 
 ## The rule that matters most
 

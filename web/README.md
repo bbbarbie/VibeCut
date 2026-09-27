@@ -428,6 +428,15 @@ words on the music's beat when one is under the edit. Anything you set by
 hand is kept and shown ("Your font differs from the look · Use the
 look's"). Looks don't grade the picture yet.
 
+## Seeing the joins while it plays
+
+Watch it all shows the joins the file will have: a borrowed style's
+dissolves play both shots across the same overlap window export uses, dips
+to black and flashes fade the same way, and cinematic bars are drawn. The
+next shot is loaded in a second, hidden player before each cut, so cuts
+don't flash black while a new file loads. The borrowed colour grade is
+still export-only.
+
 ## Export
 
 **Export** (header, or the timeline bar) renders the timeline to one MP4 in

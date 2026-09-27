@@ -26,6 +26,7 @@ import { fromDataTransfer, fromInput, type Picked } from './drop'
 import { bytes, dur, uid } from './format'
 import { clock, locate, toSource } from './sequence'
 import { cutWhilePlaying, step } from './snap'
+import { byKey } from './joinView'
 import { phStore, snapStore, transport, transportStore, useStore } from './transport'
 import type { Clip, CutData, Msg, Option, Overlay, OverlayKind, Overlays as OverlayData, Segment, Session, Shot, StyleAnswers, StyleQuestion, TimelineData } from './types'
 
@@ -101,6 +102,8 @@ export default function App() {
   }
   const dragDepth = useRef(0)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const backRef = useRef<HTMLVideoElement>(null)
+  const veilRef = useRef<HTMLDivElement>(null)
   const musicRef = useRef<HTMLAudioElement>(null)
   const mixRef = useRef<HTMLAudioElement>(null)
   // "Watch it all" plays the story through the transport, so it is heard
@@ -123,7 +126,7 @@ export default function App() {
   useEffect(() => {
     api.project().then((p) => setClips(p.clips)).catch(() => {})
     api.session().then(setSession).catch(() => {})
-    transport.video = videoRef.current
+    transport.attach(videoRef.current, backRef.current, veilRef.current)
   }, [])
   useEffect(() => { transport.setItems(tl.items, tl.total) }, [tl])
   const wfState = session?.workflow?.state
@@ -142,13 +145,15 @@ export default function App() {
     if (brief) { const b = brief; setBrief(null); send(b.message, b.style) }
   }
   useEffect(() => {
-    transport.video = videoRef.current
+    transport.attach(videoRef.current, backRef.current, veilRef.current)
     if (level === 'frames') transport.seek(phStore.get())
     else transport.stop()
     setMenu(null)
   }, [level])
   useEffect(() => { transport.audio = session?.music ? musicRef.current : null }, [session?.music])
   const mixKey = session?.mix?.key
+  const transList = session?.mix?.transitions
+  useEffect(() => { transport.setTransitions(byKey(transList), tl.fps) }, [transList, tl.fps])
   useEffect(() => { transport.mix = mixKey ? mixRef.current : null; transport.mixBroken = false }, [mixKey])
   useEffect(() => { if (!tr.playing) setBoardPlay(false) }, [tr.playing])
   useEffect(() => {
@@ -360,7 +365,7 @@ export default function App() {
       if (boardPlay) { transport.stop(); return }
       stopQueue()
       setSegment(null)
-      transport.video = videoRef.current
+      transport.attach(videoRef.current, backRef.current, veilRef.current)
       transport.seek(0)
       transport.play(1)
       setBoardPlay(true)
@@ -808,7 +813,7 @@ export default function App() {
             <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto border-l border-line bg-panel p-3">
               <div className="flex aspect-[16/10] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-line"
                    onClick={() => { if (tr.playing && !segment) transport.stop() }}>
-                <Player videoRef={videoRef} segment={segment} label={tr.playing && !segment ? 'Your story, with its words on screen — click to pause' : storyLabel}
+                <Player videoRef={videoRef} backRef={backRef} veilRef={veilRef} bars={session?.mix?.bars} segment={segment} label={tr.playing && !segment ? 'Your story, with its words on screen — click to pause' : storyLabel}
                         gap={tr.gap && !segment} overlay={overlayView} frame={tl.frame}
                         onTime={() => {}} onEnd={() => { if (queue) playAt(queue, queue.index + 1) }} onPlayingChange={() => {}} />
               </div>
@@ -846,6 +851,9 @@ export default function App() {
               <div className="flex w-[44%] min-w-[320px] flex-col">
                 <Player
                   videoRef={videoRef}
+                  backRef={backRef}
+                  veilRef={veilRef}
+                  bars={session?.mix?.bars}
                   segment={segment}
                   label={label}
                   gap={tr.gap && !segment}

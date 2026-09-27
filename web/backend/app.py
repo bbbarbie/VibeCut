@@ -203,7 +203,18 @@ def _mix_public(b: dict | None, tl: dict) -> dict | None:
     while len(MIXES) > 64:   # only recent edits can still be asked for
         MIXES.pop(next(iter(MIXES)))
     joins = audiomix.joins_for(sp["items"], sp["joins"])
-    return {"key": k, "audio": f"/api/mix/{k}.wav",
+    # The picture side of the same plan export renders (plan_transitions):
+    # per shot, frames of handle for a dissolve and any dip or flash, so the
+    # player can show the join the file will have. Only non-trivial entries.
+    trans = [{"key": it["key"], "head": p["head"], "tail": p["tail"],
+              "fade_in": list(p["fade_in"]) if p["fade_in"] else None,
+              "fade_out": list(p["fade_out"]) if p["fade_out"] else None}
+             for it, p in zip(sp["items"], sp["transitions"] or [])
+             if p["head"] or p["tail"] or p["fade_in"] or p["fade_out"]]
+    size = tl.get("frame") or {"w": 1920, "h": 1080}
+    bar = export._bar(size, (b or {}).get("style"))
+    return {"key": k, "audio": f"/api/mix/{k}.wav", "transitions": trans,
+            "bars": round(bar / size["h"], 4) if bar else 0.0,
             # `fits`: False where a carry was asked for but the shot wasn't
             # filmed long enough past the cut -- it plays as a clean break, and says so
             "joins": [{"after": it["key"], "at": sp["items"][i + 1]["seq_start"], **j,

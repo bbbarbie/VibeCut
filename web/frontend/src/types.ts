@@ -106,6 +106,7 @@ export type Turn = {
   undone: boolean; at: number; has_ops: boolean; direction: { themes: string[] } | null
 }
 import type { SeqItem } from './sequence'
+import type { Trans } from './joinView'
 import type { Target } from './snap'
 export type TimelineData = { fps: number; total: number; items: SeqItem[]; targets: Target[]; grid: { bpm: number; phase: number } | null
   frame?: { w: number; h: number } }
@@ -146,7 +147,7 @@ export type Session = {
   timeline: TimelineData
   music: MusicTrack | null
   // The edit's sound as one track (backend/audiomix.py) -- what preview plays and export writes.
-  mix: { key: string; audio: string; joins: JoinInfo[] } | null
+  mix: { key: string; audio: string; joins: JoinInfo[]; transitions: Trans[]; bars: number } | null
   board: Board | null
   structure_note: string | null
   last: { turn: number; diff: Diff | null; ghosts: { index: number; title: string; thumbs: string[] }[]; review: Review[] } | null
