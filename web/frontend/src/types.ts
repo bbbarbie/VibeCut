@@ -143,7 +143,9 @@ export type Session = {
   mix: { key: string; audio: string; joins: JoinInfo[] } | null
   board: Board | null
   structure_note: string | null
-  last: { turn: number; diff: Diff | null; ghosts: { index: number; title: string; thumbs: string[] }[] } | null
+  last: { turn: number; diff: Diff | null; ghosts: { index: number; title: string; thumbs: string[] }[]; review: Review[] } | null
+  // Every cut, checked (backend cutgrammar/joins.py) -- report only.
+  seams: Seam[]
   turns: Turn[]
   proposals: Proposals | null
   llm: boolean
@@ -205,3 +207,8 @@ export type StyleAnswers = { length?: string; pace?: string; opening?: string }
 // How the sound crosses a cut: carried out (L cut), carried in (J cut), or a clean break.
 export type JoinSound = 'cut' | 'carry_out' | 'carry_in' | 'default'
 export type JoinInfo = { after: string; at: number; sound: Exclude<JoinSound, 'default'>; set: boolean; fits: boolean }
+
+export type SeamFinding = { key: string; label: string; value: number | null; unit: string; verdict: 'ok' | 'warn' | 'bad' | 'pending'; detail: string }
+export type Seam = { after: string; before: string; at: number; verdict: 'ok' | 'warn' | 'bad'; findings: SeamFinding[] }
+// What a turn did to the cuts: a second look, shown under it.
+export type Review = { kind: 'worse' | 'better'; text: string; after?: string; at?: number; verdict?: string }

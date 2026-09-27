@@ -412,28 +412,59 @@ def by_place(shots: list[Shot], d: Direction, everyone: list[Shot]) -> Option:
                       [f"Every clip was filmed within ~{max(spread, 10):.0f} m, so there is "
                        "only one place to chapter by."], degraded=True)
 
-    # Chapters in order of first visit; a place you return to stays one chapter.
-    ordered = sorted((chrono(g) for g in groups.values()), key=lambda g: g[0].when or datetime.max)
-    beats = []
-    for i, g in enumerate(ordered):
+    # Chapters in the order you were there. A place you come back to later
+    # gets a chapter of its own at that point in the day, under the same
+    # letter -- folding the return into the first visit made the edit jump
+    # back in time, which reads as a mistake, not a structure.
+    letter = {id(g): chr(65 + i) for i, g in
+              enumerate(sorted(groups.values(), key=lambda g: min((s.when for s in g if s.when), default=datetime.max)))}
+    visits: list[tuple[int, list[Shot]]] = []   # (place key, shots of one visit)
+    for g in groups.values():
+        for v in _split_visits(chrono(g)):
+            visits.append((id(g), v))
+    visits.sort(key=lambda kv: kv[1][0].when or datetime.max)
+    # Too many chapters: fold the shortest return visit into the nearest
+    # visit to the same place, until it fits (or nothing can fold).
+    while len(visits) > 2 * MAX_BEATS:
+        cands = [(len(v), i) for i, (k, v) in enumerate(visits)
+                 if sum(1 for kk, _ in visits if kk == k) > 1]
+        if not cands:
+            break
+        _, i = min(cands)
+        k, v = visits.pop(i)
+        j = min((j for j, (kk, _) in enumerate(visits) if kk == k),
+                key=lambda j: abs(((visits[j][1][0].when or datetime.max) - (v[0].when or datetime.max)).total_seconds())
+                if visits[j][1][0].when and v[0].when else 0)
+        visits[j] = (k, chrono(visits[j][1] + v))
+    beats, seen = [], set()
+    for k, g in visits:
         centre = (float(np.mean([s.gps[0] for s in g])), float(np.mean([s.gps[1] for s in g])))
         tags = distinctive_labels(g, everyone)
-        title = f"Place {chr(65 + i)}" + (f" — {', '.join(tags)}" if tags else "")
-        visits = _visits(g)
-        detail = f"{fmt_coord(centre)} · {fmt_span(g)}" + (f" · {visits} visits" if visits > 1 else "")
-        beats.append(Beat(title, detail, g, lean=any(s.lean for s in g)))
+        title = f"Place {letter[k]}" + (" again" if k in seen else "") + (f" — {', '.join(tags)}" if tags else "")
+        seen.add(k)
+        beats.append(Beat(title, f"{fmt_coord(centre)} · {fmt_span(g)}", g, lean=any(s.lean for s in g)))
     if unplaced:
         beats.append(Beat("No location", fmt_span(unplaced), chrono(unplaced)))
 
     within = f"{radius / 1000:g} km" if radius >= 1000 else f"{radius} m"
-    summary = (f"By place: {len(ordered)} locations in the order you first reached them; "
-               f"a return visit joins its first chapter (clips within {within} are one place).")
+    returns = len(visits) - len(groups)
+    summary = (f"By place: {len(groups)} locations in the order you were there"
+               + (f", {returns} of them revisited later in the day" if returns > 0 else "")
+               + f" (clips within {within} are one place).")
     return Option("place", name, axis, summary, beats)
 
 
-def _visits(g: list[Shot]) -> int:
-    ts = sorted(s.when for s in g if s.when)
-    return 1 + sum(1 for a, b in zip(ts, ts[1:]) if b - a > SESSION_GAP) if ts else 1
+def _split_visits(g: list[Shot]) -> list[list[Shot]]:
+    """One place's shots (in time order) -> one list per visit."""
+    out: list[list[Shot]] = []
+    for s in g:
+        if out and s.when and out[-1][-1].when and s.when - out[-1][-1].when > SESSION_GAP:
+            out.append([s])
+        elif out:
+            out[-1].append(s)
+        else:
+            out.append([s])
+    return out
 
 
 # --------------------------------------------------------------------------

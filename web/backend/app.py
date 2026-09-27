@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import board as bd
-from . import audiomix, brief, cut, export, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, brief, cut, export, seams, smooth, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import Workflow, WorkflowError
 
@@ -100,9 +100,13 @@ def _session() -> dict:
     tl["frame"] = export.frame_size(tl["items"], CLIPS)
     last = SESSION.last_active()
     ghosts = []
+    cuts = seams.check(tl["items"], CLIPS) if b else []
+    review: list[dict] = []
     if last and last.diff and not last.diff["replaced"]:
         # What the latest turn removed, so the board can show it struck through.
         prev = _board_before(last)
+        # A second look at the turn: did it make any cut rougher (or fix one)?
+        review = seams.review(seams.check(timeline.build(prev, CLIPS, _track())["items"], CLIPS) if prev else [], cuts)
         for r in last.diff["beats"]["removed"]:
             old = next((x for x in (prev or {}).get("beats", []) if x["id"] == r["id"]), None)
             idx = [x["id"] for x in (prev or {}).get("beats", [])].index(r["id"]) if old else 0
@@ -112,7 +116,8 @@ def _session() -> dict:
     return {
         "board": board,
         "structure_note": _structure_note(b),
-        "last": {"turn": last.id, "diff": last.diff, "ghosts": ghosts} if last else None,
+        "last": {"turn": last.id, "diff": last.diff, "ghosts": ghosts, "review": review} if last else None,
+        "seams": cuts,
         "turns": [{
             "id": t.id, "kind": t.kind, "text": t.text, "reply": t.reply, "question": t.question,
             "choices": t.choices, "lines": _with_thumbs(t.lines, cat), "skipped": t.skipped,
@@ -131,6 +136,28 @@ def _session() -> dict:
         "preferences": PREFS.public(SESSION),
         "voiceover": _voiceover_public(),
     }
+
+
+# --------------------------------------------------------------------------
+# smoother cuts: asked for, one undoable turn (smooth.py)
+# --------------------------------------------------------------------------
+
+class SmoothReq(BaseModel):
+    order: bool = True
+    nudge: bool = True
+
+
+@app.post("/api/smooth")
+def api_smooth(req: SmoothReq) -> dict:
+    with LOCK:
+        if not SESSION.board:
+            raise HTTPException(409, "Choose a story first — there are no cuts to smooth yet.")
+        ops, said = smooth.propose(SESSION.board, CLIPS, CATALOG["cat"], order=req.order, nudge=req.nudge)
+        if not ops:
+            raise HTTPException(409, said)
+        SESSION.add({"kind": "direct", "text": "Smoother cuts", "ops": ops, "reply": said},
+                    CATALOG["cat"], _make_proposals)
+        return _session()
 
 
 # --------------------------------------------------------------------------

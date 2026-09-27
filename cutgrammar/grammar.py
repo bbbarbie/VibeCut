@@ -359,6 +359,12 @@ NEEDS = {
     "first_cut": [evidence.STILL],
     "first_speech": [evidence.AUDIO],
     "loudness": [evidence.AUDIO],
+    # joins.py: one cut of a storyboard, from the index. Energy is second-
+    # scale change between stills a second apart, so stills suffice for it --
+    # it never claims the exact frame of a cut.
+    "join_exposure": [evidence.STILL], "join_colour": [evidence.STILL], "join_repeat": [evidence.STILL],
+    "join_energy": [evidence.STILL], "join_sound": [evidence.AUDIO], "join_time": [evidence.META],
+    "join_size": [evidence.STILL],
 }
 
 

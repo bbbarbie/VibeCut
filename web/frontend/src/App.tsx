@@ -761,7 +761,8 @@ export default function App() {
       <div className={`grid min-h-0 ${level === 'story' ? 'grid-cols-[320px_minmax(0,1fr)_440px]' : 'grid-cols-[320px_minmax(0,1fr)]'}`}>
         <Chat items={chatItems} pending={pending} onSend={send} onToggle={toggle}
               disabled={!!pending} llm={session?.llm ?? false} hasBoard={!!session?.board}
-              prefs={session?.preferences ?? null} onClassify={classify} onRule={changeRule} />
+              prefs={session?.preferences ?? null} onClassify={classify} onRule={changeRule}
+              review={session?.last ? { turn: session.last.turn, items: session.last.review ?? [] } : null} />
 
         {level === 'story' ? (
           <>
@@ -797,6 +798,7 @@ export default function App() {
                 onMoveBeat={moveBeat}
                 onRetitle={retitle}
                 onBeatAction={beatAction}
+                onSmooth={async (order, nudge) => { const s = await api.smooth(order, nudge); setSession(s); offerUndo(s) }}
                 onJoin={(after, sound) => run([{ op: 'set_join', shot: after, sound }],
                   sound === 'default' ? 'Sound back to automatic' : 'Changed how the sound crosses a cut')}
               />

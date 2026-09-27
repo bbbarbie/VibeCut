@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { DiffLine, Msg, PrefCandidate, Preferences, Turn } from '../types'
+import type { DiffLine, Msg, PrefCandidate, Preferences, Review, Turn } from '../types'
 import { Remember, Rules, type ClassifyReq } from './Remember'
 
 const EXAMPLE = 'three days in Tokyo, lean into the food'
@@ -19,7 +19,7 @@ const MARK: Record<DiffLine['kind'], { sym: string; cls: string }> = {
   none: { sym: '·', cls: 'text-zinc-500 bg-zinc-800/40' },
 }
 
-export function Chat({ items, pending, onSend, onToggle, disabled, llm, hasBoard, prefs, onClassify, onRule }: {
+export function Chat({ items, pending, onSend, onToggle, disabled, llm, hasBoard, prefs, onClassify, onRule, review }: {
   items: ChatItem[]
   pending: string | null
   onSend: (text: string) => void
@@ -30,6 +30,7 @@ export function Chat({ items, pending, onSend, onToggle, disabled, llm, hasBoard
   prefs: Preferences | null
   onClassify: (r: ClassifyReq) => Promise<void>
   onRule: (id: string, action: 'forget' | 'narrow') => void
+  review?: { turn: number; items: Review[] } | null
 }) {
   const candidate = new Map((prefs?.candidates ?? []).map((c) => [c.turn, c]))
   const [text, setText] = useState('')
@@ -59,6 +60,7 @@ export function Chat({ items, pending, onSend, onToggle, disabled, llm, hasBoard
           ? <Local key={it.msg.id} m={it.msg} />
           : <TurnView key={`t${it.turn.id}`} t={it.turn} onToggle={onToggle}
                       candidate={candidate.get(it.turn.id)} onClassify={onClassify}
+                      review={review && review.turn === it.turn.id ? review.items : undefined}
                       onChoice={openChoices === it.turn.id ? (c) => send(c) : undefined} />)}
         {pending && (
           <>
@@ -122,9 +124,10 @@ function Local({ m }: { m: Msg }) {
   )
 }
 
-function TurnView({ t, onToggle, onChoice, candidate, onClassify }: {
+function TurnView({ t, onToggle, onChoice, candidate, onClassify, review }: {
   t: Turn; onToggle: (id: number) => void; onChoice?: (c: string) => void
   candidate?: PrefCandidate; onClassify: (r: ClassifyReq) => Promise<void>
+  review?: Review[]
 }) {
   const remember = candidate && !t.undone && <Remember c={candidate} onClassify={onClassify} />
   const faded = t.undone ? 'opacity-40' : ''
@@ -157,6 +160,7 @@ function TurnView({ t, onToggle, onChoice, candidate, onClassify }: {
         </div>
       )}
       {t.kind === 'direct' && remember ? <div className="flex flex-wrap justify-end pl-5">{remember}</div> : null}
+      {review && review.length > 0 && !t.undone && <ReviewLines items={review} />}
 
       {t.kind === 'chat' && (t.reply || t.question || t.lines.length > 0 || t.skipped.length > 0 || t.direction) && (
         <div className={`rounded-lg border border-line bg-raised/60 px-2.5 py-2 ${t.undone ? 'opacity-50' : ''}`}>
@@ -199,5 +203,20 @@ function TurnView({ t, onToggle, onChoice, candidate, onClassify }: {
         </div>
       )}
     </div>
+  )
+}
+
+// A second look at the latest turn: the cuts it made rougher, or smoothed.
+// Report only -- nothing is changed; the numbers are on the cut in Story.
+function ReviewLines({ items }: { items: Review[] }) {
+  return (
+    <ul className="space-y-0.5 pl-5 text-[11px]">
+      {items.map((r, i) => (
+        <li key={i} className={r.kind === 'better' ? 'text-emerald-300/80'
+          : r.verdict === 'bad' ? 'text-rose-300/90' : 'text-amber-200/80'}>
+          {r.kind === 'better' ? `✓ ${r.text}` : `! A cut at ${Math.floor((r.at ?? 0) / 60)}:${String(Math.floor((r.at ?? 0) % 60)).padStart(2, '0')} got rougher: ${r.text.charAt(0).toLowerCase()}${r.text.slice(1)}`}
+        </li>
+      ))}
+    </ul>
   )
 }
