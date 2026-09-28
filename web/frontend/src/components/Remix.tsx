@@ -6,7 +6,7 @@ import { api, type RemixJob } from '../api'
 // storyboard so it can be edited like any other cut. The heavy lifting
 // (learning the references, choosing shots, finding music and its drop,
 // rendering) happens on the server; this only asks, waits and shows.
-export function Remix({ onClose, onDone }: { onClose: () => void; onDone: () => Promise<void> | void }) {
+export function Remix({ onClose, onDone, canLinks = true }: { onClose: () => void; onDone: () => Promise<void> | void; canLinks?: boolean }) {
   const [links, setLinks] = useState('')
   const [title, setTitle] = useState('a day in my life')
   const [sub, setSub] = useState('')
@@ -47,11 +47,15 @@ export function Remix({ onClose, onDone }: { onClose: () => void; onDone: () => 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60" onClick={() => { if (!busy) onClose() }}>
       <div className="w-[560px] max-w-[94vw] rounded-2xl border border-line bg-panel p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-1 font-serif text-[20px] font-semibold text-zinc-100">Style reference</div>
-        <p className="mb-4 text-[12px] text-muted">
-          Paste one to three videos you want yours to feel like. Nothing of theirs ends up in your video —
-          only their pace, their length, the way they hold the first shot, and the kind of music they build on.
+        <div className="mb-1 font-serif text-[24px] text-zinc-100">Build a short from reference reels</div>
+        <p className="mb-3 text-[12px] leading-snug text-zinc-400">
+          Paste one to three reels you want yours to feel like. VibeCut picks the moments from your clips, finds free music with a drop,
+          and renders a finished short — which then becomes your story, editable like any other. Nothing of theirs ends up in your video:
+          only their pace, their length, how they hold the first shot, and the kind of music they build on.
         </p>
+        {!canLinks && <p className="mb-3 rounded-lg border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-[12px] text-amber-100">
+          Links can’t be fetched on this computer (no yt-dlp). Give the paths of reference files saved here instead, or install yt-dlp.
+        </p>}
 
         {!job || job.stage === 'error' ? (
           <>

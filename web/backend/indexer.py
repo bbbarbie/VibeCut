@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import multiprocessing
 import os
 import threading
 import time
@@ -201,15 +202,35 @@ def add_vision(recs: list[dict]) -> str:
         r["faces"] = json.loads((clip_dir(r["id"]) / "faces.json").read_text())
 
     for r in recs:
-        v = r.pop("_vision")
-        for s, res in zip(r["shots"], v["shots"]):
-            s["labels"] = res.get("labels", [])
-            s["faces"] = res.get("faces", 0)
-            s["face_area"] = res.get("faceArea", 0.0)
-            s["aesthetic"] = res.get("aesthetic")
-            s["utility"] = res.get("utility")
-            s["embedding"] = res.get("embedding", [])
+        _attach_vision(r, r.pop("_vision"))
     return backend if todo else "cached"
+
+
+def _attach_vision(rec: dict, v: dict) -> None:
+    for s, res in zip(rec["shots"], v.get("shots", [])):
+        s["labels"] = res.get("labels", [])
+        s["faces"] = res.get("faces", 0)
+        s["face_area"] = res.get("faceArea", 0.0)
+        s["aesthetic"] = res.get("aesthetic")
+        s["utility"] = res.get("utility")
+        s["embedding"] = res.get("embedding", [])
+
+
+def load_indexed(cid: str) -> dict | None:
+    """A clip as `start()` would hand it back, from the cache alone -- what
+    a reopened project reads instead of decoding anything again. None when
+    the index is missing (cache cleared) or older than this code writes."""
+    d = clip_dir(cid)
+    try:
+        rec = json.loads((d / "index.json").read_text())
+        if rec.get("id") != cid or "signals" not in rec or "samples" not in rec:
+            return None
+        v = json.loads((d / "vision.json").read_text()) if (d / "vision.json").exists() else {"shots": []}
+        _attach_vision(rec, v)
+        rec["faces"] = json.loads((d / "faces.json").read_text()) if (d / "faces.json").exists() else []
+    except (OSError, ValueError):
+        return None
+    return rec
 
 
 @dataclass
@@ -240,7 +261,10 @@ _pool: ProcessPoolExecutor | None = None
 def pool() -> ProcessPoolExecutor:
     global _pool
     if _pool is None:
-        _pool = ProcessPoolExecutor(max_workers=WORKERS)
+        # Spawned, not forked: the server already runs threads (uvicorn, the
+        # Vision build, import jobs), and a forked worker can inherit a held
+        # lock and never finish -- a job stuck at "7 of 8" forever.
+        _pool = ProcessPoolExecutor(max_workers=WORKERS, mp_context=multiprocessing.get_context("spawn"))
     return _pool
 
 

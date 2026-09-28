@@ -1,35 +1,43 @@
-# Creative tools — recording-inspired feature previews
+# Feature roadmap — what is not in the app, and why
 
-The seven feature cards translate the user's September 20 recordings into
-beginner-facing workflows. Plan my edit, Titles & motion and Borrow a feeling are connected to VibeCut's real,
-reversible storyboard operation engine. The remaining four are disabled and
-labelled Coming soon until their underlying pipelines exist. Descriptions of
-third-party implementations are research guidance, not proof of their internal
-architecture or installed integrations.
+The Phase 1 baseline (`design/specs/phase1-baseline.md`) consolidated the
+app around one path: Projects → Footage → Brief → Rough cut → Story →
+Export. The "Creative tools" page that used to list seven feature cards is
+gone: three of them were second doors to things the workspace already does
+(*Plan my edit* = the chat; *Titles & motion* = Words on screen → *Add
+titles for me*; *Borrow a feeling* = *Reference* in the header), and four
+were disabled cards. Those four are recorded here, not in the product, so
+nothing in the app looks like a feature that isn't one.
 
-| Button | Source recording | Research inspiration | Integration still needed |
+## Ideas from the September 20 recordings, not built
+
+Descriptions of third-party implementations are research guidance, not
+proof of their internal architecture. None of these has a pipeline, a
+provider, or a UI. Each would need explicit consent and cost decisions
+before it becomes a screen.
+
+| Idea | Source recording | What it would take | Why it waits |
 | --- | --- | --- | --- |
-| Camera motion | ScreenRecording_09-20-2026 19-16-28_1.MP4 | Named motion presets; exact product unidentified | Image-to-video provider, motion constraints, preview and subject-consistency checks |
-| Plan my edit — live | ScreenRecording_09-20-2026 19-17-24_1.MP4 | Hypit agent video workflow | Connected to `/api/chat`: direction becomes validated storyboard operations, recorded diffs and Undo. Requires footage, rough-cut approval and configured AI for edits to an existing board |
-| Titles & motion — live | export_1789946152141.MOV | HyperFrames HTML/CSS-to-video; Overlay Studio's card library (design only, see NOTICE) | Connected: seven overlay kinds suggested from the edit, profile style, edited as undoable ops, previewed and exported (`overlays.py`, `overlayDraw.ts`, `export.py`) |
-| Borrow a feeling | ScreenRecording_09-20-2026 19-32-41_1.MP4 | VidMuse reference packaging | Reference ingestion and analysis, editable style attributes, approval before application |
-| Try another version | ScreenRecording_09-20-2026 19-29-16_1.MP4 | Hypit reference-video variants | Semantic scene templates, timing alignment and non-destructive alternate versions |
-| My on-screen character | ScreenRecording_09-20-2026 19-30-49_1.MP4 | Fish Audio + HeyGen + HyperFrames | Voice/avatar services, consent before cloning, alignment and composition; cartoon output needs a suitable provider |
-| Find the supporting shots | ScreenRecording_09-20-2026 19-20-48_1.MP4 | Local video agent; exact product unidentified | Beat/transcript understanding, footage retrieval, optional licensed stock/generation, approval before insertion |
+| Camera motion (animate a still moment) | ScreenRecording_09-20-2026 19-16-28_1.MP4 | An image-to-video provider, motion constraints, preview and subject-consistency checks | Generates frames the creator didn't film — against the non-goal in CLAUDE.md unless kept as a clearly separate, opt-in mode |
+| Try another version (variants of the hook) | ScreenRecording_09-20-2026 19-29-16_1.MP4 | Reusable scene templates, timing alignment, non-destructive alternate versions | Versions need a project model first (now exists: `projects.py`); the storyboard's op log can branch, but the UI for comparing versions is not designed |
+| My on-screen character (presenter / cartoon narrator) | ScreenRecording_09-20-2026 19-30-49_1.MP4 | Voice and avatar providers, a consent step before any cloning, composition | Paid providers and consent flow; generated media is a separate mode by design |
+| Find the supporting shots (B-roll suggestions) | ScreenRecording_09-20-2026 19-20-48_1.MP4 | Beat/transcript understanding, retrieval over the creator's own index first, approval before insertion | Start with the creator's own footage: the index already has labels (macOS) and per-second signals; a "show what I'm talking about" suggestion is the first honest version |
 
-## Current boundary
+## What Phase 1 deliberately left out (see the parity matrix)
 
-- Plan my edit executes against the current project. It returns to the editor only after the backend accepts the request; errors remain visible in its dialog.
-- Browser storage is per origin and does not sync with an account or backend.
-- The last successful guided-edit request captures the profile at execution time,
-  so later profile edits do not silently rewrite the recorded request.
-- Borrow a feeling keeps only measurements of the reference. Nothing is generated, and none of its frames or audio reach the export.
-- The real-footage editing engine stays separate from optional generated-media modes.
-- No third-party packages or API credentials are needed for this planning interface.
+- Semantic search over footage by content ("every shot of the product on
+  the table"): needs embeddings and a model; the index has no text
+  descriptions yet.
+- Cross-platform speech-to-text: transcripts stay macOS-only and opt-in
+  (talking-to-camera mode). The default path needs no transcript.
+- Multiple aspect ratios per export: the export follows the footage's
+  shape; a format choice is a small addition once calibrated framing exists.
+- External agents (MCP): the ops interface in `board.py` is the right
+  boundary for it; nothing is exposed yet.
 
 ## Next implementation order
 
-1. ~~Add deterministic title/caption previews driven by creator style.~~ Done (Words on screen + Export).
-2. Suggest B-roll from the user's own indexed footage, with approval.
-3. ~~Integrate reference analysis and versioned style cards.~~ Done (Borrow a feeling).
-4. Add paid generation only after provider, cost and consent choices are explicit.
+1. Calibrate thresholds on real footage (the rule that matters most).
+2. B-roll suggestions from the creator's own index, with approval.
+3. Versions of a project (branch the op log), then variants.
+4. Paid generation only after provider, cost and consent choices are explicit.

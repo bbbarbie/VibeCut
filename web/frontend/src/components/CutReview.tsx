@@ -20,7 +20,7 @@ export function CutReview({ data, clips, approved, busy, onOverride, onApprove, 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto p-5 pb-28">
-        <p className="text-[12px] text-muted">{approved ? 'The rough cut (approved — changes here still apply)' : 'Step 1 of 2 · the rough cut'}</p>
+        <p className="text-[12px] text-muted">{approved ? 'The rough cut · approved — changes here still apply to the story' : 'The rough cut · before the story is built'}</p>
         <h2 className="mt-1 font-serif text-[26px] text-zinc-100">Here’s what I’d throw away</h2>
         <p className="mt-1 max-w-2xl text-[13px] text-zinc-400">
           Nothing is deleted from your clips. Thrown-away clips wait on the shelf, and every trim is just a start and an end point. Change anything with one click, then approve.

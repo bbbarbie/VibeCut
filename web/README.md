@@ -1,11 +1,12 @@
-# web/ — the first VibeCut interface
+# web/ — the VibeCut app
 
-Drop a folder (or single clips), say in one line what the video is, get
-three differently-structured proposals, start from one, then edit it by
-talking: "make the opening punchier and cut the market section" changes
-exactly those two things. Every turn shows a diff and can be undone.
-Footage, thumbnails and the index never leave this machine; with a key set,
-the storyboard's *text* goes to Claude to be turned into operations.
+One application, one path: **Projects → Footage → Brief → Rough cut →
+Story (or Frames) → Export.** Drop a folder of clips, say in one line what
+the video is, approve what the rough cut leaves out, start from one of three
+proposals, then shape it by talking or by hand. Every change is a turn that
+shows its diff and can be undone. Footage, thumbnails and the index never
+leave this machine; with a key set, only the storyboard's *text* goes to
+Claude to be turned into operations.
 
 ```bash
 # from the repo root
@@ -15,46 +16,86 @@ python -m web.backend            # → http://localhost:8765
 ```
 
 Chat edits need an Anthropic key: put `ANTHROPIC_API_KEY=...` in
-`web/.env` (gitignored) or export it. Without one, the first message still
-produces proposals (keyword matching), and Apply, timeline edits and undo
-all work; only chat *edits* are unavailable.
+`web/.env` (gitignored) or export it. Without one, the whole path still
+works — proposals, the rough cut, direct edits, words on screen, sound,
+export — only *typed* edits are off, and the app says so.
 
 For UI work, run `npm run dev` in `web/frontend` as well (Vite on :5173,
 proxying `/api` to the backend).
 
-Needs macOS for the full experience: the hardware decoder (VideoToolbox)
-and the on-device Vision helper. Elsewhere it falls back to software
-decode and colour-based subject grouping.
+Needs macOS for the full experience: the hardware decoder (VideoToolbox),
+the on-device Vision helper (labels, faces) and the speech helper (talking
+to camera). Elsewhere it falls back to software decode and colour-based
+subject grouping, and the home screen lists what this machine can and
+cannot do.
 
-## Creator profile
+## Screens
 
-Open **Creator profile** in the header (or visit `/#profile`). Save your
-name, handle, creative goals, platforms, preferred mood and pacing, caption
-font/color/placement, things to avoid, and up to 10 reference bookmarks with
-notes. The responsive profile page includes a live caption style sample.
+| Route | Screen | What it is |
+| --- | --- | --- |
+| `#/` | **Projects** | Every video you're making: cover, name, clips, length, stage, last edited. New video. Secondary: *Polish a finished video*, your profile. |
+| `#/p/<id>` | **Workspace** | One project. The header carries the stepper — Footage · Brief · Rough cut · Story — and the stage in the middle is *derived* from the project's state, never set by hand; passed steps can be looked at again. |
+| `#/p/<id>/frames` | **Frames** | The same edit, frame-accurate: shelf, player, timeline, keyboard. A view of the Story stage, not a step. |
+| `#/profile` | **Your profile** | Name and handle (name tags, end cards), the default font / colour / placement of words on screen, bookmarks. Stored in this browser. |
+| `#/polish` | **Polish** | A separate tool for a video that is already cut: point at a moment, say what to put there. |
 
-Use **Save profile** to persist preferences in this browser's localStorage.
-They survive page reloads and editing sessions; they do not sync across
-browsers, devices, or different localhost ports. No account is created.
-Unsaved changes trigger a warning on leaving through the page's Back button
-or reloading. Storage failures are shown without discarding the draft.
+The stages:
 
-This is the profile foundation: preferences are not yet passed to the editing
-engine, reference videos are not fetched or analyzed, and the sample is not a
-rendered video. Opening the profile keeps the editor mounted and pauses playback.
-Tests for persistence, invalid data, and storage failures run with `npm test`.
+1. **Footage** — drop clips or a folder; per-file reading status; files that
+   couldn't be read, with *Try again*; the clip grid. Nothing is copied,
+   moved or changed (files the locator can't find on disk are copied into
+   the cache). The one action: *What's this video? →*.
+2. **Brief** — one line, then the style questions (length, pace, opening,
+   focus). Opt-in side doors: *Follow my voiceover* (an SRT or script
+   becomes a fourth proposal), *Talking to camera* (macOS).
+3. **Rough cut** — the gate: what would be thrown away and trimmed, with
+   reasons and what each reason rests on; override anything; *Looks right —
+   continue*. Nothing is built until you do.
+4. **Story** — three proposals; start from one; parts and shots; chat on the
+   left (ops only, never a regeneration); on the right the player, words on
+   screen and music. *Reference* in the header borrows a video's feel.
+   *More ▾* holds the side tools (talking to camera, build a short from
+   reels, keyboard, polish, start over).
+5. **Export** — one MP4, rendered from the same plan the preview plays;
+   every export is recorded on the project and listed in the dialog.
 
-## Layout: two levels
+## Projects and persistence
 
-### Borrow a feeling
+A project is a small record on disk (`$VIBECUT_CACHE/projects/<id>.json`,
+`web/backend/projects.py`): which files it holds (by index id — the
+per-file cache does the heavy lifting), the turn log the storyboard is
+replayed from, where the workflow stands, the rough-cut overrides, the
+brief, this video's confirmed preferences, and its exports. It is written
+after every change (a middleware saves after each successful mutating
+request, and the import job saves when it lands) and read back when the
+project is opened, so a restart changes nothing. The original media is
+only ever read. If a file has moved since, the footage screen says so.
 
-Creative tools → **Borrow a feeling**: paste a link (needs `yt-dlp`) or drop
-a video whose editing you love. VibeCut reads it once at 48×27 and learns
-its **pacing** (shot length and how it changes through the video),
-**transitions** (hard cut / dissolve / dip to black / white flash / fades),
-whether it **cuts on the beat**, its **colour** (tone curve, white balance,
-split toning, saturation), its **frame** (cinematic bars) and its **music
-feel** (energy arc, tempo). Each trait says what it was measured from.
+`tests/test_projects.py` walks the whole path through the API and checks
+that a reopened project has the identical board, timeline, log, brief and
+gate, that undo still works afterwards, and that deleting a project touches
+no clip and no export.
+
+## Your profile
+
+Open it from the avatar. Name, handle, what you make, where you share; the
+default font, accent colour and caption placement for words on screen;
+taste (feeling, pacing, things to avoid); up to 10 reference bookmarks.
+Saved in this browser's localStorage; no account. The editor reads the
+name, handle, font, colour and caption placement (words on screen, name
+tags, end cards). Taste and bookmarks are kept for you and not yet read by
+the editor — the page says so.
+
+## Reference: make it feel like a video you love
+
+**Reference** in the header (or *Fine-tune* after a style is on): paste a
+link (needs `yt-dlp`) or drop a video whose editing you love. VibeCut reads
+it once at 48×27 and learns its **pacing** (shot length and how it changes
+through the video), **transitions** (hard cut / dissolve / dip to black /
+white flash / fades), whether it **cuts on the beat**, its **colour** (tone
+curve, white balance, split toning, saturation), its **frame** (cinematic
+bars) and its **music feel** (energy arc, tempo). Each trait says what it
+was measured from.
 
 Tick what to borrow. Pacing and beat retime your shots (a shot is never
 held longer than it was filmed; voiceover parts keep their timing). The
@@ -64,37 +105,20 @@ footage. Grade, transitions and bars are rendered in the export only, not
 in the preview. Music is never copied; your own tracks with the same feel
 are suggested instead. It's all one turn, and Undo removes it. Learnt styles
 are kept in `$VIBECUT_CACHE/references/`, where Forget also deletes a
-downloaded copy.
+downloaded copy. The same dialog links to **Build a short from reference
+reels** (Remix): the shelf becomes a finished short in the reels' style,
+which then lands on the storyboard like any other cut.
 
-### Creative tools
-
-Open **Creative tools** from the editor or profile, or visit `/#tools`.
-Seven cards represent the previously reviewed recording workflows. **Plan my
-edit** is available now; camera motion, titles/motion graphics, reference
-style, video variants, AI presenters, and supporting B-roll are visibly
-disabled and labelled **Coming soon**.
-
-Plan my edit accepts a format and story direction, includes the creator's
-saved pacing/avoid preferences, and sends that request through the existing
-`/api/chat` editing path. The resulting operations are validated, recorded in
-the same turn log as chat edits, shown as a diff, and can be undone. If no
-storyboard exists, the editing model can choose the proposal that best fits.
-Errors such as missing footage, an unapproved rough cut, or missing AI editing
-configuration stay in the dialog. The last successful direction is saved in
-browser localStorage so it can be revised later.
-
-The remaining six cards do not open placeholder planning forms. They will be
-enabled only when their real generation, analysis, retrieval, or rendering
-pipelines exist. See [feature roadmap](feature-roadmap.md) for the seven source
-recordings and implementation boundaries.
+## Layout: two levels
 
 **Story** (default, where people live): the edit as parts and shots. Before
-a story is chosen, the centre asks what the video is about, then shows the
-three options side by side (parts, thumbnails, a one-line explanation, a
-Watch button). After choosing: one row per part — drag a row to move it,
-click a part's title for Rename / Watch / Move / Remove / "Fine-tune in
-Frames", click a shot for Watch / Swap / Remove. No timecodes, no tracks.
-The player stays on the right; chat on the left.
+a story is chosen, the centre shows the three options side by side (parts,
+thumbnails, a one-line explanation, a Watch button). After choosing: one
+row per part — drag a row to move it, click a part's title for Rename /
+Watch / Move / Remove / "Fine-tune in Frames", click a shot for Watch / Swap
+/ Remove. No timecodes, no tracks. The player stays on the right; chat on
+the left. Below about 1100 px the chat becomes a drawer and the player
+stacks under the story.
 
 **Frames** (drill-down, one click on the switch in the header or from a
 part): the shelf, player and the precise timeline with its keyboard.
@@ -131,7 +155,9 @@ are highlighted everywhere and lead the subject storyboard.
 
 Index results are cached per file under `~/.cache/vibecut`
 (`VIBECUT_CACHE` to override), so dropping the same folder again is instant.
-The shelf itself is in memory only: restart the server and it's empty.
+The project record (which files, the turn log, the gate, the brief) is
+saved beside it under `projects/`, so a restart reopens the last project
+as it was left.
 
 ## The rough cut: throwing away, with one human gate
 
@@ -316,8 +342,7 @@ title, part label, name tag, caption, date, end card, chapter bar.
   the first shot of you talking to camera (after the title, never on top
   of it), and an end card with your handle. A kind with nothing true to say
   is left out, and the reply says why. Suggesting again never replaces
-  what's there. **Creative tools → Titles & motion** does the same from a
-  brief.
+  what's there.
 - **Anchored, not placed.** Each overlay hangs off the whole video, its end,
   a part or a shot. Move the part and its label moves; cut the video shorter
   and the end card stays at the end; remove the shot and its name tag goes,
@@ -346,8 +371,9 @@ the export's aspect ratio, so the player shows what the file will show.
 
 ## 口播精剪 · talking to camera (opt-in)
 
-**口播精剪** in the header (or beside *Follow my voiceover…*) is for clips
-where you talk to camera. Pick 中文 or English, optionally paste your script
+**Talking to camera** (on the Brief screen beside *Follow my voiceover…*,
+or under *More ▾*; shown as unavailable with the reason on anything but
+macOS 26) is for clips where you talk to camera. Pick 中文 or English, optionally paste your script
 (稿子), press **Transcribe & cut**.
 
 1. **Transcribe on this Mac** (`backend/speech.py` → `speech/vibespeech.swift`,

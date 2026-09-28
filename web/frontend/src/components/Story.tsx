@@ -1,7 +1,7 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useRef, useState } from 'react'
 import type { Board, BoardBeat, BoardShot, Clip, JoinInfo, JoinSound, Option, Seam, Session } from '../types'
 import { dur } from '../format'
-import { Voiceover } from './Voiceover'
+import { Button } from '../ui'
 
 // The Story level: the edit as parts and shots, nothing else. No timecodes,
 // no tracks, no frames -- those live one level down, in Frames.
@@ -9,31 +9,25 @@ import { Voiceover } from './Voiceover'
 export type PlayItem = { id: string; clipId: string; start: number; end: number }
 export type Selection = { kind: 'shot'; key: string; beat: string } | { kind: 'beat'; beat: string } | null
 
-const EXAMPLES = ['A weekend in Tokyo, mostly the food', 'My sister’s wedding day', 'A day at the beach with friends']
-
 const beatLength = (b: BoardBeat) => b.shots.reduce((n, s) => n + s.end - s.start, 0)
 const playItems = (beats: { shots: { id: string; clip_id: string | null; start: number; end: number; gap?: boolean }[] }[]): PlayItem[] =>
   beats.flatMap((b) => b.shots.filter((s) => !s.gap && s.clip_id).map((s) => ({ id: s.id, clipId: s.clip_id!, start: s.start, end: s.end })))
 
-export function Story({ session, clips, asking, playing, nowShot, selected, onPick, onAsk, onVoiceover, onTalk, onUse, onPlay,
-  onSelect, onMoveBeat, onRetitle, onBeatAction, matchStyle, onJoin, onSmooth }: {
+export function Story({ session, clips, asking, playing, nowShot, selected, onUse, onPlay,
+  onSelect, onMoveBeat, onRetitle, onBeatAction, onReference, onJoin, onSmooth }: {
   session: Session | null
   clips: Clip[]
   asking: boolean
   playing: string | null
   nowShot: string | null
   selected: Selection
-  onPick: (files: FileList) => void
-  onAsk: (text: string) => void
-  onVoiceover: (text: string) => Promise<void>
-  onTalk: () => void
   onUse: (o: Option) => void
   onPlay: (source: string, items: PlayItem[]) => void
   onSelect: (sel: Selection, anchor: DOMRect | null) => void
   onMoveBeat: (beat: string, to: number) => void
   onRetitle: (beat: string, title: string) => void
   onBeatAction: (action: 'play' | 'up' | 'down' | 'remove' | 'frames', beat: string) => void
-  matchStyle?: ReactNode
+  onReference?: () => void
   onJoin?: (after: string, sound: JoinSound) => void
   onSmooth?: (order: boolean, nudge: boolean) => Promise<void>
 }) {
@@ -41,28 +35,22 @@ export function Story({ session, clips, asking, playing, nowShot, selected, onPi
   const proposals = session?.proposals ?? null
   const [showOthers, setShowOthers] = useState(false)
 
-  if (!clips.length) return <Empty onPick={onPick} />
-  const vo = (
-    <div className="flex flex-wrap items-start gap-2">
-      {proposals && matchStyle && <div className="w-full">{matchStyle}</div>}
-      <Voiceover current={session?.voiceover ?? null} busy={asking} onSubmit={onVoiceover} />
-      <button type="button" onClick={onTalk}
-              className="rounded-xl border border-dashed border-line px-3 py-2.5 text-left text-[12px] text-muted hover:text-zinc-200">
-        Talking to camera? Cut it by what you said…
-      </button>
-    </div>
-  )
-  if (!board && !proposals) return <Ask clips={clips} asking={asking} onAsk={onAsk} voiceover={vo} />
+  if (!clips.length || (!board && !proposals)) {
+    return (
+      <div className="grid min-h-0 flex-1 place-items-center p-8 text-center">
+        <p className="max-w-sm text-[13px] text-zinc-400">{asking ? 'Building three ways to tell it…' : 'Nothing to show yet — the story is built from your brief, after the rough cut.'}</p>
+      </div>
+    )
+  }
   if (!board || showOthers) {
     const n = proposals!.options.length
     return (
       <div className="min-h-0 flex-1 overflow-y-auto p-5">
-        <div className="mb-4 flex flex-wrap items-baseline gap-3">
+        <div className="mb-1 flex flex-wrap items-baseline gap-3">
           <h2 className="font-serif text-[24px] text-zinc-100">{n === 4 ? 'Four' : 'Three'} ways to tell it</h2>
-          <span className="text-[12px] text-muted">Watch one, then pick the one closest to what you want. You can change anything after.</span>
-          {board && <button type="button" onClick={() => setShowOthers(false)} className="ml-auto text-[12px] text-accent hover:underline">Back to my story</button>}
+          {board && <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setShowOthers(false)}>Back to my story</Button>}
         </div>
-        <div className="mb-4 flex">{vo}</div>
+        <p className="mb-4 text-[12px] text-zinc-400">Watch one, then start from the one closest to what you want. You can change anything after — by talking, or by hand.</p>
         <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${n > 3 ? 2 : n}, minmax(0, 1fr))` }}>
           {proposals!.options.map((o) => (
             <OptionCard key={o.key} o={o} current={board?.option === o.key} playing={playing === `card:${o.key}`}
@@ -76,73 +64,7 @@ export function Story({ session, clips, asking, playing, nowShot, selected, onPi
   return (
     <BoardRows session={session!} board={board} playing={playing} nowShot={nowShot} selected={selected}
                onPlay={onPlay} onSelect={onSelect} onMoveBeat={onMoveBeat} onRetitle={onRetitle}
-               onBeatAction={onBeatAction} onOthers={() => setShowOthers(true)} matchStyle={matchStyle} onJoin={onJoin} onSmooth={onSmooth} />
-  )
-}
-
-// ---- before anything is loaded ---------------------------------------------
-
-function Empty({ onPick }: { onPick: (f: FileList) => void }) {
-  const folder = useRef<HTMLInputElement>(null)
-  const files = useRef<HTMLInputElement>(null)
-  return (
-    <div className="grid min-h-0 flex-1 place-items-center p-8">
-      <div className="w-full max-w-xl rounded-2xl border border-dashed border-zinc-700 p-10 text-center">
-        <h2 className="font-serif text-[26px] text-zinc-100">Start with your clips</h2>
-        <p className="mt-2 text-[13px] text-zinc-400">Drag a folder of videos anywhere onto this window, or choose one.</p>
-        <div className="mt-6 flex justify-center gap-2">
-          <button type="button" onClick={() => folder.current?.click()}
-                  className="rounded-lg bg-accent px-4 py-2 text-[13px] font-semibold text-accent-ink">Choose a folder</button>
-          <button type="button" onClick={() => files.current?.click()}
-                  className="rounded-lg border border-line px-4 py-2 text-[13px] text-zinc-200 hover:bg-raised">Choose some clips</button>
-        </div>
-        <p className="mt-4 text-[11px] text-muted">.mp4 and .mov · they stay on this computer</p>
-        {/* @ts-expect-error -- non-standard but supported everywhere that matters */}
-        <input ref={folder} type="file" className="hidden" webkitdirectory="" multiple
-               onChange={(e) => { if (e.target.files) onPick(e.target.files); e.target.value = '' }} />
-        <input ref={files} type="file" className="hidden" multiple accept=".mp4,.mov,video/mp4,video/quicktime"
-               onChange={(e) => { if (e.target.files) onPick(e.target.files); e.target.value = '' }} />
-      </div>
-    </div>
-  )
-}
-
-// ---- clips loaded, nothing proposed yet: ask, right here ---------------------
-
-function Ask({ clips, asking, onAsk, voiceover }: { clips: Clip[]; asking: boolean; onAsk: (t: string) => void; voiceover: ReactNode }) {
-  const [text, setText] = useState('')
-  const shots = clips.flatMap((c) => c.shots.map((s) => ({ ...s, clip: c })))
-  const go = (t: string) => { if (t.trim() && !asking) onAsk(t.trim()) }
-  return (
-    <div className="min-h-0 flex-1 overflow-y-auto p-8">
-      <div className="mx-auto max-w-2xl">
-        <p className="text-[12px] text-muted">{clips.length} clips loaded</p>
-        <h2 className="mt-1 font-serif text-[26px] text-zinc-100">What’s this video about?</h2>
-        <p className="mt-1 text-[13px] text-zinc-400">One line is enough. I’ll ask a few quick questions about the style, then show you three ways to put it together.</p>
-        <div className="mt-4 flex gap-2">
-          <input autoFocus value={text} onChange={(e) => setText(e.target.value)} disabled={asking}
-                 onKeyDown={(e) => { if (e.key === 'Enter') go(text) }}
-                 placeholder="e.g. a weekend in Tokyo, mostly the food"
-                 className="min-w-0 flex-1 rounded-lg border border-line bg-raised px-3 py-2 text-[14px] text-zinc-100 outline-none placeholder:text-zinc-500 focus:border-zinc-500" />
-          <button type="button" onClick={() => go(text)} disabled={asking || !text.trim()}
-                  className="rounded-lg bg-accent px-4 text-[13px] font-semibold text-accent-ink disabled:opacity-30">
-            {asking ? 'Thinking…' : 'Show me'}
-          </button>
-        </div>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {EXAMPLES.map((x) => (
-            <button key={x} type="button" onClick={() => setText(x)}
-                    className="rounded-full border border-line px-2.5 py-1 text-[11px] text-muted hover:text-zinc-200">{x}</button>
-          ))}
-        </div>
-        <div className="mt-5 flex">{voiceover}</div>
-        <div className="mt-8 grid grid-cols-6 gap-1.5">
-          {shots.slice(0, 24).map((s) => (
-            <img key={s.id} src={s.thumb} className="aspect-video w-full rounded object-cover" />
-          ))}
-        </div>
-      </div>
-    </div>
+               onBeatAction={onBeatAction} onOthers={() => setShowOthers(true)} onReference={onReference} onJoin={onJoin} onSmooth={onSmooth} />
   )
 }
 
@@ -171,17 +93,17 @@ function OptionCard({ o, current, playing, onPlay, onUse }: {
             </ul>
           </details>
         )}
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <button type="button" onClick={onPlay}
-                  className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-[12px] text-zinc-200 hover:bg-zinc-800">
+                  className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-line px-3 py-1.5 text-[12px] text-zinc-200 hover:bg-zinc-800">
             {playing ? <><i className="block size-2 bg-current" /> Stop</> : <><i className="block size-0 border-y-[5px] border-l-[8px] border-y-transparent border-l-current" /> Watch</>}
           </button>
           <button type="button" onClick={onUse}
-                  className="rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-accent-ink hover:brightness-110">
+                  className="shrink-0 whitespace-nowrap rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-accent-ink hover:brightness-110">
             {current ? 'Start over from this' : 'Use this one'}
           </button>
-          <span className="ml-auto self-center text-[11px] tabular-nums text-muted">{o.beats.length} parts · {dur(length)}</span>
         </div>
+        <p className="mt-2 text-[11px] tabular-nums text-muted">{o.beats.length} part{o.beats.length === 1 ? '' : 's'} · {dur(length)} · {shots} shot{shots === 1 ? '' : 's'}</p>
       </div>
       <ol className="mt-3 min-h-0 flex-1 space-y-2.5 overflow-y-auto border-t border-line px-4 py-3">
         {o.beats.map((b, i) => (
@@ -200,7 +122,6 @@ function OptionCard({ o, current, playing, onPlay, onUse }: {
           </li>
         ))}
       </ol>
-      <p className="border-t border-line px-4 py-2 text-[10px] text-muted">{shots} shots</p>
     </article>
   )
 }
@@ -208,7 +129,7 @@ function OptionCard({ o, current, playing, onPlay, onUse }: {
 // ---- the chosen story: one row per part --------------------------------------
 
 function BoardRows({ session, board, playing, nowShot, selected, onPlay, onSelect, onMoveBeat, onRetitle,
-  onBeatAction, onOthers, matchStyle, onJoin, onSmooth }: {
+  onBeatAction, onOthers, onReference, onJoin, onSmooth }: {
   session: Session; board: Board; playing: string | null; nowShot: string | null; selected: Selection
   onJoin?: (after: string, sound: JoinSound) => void
   onSmooth?: (order: boolean, nudge: boolean) => Promise<void>
@@ -218,7 +139,7 @@ function BoardRows({ session, board, playing, nowShot, selected, onPlay, onSelec
   onRetitle: (beat: string, title: string) => void
   onBeatAction: (action: 'play' | 'up' | 'down' | 'remove' | 'frames', beat: string) => void
   onOthers: () => void
-  matchStyle?: ReactNode
+  onReference?: () => void
 }) {
   const [dragBeat, setDragBeat] = useState<string | null>(null)
   const [dropAt, setDropAt] = useState<number | null>(null)
@@ -245,25 +166,22 @@ function BoardRows({ session, board, playing, nowShot, selected, onPlay, onSelec
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-5" onClick={(e) => { if (e.target === e.currentTarget) onSelect(null, null) }}>
-      <div className="mb-4 flex items-end gap-3">
-        <div className="min-w-0">
-          <h2 className="font-serif text-[24px] leading-tight text-zinc-100">Your story</h2>
-          <p className="mt-0.5 text-[12px] text-zinc-400">{session.structure_note}</p>
-        </div>
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          <span className="text-[12px] tabular-nums text-muted">{board.beats.length} parts · {dur(total)}</span>
+      <div className="mb-1 flex flex-wrap items-center gap-2">
+        <h2 className="mr-2 font-serif text-[24px] leading-tight text-zinc-100">{board.name}</h2>
+        <span className="text-[12px] tabular-nums text-muted">{board.beats.length} parts · {dur(total)}</span>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           <button type="button" onClick={() => onPlay('board', playItems(board.beats))}
                   className="flex items-center gap-1.5 rounded-lg bg-zinc-800 px-3 py-1.5 text-[12px] text-zinc-100 hover:bg-zinc-700">
             {playing === 'board' ? <><i className="block size-2 bg-current" /> Stop</>
               : <><i className="block size-0 border-y-[5px] border-l-[8px] border-y-transparent border-l-current" /> Watch it all</>}
           </button>
-          <button type="button" onClick={onOthers} className="rounded-lg border border-line px-3 py-1.5 text-[12px] text-zinc-300 hover:bg-raised">
-            Other ways to tell it
-          </button>
+          <Button onClick={onOthers} title="The other proposals built from your brief">Other ways to tell it</Button>
           {onSmooth && <SmoothButton rough={(session.seams ?? []).filter((x) => x.verdict !== 'ok').length} onSmooth={onSmooth} />}
         </div>
       </div>
-      {matchStyle && <div className="mb-4">{matchStyle}</div>}
+      <p className="mb-4 text-[12px] leading-snug text-zinc-400">
+        {session.structure_note}{board.style ? <> Feels like “{board.style.name}”{onReference ? <> · <button type="button" className="text-accent hover:underline" onClick={onReference}>change</button></> : null}.</> : null}
+      </p>
 
       <ol ref={rows} className="space-y-2"
           onDragOver={(e) => { if (dragBeat) { e.preventDefault(); setDropAt(indexAt(e.clientY)) } }}

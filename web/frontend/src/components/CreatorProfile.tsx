@@ -1,11 +1,20 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { emptyProfile, FONTS, loadProfile, PACES, PLATFORMS, safeReference, saveProfile, VIBES, type CreatorProfile as Profile } from '../profile'
-import './CreatorProfile.css'
+import { Button, Confirm, Field, inputCls, Notice, Pills, Wordmark } from '../ui'
 
-export function CreatorProfile({ onClose, onTools }: { onClose: () => void; onTools: () => void }) {
+// Your profile: the things that stay the same across videos -- your name
+// and handle (for name tags and end cards), your caption font, colour and
+// placement (the default style of words on screen), and bookmarks of
+// videos you like. Saved in this browser; no account.
+//
+// Honest about reach: today the editor reads the name, handle, font,
+// colour and caption placement. Pace, vibes and bookmarks are kept for
+// you but don't steer the edit yet.
+
+export function CreatorProfile({ onClose }: { onClose: () => void }) {
   const [initial] = useState(() => {
     try { return loadProfile(window.localStorage) }
-    catch { return { profile: emptyProfile(), error: 'Browser storage is unavailable. You can explore your style, but it cannot be saved here.' } }
+    catch { return { profile: emptyProfile(), error: 'Browser storage is unavailable. You can fill this in, but it cannot be saved here.' } }
   })
   const [profile, setProfile] = useState(initial.profile)
   const [saved, setSaved] = useState(initial.profile)
@@ -16,13 +25,10 @@ export function CreatorProfile({ onClose, onTools }: { onClose: () => void; onTo
   const [referenceNote, setReferenceNote] = useState('')
   const [referenceError, setReferenceError] = useState('')
   const heading = useRef<HTMLHeadingElement>(null)
-  const leaveDialog = useRef<HTMLDialogElement>(null)
-  const exitAction = useRef(onClose)
   const dirty = JSON.stringify(profile) !== JSON.stringify(saved)
   const pendingReference = !!(url.trim() || referenceNote.trim())
   const unsaved = dirty || pendingReference
   useEffect(() => { heading.current?.focus() }, [])
-  useEffect(() => { if (leaving) leaveDialog.current?.showModal() }, [leaving])
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => { if (unsaved) e.preventDefault() }
     window.addEventListener('beforeunload', warn)
@@ -41,7 +47,7 @@ export function CreatorProfile({ onClose, onTools }: { onClose: () => void; onTo
     }
     try {
       const next = saveProfile(window.localStorage, profile)
-      setProfile(next); setSaved(next); setError(null); setMessage('Profile saved in this browser.'); setLeaving(false)
+      setProfile(next); setSaved(next); setError(null); setMessage('Saved in this browser.'); setLeaving(false)
     } catch { setError('Could not save. Your changes are still here. Check browser storage permissions and try again.') }
   }
   const addReference = () => {
@@ -52,86 +58,125 @@ export function CreatorProfile({ onClose, onTools }: { onClose: () => void; onTo
     update('references', [...profile.references, { url: link, note: referenceNote.trim() }])
     setUrl(''); setReferenceNote(''); setReferenceError('')
   }
+  const back = () => { if (unsaved) setLeaving(true); else onClose() }
 
-  return <main className="creator-page">
-    <header className="creator-topbar">
-      <button type="button" onClick={() => { exitAction.current = onClose; if (unsaved) setLeaving(true); else onClose() }}>← Back to editor</button>
-      <span className="creator-wordmark">Vibe<span>Cut</span></span>
-      <button type="button" onClick={() => { exitAction.current = onTools; if (unsaved) setLeaving(true); else onTools() }}>Creative tools ↗</button>
-    </header>
-    <div className="creator-body">
-      <div className="creator-heading">
-        <div><p className="creator-eyebrow">YOUR CREATIVE HOME</p>
-          <h1 ref={heading} tabIndex={-1}>A little more <em>you.</em></h1>
-          <p>Give your videos a common thread. Start with the things that feel like you.</p></div>
-        <span className="creator-badge">Creator profile</span>
-      </div>
-      <div className="creator-layout">
-        <form id="creator-form" onSubmit={e => { e.preventDefault(); store() }} className="creator-fields">
-          <Section number="01" title="The person behind the camera" description="A few words about you and what you love to make.">
-            <div className="creator-pair">
-              <Field label="Your name"><input value={profile.name} maxLength={80} autoComplete="given-name" placeholder="What should we call you?" onChange={e => update('name', e.target.value)} /></Field>
-              <Field label="Creator handle"><input value={profile.handle} maxLength={80} placeholder="@yourname" autoCapitalize="none" onChange={e => update('handle', e.target.value)} /></Field>
+  return (
+    <div className="flex h-full flex-col overflow-hidden bg-ink">
+      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line bg-ink px-4">
+        <Button variant="ghost" size="sm" onClick={back}>← Back</Button>
+        <Wordmark />
+        <span className="text-[13px] text-zinc-400">/ Your profile</span>
+        <div className="flex-1" />
+        <span className="hidden text-[11px] text-muted sm:inline" aria-live="polite">
+          {error ? <span className="text-rose-300">{error}</span> : message || (unsaved ? 'Unsaved changes' : 'Stored in this browser · no account')}
+        </span>
+        <Button variant="primary" size="sm" onClick={store} disabled={!unsaved && !error}>Save</Button>
+      </header>
+
+      <main className="min-h-0 flex-1 overflow-y-auto">
+        <form id="creator-form" onSubmit={e => { e.preventDefault(); store() }} className="mx-auto grid max-w-[1000px] gap-8 px-6 py-8 lg:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="min-w-0 space-y-8">
+            <div>
+              <h1 ref={heading} tabIndex={-1} className="font-serif text-[30px] leading-tight text-zinc-100 outline-none">A little more you</h1>
+              <p className="mt-1 text-[13px] text-zinc-400">What stays the same from video to video: your name on screen, your caption style, the videos you look up to.</p>
             </div>
-            <Field label="What do you make?"><textarea value={profile.about} rows={2} maxLength={1000} placeholder="Little moments, weekend adventures, and places worth sharing…" onChange={e => update('about', e.target.value)} /></Field>
-            <Field label="What would you like help with?"><textarea value={profile.goal} rows={2} maxLength={1000} placeholder="Turn my camera roll into a weekly vlog that still feels like me." onChange={e => update('goal', e.target.value)} /></Field>
-            <Choice label="Where you share" values={PLATFORMS} selected={profile.platforms} onPick={v => toggle('platforms', v)} />
-          </Section>
-          <Section number="02" title="Your signature style" description="Choose a starting point. You can always change your mind.">
-            <Choice label="The feeling · pick a few" values={VIBES} selected={profile.vibes} onPick={v => toggle('vibes', v)} />
-            <Choice label="Pacing" values={PACES} selected={[profile.pace]} onPick={v => update('pace', v as Profile['pace'])} />
-            <Choice label="Caption font" values={FONTS} selected={[profile.font]} onPick={v => update('font', v as Profile['font'])} />
-            <div className="creator-pair">
-              <Field label="Signature color"><div className="creator-color"><input type="color" aria-label="Signature color" value={profile.color} onChange={e => update('color', e.target.value)} /><span>{profile.color.toUpperCase()}</span></div></Field>
-              <Field label="Caption placement"><select value={profile.captionPosition} onChange={e => update('captionPosition', e.target.value as Profile['captionPosition'])}><option>Lower</option><option>Middle</option></select></Field>
-            </div>
-            <Field label="Things to avoid"><textarea value={profile.avoid} rows={2} maxLength={1000} placeholder="No heavy filters. Keep natural sound. Go easy on zooms." onChange={e => update('avoid', e.target.value)} /></Field>
-          </Section>
-          <Section number="03" title="Keep your inspiration close" description="Save a video link and tell us what you like about it. Links are bookmarks for now; videos aren’t analyzed.">
-            {profile.references.length > 0 && <ul className="creator-references">{profile.references.map((r, i) => <li key={r.url}>
-              <div><a href={r.url} target="_blank" rel="noopener noreferrer">{new URL(r.url).hostname} ↗</a><p>{r.note || r.url}</p></div>
-              <button type="button" aria-label={`Remove reference ${i + 1}`} onClick={() => update('references', profile.references.filter((_, index) => index !== i))}>Remove</button>
-            </li>)}</ul>}
-            <Field label="Reference video link"><input type="text" inputMode="url" value={url} maxLength={2048} placeholder="https://…" onChange={e => { setUrl(e.target.value); setReferenceError(''); setMessage('') }} /></Field>
-            <Field label="What do you like about it?"><input value={referenceNote} maxLength={500} placeholder="The quiet opening and handwritten captions, not the transitions." onChange={e => { setReferenceNote(e.target.value); setMessage('') }} /></Field>
-            {referenceError && <p className="creator-error" role="alert">{referenceError}</p>}
-            <button type="button" className="creator-secondary" onClick={addReference} disabled={profile.references.length >= 10}>+ Add reference <span>{profile.references.length}/10</span></button>
-          </Section>
-        </form>
-        <aside className="creator-preview">
-          <p className="creator-eyebrow">YOUR STYLE, AT A GLANCE</p>
-          <div className="creator-sample" style={{ '--signature': profile.color } as CSSProperties}>
-            <span className="creator-sample-tag">STYLE PREVIEW</span>
-            <div className="creator-sample-art" aria-hidden="true"><i /><i /><i /></div>
-            <div className={`creator-caption ${profile.captionPosition.toLowerCase()} ${profile.font.toLowerCase()}`}><span>little moments,</span><br /><span>worth keeping.</span></div>
-            <span className="creator-sample-credit">{profile.handle || 'your next story'}</span>
+            {error && <Notice tone="bad">{error}</Notice>}
+
+            <Section n="01" title="You" text="Used for name tags and end cards.">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Your name"><input value={profile.name} maxLength={80} autoComplete="given-name" placeholder="What should we call you?" onChange={e => update('name', e.target.value)} className={inputCls} /></Field>
+                <Field label="Handle"><input value={profile.handle} maxLength={80} placeholder="@yourname" autoCapitalize="none" onChange={e => update('handle', e.target.value)} className={inputCls} /></Field>
+              </div>
+              <Field label="What do you make?"><textarea value={profile.about} rows={2} maxLength={1000} placeholder="Little moments, weekend adventures, and places worth sharing…" onChange={e => update('about', e.target.value)} className={inputCls + ' resize-y'} /></Field>
+              <Field label="Where you share"><Pills values={PLATFORMS} selected={profile.platforms} onPick={v => toggle('platforms', v)} /></Field>
+            </Section>
+
+            <Section n="02" title="Words on screen" text="The default font, colour and placement for titles, captions and name tags. Each video can still change them.">
+              <Field label="Font"><Pills values={FONTS} selected={[profile.font]} onPick={v => update('font', v as Profile['font'])} /></Field>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Accent colour">
+                  <div className="flex items-center gap-3">
+                    <input type="color" aria-label="Accent colour" value={profile.color} onChange={e => update('color', e.target.value)} className="h-9 w-12 cursor-pointer rounded-md border border-line bg-ink" />
+                    <span className="text-[12px] tabular-nums text-zinc-300">{profile.color.toUpperCase()}</span>
+                  </div>
+                </Field>
+                <Field label="Caption placement"><Pills values={['Lower', 'Middle']} selected={[profile.captionPosition]} onPick={v => update('captionPosition', v as Profile['captionPosition'])} /></Field>
+              </div>
+            </Section>
+
+            <Section n="03" title="Taste" text="Kept for you. Not yet read by the editor — say it in the brief for now.">
+              <Field label="The feeling · pick a few"><Pills values={VIBES} selected={profile.vibes} onPick={v => toggle('vibes', v)} /></Field>
+              <Field label="Pacing"><Pills values={PACES} selected={[profile.pace]} onPick={v => update('pace', v as Profile['pace'])} /></Field>
+              <Field label="Things to avoid"><textarea value={profile.avoid} rows={2} maxLength={1000} placeholder="No heavy filters. Keep natural sound. Go easy on zooms." onChange={e => update('avoid', e.target.value)} className={inputCls + ' resize-y'} /></Field>
+            </Section>
+
+            <Section n="04" title="Videos you look up to" text="Bookmarks with a note. To actually borrow a video's feel, use Reference inside a project.">
+              {profile.references.length > 0 && (
+                <ul className="space-y-2">
+                  {profile.references.map((r, i) => (
+                    <li key={r.url} className="flex items-start gap-3 rounded-xl border border-line bg-raised px-3 py-2.5">
+                      <div className="min-w-0 flex-1 break-words">
+                        <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-[13px] text-zinc-100 underline underline-offset-2">{new URL(r.url).hostname} ↗</a>
+                        <p className="mt-0.5 text-[12px] text-zinc-400">{r.note || r.url}</p>
+                      </div>
+                      <Button size="sm" variant="ghost" aria-label={`Remove reference ${i + 1}`} onClick={() => update('references', profile.references.filter((_, index) => index !== i))}>Remove</Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Link"><input type="text" inputMode="url" value={url} maxLength={2048} placeholder="https://…" onChange={e => { setUrl(e.target.value); setReferenceError(''); setMessage('') }} className={inputCls} /></Field>
+                <Field label="What do you like about it?"><input value={referenceNote} maxLength={500} placeholder="The quiet opening and handwritten captions." onChange={e => { setReferenceNote(e.target.value); setMessage('') }} className={inputCls} /></Field>
+              </div>
+              {referenceError && <Notice tone="bad">{referenceError}</Notice>}
+              <Button onClick={addReference} disabled={profile.references.length >= 10}>+ Add reference <span className="text-muted">{profile.references.length}/10</span></Button>
+            </Section>
           </div>
-          <div className="creator-person"><span className="creator-avatar">{profile.name.trim().slice(0, 1).toUpperCase() || 'Y'}</span><div><h2>{profile.name.trim() || 'Your creative world'}</h2><p>{profile.platforms.join(' · ') || 'A style that travels with you'}</p></div></div>
-          <p className="creator-preview-about">{profile.about || 'Your everyday moments. Your way of telling them.'}</p>
-          <div className="creator-tags">{profile.vibes.map(v => <span key={v}>{v}</span>)}</div>
-          <dl className="creator-details"><div><dt>Pacing</dt><dd>{profile.pace}</dd></div><div><dt>Captions</dt><dd>{profile.font} · {profile.captionPosition.toLowerCase()}</dd></div><div><dt>References</dt><dd>{profile.references.length} added</dd></div></dl>
-          <div className="creator-note"><strong>A starting point, saved.</strong><p>This profile stays here between editing sessions. Font, color and placement update this sample. Applying your style to edits comes next.</p></div>
-        </aside>
-      </div>
+
+          <aside className="lg:sticky lg:top-0 lg:self-start">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-muted">How your words will look</div>
+            <div className="relative mt-2 aspect-[9/13] overflow-hidden rounded-xl border border-line bg-[linear-gradient(155deg,#4a4d55_0%,#2b3038_48%,#15181d_100%)]" style={{ '--signature': profile.color } as CSSProperties}>
+              <div className={`absolute inset-x-4 text-center font-semibold leading-relaxed ${profile.captionPosition === 'Lower' ? 'bottom-[22%]' : 'top-[44%]'} ${profile.font === 'Editorial' ? 'font-serif text-[28px] font-normal' : profile.font === 'Rounded' ? 'text-[22px] [font-family:Nunito,ui-rounded,system-ui,sans-serif]' : 'text-[22px]'}`}>
+                <span className="bg-black/70 px-2 py-0.5 text-[color:var(--signature)] [box-decoration-break:clone]">little moments,</span><br />
+                <span className="bg-black/70 px-2 py-0.5 text-[color:var(--signature)] [box-decoration-break:clone]">worth keeping.</span>
+              </div>
+              <span className="absolute bottom-4 left-4 right-4 truncate text-[11px] text-zinc-300">{profile.handle || 'your next story'}</span>
+            </div>
+            <div className="mt-4 flex items-center gap-3">
+              <span className="grid size-10 shrink-0 place-items-center rounded-full bg-zinc-700 font-serif text-[22px] text-zinc-100">{profile.name.trim().slice(0, 1).toUpperCase() || 'Y'}</span>
+              <div className="min-w-0">
+                <div className="truncate text-[14px] text-zinc-100">{profile.name.trim() || 'Your name'}</div>
+                <div className="truncate text-[11px] text-muted">{profile.platforms.join(' · ') || 'Where you share'}</div>
+              </div>
+            </div>
+            <dl className="mt-4 space-y-1.5 border-t border-line pt-3 text-[12px]">
+              <div className="flex justify-between"><dt className="text-muted">Words</dt><dd className="text-zinc-200">{profile.font} · {profile.captionPosition.toLowerCase()}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">Pacing</dt><dd className="text-zinc-200">{profile.pace}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">References</dt><dd className="text-zinc-200">{profile.references.length}</dd></div>
+            </dl>
+          </aside>
+        </form>
+      </main>
+
+      {leaving && (
+        <Confirm title="Keep your changes?" text="Your latest changes haven’t been saved." action="Leave without saving" danger
+                 onNo={() => setLeaving(false)} onYes={onClose} />
+      )}
     </div>
-    <footer className="creator-savebar">
-      <div aria-live="polite">{error ? <span className="creator-error" role="alert">{error}</span> : message || (unsaved ? 'You have unsaved changes' : 'Only stored in this browser · no account needed')}</div>
-      <button type="submit" form="creator-form" className="creator-primary">Save profile <span aria-hidden="true">↗</span></button>
-    </footer>
-    {leaving && <dialog ref={leaveDialog} className="creator-leave" aria-labelledby="leave-heading" onCancel={() => setLeaving(false)}>
-      <h2 id="leave-heading">Keep your changes?</h2><p>Your latest changes haven’t been saved.</p>
-      <button autoFocus type="button" onClick={() => setLeaving(false)}>Keep editing</button>
-      <button type="button" onClick={() => exitAction.current()}>Discard changes & leave</button>
-    </dialog>}
-  </main>
+  )
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <label className="creator-field"><span>{label}</span>{children}</label>
-}
-function Section({ number, title, description, children }: { number: string; title: string; description: string; children: ReactNode }) {
-  return <section className="creator-section"><header><span>{number}</span><div><h2>{title}</h2><p>{description}</p></div></header><div className="creator-section-content">{children}</div></section>
-}
-function Choice({ label, values, selected, onPick }: { label: string; values: readonly string[]; selected: string[]; onPick: (v: string) => void }) {
-  return <fieldset className="creator-choice"><legend>{label}</legend><div>{values.map(v => <button key={v} type="button" aria-pressed={selected.includes(v)} onClick={() => onPick(v)}>{v}</button>)}</div></fieldset>
+function Section({ n, title, text, children }: { n: string; title: string; text: string; children: ReactNode }) {
+  return (
+    <section className="border-t border-line pt-6">
+      <header className="flex gap-3">
+        <span className="pt-1 text-[11px] tabular-nums text-muted">{n}</span>
+        <div>
+          <h2 className="font-serif text-[22px] leading-tight text-zinc-100">{title}</h2>
+          <p className="mt-0.5 text-[12px] text-zinc-400">{text}</p>
+        </div>
+      </header>
+      <div className="mt-4 grid gap-4 pl-8">{children}</div>
+    </section>
+  )
 }

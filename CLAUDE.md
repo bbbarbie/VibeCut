@@ -34,12 +34,21 @@ The promise to a user is therefore *not* "this will be beautiful." It is
 - `storyline/` — proposes several edits from one shoot. Not built as a
   module; v1 axis enumeration (time / place / subject, no LLM) lives in
   `web/backend/storyboard.py`.
-- `web/` — first interface (FastAPI + Vite/React). Built at the user's
-  explicit request despite the "no web UI" non-goal below; scope is
-  deliberately one path: drop → index → three proposals → pick one →
-  edit by chat or timeline. Two levels: **Story** (default — parts and
-  shots, no timecodes) and **Frames** (the precise timeline). Select, then
-  act; no jargon in the UI. See `web/README.md`.
+- `web/` — the app (FastAPI + Vite/React). Built at the user's explicit
+  request despite the "no web UI" non-goal below; scope is deliberately one
+  path: **Projects → Footage → Brief → Rough cut → Story → Export**
+  (Phase 1 baseline, 2026-09-28; audit, parity matrix against Vyra and the
+  plan in `design/specs/phase1-baseline.md`). The stage shown is *derived*
+  from project state (`web/frontend/src/stage.ts`), never set by hand.
+  Projects persist on disk (`web/backend/projects.py`: clip ids, turn log,
+  workflow, cut overrides, brief, exports) and survive restarts; the
+  middleware saves after every mutating request. Two levels inside Story:
+  **Story** (parts and shots, no timecodes) and **Frames** (the precise
+  timeline). Select, then act; no jargon in the UI. One design system
+  (`web/frontend/src/ui.tsx`); the old Creative-tools page and its four
+  "coming soon" cards are gone (see `web/feature-roadmap.md`). What the
+  machine can't do (no key, not macOS, no yt-dlp) is stated on the home
+  screen and where the action would be, never hidden. See `web/README.md`.
 - Chat editing rule: a turn applies operations to the working storyboard
   (`web/backend/board.py`), never regenerates it. The LLM only emits ops;
   the diff is computed, not reported by the model. Keep it that way.

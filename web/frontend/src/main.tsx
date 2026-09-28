@@ -1,19 +1,28 @@
 import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
+import { CreatorProfile } from './components/CreatorProfile.tsx'
 import { Polish } from './components/Polish.tsx'
+import { Projects } from './components/Projects.tsx'
+import { go, parseRoute, type Route } from './router.ts'
 import './index.css'
 
-// #polish is its own page: a finished video and the creator pointing at it.
-// It shares nothing with the storyboard editor but the server.
+// Four places: the projects home, one project's workspace, your profile,
+// and the finished-video tool. The workspace is remounted per project, so
+// nothing of one video leaks into the next.
 function Root() {
-  const [polish, setPolish] = useState(window.location.hash === '#polish')
+  const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash))
   useEffect(() => {
-    const change = () => setPolish(window.location.hash === '#polish')
+    const change = () => setRoute(parseRoute(window.location.hash))
     window.addEventListener('hashchange', change)
     return () => window.removeEventListener('hashchange', change)
   }, [])
-  return polish ? <Polish /> : <App />
+  switch (route.kind) {
+    case 'projects': return <Projects />
+    case 'profile': return <CreatorProfile onClose={() => window.history.length > 1 ? window.history.back() : go({ kind: 'projects' })} />
+    case 'polish': return <Polish />
+    case 'project': return <App key={route.id} id={route.id} view={route.view} />
+  }
 }
 
 createRoot(document.getElementById('root')!).render(

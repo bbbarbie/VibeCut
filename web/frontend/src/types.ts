@@ -28,7 +28,22 @@ export type Clip = {
          flags: { code: string; zh: string; en: string }[]; windows: Record<string, [number, number]> } | null
 }
 
-export type Project = { clips: Clip[]; vision: string }
+export type Project = { clips: Clip[]; vision: string; project: ProjectMeta | null }
+
+// One row on the dashboard (backend/projects.py). `stage` is where the
+// creator would pick it up: footage · brief · cut · story · exported.
+export type ProjectMeta = {
+  id: string; name: string; created: number; updated: number
+  clips: number; duration: number | null; cover: string | null
+  stage: 'footage' | 'brief' | 'cut' | 'story' | 'exported'
+  edits: number; exports: number; board: { name: string; parts: number } | null; last_export: ExportRecord | null
+}
+export type ExportRecord = { job: string; file: string; path: string; at: number; seconds: number; size: { w: number; h: number }
+  music: boolean; overlays: number; bytes: number | null }
+export type Brief = { message: string; style: StyleAnswers; said: string; at: number }
+// What this machine can do -- shown, so nothing is offered that then fails.
+export type Capabilities = { llm: boolean; speech: boolean; vision: string; links: boolean; music_folder: string | null; platform: string }
+export type ImportError = { path: string | null; error: string }
 
 export type Job = {
   id: string
@@ -159,6 +174,11 @@ export type Session = {
   preferences: Preferences
   voiceover: { source: string; timing: 'estimated' | 'text_only'; lines: number; total: number } | null
   overlays: Overlays
+  project: ProjectMeta | null
+  brief: Brief | null
+  exports: ExportRecord[]
+  import_errors: ImportError[]
+  capabilities: Capabilities
 }
 
 export type ExportJob = {

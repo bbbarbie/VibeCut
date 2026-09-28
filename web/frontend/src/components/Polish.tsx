@@ -154,7 +154,8 @@ export function Polish() {
     <div className="flex h-full flex-col bg-panel text-zinc-200">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line px-4">
         <a href="#" className="font-serif text-[20px] text-zinc-100">VibeCut</a>
-        <span className="text-[12px] text-muted">Polish — point at a moment, say what you want there</span>
+        <a href="#/" className="rounded-md px-1.5 py-0.5 text-[12px] text-muted hover:bg-raised hover:text-zinc-100">← Your videos</a>
+        <span className="text-[12px] text-muted">Polish — point at a moment of a finished video, say what you want there</span>
         {v && <span className="ml-auto truncate text-[12px] text-zinc-400">{v.name}</span>}
         <button type="button" onClick={() => file.current?.click()}
                 className={`${v ? '' : 'ml-auto'} rounded-lg border border-line px-3 py-1 text-[12px] hover:bg-raised`}>

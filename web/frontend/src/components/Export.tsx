@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
-import { dur } from '../format'
+import { bytes, dur } from '../format'
 import { renderSchedule, type Part } from '../overlayDraw'
-import type { BoardStyle, ExportJob, Overlays, TimelineData } from '../types'
+import type { BoardStyle, ExportJob, ExportRecord, Overlays, TimelineData } from '../types'
+import { ago } from '../ui'
 
 type Phase = { kind: 'ready' } | { kind: 'drawing'; done: number; of: number } | { kind: 'rendering'; job: ExportJob }
   | { kind: 'done'; job: ExportJob } | { kind: 'error'; message: string }
@@ -10,12 +11,14 @@ type Phase = { kind: 'ready' } | { kind: 'drawing'; done: number; of: number } |
 // Export: the edit, its words on screen and its music, as one file. The
 // words are drawn here, by the same code as the preview, then composited
 // by the server -- so the file shows exactly what the player showed.
-export function Export({ tl, overlays, parts, music, style, onClose }: {
+// Past exports of this project are listed underneath (they're on the project).
+export function Export({ tl, overlays, parts, music, style, history = [], onClose }: {
   tl: TimelineData
   overlays: Overlays
   parts: Part[]
   music: string | null
   style?: BoardStyle | null
+  history?: ExportRecord[]
   onClose: () => void
 }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'ready' })
@@ -122,9 +125,24 @@ export function Export({ tl, overlays, parts, music, style, onClose }: {
           </div>
         )}
 
+        {history.length > 0 && phase.kind !== 'done' && (
+          <div className="mt-4 border-t border-line pt-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-muted">Exported before</div>
+            <ul className="mt-1.5 max-h-32 space-y-1 overflow-y-auto text-[12px]">
+              {[...history].reverse().map((h, k) => (
+                <li key={h.job} className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate text-zinc-300" title={h.path}>{h.file}</span>
+                  <span className="shrink-0 text-[11px] tabular-nums text-muted">{dur(h.seconds)}{h.bytes ? ` · ${bytes(h.bytes)}` : ''} · {ago(h.at)}</span>
+                  <a href={`/api/exports/${history.length - 1 - k}/file`} download className="shrink-0 text-[11px] text-accent hover:underline">Download</a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <div className="mt-5 flex justify-end gap-2">
           {phase.kind === 'done' ? <>
-            <button type="button" onClick={() => api.exportReveal(phase.job.id)} className="rounded-lg border border-line px-3 py-1.5 text-[12px] text-zinc-200 hover:bg-raised">Show in Finder</button>
+            {navigator.platform.startsWith('Mac') && <button type="button" onClick={() => api.exportReveal(phase.job.id)} className="rounded-lg border border-line px-3 py-1.5 text-[12px] text-zinc-200 hover:bg-raised">Show in Finder</button>}
             <a href={`/api/export/${phase.job.id}/file`} download className="rounded-lg border border-line px-3 py-1.5 text-[12px] text-zinc-200 hover:bg-raised">Download</a>
             <button type="button" onClick={onClose} className="rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-accent-ink">Done</button>
           </> : busy ? (

@@ -7,9 +7,11 @@ the storyboard *text* goes to the chat model (see llm.py).
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 import threading
+import time
 import uuid
 from pathlib import Path
 from urllib.parse import unquote
@@ -17,11 +19,12 @@ from urllib.parse import unquote
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import board as bd
+from . import projects as pj
 from . import audiomix, brief, cut, export, looks, seams, smooth, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import Workflow, WorkflowError
@@ -34,13 +37,23 @@ async def lifespan(_: FastAPI):
     indexer.pool()
     if musiclib.load_setting() and os.path.isdir(musiclib.load_setting()):
         musiclib.set_folder(musiclib.load_setting())
+    # The project that was open last time is open again, as it was left.
+    last = pj.open_id()
+    if last:
+        try:
+            _open_project(last)
+        except pj.ProjectError:
+            pj.set_open(None)
     yield
 
 
 app = FastAPI(title="VibeCut", docs_url="/api/docs", lifespan=lifespan)
 
-# The one project: whatever has been dropped in this session, the working
+# The open project: whatever has been dropped into it, the working
 # storyboard's turn log, and the shelf catalogue the ops resolve against.
+# Everything here is rebuilt from the project's record (projects.py) and
+# the per-file index cache; nothing lives only in memory.
+PROJECT: dict = {"p": None}
 CLIPS: dict[str, dict] = {}
 VISION_USED = {"value": False}
 SESSION = bd.Session()
@@ -51,6 +64,98 @@ PLAN: dict = {"plan": None}
 WORKFLOW = Workflow()
 # What the creator's edits have taught -- only what they confirmed.
 PREFS = Preferences(indexer.CACHE / "preferences.json")
+
+
+def _open_project(pid: str) -> pj.Project:
+    """Make `pid` the open project: its clips from the cache, its log
+    replayed, its gate where it was left."""
+    global SESSION, WORKFLOW
+    pr = pj.load(pid)
+    with LOCK:
+        clips, missing = pj.restore_clips(pr)
+        CLIPS.clear()
+        CLIPS.update(clips)
+        VISION_USED["value"] = vision.status() == "ready" and any(
+            s.get("labels") for c in CLIPS.values() for s in c["shots"])
+        SESSION = pj.restore_session(pr)
+        WORKFLOW = pj.restore_workflow(pr)
+        PREFS.new_project()
+        pj.restore_prefs(pr, PREFS)
+        old = cut.Plan(overrides=dict(pr.cut_overrides), targets=dict(pr.cut_targets))
+        PLAN["plan"] = cut.compute(CLIPS, old) if CLIPS else None
+        # A project whose files went missing since it was saved says so on
+        # the footage screen; it never pretends they are there.
+        if missing:
+            pr.import_errors = missing + [e for e in pr.import_errors
+                                          if e.get("path") not in {m["path"] for m in missing}]
+        if not CLIPS and WORKFLOW.state != "intake":
+            WORKFLOW = Workflow()
+        PROJECT["p"] = pr
+        _refresh_catalog()
+    pj.set_open(pid)
+    return pr
+
+
+def _close_project() -> None:
+    global SESSION, WORKFLOW
+    with LOCK:
+        PROJECT["p"] = None
+        CLIPS.clear()
+        SESSION = bd.Session()
+        WORKFLOW = Workflow()
+        PLAN["plan"] = None
+        PREFS.new_project()
+        _refresh_catalog()
+    pj.set_open(None)
+
+
+def _save() -> None:
+    """The open project, as it stands, to disk. Cheap; called after every change."""
+    pr = PROJECT["p"]
+    if pr is None:
+        return
+    with LOCK:
+        pj.capture(pr, CLIPS, SESSION, WORKFLOW, PLAN["plan"], PREFS)
+    pj.save(pr)
+
+
+def _meta() -> dict | None:
+    pr = PROJECT["p"]
+    return None if pr is None else pr.summary(CLIPS, SESSION.board)
+
+
+def _capabilities() -> dict:
+    """What this machine can do, so the UI says so instead of failing later."""
+    return {
+        "llm": llm.available(),
+        "speech": sys.platform == "darwin" and shutil.which("swiftc") is not None,
+        "vision": vision.status(),
+        "links": reference.ytdlp() is not None,
+        "music_folder": musiclib.STATE.get("folder"),
+        "platform": sys.platform,
+    }
+
+
+# Mutating calls need an open project (the dashboard has none), and after
+# they succeed the project is written to disk. Uploads, the finished-video
+# tool and the reference library stand apart: they are not project state.
+_NO_PROJECT_OK = ("/api/projects", "/api/upload", "/api/locate", "/api/polish", "/api/music/folder",
+                  "/api/references")
+_NOT_SAVED = ("/api/projects", "/api/upload", "/api/locate", "/api/polish", "/api/music/folder")
+
+
+@app.middleware("http")
+async def project_scope(request: Request, call_next):
+    path = request.url.path
+    mutating = request.method in ("POST", "DELETE", "PATCH", "PUT") and path.startswith("/api/")
+    if mutating and PROJECT["p"] is None:
+        if not path.startswith(_NO_PROJECT_OK) or path.endswith(("/apply", "/look")):
+            return JSONResponse({"detail": "Open a project first."}, status_code=409)
+    response = await call_next(request)
+    if mutating and response.status_code < 400 and not path.startswith(_NOT_SAVED) \
+            and "/frames/" not in path:
+        _save()
+    return response
 
 
 def _make_proposals(direction: dict) -> dict:
@@ -134,6 +239,11 @@ def _session() -> dict:
         "mix": _mix_public(b, tl),
         "preferences": PREFS.public(SESSION),
         "voiceover": _voiceover_public(),
+        "project": _meta(),
+        "brief": PROJECT["p"].brief if PROJECT["p"] else None,
+        "exports": list(PROJECT["p"].exports) if PROJECT["p"] else [],
+        "import_errors": list(PROJECT["p"].import_errors) if PROJECT["p"] else [],
+        "capabilities": _capabilities(),
     }
 
 
@@ -314,7 +424,7 @@ def _cut_of(cid: str) -> dict | None:
 def _project() -> dict:
     clips = sorted(CLIPS.values(), key=lambda c: (storyboard.parse_when(c.get("capture_time"))
                                                   or storyboard.datetime.max, c["name"]))
-    return {"clips": [_public_clip(c) for c in clips], "vision": vision.status()}
+    return {"clips": [_public_clip(c) for c in clips], "vision": vision.status(), "project": _meta()}
 
 
 # --------------------------------------------------------------------------
@@ -363,10 +473,18 @@ def api_import(req: ImportReq) -> dict:
         if not os.path.isdir(req.folder):
             raise HTTPException(400, f"not a folder: {req.folder}")
         paths += indexer.find_videos(req.folder)
-    paths = [p for p in dict.fromkeys(paths)
-             if os.path.isfile(p) and Path(p).suffix.lower() in indexer.VIDEO_EXT]
+    asked = list(dict.fromkeys(paths))
+    paths = [p for p in asked if os.path.isfile(p) and Path(p).suffix.lower() in indexer.VIDEO_EXT]
+    pr = PROJECT["p"]
+    # A file that isn't there (moved since the project was saved, a bad
+    # path) is reported on the footage screen, not dropped on the floor.
+    gone = [{"path": p, "error": "no such file" if not os.path.isfile(p) else "only .mp4 / .mov"}
+            for p in asked if p not in paths]
+    if pr is not None and gone:
+        with LOCK:
+            pr.import_errors = [e for e in pr.import_errors if e.get("path") not in {g["path"] for g in gone}] + gone
     if not paths:
-        raise HTTPException(400, "no .mp4 or .mov files")
+        raise HTTPException(400, "no .mp4 or .mov files" if not gone else gone[0]["error"] + ": " + Path(gone[0]["path"]).name)
     # Adding to a session: only what isn't on the shelf already gets indexed.
     fresh = [p for p in paths if indexer.clip_id(p) not in CLIPS]
 
@@ -376,6 +494,12 @@ def api_import(req: ImportReq) -> dict:
                 CLIPS[c["id"]] = c
             VISION_USED["value"] = vision.status() == "ready"
             _refresh_catalog()
+            if pr is not None:
+                # Files that couldn't be read stay listed (with a retry) until they can.
+                tried = {p for p in paths}
+                pr.import_errors = [e for e in pr.import_errors if e.get("path") not in tried] + list(job.errors)
+            if not job.clips:
+                return
             # Stage 1 + 2: reject and trim, then stop at the gate for a person.
             PLAN["plan"] = cut.compute(CLIPS, PLAN["plan"])
             if WORKFLOW.state in ("intake", "indexing"):
@@ -383,9 +507,11 @@ def api_import(req: ImportReq) -> dict:
                     WORKFLOW.advance("indexing", f"{len(job.clips)} clips indexed")
                 WORKFLOW.advance("rough-cut", "reject + trim computed")
                 WORKFLOW.advance("cut-review", cut.summary(PLAN["plan"])["line_en"])
-            elif job.clips:
+            else:
                 WORKFLOW.reopen("system", f"{len(job.clips)} new clip(s) to review")
             SESSION.replay(CATALOG["cat"], _make_proposals)
+        if pr is not None and pr is PROJECT["p"]:
+            _save()
 
     return indexer.start(fresh, done, known=len(paths) - len(fresh)).public()
 
@@ -405,6 +531,8 @@ def api_project() -> dict:
 
 @app.delete("/api/project")
 def api_clear() -> dict:
+    """Start the open project over: its footage, log and gate. The files
+    on disk and their index are untouched."""
     global SESSION, WORKFLOW
     with LOCK:
         CLIPS.clear()
@@ -412,8 +540,115 @@ def api_clear() -> dict:
         PREFS.new_project()
         WORKFLOW = Workflow()
         PLAN["plan"] = None
+        if PROJECT["p"]:
+            PROJECT["p"].brief = None
+            PROJECT["p"].import_errors = []
         _refresh_catalog()
     return _project()
+
+
+# --------------------------------------------------------------------------
+# projects: the dashboard's list, and which one is open (projects.py)
+# --------------------------------------------------------------------------
+
+class ProjectReq(BaseModel):
+    name: str = ""
+
+
+class BriefReq(BaseModel):
+    message: str | None = None
+    style: dict | None = None
+    said: str = ""
+
+
+def _summaries() -> list[dict]:
+    cur = PROJECT["p"]
+    out = []
+    for p in pj.list_all():
+        if cur is not None and p.id == cur.id:
+            out.append(cur.summary(CLIPS, SESSION.board))
+        else:
+            out.append(p.summary())
+    return out
+
+
+@app.get("/api/projects")
+def api_projects() -> dict:
+    return {"projects": _summaries(), "open": PROJECT["p"].id if PROJECT["p"] else None,
+            "capabilities": _capabilities()}
+
+
+@app.post("/api/projects")
+def api_project_create(req: ProjectReq) -> dict:
+    _save()
+    pr = pj.create(req.name)
+    _open_project(pr.id)
+    return {"project": _meta(), "session": _session()}
+
+
+@app.post("/api/projects/{pid}/open")
+def api_project_open(pid: str) -> dict:
+    if PROJECT["p"] is not None and PROJECT["p"].id == pid:
+        return {"project": _meta(), "session": _session()}
+    _save()
+    try:
+        _open_project(pid)
+    except pj.ProjectError as e:
+        raise HTTPException(404, str(e)) from e
+    return {"project": _meta(), "session": _session()}
+
+
+@app.post("/api/projects/close")
+def api_project_close() -> dict:
+    _save()
+    _close_project()
+    return {"projects": _summaries(), "open": None}
+
+
+@app.patch("/api/projects/{pid}")
+def api_project_rename(pid: str, req: ProjectReq) -> dict:
+    name = req.name.strip()[:80]
+    if not name:
+        raise HTTPException(400, "give it a name")
+    cur = PROJECT["p"]
+    if cur is not None and cur.id == pid:
+        cur.name = name
+        _save()
+        return {"project": _meta()}
+    try:
+        pr = pj.load(pid)
+    except pj.ProjectError as e:
+        raise HTTPException(404, str(e)) from e
+    pr.name = name
+    pj.save(pr)
+    return {"project": pr.summary()}
+
+
+@app.delete("/api/projects/{pid}")
+def api_project_delete(pid: str) -> dict:
+    """Removes the project record only -- never a clip, never an export."""
+    if PROJECT["p"] is not None and PROJECT["p"].id == pid:
+        _close_project()
+    try:
+        pj.delete(pid)
+    except pj.ProjectError as e:
+        raise HTTPException(404, str(e)) from e
+    return {"projects": _summaries(), "open": PROJECT["p"].id if PROJECT["p"] else None}
+
+
+@app.post("/api/project/brief")
+def api_project_brief(req: BriefReq) -> dict:
+    """The one-line description and style answers, kept on the project
+    until the story is built (and after, as a record of what was asked)."""
+    pr = PROJECT["p"]
+    if pr is None:
+        raise HTTPException(409, "Open a project first.")
+    if req.message is None or not req.message.strip():
+        pr.brief = None
+    else:
+        pr.brief = {"message": req.message.strip(), "style": brief.clean_style(req.style) or {},
+                    "said": req.said, "at": time.time()}
+    return _session()
 
 
 # --------------------------------------------------------------------------
@@ -826,7 +1061,29 @@ def api_export_start(jid: str, req: ExportStartReq) -> dict:
 
 @app.get("/api/export/{jid}")
 def api_export_status(jid: str) -> dict:
-    return _job(jid).public()
+    job = _job(jid)
+    pub = job.public()
+    # A finished export is part of the project's record: the dashboard and
+    # the Export stage list it, and it is how "done" is known after a restart.
+    pr = PROJECT["p"]
+    if pub["stage"] == "done" and pr is not None and not any(e.get("job") == jid for e in pr.exports):
+        pr.exports.append({"job": jid, "file": pub["file"], "path": pub["path"], "at": time.time(),
+                           "seconds": pub["total"], "size": pub["size"], "music": pub["music"],
+                           "overlays": pub["overlays"], "bytes": os.path.getsize(pub["path"]) if pub["path"] and os.path.isfile(pub["path"]) else None})
+        _save()
+    return pub
+
+
+@app.get("/api/exports/{n}/file")
+def api_export_saved_file(n: int) -> FileResponse:
+    """A past export of the open project, by its index in the list."""
+    pr = PROJECT["p"]
+    if pr is None or n < 0 or n >= len(pr.exports):
+        raise HTTPException(404)
+    path = pr.exports[n].get("path")
+    if not path or not os.path.isfile(path):
+        raise HTTPException(404, "that file is no longer where it was saved")
+    return FileResponse(path, media_type="video/mp4", filename=Path(path).name)
 
 
 @app.post("/api/export/{jid}/cancel")
