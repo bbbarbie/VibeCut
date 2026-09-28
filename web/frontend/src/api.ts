@@ -1,4 +1,7 @@
-import type { CutData, ExportJob, Job, LookFit, PrefClass, Project, RefCard, RefJob, RefSummary, Session, StyleAnswers, StyleQuestion, TalkState } from './types'
+import type { Capabilities, CutData, ExportJob, Job, LookFit, PrefClass, Project, ProjectMeta, RefCard, RefJob, RefSummary, Session, StyleAnswers, StyleQuestion, TalkState } from './types'
+
+export type ProjectList = { projects: ProjectMeta[]; open: string | null; capabilities: Capabilities }
+export type Opened = { project: ProjectMeta; session: Session }
 
 export type RemixJob = {
   id: string
@@ -28,6 +31,16 @@ const post = (url: string, body: unknown) =>
   fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
 
 export const api = {
+  // projects: the dashboard's list, and which one is open
+  projects: () => j<ProjectList>(fetch('/api/projects')),
+  createProject: (name: string) => j<Opened>(post('/api/projects', { name })),
+  openProject: (id: string) => j<Opened>(post(`/api/projects/${id}/open`, {})),
+  closeProject: () => j<{ projects: ProjectMeta[]; open: null }>(post('/api/projects/close', {})),
+  renameProject: (id: string, name: string) =>
+    j<{ project: ProjectMeta }>(fetch(`/api/projects/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }) })),
+  deleteProject: (id: string) => j<{ projects: ProjectMeta[]; open: string | null }>(fetch(`/api/projects/${id}`, { method: 'DELETE' })),
+  brief: (message: string | null, style?: StyleAnswers, said?: string) =>
+    j<Session>(post('/api/project/brief', { message, style: style ?? null, said: said ?? '' })),
   project: () => j<Project>(fetch('/api/project')),
   clear: () => j<Project>(fetch('/api/project', { method: 'DELETE' })),
   locate: (files: { name: string; size: number; mtime: number; relpath: string }[]) =>
