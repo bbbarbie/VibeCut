@@ -4,10 +4,10 @@ import type { StyleAnswers, StyleQuestion } from './types.ts'
 // plus anything they typed under "Something else".
 export type Picks = Record<string, { keys: string[]; other: string }>
 
-const STYLE_IDS = ['length', 'pace', 'opening'] as const
+const STYLE_IDS = ['length', 'pace', 'opening', 'captions'] as const
 
 /** Picks -> the first chat message and the structured answers that shape
- * the proposals. Length, pace and opening travel as `style`; focus and any
+ * the proposals. Length, pace, opening and captions travel as `style`; focus and any
  * tailored question become plain words in the direction. */
 export function composeBrief(text: string, questions: StyleQuestion[], picks: Picks, extra = ''):
   { message: string; style: StyleAnswers } {

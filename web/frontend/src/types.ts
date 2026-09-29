@@ -230,7 +230,7 @@ export type TalkState = { job: TalkJob | null; plan: TalkPlan | null; llm: boole
 // The style questions asked once, after the first description (brief.py).
 export type StyleChoice = { key: string; label: string; hint?: string }
 export type StyleQuestion = { id: string; question: string; multi: boolean; hint?: string; choices: StyleChoice[] }
-export type StyleAnswers = { length?: string; pace?: string; opening?: string }
+export type StyleAnswers = { length?: string; pace?: string; opening?: string; captions?: string }
 
 // How the sound crosses a cut: carried out (L cut), carried in (J cut), or a clean break.
 export type JoinSound = 'cut' | 'carry_out' | 'carry_in' | 'default'

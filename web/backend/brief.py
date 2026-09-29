@@ -32,7 +32,19 @@ SIMILAR = 0.78
 # café in the morning and again at night is two moments, not a stutter.
 RETAKE_WINDOW_S = 15 * 60
 OPENINGS = ("hook", "start")
-STYLE_KEYS = {"length": tuple(LENGTH_S), "pace": tuple(PACE_CAP_S), "opening": OPENINGS}
+# Words on screen: which look (looks/*.json) and which overlay kinds
+# (overlays.KINDS). Only words the edit already knows -- part titles, dates,
+# the description, a voiceover's own lines -- so no answer invents copy.
+# Spoken words are captioned only where a transcript exists (voiceover or
+# talking-head mode); a plain vlog has none, by design.
+CAPTIONS = {
+    "none": None,
+    "simple": ("clean", ["title", "part", "caption", "end"]),
+    "bold": ("hype", ["title", "part", "date", "caption"]),
+    "key": ("quiet", ["title", "date"]),
+}
+STYLE_KEYS = {"length": tuple(LENGTH_S), "pace": tuple(PACE_CAP_S), "opening": OPENINGS,
+              "captions": tuple(CAPTIONS)}
 
 # Focus choices, each a storyboard theme (storyboard.THEMES).
 FOCUS = [("people", "Me and the people I was with"), ("food", "Food and drinks"),
@@ -56,6 +68,11 @@ def fixed_questions(theme_counts: Counter | None = None) -> list[dict]:
         {"id": "opening", "question": "How should it start?", "multi": False, "choices": [
             {"key": "hook", "label": "With the best moment", "hint": "A hook first, then the story"},
             {"key": "start", "label": "From the beginning", "hint": "In the order it happened"}]},
+        {"id": "captions", "question": "What words should be on screen?", "multi": False, "choices": [
+            {"key": "none", "label": "No words", "hint": "Just the footage"},
+            {"key": "simple", "label": "Simple and clean", "hint": "A title and a small label for each part"},
+            {"key": "bold", "label": "Bold, Reels style", "hint": "Big capitals that hit on the beat, with dates"},
+            {"key": "key", "label": "Just the key words", "hint": "An opening title and the dates, nothing else"}]},
     ]
     counts = theme_counts or Counter()
     focus = [{"key": k, "label": label} for k, label in FOCUS if counts.get(k, 0) >= MIN_FOCUS_SHOTS]
@@ -97,6 +114,23 @@ def describe(style: dict | None) -> str:
     if style.get("opening") == "hook":
         s = f"{s}, opening on the best moment" if s else "opening on the best moment"
     return s
+
+
+def caption_ops(board: dict, cat, answer: str | None, title: str | None = None) -> tuple[list[dict], list[str]]:
+    """The words the captions answer asks for, as ops for a freshly chosen
+    storyboard: the look first, then what overlays.suggest can fill truthfully.
+    (ops, notes on what was left out)."""
+    from . import overlays
+    want = CAPTIONS.get(answer or "")
+    if not want:
+        return [], []
+    look, kinds = want
+    if board.get("option") != "voice":
+        kinds = [k for k in kinds if k != "caption"]    # no spoken lines to caption
+    ops, notes = overlays.suggest(board, cat, None, title, kinds)
+    if not ops:
+        return [], notes
+    return [{"op": "set_look", "look": look}, *ops], notes
 
 
 def _window(s, cap: float, best: dict[str, float]) -> None:

@@ -850,7 +850,29 @@ def api_ops(req: OpsReq) -> dict:
     with LOCK:
         SESSION.add({"kind": "direct", "text": req.label, "ops": req.ops},
                     CATALOG["cat"], _make_proposals)
+        if [o.get("op") for o in req.ops] == ["choose_option"]:
+            _words_as_asked()
         return _session()
+
+
+def _words_as_asked() -> None:
+    """A story was just chosen: put on screen the words the style questions
+    asked for, as their own turn so Undo takes only the words away."""
+    b = SESSION.board
+    d = _direction() or {}
+    answer = (d.get("style") or {}).get("captions")
+    if not b or b.get("overlays") or not answer:
+        return
+    said = (d.get("text") or "").split("\n")[0].strip()
+    ops, notes = brief.caption_ops(b, CATALOG["cat"], answer, said if len(said) <= 48 else None)
+    if not ops:
+        return
+    n = sum(o["op"] == "add_overlay" for o in ops)
+    reply = f"Added {n} word overlay{'s' * (n != 1)}, as you asked at the start."
+    if notes:
+        reply += " " + " ".join(notes)
+    SESSION.add({"kind": "direct", "text": "Words on screen, as you asked", "ops": ops, "reply": reply},
+                CATALOG["cat"], _make_proposals)
 
 
 @app.post("/api/turns/{tid}/toggle")
