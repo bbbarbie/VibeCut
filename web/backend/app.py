@@ -861,14 +861,15 @@ def _words_as_asked() -> None:
     b = SESSION.board
     d = _direction() or {}
     answer = (d.get("style") or {}).get("captions")
-    if not b or b.get("overlays") or not answer:
+    if not b or b.get("overlays") or not d:
         return
     said = (d.get("text") or "").split("\n")[0].strip()
-    ops, notes = brief.caption_ops(b, CATALOG["cat"], answer, said if len(said) <= 48 else None)
+    ops, notes = brief.caption_ops(b, CATALOG["cat"], answer, said if len(said) <= 48 else None, said)
     if not ops:
         return
     n = sum(o["op"] == "add_overlay" for o in ops)
-    reply = f"Added {n} word overlay{'s' * (n != 1)}, as you asked at the start."
+    reply = (f"Added {n} word overlay{'s' * (n != 1)}, as you asked at the start." if answer else
+             f"Added {n} day-in-my-life caption{'s' * (n != 1)}: the time and what's happening. Click one to retype it.")
     if notes:
         reply += " " + " ".join(notes)
     SESSION.add({"kind": "direct", "text": "Words on screen, as you asked", "ops": ops, "reply": reply},

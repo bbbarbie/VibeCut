@@ -16,6 +16,7 @@ every threshold in cutgrammar.
 from __future__ import annotations
 
 import copy
+import re
 from collections import Counter
 
 # Rough target lengths. "long" keeps every usable shot.
@@ -39,10 +40,13 @@ OPENINGS = ("hook", "start")
 # talking-head mode); a plain vlog has none, by design.
 CAPTIONS = {
     "none": None,
+    # the clock and what's happening, per moment (daylog.py), plus a title
+    "day": ("cozy", ["title"]),
     "simple": ("clean", ["title", "part", "caption", "end"]),
     "bold": ("hype", ["title", "part", "date", "caption"]),
     "key": ("quiet", ["title", "date"]),
 }
+DAY_IN_LIFE = re.compile(r"\bday in (my|the|a) life\b|\bdaily vlog\b|\bdiml\b", re.I)
 STYLE_KEYS = {"length": tuple(LENGTH_S), "pace": tuple(PACE_CAP_S), "opening": OPENINGS,
               "captions": tuple(CAPTIONS)}
 
@@ -69,6 +73,7 @@ def fixed_questions(theme_counts: Counter | None = None) -> list[dict]:
             {"key": "hook", "label": "With the best moment", "hint": "A hook first, then the story"},
             {"key": "start", "label": "From the beginning", "hint": "In the order it happened"}]},
         {"id": "captions", "question": "What words should be on screen?", "multi": False, "choices": [
+            {"key": "day", "label": "Day in my life", "hint": "The time and what you're doing: “7:42 am · coffee run”"},
             {"key": "none", "label": "No words", "hint": "Just the footage"},
             {"key": "simple", "label": "Simple and clean", "hint": "A title and a small label for each part"},
             {"key": "bold", "label": "Bold, Reels style", "hint": "Big capitals that hit on the beat, with dates"},
@@ -116,11 +121,15 @@ def describe(style: dict | None) -> str:
     return s
 
 
-def caption_ops(board: dict, cat, answer: str | None, title: str | None = None) -> tuple[list[dict], list[str]]:
+def caption_ops(board: dict, cat, answer: str | None, title: str | None = None,
+                about: str = "") -> tuple[list[dict], list[str]]:
     """The words the captions answer asks for, as ops for a freshly chosen
     storyboard: the look first, then what overlays.suggest can fill truthfully.
     (ops, notes on what was left out)."""
-    from . import overlays
+    from . import daylog, overlays
+    about = about or title or ""
+    if answer is None and DAY_IN_LIFE.search(about):
+        answer = "day"      # the genre's own captions, unless they said otherwise
     want = CAPTIONS.get(answer or "")
     if not want:
         return [], []
@@ -128,6 +137,9 @@ def caption_ops(board: dict, cat, answer: str | None, title: str | None = None) 
     if board.get("option") != "voice":
         kinds = [k for k in kinds if k != "caption"]    # no spoken lines to caption
     ops, notes = overlays.suggest(board, cat, None, title, kinds)
+    if answer == "day":
+        more, why = daylog.caption_ops(board, cat, about)
+        ops, notes = ops + more, notes + why
     if not ops:
         return [], notes
     return [{"op": "set_look", "look": look}, *ops], notes

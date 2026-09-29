@@ -133,7 +133,11 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   (`brief.caption_ops`: a look + `overlays.suggest` kinds), so it shows in
   preview and export. Only words the edit knows; spoken words get captions
   only on the voiceover proposal (no transcript on the default path).
-  `tests/test_captions_answer.py`.
+  `tests/test_captions_answer.py`. **Day in my life** (`daylog.py`, the
+  default when the description says so): per moment the day moves on,
+  "7:42 am · coffee run" — clock from the clip's recording time + shot
+  offset, phrase from Vision labels (table, or with a key Claude phrases the
+  labels + time; text only, no frames leave). No time → no caption.
 - HDR (HLG/PQ) footage: thumbnails and samples are tone-mapped to SDR in
   `media.to_sdr` so they look like the phone showed them; measurement frames
   are untouched. `tests/test_hdr.py`.

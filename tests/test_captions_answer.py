@@ -12,7 +12,9 @@ one Undo takes the words away without touching the cut.
 from __future__ import annotations
 
 import os
+import re
 import sys
+from datetime import timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -67,6 +69,59 @@ def main() -> int:
     kinds = [o["kind"] for o in s.board["overlays"]]
     check("key words: a title, no part labels", "title" in kinds and "part" not in kinds, str(kinds))
     check("key words: the quiet look", ov.style_of(s.board).get("look") == "quiet")
+
+    print("day in my life")
+    from web.backend import daylog
+    s, cat, t, cut, notes = words("day")
+    caps = [o for o in s.board["overlays"] if o["kind"] == "caption"]
+    check("day: a caption per moment the day moves on", len(caps) >= 3, str([o["text"] for o in caps]))
+    check("day: each starts with the clock", all(re.match(r"\d{1,2}:\d\d (am|pm)", o["text"]) for o in caps),
+          str([o["text"] for o in caps]))
+    first = s.board["beats"][0]["shots"][0]
+    sh = cat.shots[first["id"]]
+    want = daylog.clock(sh.when + timedelta(seconds=first["start"] - sh.start))
+    check("day: the time is the recording time of that shot", caps[0]["text"].startswith(want), f"{caps[0]['text']} vs {want}")
+    check("day: what's happening comes from the labels",
+          any(o["text"].endswith("· eating out") for o in caps) and any(o["text"].endswith("· market") for o in caps),
+          str([o["text"] for o in caps]))
+    check("day: the cozy look", ov.style_of(s.board).get("look") == "cozy")
+    check("day: captions are ordinary overlays, retypable by hand",
+          all(set(ov.EDITABLE) >= {"text"} for _ in caps))
+    s.toggle(t.id, cat, mk)
+    check("day: one undo takes them away", not s.board.get("overlays"))
+
+    check("the most specific label speaks", daylog.phrase({"food": 0.9, "sushi": 0.6}) == "sushi time")
+    check("an unsure label stays quiet", daylog.phrase({"coffee": 0.1}) is None)
+    check("unknown labels give the time alone", daylog.phrase({"structure": 0.9}) is None)
+
+    s, cat = session()
+    auto, _ = brief.caption_ops(s.board, cat, None, None, "A day in my life in Tokyo")
+    check("a day-in-my-life description gets these captions by default",
+          any(o.get("kind") == "caption" for o in auto) and auto[0] == {"op": "set_look", "look": "cozy"})
+    off, _ = brief.caption_ops(s.board, cat, "none", None, "A day in my life in Tokyo")
+    check("but 'No words' still means no words", off == [])
+    plain, _ = brief.caption_ops(s.board, cat, None, None, "trip to Tokyo")
+    check("other descriptions get nothing unasked", plain == [])
+
+    from web.backend import llm
+    real = llm.day_phrases
+    llm.day_phrases = lambda items, about="": ["slow start", "", "temple hopping", "dinner with friends"][:len(items)]
+    ops, _ = daylog.caption_ops(s.board, cat, "A day in my life", ask_model=True)
+    check("with a key, Claude's phrase replaces the table's",
+          [o["text"].split(" · ")[-1] for o in ops] == ["slow start", "market", "temple hopping", "dinner with friends"],
+          str([o["text"] for o in ops]))
+
+    def fail(items, about=""):
+        raise llm.LLMError("down")
+    llm.day_phrases = fail
+    ops, _ = daylog.caption_ops(s.board, cat, "", ask_model=True)
+    check("and if Claude can't be reached, the table's phrases stand", ops[0]["text"].endswith("slow morning"))
+    llm.day_phrases = real
+
+    for sh in cat.shots.values():
+        sh.when = None
+    ops, notes = daylog.caption_ops(s.board, cat, ask_model=False)
+    check("no recording times: no invented clock, and it says so", ops == [] and "recording time" in notes[0])
 
     check("the question is asked", "captions" in [q["id"] for q in brief.fixed_questions()])
     check("the answer survives cleaning", brief.clean_style({"captions": "bold"}) == {"captions": "bold"})
