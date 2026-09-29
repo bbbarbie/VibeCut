@@ -49,6 +49,7 @@ class Project:
     workflow: dict = field(default_factory=lambda: Workflow().__dict__.copy())
     cut_overrides: dict[str, str] = field(default_factory=dict)
     cut_targets: dict[str, float] = field(default_factory=dict)
+    cut_windows: dict[str, list[float]] = field(default_factory=dict)
     # the one-line description and the style answers, kept until the story is built
     brief: dict | None = None
     exports: list[dict] = field(default_factory=list)
@@ -222,6 +223,7 @@ def capture(project: Project, clips: dict[str, dict], session: bd.Session, workf
                         "revision": workflow.revision, "history": workflow.history[-50:]}
     project.cut_overrides = dict(plan.overrides) if plan else {}
     project.cut_targets = dict(plan.targets) if plan else {}
+    project.cut_windows = {k: list(v) for k, v in plan.windows.items()} if plan else {}
     project.snapshot = snapshot_of(clips, session.board)
     if prefs is not None:
         project.prefs = {"project": list(prefs.project),

@@ -54,7 +54,8 @@ export const api = {
   job: (id: string) => j<Job>(fetch(`/api/jobs/${id}`)),
   session: () => j<Session>(fetch('/api/session')),
   cut: () => j<CutData>(fetch('/api/cut')),
-  override: (target: string, action: string) => j<CutData>(post('/api/cut/override', { target, action })),
+  override: (target: string, action: string, range?: [number, number]) =>
+    j<CutData>(post('/api/cut/override', { target, action, start: range?.[0] ?? null, end: range?.[1] ?? null })),
   approve: () => j<Session>(post('/api/cut/approve', {})),
   chat: (message: string, style?: StyleAnswers) => j<Session>(post('/api/chat', { message, style: style ?? null })),
   questions: (message: string) => j<{ questions: StyleQuestion[]; tailored: boolean }>(post('/api/brief/questions', { message })),
