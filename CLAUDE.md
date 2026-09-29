@@ -138,6 +138,10 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   "7:42 am · coffee run" — clock from the clip's recording time + shot
   offset, phrase from Vision labels (table, or with a key Claude phrases the
   labels + time; text only, no frames leave). No time → no caption.
+  The brief's suggestion chips are read from the shoot (`pitch.py`: days,
+  morning→night, themes, faces, talking, rough GPS; templates, or Claude
+  phrasing those text facts with a key); a chip goes straight to Next.
+  `tests/test_pitch.py`.
 - HDR (HLG/PQ) footage: thumbnails and samples are tone-mapped to SDR in
   `media.to_sdr` so they look like the phone showed them; measurement frames
   are untouched. `tests/test_hdr.py`.

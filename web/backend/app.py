@@ -25,7 +25,7 @@ from pydantic import BaseModel
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, brief, cut, export, looks, seams, smooth, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, brief, cut, export, looks, pitch, seams, smooth, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import Workflow, WorkflowError
 
@@ -711,6 +711,23 @@ def api_chat(req: ChatReq) -> dict:
                      "choices": out.get("choices", []) if out.get("question") else [],
                      "direction": direction}, cat, _make_proposals)
         return _session()
+
+
+SUGGESTED: dict = {}     # clip ids -> suggestions, so a revisit doesn't ask again
+
+
+@app.get("/api/brief/suggestions")
+def api_brief_suggestions() -> dict:
+    """Three one-line descriptions read from the footage, to click instead of typing."""
+    with LOCK:
+        clips = list(CLIPS.values())
+    if not clips:
+        return {"suggestions": [], "source": "none"}
+    key = ",".join(sorted(c["id"] for c in clips))
+    if key not in SUGGESTED:
+        SUGGESTED.clear()
+        SUGGESTED[key] = pitch.suggest(clips)
+    return SUGGESTED[key]
 
 
 @app.post("/api/brief/questions")
