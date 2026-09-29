@@ -160,8 +160,8 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   useEffect(() => { if (shown !== 'story' && level === 'frames') setLevel('story') }, [shown]) // eslint-disable-line react-hooks/exhaustive-deps
   const showStep = (s: Stage) => { setPeek(s === stage ? null : s); setMenu(null); stopQueue(); setSegment(null); if (s !== 'story') transport.stop() }
 
-  const cutOverride = async (target: string, action: string) => {
-    setCutData(await api.override(target, action))
+  const cutOverride = async (target: string, action: string, range?: [number, number]) => {
+    setCutData(await api.override(target, action, range))
     await refresh()
   }
   const approveCut = async () => {

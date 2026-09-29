@@ -67,6 +67,9 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   every decision passes a human gate. **Known failure on real footage:**
   `speech_mask` is level-based, so music reads as talking and those clips
   are barely trimmed (3 real clips: 7:16 → 7:12). A real VAD is the fix.
+  At the gate the kept range can be dragged by its ends (`set` override,
+  min 1 s, undone by `auto`; `tests/test_cut_set.py`); hovering the bar shows
+  the frame at that moment (index sample first, then the clip seeked).
 
 - Words on screen + export (`web/backend/overlays.py`, `export.py`,
   `web/frontend/src/overlayDraw.ts`; ideas from Overlay Studio — design

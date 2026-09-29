@@ -24,6 +24,7 @@ export type Clip = {
   index_seconds: number
   video: string
   shots: Shot[]
+  samples?: { times: number[]; base: string }   // ~1 frame a second, for hover previews
   cut: { rejected: boolean; auto_rejected: boolean; zh: string; en: string; override: string | null
          flags: { code: string; zh: string; en: string }[]; windows: Record<string, [number, number]> } | null
 }

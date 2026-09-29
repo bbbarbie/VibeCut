@@ -81,7 +81,8 @@ def _open_project(pid: str) -> pj.Project:
         WORKFLOW = pj.restore_workflow(pr)
         PREFS.new_project()
         pj.restore_prefs(pr, PREFS)
-        old = cut.Plan(overrides=dict(pr.cut_overrides), targets=dict(pr.cut_targets))
+        old = cut.Plan(overrides=dict(pr.cut_overrides), targets=dict(pr.cut_targets),
+                       windows=dict(pr.cut_windows))
         PLAN["plan"] = cut.compute(CLIPS, old) if CLIPS else None
         # A project whose files went missing since it was saved says so on
         # the footage screen; it never pretends they are there.
@@ -407,6 +408,9 @@ def _public_clip(c: dict) -> dict:
             "faces": s.get("faces", 0), "utility": s.get("utility"),
             "thumb": f"/api/thumbs/{c['id']}/{s['thumb']}",
         } for s in c["shots"]],
+        # ~1 frame a second, for the rough cut's hover preview before the video seeks
+        "samples": {"times": (c.get("samples") or {}).get("times", []),
+                    "base": f"/api/samples/{c['id']}/"},
     }
 
 
@@ -805,7 +809,9 @@ def api_cut() -> dict:
 
 class OverrideReq(BaseModel):
     target: str          # clip id, or shot id "clip:index"
-    action: str          # keep | reject | full | longer | shorter | auto
+    action: str          # keep | reject | full | longer | shorter | set | auto
+    start: float | None = None   # set: the creator's in and out points
+    end: float | None = None
 
 
 @app.post("/api/cut/override")
@@ -814,7 +820,7 @@ def api_cut_override(req: OverrideReq) -> dict:
         if not PLAN["plan"]:
             raise HTTPException(400, "nothing to override yet")
         try:
-            PLAN["plan"] = cut.override(PLAN["plan"], req.target, req.action, CLIPS)
+            PLAN["plan"] = cut.override(PLAN["plan"], req.target, req.action, CLIPS, req.start, req.end)
         except (ValueError, KeyError) as e:
             raise HTTPException(400, str(e)) from e
         WORKFLOW.revise("user", f"{req.action} {req.target}")
@@ -1364,6 +1370,18 @@ def api_thumb(clip_id: str, name: str) -> FileResponse:
     if clip_id not in CLIPS or "/" in name or not name.endswith(".jpg"):
         raise HTTPException(404)
     p = indexer.clip_dir(clip_id) / name
+    if not p.exists():
+        raise HTTPException(404)
+    return FileResponse(p, media_type="image/jpeg",
+                        headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
+@app.get("/api/samples/{clip_id}/{i}")
+def api_sample(clip_id: str, i: int) -> FileResponse:
+    files = (CLIPS.get(clip_id) or {}).get("samples", {}).get("files", [])
+    if not 0 <= i < len(files):
+        raise HTTPException(404)
+    p = indexer.clip_dir(clip_id) / files[i]
     if not p.exists():
         raise HTTPException(404)
     return FileResponse(p, media_type="image/jpeg",
