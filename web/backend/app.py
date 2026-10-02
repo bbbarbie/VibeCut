@@ -25,7 +25,7 @@ from pydantic import BaseModel
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, brief, cut, export, looks, seams, smooth, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, brief, cut, export, looks, pitch, seams, smooth, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import Workflow, WorkflowError
 
@@ -713,6 +713,23 @@ def api_chat(req: ChatReq) -> dict:
         return _session()
 
 
+SUGGESTED: dict = {}     # clip ids -> suggestions, so a revisit doesn't ask again
+
+
+@app.get("/api/brief/suggestions")
+def api_brief_suggestions() -> dict:
+    """Three one-line descriptions read from the footage, to click instead of typing."""
+    with LOCK:
+        clips = list(CLIPS.values())
+    if not clips:
+        return {"suggestions": [], "source": "none"}
+    key = ",".join(sorted(c["id"] for c in clips))
+    if key not in SUGGESTED:
+        SUGGESTED.clear()
+        SUGGESTED[key] = pitch.suggest(clips)
+    return SUGGESTED[key]
+
+
 @app.post("/api/brief/questions")
 def api_brief_questions(req: QuestionsReq) -> dict:
     """The style questions asked once, after the first description."""
@@ -850,7 +867,30 @@ def api_ops(req: OpsReq) -> dict:
     with LOCK:
         SESSION.add({"kind": "direct", "text": req.label, "ops": req.ops},
                     CATALOG["cat"], _make_proposals)
+        if [o.get("op") for o in req.ops] == ["choose_option"]:
+            _words_as_asked()
         return _session()
+
+
+def _words_as_asked() -> None:
+    """A story was just chosen: put on screen the words the style questions
+    asked for, as their own turn so Undo takes only the words away."""
+    b = SESSION.board
+    d = _direction() or {}
+    answer = (d.get("style") or {}).get("captions")
+    if not b or b.get("overlays") or not d:
+        return
+    said = (d.get("text") or "").split("\n")[0].strip()
+    ops, notes = brief.caption_ops(b, CATALOG["cat"], answer, said if len(said) <= 48 else None, said)
+    if not ops:
+        return
+    n = sum(o["op"] == "add_overlay" for o in ops)
+    reply = (f"Added {n} word overlay{'s' * (n != 1)}, as you asked at the start." if answer else
+             f"Added {n} day-in-my-life caption{'s' * (n != 1)}: the time and what's happening. Click one to retype it.")
+    if notes:
+        reply += " " + " ".join(notes)
+    SESSION.add({"kind": "direct", "text": "Words on screen, as you asked", "ops": ops, "reply": reply},
+                CATALOG["cat"], _make_proposals)
 
 
 @app.post("/api/turns/{tid}/toggle")

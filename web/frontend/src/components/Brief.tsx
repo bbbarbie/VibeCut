@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { api } from '../api'
 import type { Brief as BriefData, Capabilities, Clip, Session } from '../types'
 import { Button, Notice, inputCls } from '../ui'
 import { Voiceover } from './Voiceover'
@@ -8,6 +9,7 @@ import { Voiceover } from './Voiceover'
 // here because they change what the story is built from: the creator's own
 // narration, and talking-to-camera mode.
 
+// Shown only if the footage can't be read for suggestions (pitch.py).
 const EXAMPLES = ['A weekend in Tokyo, mostly the food', 'My sister’s wedding day', 'A day at the beach with friends']
 
 export function Brief({ clips, brief, asking, caps, voiceover, onAsk, onVoiceover, onTalk, onContinue }: {
@@ -24,6 +26,17 @@ export function Brief({ clips, brief, asking, caps, voiceover, onAsk, onVoiceove
   const [text, setText] = useState(brief?.message ?? '')
   const shots = clips.flatMap((c) => c.shots.map((s) => ({ ...s, clip: c })))
   const go = (t: string) => { if (t.trim() && !asking) onAsk(t.trim()) }
+  // Three lines read from these clips, so a click can replace typing.
+  const [ideas, setIdeas] = useState<string[] | null>(null)
+  const clipKey = clips.map((c) => c.id).join(',')
+  useEffect(() => {
+    if (!clipKey) return
+    let live = true
+    api.suggestions()
+      .then((r) => { if (live) setIdeas(r.suggestions.length ? r.suggestions : EXAMPLES) })
+      .catch(() => { if (live) setIdeas(EXAMPLES) })
+    return () => { live = false }
+  }, [clipKey])
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-8">
       <div className="mx-auto max-w-2xl">
@@ -35,10 +48,13 @@ export function Brief({ clips, brief, asking, caps, voiceover, onAsk, onVoiceove
                  placeholder="e.g. a weekend in Tokyo, mostly the food" className={inputCls + ' text-[14px]'} />
           <Button variant="primary" size="lg" type="submit" disabled={asking || !text.trim()}>{asking ? 'Thinking…' : 'Next'}</Button>
         </form>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {EXAMPLES.map((x) => (
-            <button key={x} type="button" onClick={() => setText(x)}
-                    className="rounded-full border border-line px-2.5 py-1 text-[11px] text-muted hover:text-zinc-200">{x}</button>
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {ideas === null ? (
+            <span className="text-[11px] text-muted"><span className="mr-1.5 inline-block size-1.5 animate-pulse rounded-full bg-accent" />Reading your clips for ideas…</span>
+          ) : ideas.map((x) => (
+            <button key={x} type="button" disabled={asking} onClick={() => { setText(x); go(x) }}
+                    title="Use this and go on"
+                    className="rounded-full border border-line px-2.5 py-1 text-[12px] text-zinc-300 hover:border-zinc-500 hover:text-zinc-100 disabled:opacity-40">{x}</button>
           ))}
         </div>
 

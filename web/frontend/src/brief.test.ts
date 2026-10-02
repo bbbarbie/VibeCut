@@ -33,3 +33,11 @@ test('picks read back in plain words', () => {
   assert.equal(sayPicks(Q, { length: { keys: ['short'], other: '' }, focus: { keys: ['people', 'food'], other: '' } }),
     'short, people + food')
 })
+
+test('the captions answer travels structured, so it can put words on screen', () => {
+  const q: StyleQuestion[] = [{ id: 'captions', question: 'What words should be on screen?', multi: false,
+    choices: [{ key: 'bold', label: 'Bold, Reels style' }] }]
+  const b = composeBrief('trip', q, { captions: { keys: ['bold'], other: '' } })
+  assert.deepEqual(b.style, { captions: 'bold' })
+  assert.equal(b.message, 'trip')
+})

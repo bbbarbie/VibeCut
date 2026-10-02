@@ -128,6 +128,20 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   direction and reshape each proposal (`brief.shape`); focus and any
   Claude-tailored question (key only) become direction words. Targets (60 s,
   180 s, pace caps 8 / 5 / 2.5 s) are guesses. Tests: `tests/test_brief.py`.
+  A fourth question, words on screen (none / simple / bold / key), travels
+  as `style.captions`; when a story is chosen it becomes one undoable turn
+  (`brief.caption_ops`: a look + `overlays.suggest` kinds), so it shows in
+  preview and export. Only words the edit knows; spoken words get captions
+  only on the voiceover proposal (no transcript on the default path).
+  `tests/test_captions_answer.py`. **Day in my life** (`daylog.py`, the
+  default when the description says so): per moment the day moves on,
+  "7:42 am · coffee run" — clock from the clip's recording time + shot
+  offset, phrase from Vision labels (table, or with a key Claude phrases the
+  labels + time; text only, no frames leave). No time → no caption.
+  The brief's suggestion chips are read from the shoot (`pitch.py`: days,
+  morning→night, themes, faces, talking, rough GPS; templates, or Claude
+  phrasing those text facts with a key); a chip goes straight to Next.
+  `tests/test_pitch.py`.
 - HDR (HLG/PQ) footage: thumbnails and samples are tone-mapped to SDR in
   `media.to_sdr` so they look like the phone showed them; measurement frames
   are untouched. `tests/test_hdr.py`.

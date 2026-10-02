@@ -408,3 +408,68 @@ def tailor_questions(message: str, asked: list[dict]) -> list[dict]:
             out.append({"id": f"extra{i + 1}", "question": q["question"].strip()[:140], "multi": False,
                         "choices": [{"key": c, "label": c} for c in choices]})
     return out
+
+
+DAY_SYSTEM = """You write the small captions of a "day in my life" vlog: after the clock time, a few words saying what is happening, the way creators write them on Reels and TikTok ("coffee run", "class time", "golden hour walk", "packing up"). You are given, for each moment, its time and the on-device image labels of that shot (the only thing you know about the picture), plus the creator's one-line description of the video.
+
+Rules: 1 to 4 words, all lowercase, no emoji, no hashtags, no full stop, no time. Say only what the labels and the time support; lean on the time for meals and routines (8 am + cup = "morning coffee"). Don't repeat the same phrase for neighbouring moments unless it really is the same thing. If the labels don't tell you what is happening, return an empty string for that moment rather than guessing."""
+
+DAY_SCHEMA = {
+    "type": "object", "additionalProperties": False, "required": ["phrases"],
+    "properties": {"phrases": {"type": "array", "items": {"type": "string"}}},
+}
+
+
+def day_phrases(items: list[dict], about: str = "") -> list[str]:
+    """[{time, labels}] -> one short phrase per item ('' = time only).
+    Only times and label words leave the machine -- never a frame."""
+    import anthropic
+
+    lines = [f"{i + 1}. {it['time']} — labels: {', '.join(it['labels']) or 'none'}" for i, it in enumerate(items)]
+    try:
+        resp = client().messages.create(
+            model=MODEL, max_tokens=1500, system=DAY_SYSTEM,
+            messages=[{"role": "user", "content": f"The video: {about[:300] or '(no description)'}\n\n"
+                                                  + "\n".join(lines)
+                                                  + f"\n\nReturn exactly {len(items)} phrases, in order."}],
+            output_config={"effort": "low", "format": {"type": "json_schema", "schema": DAY_SCHEMA}},
+        )
+    except anthropic.APIError as e:
+        raise LLMError(str(e)) from e
+    text = next((b.text for b in resp.content if b.type == "text"), "")
+    try:
+        raw = json.loads(text).get("phrases", [])
+    except (json.JSONDecodeError, AttributeError) as e:
+        raise LLMError("unreadable phrases") from e
+    out = [" ".join(str(p).strip().lower().rstrip(".").split()[:4])[:40] for p in raw[:len(items)]]
+    return out + [""] * (len(items) - len(out))
+
+
+BRIEFS_SYSTEM = """A creator has just dropped their clips into a vlog editor, and the next screen asks "What's this video about?". Suggest three one-line answers they could click instead of typing, written the way a creator would describe their own video ("a weekend in Lisbon, mostly the food", "my first week at uni", "slow Sunday reset").
+
+You only get facts read from the footage: counts, dates and times, on-device image labels, whether people and talking are in it, and rough coordinates. If the coordinates clearly point at a city or area you know, you may name it; otherwise don't name places. Don't invent people, events or feelings the facts don't support. Each line: 3 to 9 words, sentence case, no emoji, no hashtags, no full stop. Make the three genuinely different angles (for example: the whole day, the main thing in it, the mood)."""
+
+BRIEFS_SCHEMA = {
+    "type": "object", "additionalProperties": False, "required": ["lines"],
+    "properties": {"lines": {"type": "array", "items": {"type": "string"}}},
+}
+
+
+def suggest_briefs(facts_text: str) -> list[str]:
+    """Facts about the shoot (text) -> three suggested descriptions."""
+    import anthropic
+
+    try:
+        resp = client().messages.create(
+            model=MODEL, max_tokens=800, system=BRIEFS_SYSTEM,
+            messages=[{"role": "user", "content": facts_text[:2000]}],
+            output_config={"effort": "low", "format": {"type": "json_schema", "schema": BRIEFS_SCHEMA}},
+        )
+    except anthropic.APIError as e:
+        raise LLMError(str(e)) from e
+    text = next((b.text for b in resp.content if b.type == "text"), "")
+    try:
+        raw = json.loads(text).get("lines", [])
+    except (json.JSONDecodeError, AttributeError) as e:
+        raise LLMError("unreadable suggestions") from e
+    return [" ".join(str(x).split()).rstrip(".")[:70] for x in raw if str(x).strip()][:3]
