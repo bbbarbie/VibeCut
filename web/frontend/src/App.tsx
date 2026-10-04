@@ -163,10 +163,11 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const [othersOpen, setOthersOpen] = useState(false)
   const landed = useRef(false)
   useEffect(() => {
-    if (landed.current || !session) return
+    // wait until the stage is known (clips and the gate load after the session)
+    if (landed.current || !session?.board || shown !== 'story') return
     landed.current = true
-    if (shown === 'story' && session.board && level === 'story') setLevel('frames')
-  }, [session]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (level === 'story' && !othersOpen) setLevel('frames')
+  }, [session, shown]) // eslint-disable-line react-hooks/exhaustive-deps
   const showStep = (s: Stage) => { setPeek(s === stage ? null : s); setMenu(null); stopQueue(); setSegment(null); if (s !== 'story') transport.stop() }
 
   const cutOverride = async (target: string, action: string, range?: [number, number]) => {
