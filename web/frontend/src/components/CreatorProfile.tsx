@@ -91,7 +91,7 @@ export function CreatorProfile({ onClose }: { onClose: () => void }) {
               <Field label="Where you share"><Pills values={PLATFORMS} selected={profile.platforms} onPick={v => toggle('platforms', v)} /></Field>
             </Section>
 
-            <Section n="02" title="Words on screen" text="The default font, colour and placement for titles, captions and name tags. Each video can still change them.">
+            <Section n="02" title="Captions" text="The default font, colour and placement for titles, captions and name tags. Each video can still change them.">
               <Field label="Font"><Pills values={FONTS} selected={[profile.font]} onPick={v => update('font', v as Profile['font'])} /></Field>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Accent colour">

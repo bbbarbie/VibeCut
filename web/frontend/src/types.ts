@@ -136,6 +136,8 @@ export type Overlay = {
   id: string; kind: OverlayKind; text: string; sub: string; pos: OverlayPos; size: 'S' | 'M' | 'L'; anim: OverlayAnim
   dur: number | null; anchor: { to: 'edit' | 'end' | 'beat' | 'shot'; id?: string }; at: number
   start: number; end: number; shown_end: number
+  // picked against the picture behind it (backend ink.py): main / accent colour, and a halo when nothing contrasts enough
+  ink?: string; ink2?: string; halo?: string
 }
 export type OverlayStyle = { font: 'Clean' | 'Editorial' | 'Rounded' | 'Mono' | 'Condensed'; color: string; accent: string; captions: 'bottom' | 'center'; backing: 'shadow' | 'box' | 'none'
   look?: string; motion?: Motion | null }

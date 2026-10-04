@@ -139,7 +139,7 @@ function EmptyHome({ onNew }: { onNew: () => void }) {
 function Machine({ caps }: { caps: Capabilities }) {
   const mac = caps.platform === 'darwin'
   const rows: [string, boolean, string][] = [
-    ['Cuts, stories, words on screen, sound and export', true, 'always on, all on this computer'],
+    ['Cuts, stories, captions, sound and export', true, 'always on, all on this computer'],
     ['Typed edits (“the opening is too slow”)', caps.llm, caps.llm ? 'a language model is set up' : 'needs ANTHROPIC_API_KEY in web/.env — the storyboard’s text is sent, never footage'],
     ['What’s in each shot (on-device labels, faces)', caps.vision === 'ready', caps.vision === 'ready' ? 'on' : mac ? 'building the helper…' : 'macOS only — colour grouping is used instead'],
     ['Talking to camera (transcribe, cut pauses and retakes)', caps.speech, caps.speech ? 'on' : 'needs macOS 26 with the Xcode command-line tools'],

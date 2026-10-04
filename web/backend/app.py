@@ -25,7 +25,7 @@ from pydantic import BaseModel
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, brief, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, brief, ink, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import Workflow, WorkflowError
 
@@ -75,6 +75,7 @@ def _open_project(pid: str) -> pj.Project:
         clips, missing = pj.restore_clips(pr)
         # Clips indexed before the voice reading existed get it once, here.
         sound.add_sound(list(clips.values()))
+        ink.fill(list(clips.values()))
         CLIPS.clear()
         CLIPS.update(clips)
         VISION_USED["value"] = vision.status() == "ready" and any(
@@ -357,6 +358,8 @@ def _overlays_public(b: dict | None, cat, tl: dict) -> dict:
     items = overlays.resolve(b)
     if (style.get("motion") or {}).get("beat_lock"):
         items = looks.beat_lock(items, tl.get("grid"), tl.get("total", 0.0))
+    # each overlay's colour against what's behind it, from the video's own palette
+    items = ink.for_board(items, style, timeline.layout(b), CLIPS)
     return {"items": items, "style": style, "findings": overlays.check(b, cat),
             "look": {"id": (b or {}).get("look"), "overrides": looks.overrides(b), "all": looks.public()}}
 
@@ -899,7 +902,7 @@ def _words_as_asked() -> None:
     reply = f"Added {n} caption{'s' * (n != 1)} — {what}, as you asked at the start. Click one to retype it."
     if notes:
         reply += " " + " ".join(notes)
-    SESSION.add({"kind": "direct", "text": "Words on screen, as you asked", "ops": ops, "reply": reply},
+    SESSION.add({"kind": "direct", "text": "Captions, as you asked", "ops": ops, "reply": reply},
                 CATALOG["cat"], _make_proposals)
 
 

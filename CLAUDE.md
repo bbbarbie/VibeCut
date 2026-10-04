@@ -159,7 +159,13 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   heard, Apple SpeechTranscriber on the Mac (speech.py, cached), lines
   broken at pauses ≥0.6 s / sentence ends / 42 chars (16 CJK), timed to the
   words, anchored to the shot; prefetched in the background when the brief
-  is saved. Words never decide the cut. Older answers (day / simple / bold /
+  is saved. Words never decide the cut. **Ink** (`ink.py`): each overlay's
+  colour is checked against the frame behind it (32×18 tone grid per index
+  sample, `tones.npy`, written at index time or once from the sample JPEGs
+  for older clips); where the look's colour is under WCAG 4.5 it takes a
+  tint / shade of the footage's own hue, a neutral only if none reads, and a
+  halo below 4.5. Derived per request, never stored in the log. The UI calls
+  overlays "Captions". `tests/test_ink.py`. Older answers (day / simple / bold /
   key) map to describe + a look. `tests/test_captions_answer.py`.
   The brief's suggestion chips are read from the shoot (`pitch.py`: days,
   morning→night, themes, faces, talking, rough GPS; templates, or Claude

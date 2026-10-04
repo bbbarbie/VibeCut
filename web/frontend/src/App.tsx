@@ -780,7 +780,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
 
   const player = (big: boolean) => (
     <Player videoRef={videoRef} backRef={backRef} veilRef={veilRef} bars={session?.mix?.bars} segment={segment}
-            label={big ? label : tr.playing && !segment ? 'Your story, with its words on screen — click to pause' : storyLabel}
+            label={big ? label : tr.playing && !segment ? 'Your story, with its captions — click to pause' : storyLabel}
             gap={tr.gap && !segment} overlay={overlayView} frame={tl.frame}
             onTime={() => {}} onEnd={() => { if (queue) playAt(queue, queue.index + 1) }} onPlayingChange={() => {}} />
   )
@@ -900,7 +900,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
           {profileInitial}
         </button>
         <Button variant="primary" size="sm" disabled={!session?.board} onClick={openExport}
-                title={session?.board ? 'Render the edit, its words on screen and its music to one video file' : 'Pick a story first'}>
+                title={session?.board ? 'Render the edit, its captions and its music to one video file' : 'Pick a story first'}>
           Export{session?.exports.length ? ` · ${session.exports.length}` : ''}
         </Button>
       </header>
@@ -916,7 +916,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
               <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-panel">
                 {session?.board && (
                   <div className="flex h-8 shrink-0 items-end gap-1 border-b border-line px-3" role="tablist">
-                    {([['shots', 'Shots'], ['words', `Words on screen${ovData.items.length ? ` · ${ovData.items.length}` : ''}`]] as const).map(([k, name]) => (
+                    {([['shots', 'Shots'], ['words', `Captions${ovData.items.length ? ` · ${ovData.items.length}` : ''}`]] as const).map(([k, name]) => (
                       <button key={k} type="button" role="tab" aria-selected={framesTab === k} onClick={() => setFramesTab(k)}
                               className={`rounded-t-md px-2.5 py-1 text-[11px] ${framesTab === k ? 'bg-raised text-zinc-100' : 'text-muted hover:text-zinc-200'}`}>{name}</button>
                     ))}

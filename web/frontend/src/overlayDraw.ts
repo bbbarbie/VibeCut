@@ -198,7 +198,8 @@ function linesFor(o: Overlay, style: OverlayStyle, u: number, chars: number): Li
 function baseLines(o: Overlay, style: OverlayStyle, u: number, chars: number): Line[] {
   const s = SIZE[o.size]
   const text = chars < o.text.length ? o.text.slice(0, chars) : o.text
-  const ink = style.color
+  const ink = o.ink ?? style.color
+  style = o.ink2 ? { ...style, accent: o.ink2 } : style
   switch (o.kind) {
     case 'title':
       return [{ text, px: 0.09 * u * s, bold: true, color: ink },
@@ -326,7 +327,12 @@ function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingConte
     const lx = a.align === 'left' ? x : a.align === 'right' ? x - w : x - w / 2
     ctx.fillRect(lx, y + blockH + 0.014 * u, w, Math.max(2, 0.004 * u))
   }
-  if (style.backing === 'shadow') {
+  if (o.halo) {
+    // nothing in the palette stands out from this frame enough on its own
+    ctx.shadowColor = o.halo
+    ctx.shadowBlur = 0.022 * u
+    ctx.shadowOffsetY = 0.002 * u
+  } else if (style.backing === 'shadow') {
     ctx.shadowColor = 'rgba(0,0,0,0.6)'
     ctx.shadowBlur = 0.018 * u
     ctx.shadowOffsetY = 0.003 * u

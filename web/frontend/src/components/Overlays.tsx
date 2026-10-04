@@ -51,12 +51,12 @@ export function Overlays({ data, items, level, selected, busy, onSelect, onRun, 
     setSuggesting(true); setErr(null)
     try { await onSuggest() } catch (e) { setErr((e as Error).message) } finally { setSuggesting(false) }
   }
-  const style1 = (patch: Record<string, string>, what: string) => onRun([{ op: 'overlay_style', ...patch }], `You changed the ${what} of all words on screen`)
+  const style1 = (patch: Record<string, string>, what: string) => onRun([{ op: 'overlay_style', ...patch }], `You changed the ${what} of all captions`)
 
   return (
     <section className="rounded-xl border border-line bg-raised px-3 py-2.5">
       <div className="flex items-baseline gap-2">
-        <h4 className="font-serif text-[15px] text-zinc-100">Words on screen</h4>
+        <h4 className="font-serif text-[15px] text-zinc-100">Captions</h4>
         {issues > 0 && <span className="text-[10px] text-amber-300" title="Things a viewer would notice — see each item">{issues} to look at</span>}
         <button type="button" onClick={suggest} disabled={busy || suggesting}
                 title="Add a title, part labels, dates, captions from your voiceover, a name tag and an end card — only where the edit already knows the words. Nothing you added is replaced."

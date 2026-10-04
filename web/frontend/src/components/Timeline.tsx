@@ -215,7 +215,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                  onChange={(e) => setZoom(Number(e.target.value))} className="w-20 accent-[#b9d9eb]" />
         </label>
         {onExport && (
-          <button type="button" onClick={onExport} disabled={!items.length} title="Render the edit, its words on screen and its music to one video file"
+          <button type="button" onClick={onExport} disabled={!items.length} title="Render the edit, its captions and its music to one video file"
                   className="shrink-0 rounded-md bg-accent px-2 py-0.5 text-[11px] font-semibold text-accent-ink disabled:opacity-30">Export…</button>
         )}
         <button type="button" onClick={onHelp} title="Keyboard shortcuts"
