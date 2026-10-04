@@ -14,7 +14,7 @@ const playItems = (beats: { shots: { id: string; clip_id: string | null; start: 
   beats.flatMap((b) => b.shots.filter((s) => !s.gap && s.clip_id).map((s) => ({ id: s.id, clipId: s.clip_id!, start: s.start, end: s.end })))
 
 export function Story({ session, clips, asking, playing, nowShot, selected, onUse, onPlay,
-  onSelect, onMoveBeat, onRetitle, onBeatAction, onReference, onJoin, onSmooth }: {
+  onSelect, onMoveBeat, onRetitle, onBeatAction, onReference, onJoin, onSmooth, othersOpen, onOthersOpen }: {
   session: Session | null
   clips: Clip[]
   asking: boolean
@@ -30,10 +30,14 @@ export function Story({ session, clips, asking, playing, nowShot, selected, onUs
   onReference?: () => void
   onJoin?: (after: string, sound: JoinSound) => void
   onSmooth?: (order: boolean, nudge: boolean) => Promise<void>
+  othersOpen?: boolean
+  onOthersOpen?: (open: boolean) => void
 }) {
   const board = session?.board ?? null
   const proposals = session?.proposals ?? null
-  const [showOthers, setShowOthers] = useState(false)
+  const [ownOthers, setOwnOthers] = useState(false)
+  const showOthers = othersOpen ?? ownOthers
+  const setShowOthers = onOthersOpen ?? setOwnOthers
 
   if (!clips.length || (!board && !proposals)) {
     return (
@@ -297,7 +301,7 @@ const JOIN_WORDS: Record<Exclude<JoinSound, 'default'>, { chip: string; menu: st
 
 // ---- smoother cuts: asked for, one undoable turn --------------------------------
 
-function SmoothButton({ rough, onSmooth }: { rough: number; onSmooth: (order: boolean, nudge: boolean) => Promise<void> }) {
+export function SmoothButton({ rough, onSmooth, small }: { rough: number; onSmooth: (order: boolean, nudge: boolean) => Promise<void>; small?: boolean }) {
   const [open, setOpen] = useState(false)
   const [order, setOrder] = useState(true)
   const [nudge, setNudge] = useState(true)
@@ -311,12 +315,13 @@ function SmoothButton({ rough, onSmooth }: { rough: number; onSmooth: (order: bo
     <div className="relative">
       <button type="button" onClick={() => setOpen((o) => !o)}
               title="See which cuts feel rough, and try a smoother version you can undo"
-              className="rounded-lg border border-line px-3 py-1.5 text-[12px] text-zinc-300 hover:bg-raised">
+              className={small ? 'rounded-md border border-line px-2.5 py-1 text-[11px] text-zinc-300 hover:bg-raised'
+                : 'rounded-lg border border-line px-3 py-1.5 text-[12px] text-zinc-300 hover:bg-raised'}>
         Smoother cuts{rough > 0 && <span className="ml-1.5 rounded bg-amber-300/15 px-1 text-[10px] text-amber-200">{rough} rough</span>}
       </button>
       {open && (
         <div className="absolute right-0 top-9 z-30 w-72 rounded-xl border border-line bg-panel p-3 text-[12px] shadow-xl">
-          <p className="text-zinc-300">{rough ? `${rough} cut${rough === 1 ? '' : 's'} may feel rough — marked ! on the story.` : 'No cut is flagged as rough.'} Try:</p>
+          <p className="text-zinc-300">{rough ? `${rough} cut${rough === 1 ? '' : 's'} may feel rough — marked ! between shots.` : 'No cut is flagged as rough.'} Try:</p>
           <label className="mt-2 flex items-start gap-2 text-zinc-200">
             <input type="checkbox" checked={order} onChange={(e) => setOrder(e.target.checked)} className="mt-0.5" />
             <span>Reorder shots inside a part<span className="block text-[11px] text-muted">Parts stay where they are; time only runs backwards if it clearly helps</span></span>

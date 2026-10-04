@@ -17,7 +17,7 @@ import { Menu, SwapPicker, type MenuItem } from './components/Menus'
 import { Music } from './components/Music'
 import type { ClassifyReq } from './components/Remember'
 import { Shelf } from './components/Shelf'
-import { Story, type PlayItem, type Selection } from './components/Story'
+import { SmoothButton, Story, type PlayItem, type Selection } from './components/Story'
 import { Timeline, type Marks } from './components/Timeline'
 import { Footage, type Importing } from './components/Footage'
 import { Brief } from './components/Brief'
@@ -158,6 +158,15 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const shown: Stage = peek && done.includes(peek) ? peek : stage
   useEffect(() => { if (peek && !done.includes(peek)) setPeek(null) }, [peek, done])
   useEffect(() => { if (shown !== 'story' && level === 'frames') setLevel('story') }, [shown]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Once a story is chosen the edit lives in Frames (sarah, 2026-10-04): opening
+  // the project lands there; the Story view stays one click away.
+  const [othersOpen, setOthersOpen] = useState(false)
+  const landed = useRef(false)
+  useEffect(() => {
+    if (landed.current || !session) return
+    landed.current = true
+    if (shown === 'story' && session.board && level === 'story') setLevel('frames')
+  }, [session]) // eslint-disable-line react-hooks/exhaustive-deps
   const showStep = (s: Stage) => { setPeek(s === stage ? null : s); setMenu(null); stopQueue(); setSegment(null); if (s !== 'story') transport.stop() }
 
   const cutOverride = async (target: string, action: string, range?: [number, number]) => {
@@ -722,7 +731,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const openTalk = () => { transport.stop(); stopQueue(); setMenu(null); setLevel('story'); setTalkOpen(true) }
   const openExport = () => { transport.stop(); videoRef.current?.pause(); stopQueue(); setMenu(null); setExporting(true) }
   const openRemix = () => { transport.stop(); videoRef.current?.pause(); stopQueue(); setMenu(null); setReferencing(false); setRemixing(true) }
-  const remixDone = async () => { await refresh(); setPeek(null); setLevel('story') }
+  const remixDone = async () => { await refresh(); setPeek(null); setLevel('frames') }
   const startOver = async () => {
     setRestart(false)
     try { await api.clear(); await refresh(); setLocal([hello]); setPeek(null); setCutData(null); setLevel('story') }
@@ -735,7 +744,11 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   }
 
   const usedIds = useMemo(() => new Set((session?.board?.beats ?? []).flatMap((b) => b.shots.map((x) => x.id))), [session])
-  const apply = (o: Option) => run([{ op: 'choose_option', option: o.key }], `You started from “${o.name}”`)
+  const apply = async (o: Option) => {
+    await run([{ op: 'choose_option', option: o.key }], `You started from “${o.name}”`)
+    setOthersOpen(false)
+    setLevel('frames')
+  }
   const clear = () => session?.board && run(session.board.beats.map((b) => ({ op: 'drop_beat', beat: b.id })),
     'You cleared the timeline')
 
@@ -830,6 +843,8 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
         onRetitle={retitle}
         onBeatAction={beatAction}
         onReference={() => setReferencing(true)}
+        othersOpen={othersOpen}
+        onOthersOpen={setOthersOpen}
         onSmooth={async (order, nudge) => { const s = await api.smooth(order, nudge); setSession(s); offerUndo(s) }}
         onJoin={(after, sound) => run([{ op: 'set_join', shot: after, sound }],
           sound === 'default' ? 'Sound back to automatic' : 'Changed how the sound crosses a cut')}
@@ -920,6 +935,20 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                       <button key={k} type="button" role="tab" aria-selected={framesTab === k} onClick={() => setFramesTab(k)}
                               className={`rounded-t-md px-2.5 py-1 text-[11px] ${framesTab === k ? 'bg-raised text-zinc-100' : 'text-muted hover:text-zinc-200'}`}>{name}</button>
                     ))}
+                    {/* what used to live only on the Story page */}
+                    <div className="ml-auto flex items-center gap-1.5 self-center">
+                      <button type="button" onClick={() => playSource('board', [])}
+                              className="rounded-md bg-zinc-800 px-2.5 py-1 text-[11px] text-zinc-100 hover:bg-zinc-700">
+                        {boardPlay ? 'Stop' : 'Watch it all'}
+                      </button>
+                      <SmoothButton small rough={(session.seams ?? []).filter((x) => x.verdict !== 'ok').length}
+                                    onSmooth={async (order, nudge) => { const r = await api.smooth(order, nudge); setSession(r); offerUndo(r) }} />
+                      {session.proposals && (
+                        <button type="button" onClick={() => { setOthersOpen(true); setLevel('story') }}
+                                title="The other proposals built from your brief"
+                                className="rounded-md border border-line px-2.5 py-1 text-[11px] text-zinc-300 hover:bg-raised">Other ways to tell it</button>
+                      )}
+                    </div>
                   </div>
                 )}
                 {framesTab === 'words' && overlaysPanel ? (
@@ -981,7 +1010,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                             history={session?.exports ?? []} onClose={() => { setExporting(false); api.session().then(setSession).catch(() => {}) }} />}
       {remixing && <Remix onClose={() => setRemixing(false)} onDone={remixDone} canLinks={caps.links} />}
       {referencing && <BorrowStyle onClose={() => setReferencing(false)} onRemix={openRemix}
-                                   onApplied={(s) => { setSession(s); offerUndo(s); setReferencing(false); setPeek(null); setLevel('story') }} />}
+                                   onApplied={(s) => { setSession(s); offerUndo(s); setReferencing(false); setPeek(null); setLevel('frames') }} />}
       {restart && <Confirm title="Start this video over?" action="Start over" danger onNo={() => setRestart(false)} onYes={startOver}
                            text="The footage list, the rough cut, the story and its history are cleared. Your clip files and anything you exported are untouched." />}
 
