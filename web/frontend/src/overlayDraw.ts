@@ -351,7 +351,16 @@ function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingConte
     ctx.globalAlpha = group ? at(group).alpha : p0.alpha
     // letter-spacing adds trailing space; shift so tracked text stays aligned
     const shift = r.line.track && a.align !== 'left' ? (r.line.track * r.line.px) / (a.align === 'center' ? 2 : 1) : 0
-    ctx.fillText(r.text, x + shift, y + (r.h - r.line.px) / 2)
+    const ty = y + (r.h - r.line.px) / 2
+    if (o.halo) {
+      // a tight dark edge hugging the letters carries them over the pale
+      // parts of a split frame; the soft glow set above adds the rest
+      const soft = ctx.shadowBlur
+      ctx.shadowBlur = 0.005 * u
+      ctx.fillText(r.text, x + shift, ty)
+      ctx.shadowBlur = soft
+    }
+    ctx.fillText(r.text, x + shift, ty)
     y += r.h
     prev = r.line
   }

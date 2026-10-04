@@ -28,7 +28,8 @@ import numpy as np
 
 GRID_W, GRID_H = 32, 18
 READABLE = 4.5        # WCAG AA for body text [prior for video]
-HALO = "rgba(0,0,0,0.75)"   # a soft dark shadow under light words
+HALO = "rgba(0,0,0,0.85)"         # under light words
+COVER = 0.95         # share of the background an ink must read over to need no halo [prior]
 LOW, HIGH = 15, 85    # percentiles of the background taken as its darkest / brightest
 
 # Where on the frame each position puts its words: (x0, x1, y0, y1) as fractions.
@@ -137,27 +138,32 @@ def worst(ink: str, lum: np.ndarray) -> float:
     return min(contrast(li, lo), contrast(li, hi))
 
 
-def pick(own: str, cells: np.ndarray, pal: list[str]) -> tuple[str | None, bool]:
-    """-> (ink to use instead of `own`, or None to keep it; whether it needs a halo).
+def pick(own: str, cells: np.ndarray, pal: list[str]) -> tuple[str | None, str | None]:
+    """-> (ink to use instead of `own`, or None to keep it; halo colour or None).
 
-    A dark ink only when the whole background under the words is pale: over
-    a frame that is part light, part dark (hair, trousers, shade) dark words
-    vanish into the dark part, while light words on a dark shadow read on
-    both -- the subtitle convention. So a split background keeps a light
-    ink and gets a dark halo, never a white glow."""
+    An ink that reads over (nearly) all of what's behind the words needs
+    nothing more: the look's own colour if it does, else the footage's own
+    tint or shade, a neutral last. When none does -- a pale floor with black
+    trousers in the middle -- dark words vanish into the dark part (seen on
+    her footage), so the words stay light on a strong dark edge, the
+    subtitle convention, which reads over both."""
     lum = luminance(cells)
-    if worst(own, lum) >= READABLE:
-        return None, False
-    scored = [(worst(c, lum), k, c) for k, c in enumerate(pal)]
-    # the footage's own tints first; a neutral only when none of them reads
-    reads = [x for x in scored if x[0] >= READABLE]
-    hued = [x for x in reads if x[1] < len(pal) - 2]
-    if reads:
-        return max(hued or reads)[2], False
+
+    def share(c: str) -> float:
+        li = float(luminance(hex_rgb(c)))
+        return float(np.mean([contrast(li, float(x)) >= READABLE for x in lum]))
+
+    if share(own) >= COVER:
+        return None, None
+    scored = [(share(c), k, c) for k, c in enumerate(pal)]
+    covers = [x for x in scored if x[0] >= COVER]
+    hued = [x for x in covers if x[1] < len(pal) - 2]
+    if covers:
+        return max(hued or covers)[2], None
     if float(luminance(hex_rgb(own))) > 0.35:
-        return None, True
+        return None, HALO
     light = [x for x in scored if float(luminance(hex_rgb(x[2]))) > 0.6]
-    return (light[0][2] if light else "#faf7f2"), True
+    return (light[0][2] if light else "#faf7f2"), HALO
 
 
 def inks(items: list[dict], style: dict, layout: list[dict], tones: dict[str, np.ndarray],
@@ -182,14 +188,14 @@ def inks(items: list[dict], style: dict, layout: list[dict], tones: dict[str, np
             o["ink"] = ink
         if o.get("sub"):
             ink2, halo2 = pick(style["accent"], cells, pal)
-            # one tone for both lines: a dark place name over light words on a halo would vanish
+            # under a halo both lines are light: a dark place name would vanish into it
             if halo and ink2 and float(luminance(hex_rgb(ink2))) < 0.35:
                 ink2 = None
             if ink2:
                 o["ink2"] = ink2
             halo = halo or halo2
         if halo:
-            o["halo"] = HALO
+            o["halo"] = halo
         out.append(o)
     return out
 

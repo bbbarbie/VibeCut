@@ -101,6 +101,12 @@ def main() -> int:
     check("pale wall with black trousers under the words: light words on a dark halo, never dark words",
           sp.get("halo") == ink.HALO and ink.luminance(ink.hex_rgb(sp.get("ink", COZY["color"]))) > 0.35, str(sp))
     check("a pale background gets no halo", "halo" not in bright)
+    speck = np.zeros((4, H, W, 3), dtype=np.uint8)
+    speck[:] = white_wall
+    speck[:, 13, 8] = (12, 12, 14)        # one dark cell of 80 under the words
+    sk = run({"a": speck}, cap())
+    check("a white wall with one dark speck: still dark words, no halo",
+          ink.luminance(ink.hex_rgb(sk["ink"])) < 0.35 and "halo" not in sk, str(sk))
 
     sub = run({"a": frame(blue_sky, white_wall)}, cap(sub="Columbia University"))
     check("the place line gets its own readable colour", "ink2" in sub, str(sub))
