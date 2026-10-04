@@ -102,12 +102,14 @@ def boundary(sig: ClipSignals, t: int, kind: str, subj: np.ndarray, edge: np.nda
     return float(0.4 * steady + 0.3 * subj[k] + 0.3 * speech_ok - 0.4 * edge[k])
 
 
-def target_length(sig: ClipSignals, scores: np.ndarray, lo: int = 0, hi: int | None = None) -> float:
+def target_length(sig: ClipSignals, scores: np.ndarray, lo: int = 0, hi: int | None = None,
+                  short: bool = False) -> float:
     """How much of this clip is worth keeping: its good seconds, within a
-    range that fits the kind of clip (someone talking holds longer)."""
+    range that fits the kind of clip (someone talking holds longer).
+    `short`: the length it would get as a moment without talking."""
     hi = sig.n if hi is None else hi
     good = int((scores[lo:hi] >= GOOD).sum())
-    if is_talking(sig):
+    if is_talking(sig) and not short:
         # Which sentences matter can't be known without a transcript, so a
         # talking clip only loses what is unusable -- never a chosen amount
         # of what was said. Shortening it further is the creator's call.

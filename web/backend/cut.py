@@ -21,6 +21,7 @@ from . import storyboard as sb
 
 STEP_S = 2.0        # "longer" / "shorter" moves the target by this much
 MIN_SET_S = 1.0     # a hand-set range is never shorter than this
+LONG_S = 8.0        # a talking window longer than this also gets short options [prior]
 # Vision feature prints of the same view taken twice score ~0.9+; the
 # numpy thumbnail fingerprint needs a stricter bar. Guesses, like the rest.
 DUP_VISION = 0.93
@@ -69,6 +70,16 @@ def compute(clips: dict[str, dict], old: Plan | None = None, ask=None) -> Plan:
         for s in r["shots"]:
             sid = f"{r['id']}:{s['index']}"
             tops[sid] = trim.candidates(c.sig, plan.targets.get(sid), c.faces, lo=s["start"], hi=s["end"])
+            w0 = tops[sid][0]
+            if sid not in plan.targets and trim.is_talking(c.sig) and w0.end - w0.start > LONG_S:
+                # Kept long because it sounds like talking -- but loud music
+                # sounds like talking too. Its best short moments go next to it,
+                # and the judge, who can see whether anyone talks to camera,
+                # chooses. Without a judge the long window stays, as before.
+                scores = trim.second_scores(c.sig, c.faces)
+                a, b = int(s["start"]), min(int(np.ceil(s["end"])), c.sig.n)
+                short = trim.target_length(c.sig, scores, a, b, short=True)
+                tops[sid] = [w0] + trim.candidates(c.sig, short, c.faces, lo=s["start"], hi=s["end"], k=2)
             jobs.append((r, sid, tops[sid]))
     picked = moments.choose(jobs, ask) if ask is not False else {}
 
