@@ -398,6 +398,27 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     if (queue?.source === source) { stopQueue(); videoRef.current?.pause(); return }
     if (list.length) playAt({ source, items: list, index: 0 }, 0)
   }
+  // A shot or a part of the story plays as the edit, not as its raw clip, so
+  // its words on screen, joins and sound are what you see.
+  const until = useRef<number | null>(null)
+  const playEdit = (from: number, to: number) => {
+    stopQueue()
+    setSegment(null)
+    transport.stop()
+    transport.attach(videoRef.current, backRef.current, veilRef.current)
+    transport.seek(from)
+    until.current = to
+    transport.play(1)
+    setBoardPlay(true)
+  }
+  useEffect(() => phStore.subscribe(() => {
+    if (until.current != null && phStore.get() >= until.current - 0.03) { until.current = null; transport.stop() }
+  }), [])
+  useEffect(() => { if (!tr.playing) until.current = null }, [tr.playing])
+  const spanOf = (keys: string[]) => {
+    const its = tl.items.filter((x) => keys.includes(x.key))
+    return its.length ? [Math.min(...its.map((x) => x.seq_start)), Math.max(...its.map((x) => x.seq_end))] as const : null
+  }
   const preview = (clipId: string, start: number, end: number, shotId: string) => {
     transport.stop()
     stopQueue()
@@ -575,7 +596,9 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     if (!b) return
     const i = beatIndex(id)
     if (action === 'play') {
-      playSource(`beat:${id}`, b.shots.filter((x) => !x.gap && x.clip_id).map((x) => ({ id: x.id, clipId: x.clip_id!, start: x.start, end: x.end })))
+      const span = spanOf(b.shots.map((x) => x.key))
+      if (span) playEdit(span[0], span[1])
+      else playSource(`beat:${id}`, b.shots.filter((x) => !x.gap && x.clip_id).map((x) => ({ id: x.id, clipId: x.clip_id!, start: x.start, end: x.end })))
     } else if (action === 'up') run([{ op: 'move_beat', beat: id, to_index: i - 1 }], `You moved “${b.title}” up`)
     else if (action === 'down') run([{ op: 'move_beat', beat: id, to_index: i + 1 }], `You moved “${b.title}” down`)
     else if (action === 'remove') { setStorySel(null); run([{ op: 'drop_beat', beat: id }], `You removed “${b.title}”`) }
@@ -606,7 +629,11 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     const openSwap = () => e && setSwap({ key: menu.key, thumb: e.thumb, id: e.id })
     if (menu.kind === 'story-shot') {
       return { title: `This shot · ${e ? (e.end - e.start).toFixed(1) : '?'}s`, items: [
-        { label: 'Watch this shot', onClick: () => e?.clip_id && preview(e.clip_id, e.start, e.end, e.id) },
+        { label: 'Watch this shot', onClick: () => {
+          const span = spanOf([menu.key])
+          if (span) playEdit(span[0], span[1])
+          else if (e?.clip_id) preview(e.clip_id, e.start, e.end, e.id)
+        } },
         { label: 'Swap for a different shot…', onClick: openSwap },
         { label: 'Remove from the story', danger: true, onClick: () => run([{ op: 'drop_shot', shot: menu.key }], 'You removed a shot') },
       ] }
