@@ -770,6 +770,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       <Footage clips={clips} importing={importing} errors={session?.import_errors ?? []} vision={caps.vision}
                onPick={(fl) => importPicked(fromInput(fl))} onRetry={retryImport}
                onPreview={(c, sh) => preview(c.id, sh.start, sh.end, sh.id)}
+               onDecide={(c, a) => { cutOverride(c.id, a).catch((e) => note((e as Error).message)) }}
                canContinue={!!clips.length && !importing && stage !== 'footage'} briefDone={!!brief}
                onNext={() => showStep(stage === 'story' ? 'story' : brief ? 'cut' : 'brief')} />
     ) : shown === 'brief' ? (

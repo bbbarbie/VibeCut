@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import type { Clip, ImportError, Shot } from '../types'
 import { dur, when } from '../format'
 import { Button, Notice, Progress, cx } from '../ui'
@@ -9,7 +9,7 @@ import { Button, Notice, Progress, cx } from '../ui'
 
 export type Importing = { text: string; frac: number | null } | null
 
-export function Footage({ clips, importing, errors, vision, onPick, onRetry, onPreview, onNext, canContinue, briefDone }: {
+export function Footage({ clips, importing, errors, vision, onPick, onRetry, onPreview, onDecide, onNext, canContinue, briefDone }: {
   clips: Clip[]
   importing: Importing
   errors: ImportError[]
@@ -17,6 +17,8 @@ export function Footage({ clips, importing, errors, vision, onPick, onRetry, onP
   onPick: (files: FileList) => void
   onRetry: (paths: string[]) => void
   onPreview: (clip: Clip, shot: Shot) => void
+  /** keep / reject a clip the rough cut left out, or 'auto' to give the call back */
+  onDecide: (clip: Clip, action: 'keep' | 'reject' | 'auto') => void
   onNext: () => void
   canContinue: boolean
   briefDone: boolean
@@ -101,7 +103,7 @@ export function Footage({ clips, importing, errors, vision, onPick, onRetry, onP
         )}
 
         <div className="mt-5 grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
-          {clips.map((c) => <ClipCard key={c.id} clip={c} onPreview={(s) => onPreview(c, s)} />)}
+          {clips.map((c) => <ClipCard key={c.id} clip={c} onPreview={(s) => onPreview(c, s)} onDecide={(a) => onDecide(c, a)} />)}
         </div>
       </div>
 
@@ -119,7 +121,8 @@ export function Footage({ clips, importing, errors, vision, onPick, onRetry, onP
   )
 }
 
-function ClipCard({ clip, onPreview }: { clip: Clip; onPreview: (s: Shot) => void }) {
+function ClipCard({ clip, onPreview, onDecide }: { clip: Clip; onPreview: (s: Shot) => void; onDecide: (a: 'keep' | 'reject' | 'auto') => void }) {
+  const [asking, setAsking] = useState(false)
   const first = clip.shots[0]
   const thrown = clip.cut?.rejected
   const portrait = clip.height > clip.width
@@ -142,9 +145,34 @@ function ClipCard({ clip, onPreview }: { clip: Clip; onPreview: (s: Shot) => voi
       )}
       <div className="mt-1.5 truncate px-0.5 text-[12px] text-zinc-200" title={clip.name}>{clip.name}</div>
       <div className="truncate px-0.5 text-[10px] text-muted">{when(clip.capture_time) || 'no date'}{clip.gps ? ' · GPS' : ''}{labels.length ? ` · ${labels.join(', ')}` : ''}</div>
+      {/* The rough cut's call on a clip is a suggestion: a two-second clip may be
+          a mis-tap or a short video on purpose, and only the creator knows. */}
       {thrown && (
-        <div className="mt-1.5 rounded bg-rose-500/10 px-1.5 py-1 text-[10px] leading-snug text-rose-200">
-          Rough cut leaves it out: {clip.cut!.override === 'reject' ? 'you threw it away' : clip.cut!.en}
+        <div className="mt-1.5 rounded bg-rose-500/10 text-[10px] leading-snug text-rose-200">
+          <button type="button" onClick={() => setAsking((x) => !x)} aria-expanded={asking}
+                  className="flex w-full items-start gap-1 px-1.5 py-1 text-left hover:bg-rose-500/10">
+            <span className="min-w-0 flex-1">
+              {clip.cut!.override === 'reject' ? 'You threw it out' : `Rough cut leaves it out: ${clip.cut!.en}`}
+            </span>
+            <span aria-hidden className="shrink-0 text-rose-300/80">{asking ? '▴' : '▾'}</span>
+          </button>
+          {asking && (
+            <div className="flex gap-1 px-1.5 pb-1.5">
+              <button type="button" onClick={() => { setAsking(false); onDecide('keep') }}
+                      className="flex-1 rounded bg-zinc-100 px-2 py-1 text-[11px] font-semibold text-zinc-900 hover:bg-white">Keep it</button>
+              {clip.cut!.override === 'reject'
+                ? <button type="button" onClick={() => { setAsking(false); onDecide('auto') }}
+                          className="flex-1 rounded border border-rose-400/40 px-2 py-1 text-[11px] text-rose-100 hover:bg-rose-500/20">Let the rough cut decide</button>
+                : <button type="button" onClick={() => { setAsking(false); onDecide('reject') }}
+                          className="flex-1 rounded border border-rose-400/40 px-2 py-1 text-[11px] text-rose-100 hover:bg-rose-500/20">Throw it out</button>}
+            </div>
+          )}
+        </div>
+      )}
+      {!thrown && clip.cut?.override === 'keep' && clip.cut.auto_rejected && (
+        <div className="mt-1.5 flex items-start gap-1 rounded bg-emerald-500/10 px-1.5 py-1 text-[10px] leading-snug text-emerald-200">
+          <span className="min-w-0 flex-1">You kept it. The rough cut would have left it out: {clip.cut.en}</span>
+          <button type="button" onClick={() => onDecide('auto')} className="shrink-0 underline decoration-emerald-400/50 hover:text-white">Undo</button>
         </div>
       )}
     </div>
