@@ -207,7 +207,11 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   (and its grade via `apply_style`), so editing a remix no longer loses its
   mix. Default proposals keep one of each look-alike group filmed within
   15 min (Vision only; cos ≥ 0.78, or ≥ 0.72 from the same spot, GPS ≤150 m).
-  Overlay ffconcat gets `option framerate 30` (10 of
+  An edit that already exists gets the same check (`brief.repeat_ops`, also
+  the same stretch of one clip twice, across parts): when a story is chosen,
+  and once for stories chosen before it, one undoable turn drops the
+  weaker of each (sarah: never identical shots in the edit); later hand
+  edits are never second-guessed. Overlay ffconcat gets `option framerate 30` (10 of
   30 frames were wrong). CARRY_S 0.5 s and MICRO_S are priors — calibrate.
   Tests: `tests/test_audiomix.py`, additions in `test_export.py`,
   `test_brief.py`, `test_remix.py`.

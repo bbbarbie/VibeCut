@@ -188,9 +188,7 @@ def one_per_look(options: list) -> None:
         for b in o.beats:
             keep: list = []
             for s in sorted(b.shots, key=rank, reverse=True):
-                if not any(s.clip_id != k.clip_id and s.vec.shape == k.vec.shape and _close(s, k)
-                           and float(s.vec @ k.vec) >= (SAME_PLACE_SIMILAR if _same_place(s, k) else SIMILAR)
-                           for k in keep):
+                if not any(alike(s, k) for k in keep):
                     keep.append(s)
             dropped += len(b.shots) - len(keep)
             b.shots = [s for s in b.shots if s in keep]
@@ -198,6 +196,34 @@ def one_per_look(options: list) -> None:
         if dropped:
             o.notes.append(f"Kept the best of each look-alike: {dropped} near-repeat shot"
                            f"{'s' * (dropped != 1)} left on the shelf.")
+
+
+def alike(a, b) -> bool:
+    """Two shots a viewer reads as the same shot twice: one view filmed
+    again (Vision feature print), close in time."""
+    return (a.clip_id != b.clip_id and a.vec.shape == b.vec.shape and _close(a, b)
+            and float(a.vec @ b.vec) >= (SAME_PLACE_SIMILAR if _same_place(a, b) else SIMILAR))
+
+
+def repeat_ops(board: dict | None, cat) -> tuple[list[dict], list[str]]:
+    """An edit that already exists: the shots that repeat another shot in it
+    -- a look-alike, or the same stretch of one clip twice -- as drop_shot
+    ops, keeping the better-made of each group wherever it sits. Returns
+    (ops, names of what goes). Vision-only, like `one_per_look`."""
+    entries = [e for bt in (board or {}).get("beats", []) for e in bt["shots"]
+               if not e.get("gap") and e.get("id") in cat.shots]
+    rank = lambda e: cat.shots[e["id"]].score + (0.15 if cat.shots[e["id"]].lean else 0.0)  # noqa: E731
+    keep: list[dict] = []
+    ops, names = [], []
+    for e in sorted(entries, key=rank, reverse=True):
+        s = cat.shots[e["id"]]
+        same = any(e["id"] == k["id"] and e["start"] < k["end"] and k["start"] < e["end"] for k in keep)
+        if same or any(alike(s, cat.shots[k["id"]]) for k in keep):
+            ops.append({"op": "drop_shot", "shot": e.get("key") or e["id"]})
+            names.append(s.clip_name)
+        else:
+            keep.append(e)
+    return ops, names
 
 
 def _same_place(a, b) -> bool:

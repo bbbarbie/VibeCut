@@ -96,8 +96,36 @@ def _open_project(pid: str) -> pj.Project:
             WORKFLOW = Workflow()
         PROJECT["p"] = pr
         _refresh_catalog()
+        # A story picked before the repeat check existed gets it once, here.
+        _drop_repeats(only_once=True)
     pj.set_open(pid)
     return pr
+
+
+REPEATS_TEXT = "Took out shots that repeat another"
+
+
+def _drop_repeats(only_once: bool = False) -> None:
+    """No shot in the edit repeats another (sarah: never put identical
+    shots in): the weaker of each look-alike goes, as one undoable turn.
+    Runs when a story is chosen, and once for a story chosen before this
+    existed; after that the creator's own edits are never second-guessed."""
+    b = SESSION.board
+    if not b or not VISION_USED["value"]:
+        return
+    if only_once:
+        last = max((i for i, t in enumerate(SESSION.turns) if not t.undone
+                    and any(o.get("op") == "choose_option" for o in t.ops)), default=None)
+        if last is None or any(t.text == REPEATS_TEXT for t in SESSION.turns[last + 1:]):
+            return
+    ops, names = brief.repeat_ops(b, CATALOG["cat"])
+    if not ops:
+        return
+    words = ", ".join(names[:4]) + (f" and {len(names) - 4} more" if len(names) > 4 else "")
+    reply = (f"Took out {len(ops)} shot{'s' * (len(ops) != 1)} that repeated another one in the edit "
+             f"({words}); the better-made of each stays. Undo puts {'them' if len(ops) != 1 else 'it'} back.")
+    SESSION.add({"kind": "direct", "text": REPEATS_TEXT, "ops": ops, "reply": reply},
+                CATALOG["cat"], _make_proposals)
 
 
 def _close_project() -> None:
@@ -878,6 +906,7 @@ def api_ops(req: OpsReq) -> dict:
         SESSION.add({"kind": "direct", "text": req.label, "ops": req.ops},
                     CATALOG["cat"], _make_proposals)
         if [o.get("op") for o in req.ops] == ["choose_option"]:
+            _drop_repeats()
             _words_as_asked()
         return _session()
 

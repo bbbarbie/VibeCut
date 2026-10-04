@@ -142,6 +142,25 @@ def main() -> int:
     check("same seat, same hall, 13 min apart (0.77): one shot, the better", ids == ["hall0000000a:0"], str(ids))
     ids = placed([dict(c, shots=[dict(c["shots"][0])]) for c in near], [[40.8091, -73.9625], [40.8191, -73.9625]])
     check("the same similarity a kilometre apart: two moments", len(ids) == 2, str(ids))
+    print("repeats in an edit that already exists (her shots 18 and 19)")
+    from web.backend import board as bd
+    hall = [dict(c, shots=[dict(c["shots"][0])]) for c in near]
+    for c in hall:
+        c["gps"] = [40.8091, -73.9625]
+    hall[1]["capture_time"] = "2026-05-02T10:14:00+0900"       # 13 minutes after the first
+    cat = bd.Catalog.from_clips(hall + others)
+    ent = lambda sid: {"id": sid, "start": 0.0, "end": 2.5}  # noqa: E731
+    edit = {"beats": [{"id": "b1", "title": "Afternoon", "shots": [ent("other0000001:0"), ent("hall0000000b:0")]},
+                      {"id": "b2", "title": "Later", "shots": [ent("hall0000000a:0"), ent("other0000002:0")]}]}
+    ops, names = brief.repeat_ops(edit, cat)
+    check("the lecture hall twice, even across parts: the weaker one goes",
+          ops == [{"op": "drop_shot", "shot": "hall0000000b:0"}], str(ops))
+    again = {"beats": [{"id": "b1", "title": "x", "shots": [ent("other0000001:0"),
+                                                         {"id": "other0000001:0", "key": "other0000001:0~2", "start": 1.0, "end": 3.0}]}]}
+    ops, _ = brief.repeat_ops(again, cat)
+    check("the same stretch of one clip twice: one goes", len(ops) == 1, str(ops))
+    clean = {"beats": [{"id": "b1", "title": "x", "shots": [ent("other0000001:0"), ent("other0000002:0"), ent("hall0000000a:0")]}]}
+    check("an edit without repeats is left alone", brief.repeat_ops(clean, cat) == ([], []))
     no_vision = sb.build(dupes + others, "", vision=False)["options"]
     check("without Vision (colour only) nothing is collapsed",
           sum(x.startswith("take") for x in shot_ids(no_vision[0])) == 5)
