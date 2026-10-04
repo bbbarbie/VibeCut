@@ -398,8 +398,8 @@ function Ghost({ title, thumbs }: { title: string; thumbs: string[] }) {
         <span className="font-serif text-[15px] text-rose-200 line-through">{title}</span>
         <span className="text-[11px] text-rose-300/80">just removed</span>
       </div>
-      <div className="mt-1 flex gap-1 pl-9 grayscale">
-        {thumbs.slice(0, 8).map((t, j) => <img key={j} src={t} className="h-8 w-14 rounded-sm object-cover opacity-50" />)}
+      <div className="mt-1 flex gap-1 pl-9">
+        {thumbs.slice(0, 8).map((t, j) => <img key={j} src={t} className="h-8 w-14 rounded-sm object-cover" />)}
       </div>
     </div>
   )
