@@ -25,7 +25,7 @@ from pydantic import BaseModel
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, brief, cut, export, looks, pitch, seams, smooth, sound, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, brief, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import Workflow, WorkflowError
 
@@ -655,6 +655,10 @@ def api_project_brief(req: BriefReq) -> dict:
     else:
         pr.brief = {"message": req.message.strip(), "style": brief.clean_style(req.style) or {},
                     "said": req.said, "at": time.time()}
+        if pr.brief["style"].get("captions") == "transcribe":
+            # Transcribing takes a while; start now so the subtitles are
+            # ready when a story is chosen. On this Mac, free, cached.
+            subtitles.prefetch(list(CLIPS.values()), req.message)
     return _session()
 
 
@@ -880,16 +884,19 @@ def _words_as_asked() -> None:
     asked for, as their own turn so Undo takes only the words away."""
     b = SESSION.board
     d = _direction() or {}
-    answer = (d.get("style") or {}).get("captions")
+    style = d.get("style") or {}
+    answer = style.get("captions")
     if not b or b.get("overlays") or not d:
         return
     said = (d.get("text") or "").split("\n")[0].strip()
-    ops, notes = brief.caption_ops(b, CATALOG["cat"], answer, said if len(said) <= 48 else None, said)
+    found = places.lookup([c.get("gps") for c in CLIPS.values()]) if answer in ("describe", None, "day") else {}
+    ops, notes = brief.caption_ops(b, CATALOG["cat"], answer, said if len(said) <= 48 else None, said,
+                                   look=style.get("caption_look"), clips=CLIPS, places=found)
     if not ops:
         return
     n = sum(o["op"] == "add_overlay" for o in ops)
-    reply = (f"Added {n} word overlay{'s' * (n != 1)}, as you asked at the start." if answer else
-             f"Added {n} day-in-my-life caption{'s' * (n != 1)}: the time and what's happening. Click one to retype it.")
+    what = {"transcribe": "subtitles of what's said", "none": "words"}.get(answer or "", "captions: the time, the place and what's happening")
+    reply = f"Added {n} caption{'s' * (n != 1)} — {what}, as you asked at the start. Click one to retype it."
     if notes:
         reply += " " + " ".join(notes)
     SESSION.add({"kind": "direct", "text": "Words on screen, as you asked", "ops": ops, "reply": reply},

@@ -142,16 +142,25 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   direction and reshape each proposal (`brief.shape`); focus and any
   Claude-tailored question (key only) become direction words. Targets (60 s,
   180 s, pace caps 8 / 5 / 2.5 s) are guesses. Tests: `tests/test_brief.py`.
-  A fourth question, words on screen (none / simple / bold / key), travels
-  as `style.captions`; when a story is chosen it becomes one undoable turn
-  (`brief.caption_ops`: a look + `overlays.suggest` kinds), so it shows in
-  preview and export. Only words the edit knows; spoken words get captions
-  only on the voiceover proposal (no transcript on the default path).
-  `tests/test_captions_answer.py`. **Day in my life** (`daylog.py`, the
-  default when the description says so): per moment the day moves on,
-  "7:42 am · coffee run" — clock from the clip's recording time + shot
-  offset, phrase from Vision labels (table, or with a key Claude phrases the
-  labels + time; text only, no frames leave). No time → no caption.
+  **Captions** (none / describe / transcribe) travels as `style.captions`,
+  and a follow-up asked only when there are captions (`when` on the
+  question), the look (clean / bold = hype / cozy / quiet), as
+  `style.caption_look`. When a story is chosen it becomes one undoable turn
+  (`brief.caption_ops`: look + title + captions). **Describe** = per moment
+  the day moves on, "7:42 am · coffee run" (`daylog.py`; clock from the
+  clip's recording time + shot offset, phrase from Vision labels, a bigger
+  table incl. scenery; with a key Claude may phrase labels + time, text
+  only) plus, where a new place starts, its name above the line (`sub`):
+  GPS rounded to ~100 m → Apple's geocoder on the Mac (`places.py`,
+  `place/vibeplace.swift`; coordinates only, free, cached in
+  `$VIBECUT_CACHE/places.json`; a place, area or city, never an address).
+  The default when the description says day-in-my-life. **Transcribe** =
+  subtitles of what's said (`subtitles.py`): only clips where a voice is
+  heard, Apple SpeechTranscriber on the Mac (speech.py, cached), lines
+  broken at pauses ≥0.6 s / sentence ends / 42 chars (16 CJK), timed to the
+  words, anchored to the shot; prefetched in the background when the brief
+  is saved. Words never decide the cut. Older answers (day / simple / bold /
+  key) map to describe + a look. `tests/test_captions_answer.py`.
   The brief's suggestion chips are read from the shoot (`pitch.py`: days,
   morning→night, themes, faces, talking, rough GPS; templates, or Claude
   phrasing those text facts with a key); a chip goes straight to Next.

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { composeBrief, sayPicks } from './brief.ts'
+import { applies, composeBrief, sayPicks } from './brief.ts'
 import type { StyleQuestion } from './types.ts'
 
 const Q: StyleQuestion[] = [
@@ -40,4 +40,20 @@ test('the captions answer travels structured, so it can put words on screen', ()
   const b = composeBrief('trip', q, { captions: { keys: ['bold'], other: '' } })
   assert.deepEqual(b.style, { captions: 'bold' })
   assert.equal(b.message, 'trip')
+})
+
+test('the captions look is asked only when there are captions', () => {
+  const caps: StyleQuestion[] = [
+    { id: 'captions', question: 'Captions?', multi: false, choices: [{ key: 'describe', label: 'Describe' }, { key: 'none', label: 'No captions' }] },
+    { id: 'caption_look', question: 'How should the captions look?', multi: false, when: { captions: ['describe', 'transcribe'] },
+      choices: [{ key: 'bold', label: 'Bold' }] },
+  ]
+  assert.equal(applies(caps[1], {}), false)
+  assert.equal(applies(caps[1], { captions: { keys: ['none'], other: '' } }), false)
+  assert.equal(applies(caps[1], { captions: { keys: ['describe'], other: '' } }), true)
+  const on = composeBrief('a day', caps, { captions: { keys: ['describe'], other: '' }, caption_look: { keys: ['bold'], other: '' } })
+  assert.deepEqual(on.style, { captions: 'describe', caption_look: 'bold' })
+  // a look picked, then captions switched off: the look doesn't travel
+  const off = composeBrief('a day', caps, { captions: { keys: ['none'], other: '' }, caption_look: { keys: ['bold'], other: '' } })
+  assert.deepEqual(off.style, { captions: 'none' })
 })

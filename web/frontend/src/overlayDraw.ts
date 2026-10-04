@@ -213,7 +213,9 @@ function baseLines(o: Overlay, style: OverlayStyle, u: number, chars: number): L
       return [{ text, px: 0.05 * u * s, bold: true, color: ink },
         ...(o.sub ? [{ text: o.sub, px: 0.03 * u * s, bold: false, color: style.accent }] : [])]
     case 'caption':
-      return [{ text, px: 0.046 * u * s, bold: false, color: ink }]
+      // a describing caption names the place where a new one starts, small, above the line
+      return [...(o.sub ? [{ text: o.sub, px: 0.026 * u * s, bold: true, color: style.accent, track: 0.12, upper: true }] : []),
+        { text, px: 0.046 * u * s, bold: false, color: ink }]
     case 'date':
       return [{ text, px: 0.03 * u * s, bold: true, color: ink, track: 0.12, upper: true }]
     default:

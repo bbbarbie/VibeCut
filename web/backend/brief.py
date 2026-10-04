@@ -33,22 +33,20 @@ SIMILAR = 0.78
 # café in the morning and again at night is two moments, not a stutter.
 RETAKE_WINDOW_S = 15 * 60
 OPENINGS = ("hook", "start")
-# Words on screen: which look (looks/*.json) and which overlay kinds
-# (overlays.KINDS). Only words the edit already knows -- part titles, dates,
-# the description, a voiceover's own lines -- so no answer invents copy.
-# Spoken words are captioned only where a transcript exists (voiceover or
-# talking-head mode); a plain vlog has none, by design.
-CAPTIONS = {
-    "none": None,
-    # the clock and what's happening, per moment (daylog.py), plus a title
-    "day": ("cozy", ["title"]),
-    "simple": ("clean", ["title", "part", "caption", "end"]),
-    "bold": ("hype", ["title", "part", "date", "caption"]),
-    "key": ("quiet", ["title", "date"]),
-}
+# Captions: what they say (describe / transcribe / none) and how they look
+# (looks/*.json). Only words the footage knows: the clock, the place from
+# the clip's GPS and what the image labels see (describe, daylog.py), or
+# what was said, from the Mac's own recogniser (transcribe, subtitles.py).
+# Every answer also gets an opening title from the creator's own words.
+CAPTIONS = ("describe", "transcribe", "none")
+CAPTION_LOOKS = {"clean": "clean", "bold": "hype", "cozy": "cozy", "quiet": "quiet"}
+DEFAULT_LOOK = {"describe": "cozy", "transcribe": "clean"}
+# Answers saved before the question changed: (what they say, how they look).
+LEGACY = {"day": ("describe", "cozy"), "simple": ("describe", "clean"), "bold": ("describe", "bold"),
+          "key": ("describe", "quiet")}
 DAY_IN_LIFE = re.compile(r"\bday in (my|the|a) life\b|\bdaily vlog\b|\bdiml\b", re.I)
 STYLE_KEYS = {"length": tuple(LENGTH_S), "pace": tuple(PACE_CAP_S), "opening": OPENINGS,
-              "captions": tuple(CAPTIONS)}
+              "captions": CAPTIONS + tuple(LEGACY), "caption_look": tuple(CAPTION_LOOKS)}
 
 # Focus choices, each a storyboard theme (storyboard.THEMES).
 FOCUS = [("people", "Me and the people I was with"), ("food", "Food and drinks"),
@@ -72,12 +70,17 @@ def fixed_questions(theme_counts: Counter | None = None) -> list[dict]:
         {"id": "opening", "question": "How should it start?", "multi": False, "choices": [
             {"key": "hook", "label": "With the best moment", "hint": "A hook first, then the story"},
             {"key": "start", "label": "From the beginning", "hint": "In the order it happened"}]},
-        {"id": "captions", "question": "What words should be on screen?", "multi": False, "choices": [
-            {"key": "day", "label": "Day in my life", "hint": "The time and what you're doing: “7:42 am · coffee run”"},
-            {"key": "none", "label": "No words", "hint": "Just the footage"},
-            {"key": "simple", "label": "Simple and clean", "hint": "A title and a small label for each part"},
-            {"key": "bold", "label": "Bold, Reels style", "hint": "Big capitals that hit on the beat, with dates"},
-            {"key": "key", "label": "Just the key words", "hint": "An opening title and the dates, nothing else"}]},
+        {"id": "captions", "question": "Captions?", "multi": False, "choices": [
+            {"key": "describe", "label": "Describe what's happening",
+             "hint": "The time, the place and what's in the shot: “7:42 am · coffee run”"},
+            {"key": "transcribe", "label": "Write out what's said", "hint": "Subtitles of the talking, made on this Mac"},
+            {"key": "none", "label": "No captions", "hint": "Just the footage"}]},
+        {"id": "caption_look", "question": "How should the captions look?", "multi": False,
+         "when": {"captions": ["describe", "transcribe"]}, "choices": [
+            {"key": "clean", "label": "Clean and simple", "hint": "Small, white, out of the way"},
+            {"key": "bold", "label": "Bold, Reels style", "hint": "Big capitals that hit on the beat"},
+            {"key": "cozy", "label": "Soft and cozy", "hint": "Warm and rounded, like a diary"},
+            {"key": "quiet", "label": "Quiet", "hint": "Thin and calm"}]},
     ]
     counts = theme_counts or Counter()
     focus = [{"key": k, "label": label} for k, label in FOCUS if counts.get(k, 0) >= MIN_FOCUS_SHOTS]
@@ -122,27 +125,28 @@ def describe(style: dict | None) -> str:
 
 
 def caption_ops(board: dict, cat, answer: str | None, title: str | None = None,
-                about: str = "") -> tuple[list[dict], list[str]]:
-    """The words the captions answer asks for, as ops for a freshly chosen
-    storyboard: the look first, then what overlays.suggest can fill truthfully.
+                about: str = "", look: str | None = None, clips: dict | None = None,
+                places: dict | None = None) -> tuple[list[dict], list[str]]:
+    """The captions the brief asked for, as ops for a freshly chosen
+    storyboard: the look, an opening title, then the captions themselves.
     (ops, notes on what was left out)."""
-    from . import daylog, overlays
+    from . import daylog, overlays, subtitles
     about = about or title or ""
+    if answer in LEGACY:
+        answer, look = LEGACY[answer][0], look or LEGACY[answer][1]
     if answer is None and DAY_IN_LIFE.search(about):
-        answer = "day"      # the genre's own captions, unless they said otherwise
-    want = CAPTIONS.get(answer or "")
-    if not want:
+        answer = "describe"     # the genre's own captions, unless they said otherwise
+    if answer not in ("describe", "transcribe"):
         return [], []
-    look, kinds = want
-    if board.get("option") != "voice":
-        kinds = [k for k in kinds if k != "caption"]    # no spoken lines to caption
-    ops, notes = overlays.suggest(board, cat, None, title, kinds)
-    if answer == "day":
-        more, why = daylog.caption_ops(board, cat, about)
-        ops, notes = ops + more, notes + why
-    if not ops:
+    ops, notes = overlays.suggest(board, cat, None, title, ["title"])
+    if answer == "describe":
+        more, why = daylog.caption_ops(board, cat, about, places=places)
+    else:
+        more, why = subtitles.caption_ops(board, cat, clips or {}, about)
+    ops, notes = ops + more, notes + why
+    if not more:
         return [], notes
-    return [{"op": "set_look", "look": look}, *ops], notes
+    return [{"op": "set_look", "look": CAPTION_LOOKS.get(look or "", DEFAULT_LOOK[answer])}, *ops], notes
 
 
 def _window(s, cap: float, best: dict[str, float]) -> None:
