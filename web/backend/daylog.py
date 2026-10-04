@@ -46,7 +46,7 @@ PHRASES: list[tuple[str, str]] = [
     ("bus", "on the bus"), ("car", "on the way"), ("taxi", "on the way"), ("crosswalk", "heading out"),
     ("street", "out and about"), ("crowd", "out and about"), ("temple", "temple visit"),
     ("museum", "museum"), ("concert", "concert"), ("stage", "show time"), ("fireworks", "fireworks"),
-    ("sunset", "sunset"), ("sunrise", "sunrise"), ("night", "night out"), ("sky", "look up"),
+    ("sunset", "sunset"), ("sunrise", "sunrise"), ("night", "night out"),
     ("stairs", "up we go"), ("path", "walking"),
     # scenery: what the place looks like, when nothing is happening in it
     ("waterfall", "waterfall"), ("lake", "by the lake"), ("river", "along the river"), ("shore", "by the water"),
@@ -64,6 +64,7 @@ PHRASES: list[tuple[str, str]] = [
     # generic last: they speak only when nothing more specific does
     ("cup", "coffee run"), ("beverage", "drinks"), ("food", "food"),
     ("water", "by the water"),
+    # no "sky": Vision sees sky in nearly every outdoor shot, so it said nothing ("look up" confused her)
     ("plant", "greenery"), ("tree", "greenery"),
 ]
 _RANK = {k: i for i, (k, _) in enumerate(PHRASES)}
