@@ -64,9 +64,16 @@ The promise to a user is therefore *not* "this will be beautiful." It is
 - Rough cut (`cutgrammar/reject.py`, `trim.py`, `signals.py`; gate in
   `web/backend/workflow.py`, design adapted from cut-motion — see NOTICE).
   Discrimination-tested on synthetic fixtures; thresholds are guesses and
-  every decision passes a human gate. **Known failure on real footage:**
-  `speech_mask` is level-based, so music reads as talking and those clips
-  are barely trimmed (3 real clips: 7:16 → 7:12). A real VAD is the fix.
+  every decision passes a human gate. `speech_mask` is level-based, so
+  music read as talking and those clips were barely trimmed (3 real clips:
+  7:16 → 7:12). **Voice reading** (`web/backend/sound.py`,
+  `sound/vibesound.swift`, `signals.with_voice`): Apple's on-device sound
+  classifier (macOS; audio track only, nothing leaves) gives per-second
+  voice / music / singing / laughter, cached as `sound.json`; speech counts
+  only where a voice is heard (VOICE_LO 0.15 → VOICE_HI 0.45, priors).
+  Filled once on project open for older clips. Elsewhere the level mask
+  stays. Silero was the brief's default but needs onnxruntime (not numpy-
+  only, and pip installs are blocked on her Mac). `tests/test_voice.py`.
   At the gate the kept range can be dragged by its ends (`set` override,
   min 1 s, undone by `auto`; `tests/test_cut_set.py`); hovering the bar shows
   the frame at that moment (index sample first, then the clip seeked).
