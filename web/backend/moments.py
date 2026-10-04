@@ -108,8 +108,7 @@ def choose(jobs: list[tuple[dict, str, list[Window]]], ask: Ask | None = None) -
                 fs = frames(rec, w)
                 if not fs:
                     return rec["id"], sid, k, None
-                opts.append({"span": f"{_mmss(w.start)}–{_mmss(w.end)}, {w.end - w.start:.0f} s",
-                             "frames": [f.read_bytes() for f in fs]})
+                opts.append({"span": f"{_mmss(w.start)}–{_mmss(w.end)}", "frames": [f.read_bytes() for f in fs]})
             best, why = ask(opts)
             return rec["id"], sid, k, (best, why) if 0 <= best < len(cands) else None
         except Exception:  # noqa: BLE001 -- any failure means the rules' pick stands

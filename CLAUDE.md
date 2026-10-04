@@ -76,8 +76,6 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   frames from each and picks one (frames leave the Mac; nothing else).
   Cached per shot in the clip dir's `moments.json`; no key, an error or a
   bad answer leaves the rules' first pick. `VIBECUT_MOMENTS=0` turns it off.
-  A "talking" window over LONG_S 8 s (often just loud music) also gets its
-  2 best short moments as options; only the judge can trim it to one.
   `tests/test_moments.py`. Not yet judged against her picks on real footage.
 
 - Words on screen + export (`web/backend/overlays.py`, `export.py`,

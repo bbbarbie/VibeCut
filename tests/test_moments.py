@@ -134,28 +134,6 @@ def main() -> int:
     s = plan.clips["clip0000000d"]["shots"]["clip0000000d:0"]
     check("no frames on disk: nothing is sent, the rules' pick stands", s["picked_by"] == "rules" and len(calls) == 1)
 
-    # -- a long clip kept whole because it "sounds like talking" -----------
-    # Loud music reads as talking, so the trim keeps the whole thing. Its
-    # best short moments are offered next to it; without a judge, nothing changes.
-    talky = _clips("clip0000000f", [range(5, 11), range(20, 26)])
-    sg = _sig([range(5, 11), range(20, 26)])
-    sg.speech = [0.8] * N
-    talky["clip0000000f"]["signals"] = sg.to_json()
-    sid_f = "clip0000000f:0"
-    plan = cut.compute(talky)
-    s = plan.clips["clip0000000f"]["shots"][sid_f]
-    long_len = s["window"][1] - s["window"][0]
-    check("no judge: the talking clip is still kept long", long_len > cut.LONG_S and s["picked_by"] == "rules",
-          f"{s['window']}")
-    shorts = [o for o in s["options"][1:] if o[1] - o[0] <= 5]
-    check("and its best short moments are offered next to it", len(shorts) >= 1, str(s["options"]))
-    seen = []
-    plan = cut.compute(talky, ask=lambda o: (seen.append(o), (1, "just music, nobody talks"))[1])
-    s = plan.clips["clip0000000f"]["shots"][sid_f]
-    check("the judge sees how long each option is", seen and " s" in seen[0][0]["span"], seen[0][0]["span"] if seen else "")
-    check("a judge can trim it to a short moment", s["window"][1] - s["window"][0] <= 5 and s["picked_by"] == "claude",
-          str(s["window"]))
-
     # -- frames ---------------------------------------------------------------
     rec = _clips("clip0000000e", [])["clip0000000e"]
     fs = moments.frames(rec, trim.Window(start=10.0, end=15.0, target=5, score=0, whole=False, reason_zh="", reason_en=""))
