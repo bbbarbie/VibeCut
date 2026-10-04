@@ -128,9 +128,9 @@ function ClipCard({ clip, onPreview, onDecide }: { clip: Clip; onPreview: (s: Sh
   const portrait = clip.height > clip.width
   const labels = Array.from(new Set(clip.shots.flatMap((s) => s.labels.slice(0, 2).map(([l]) => l.replace(/_/g, ' '))))).slice(0, 3)
   return (
-    <div className={cx('rounded-xl border border-line bg-raised/60 p-2', thrown && 'opacity-70')}>
+    <div className={cx('rounded-xl border p-2', thrown ? 'border-rose-500/30 bg-rose-500/10' : 'border-line bg-raised/60')}>
       <button type="button" onClick={() => first && onPreview(first)} title="Watch" className="relative block aspect-video w-full overflow-hidden rounded-lg bg-black">
-        {first && <img src={first.thumb} alt="" loading="lazy" draggable={false} className={cx('size-full', portrait ? 'object-contain' : 'object-cover', thrown && 'grayscale')} />}
+        {first && <img src={first.thumb} alt="" loading="lazy" draggable={false} className={cx('size-full', portrait ? 'object-contain' : 'object-cover')} />}
         <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 text-[10px] tabular-nums text-zinc-200">{dur(clip.duration)}</span>
         {clip.shots.length > 1 && <span className="absolute left-1 top-1 rounded bg-black/70 px-1 text-[10px] text-zinc-200">{clip.shots.length} shots</span>}
       </button>
