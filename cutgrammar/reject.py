@@ -94,8 +94,14 @@ def judge(sig: ClipSignals, faces: np.ndarray | None = None) -> Verdict:
                        stats=stats)
     if stats["blurry"] >= MOST:
         return Verdict(True, "blurry", "全片模糊", "blurred from start to finish", stats=stats)
+    # Shake is read from stills a second apart, so walking with the camera
+    # reads the same as shaking it: on one real shoot this threw out 17 of
+    # 42 handheld videos. A guess that strong only warns; the trim already
+    # keeps the steadiest seconds, and the gate is where a person decides.
     if stats["shaky"] >= MOST and not talking:
-        return Verdict(True, "shaky", "全程剧烈晃动", "shaking hard the whole way through", stats=stats)
+        return Verdict(False, flags=[{"code": "shaky", "zh": "可能全程在晃（从每秒一帧推测，请看一下）",
+                                      "en": "may be shaky the whole way (guessed from one frame a second — take a look)"}],
+                       stats=stats)
     return Verdict(False, stats=stats)
 
 

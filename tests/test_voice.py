@@ -25,7 +25,7 @@ TMP = Path(tempfile.mkdtemp(prefix="vibecut-voice-"))
 os.environ["VIBECUT_CACHE"] = str(TMP / "cache")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from cutgrammar import trim  # noqa: E402
+from cutgrammar import reject, trim  # noqa: E402
 from cutgrammar.signals import VOICE_HI, ClipSignals, with_voice  # noqa: E402
 from web.backend import indexer, sound  # noqa: E402
 
@@ -81,6 +81,14 @@ def main() -> int:
     sound.attach(rec)
     check("a cached reading gates the loaded clip",
           not trim.is_talking(ClipSignals.from_json(rec["signals"])) and rec["sound"]["music"][0] == 0.9)
+
+    # Every loud clip used to count as talking, and talking clips are never
+    # thrown out -- which hid how strict the shake guess is. Handheld walking
+    # footage now gets a warning at the gate, not a rejection.
+    walk = with_voice(ClipSignals.from_json({**raw.to_json(), "motion": [14.0] * N}), [0.02] * N)
+    v = reject.judge(walk)
+    check("a handheld clip isn't thrown out on a shake guess", not v.rejected and v.flags
+          and v.flags[0]["code"] == "shaky", f"{v.code or 'kept'}, flags {[f['code'] for f in v.flags]}")
 
     # -- the real classifier, macOS only --------------------------------------
     binary = sound.ensure_built()

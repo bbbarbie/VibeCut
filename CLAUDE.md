@@ -164,8 +164,9 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   - **Evidence levels** (`cutgrammar/evidence.py`): every finding names
     what it rests on — meta / still / motion / audio. A finding whose
     reading the media lacks gets verdict `pending` ("not checked"), value
-    kept. `load_index()` carries no motion. Rough-cut "shaky" rejects are
-    flagged as guessed from stills.
+    kept. `load_index()` carries no motion. Rough-cut "shaky" is only a warning
+    at the gate, never a rejection: guessed from stills, it threw out 17 of
+    42 handheld videos once music stopped counting as talking.
   - **Inventory** (`cutgrammar/inventory.py`, `inventory.py`): read-only
     sha256 manifest of a shoot folder; verify names missing / changed /
     unexpected files. CLI only, not wired into import.
