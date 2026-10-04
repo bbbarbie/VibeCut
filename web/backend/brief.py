@@ -32,6 +32,12 @@ SIMILAR = 0.78
 # retakes are (same window as cutgrammar.reject's duplicate rule): the same
 # café in the morning and again at night is two moments, not a stutter.
 RETAKE_WINDOW_S = 15 * 60
+# Filmed from the same spot (GPS within ~150 m) a lower cut-off already
+# means the same view: on her footage two lecture-hall shots from one seat,
+# 13 minutes apart, scored 0.766 and read as one shot twice. 0.72 sits at
+# the shoot's 95th percentile of shot-pair similarity. [prior]
+SAME_PLACE_SIMILAR = 0.72
+SAME_PLACE_M = 150.0
 OPENINGS = ("hook", "start")
 # Captions: what they say (describe / transcribe / none) and how they look
 # (looks/*.json). Only words the footage knows: the clock, the place from
@@ -182,8 +188,9 @@ def one_per_look(options: list) -> None:
         for b in o.beats:
             keep: list = []
             for s in sorted(b.shots, key=rank, reverse=True):
-                if not any(s.clip_id != k.clip_id and s.vec.shape == k.vec.shape
-                           and float(s.vec @ k.vec) >= SIMILAR and _close(s, k) for k in keep):
+                if not any(s.clip_id != k.clip_id and s.vec.shape == k.vec.shape and _close(s, k)
+                           and float(s.vec @ k.vec) >= (SAME_PLACE_SIMILAR if _same_place(s, k) else SIMILAR)
+                           for k in keep):
                     keep.append(s)
             dropped += len(b.shots) - len(keep)
             b.shots = [s for s in b.shots if s in keep]
@@ -191,6 +198,15 @@ def one_per_look(options: list) -> None:
         if dropped:
             o.notes.append(f"Kept the best of each look-alike: {dropped} near-repeat shot"
                            f"{'s' * (dropped != 1)} left on the shelf.")
+
+
+def _same_place(a, b) -> bool:
+    if not a.gps or not b.gps:
+        return False
+    import math
+    dy = (a.gps[0] - b.gps[0]) * 111_000
+    dx = (a.gps[1] - b.gps[1]) * 111_000 * math.cos(math.radians(a.gps[0]))
+    return math.hypot(dx, dy) <= SAME_PLACE_M
 
 
 def _close(a, b) -> bool:

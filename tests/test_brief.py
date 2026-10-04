@@ -129,6 +129,19 @@ def main() -> int:
     later["capture_time"] = "2026-05-02T18:00:00+0900"      # the same view, that evening
     ids = shot_ids(sb.build(dupes + [later], "", vision=True)["options"][0])
     check("the same view hours later is a new moment, not a retake", "take0000late:0" in ids, str(ids))
+    import math
+    seat = [math.cos(0.7), math.sin(0.7)] + [0.0] * 6      # cosine with emb(0): 0.765, under SIMILAR
+    near = [clip("hall0000000a", 1, 0, 0.7), clip("hall0000000b", 14, 0, 0.6)]
+    near[1]["shots"][0]["embedding"] = seat
+
+    def placed(cs, gps):
+        for c, g in zip(cs, gps):
+            c["gps"] = g
+        return shot_ids(sb.build(cs, "", vision=True)["options"][0])
+    ids = placed([dict(c, shots=[dict(c["shots"][0])]) for c in near], [[40.8091, -73.9625], [40.8091, -73.9625]])
+    check("same seat, same hall, 13 min apart (0.77): one shot, the better", ids == ["hall0000000a:0"], str(ids))
+    ids = placed([dict(c, shots=[dict(c["shots"][0])]) for c in near], [[40.8091, -73.9625], [40.8191, -73.9625]])
+    check("the same similarity a kilometre apart: two moments", len(ids) == 2, str(ids))
     no_vision = sb.build(dupes + others, "", vision=False)["options"]
     check("without Vision (colour only) nothing is collapsed",
           sum(x.startswith("take") for x in shot_ids(no_vision[0])) == 5)

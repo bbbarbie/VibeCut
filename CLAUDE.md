@@ -206,7 +206,8 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   (`set_music`: track, in-point, gains, ducks, sfx, level) — Remix writes it
   (and its grade via `apply_style`), so editing a remix no longer loses its
   mix. Default proposals keep one of each look-alike group filmed within
-  15 min (Vision only). Overlay ffconcat gets `option framerate 30` (10 of
+  15 min (Vision only; cos ≥ 0.78, or ≥ 0.72 from the same spot, GPS ≤150 m).
+  Overlay ffconcat gets `option framerate 30` (10 of
   30 frames were wrong). CARRY_S 0.5 s and MICRO_S are priors — calibrate.
   Tests: `tests/test_audiomix.py`, additions in `test_export.py`,
   `test_brief.py`, `test_remix.py`.
