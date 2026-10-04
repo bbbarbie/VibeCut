@@ -7,8 +7,8 @@ look when it stands out from the picture behind it, and otherwise the
 nearest colour from the video's own palette that does: a pale tint or a deep
 shade of its dominant hue, so the words still belong to the footage instead
 of shouting over it. When nothing reaches a readable contrast (a busy frame
-that is both bright and dark under the words) the words also get a soft halo
-in the opposite tone.
+that is both bright and dark under the words) they stay light and get a
+soft dark shadow, since dark words vanish into whatever part is dark.
 
 What's "behind" is read from the index samples the viewer sees (SDR, ~1/s),
 reduced to a 32x18 colour grid per sample and cached per clip as
@@ -28,14 +28,15 @@ import numpy as np
 
 GRID_W, GRID_H = 32, 18
 READABLE = 4.5        # WCAG AA for body text [prior for video]
-HALO_BELOW = 4.5      # under this even the best ink gets a halo
+HALO = "rgba(0,0,0,0.75)"   # a soft dark shadow under light words
 LOW, HIGH = 15, 85    # percentiles of the background taken as its darkest / brightest
 
 # Where on the frame each position puts its words: (x0, x1, y0, y1) as fractions.
 REGIONS = {
     "top-left": (0.04, 0.5, 0.04, 0.3), "top": (0.2, 0.8, 0.04, 0.3), "top-right": (0.5, 0.96, 0.04, 0.3),
     "left": (0.04, 0.5, 0.35, 0.65), "center": (0.15, 0.85, 0.35, 0.65), "right": (0.5, 0.96, 0.35, 0.65),
-    "bottom-left": (0.04, 0.5, 0.68, 0.94), "bottom": (0.15, 0.85, 0.68, 0.94),
+    # a caption is one or two short centred lines, not the whole band
+    "bottom-left": (0.04, 0.5, 0.7, 0.92), "bottom": (0.25, 0.75, 0.72, 0.92),
     "bottom-right": (0.5, 0.96, 0.68, 0.94),
 }
 
@@ -136,18 +137,27 @@ def worst(ink: str, lum: np.ndarray) -> float:
     return min(contrast(li, lo), contrast(li, hi))
 
 
-def pick(own: str, cells: np.ndarray, pal: list[str]) -> tuple[str | None, float]:
-    """-> (ink to use instead of `own`, or None to keep it; its contrast)."""
+def pick(own: str, cells: np.ndarray, pal: list[str]) -> tuple[str | None, bool]:
+    """-> (ink to use instead of `own`, or None to keep it; whether it needs a halo).
+
+    A dark ink only when the whole background under the words is pale: over
+    a frame that is part light, part dark (hair, trousers, shade) dark words
+    vanish into the dark part, while light words on a dark shadow read on
+    both -- the subtitle convention. So a split background keeps a light
+    ink and gets a dark halo, never a white glow."""
     lum = luminance(cells)
-    base = worst(own, lum)
-    if base >= READABLE:
-        return None, base
+    if worst(own, lum) >= READABLE:
+        return None, False
     scored = [(worst(c, lum), k, c) for k, c in enumerate(pal)]
     # the footage's own tints first; a neutral only when none of them reads
-    own_hue = [x for x in scored if x[1] < len(pal) - 2 and x[0] >= READABLE]
-    v, _, c = max(own_hue or scored)
-    best, score = (c, v) if v > base else (None, base)
-    return best, score
+    reads = [x for x in scored if x[0] >= READABLE]
+    hued = [x for x in reads if x[1] < len(pal) - 2]
+    if reads:
+        return max(hued or reads)[2], False
+    if float(luminance(hex_rgb(own))) > 0.35:
+        return None, True
+    light = [x for x in scored if float(luminance(hex_rgb(x[2]))) > 0.6]
+    return (light[0][2] if light else "#faf7f2"), True
 
 
 def inks(items: list[dict], style: dict, layout: list[dict], tones: dict[str, np.ndarray],
@@ -167,16 +177,19 @@ def inks(items: list[dict], style: dict, layout: list[dict], tones: dict[str, np
             out.append(o)
             continue
         o = dict(o)
-        ink, c = pick(style["color"], cells, pal)
+        ink, halo = pick(style["color"], cells, pal)
         if ink:
             o["ink"] = ink
         if o.get("sub"):
-            ink2, _ = pick(style["accent"], cells, pal)
+            ink2, halo2 = pick(style["accent"], cells, pal)
+            # one tone for both lines: a dark place name over light words on a halo would vanish
+            if halo and ink2 and float(luminance(hex_rgb(ink2))) < 0.35:
+                ink2 = None
             if ink2:
                 o["ink2"] = ink2
-        if c < HALO_BELOW:
-            light = float(luminance(hex_rgb(ink or style["color"]))) > 0.35
-            o["halo"] = "rgba(0,0,0,0.75)" if light else "rgba(255,255,255,0.7)"
+            halo = halo or halo2
+        if halo:
+            o["halo"] = HALO
         out.append(o)
     return out
 

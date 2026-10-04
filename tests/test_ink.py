@@ -94,6 +94,14 @@ def main() -> int:
     halo = run({"a": busy}, cap())
     check("a frame both black and white under the words: a halo", "halo" in halo, str(halo))
 
+    split = np.zeros((4, H, W, 3), dtype=np.uint8)
+    split[:] = white_wall
+    split[:, 12:, 14:20] = (12, 12, 14)   # black trousers in the middle of the band
+    sp = run({"a": split}, cap())
+    check("pale wall with black trousers under the words: light words on a dark halo, never dark words",
+          sp.get("halo") == ink.HALO and ink.luminance(ink.hex_rgb(sp.get("ink", COZY["color"]))) > 0.35, str(sp))
+    check("a pale background gets no halo", "halo" not in bright)
+
     sub = run({"a": frame(blue_sky, white_wall)}, cap(sub="Columbia University"))
     check("the place line gets its own readable colour", "ink2" in sub, str(sub))
 

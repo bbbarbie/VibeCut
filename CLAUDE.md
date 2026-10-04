@@ -163,8 +163,10 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   colour is checked against the frame behind it (32×18 tone grid per index
   sample, `tones.npy`, written at index time or once from the sample JPEGs
   for older clips); where the look's colour is under WCAG 4.5 it takes a
-  tint / shade of the footage's own hue, a neutral only if none reads, and a
-  halo below 4.5. Derived per request, never stored in the log. The UI calls
+  tint / shade of the footage's own hue, a neutral only if none reads; when
+  nothing reads (part light, part dark under the words) light words on a
+  dark halo, never dark words (they vanished into hair and trousers on her
+  footage). Derived per request, never stored in the log. The UI calls
   overlays "Captions". `tests/test_ink.py`. Older answers (day / simple / bold /
   key) map to describe + a look. `tests/test_captions_answer.py`.
   The brief's suggestion chips are read from the shoot (`pitch.py`: days,
