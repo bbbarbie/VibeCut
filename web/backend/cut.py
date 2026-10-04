@@ -69,7 +69,11 @@ def compute(clips: dict[str, dict], old: Plan | None = None, ask=None) -> Plan:
         for s in r["shots"]:
             sid = f"{r['id']}:{s['index']}"
             tops[sid] = trim.candidates(c.sig, plan.targets.get(sid), c.faces, lo=s["start"], hi=s["end"])
-            jobs.append((r, sid, tops[sid]))
+            # Only clips that stay in are worth asking about: a duplicate or a
+            # rejected clip would spend a call nobody sees.
+            o = plan.overrides.get(r["id"])
+            if not ((verdicts[r["id"]].rejected and o != "keep") or o == "reject"):
+                jobs.append((r, sid, tops[sid]))
     picked = moments.choose(jobs, ask) if ask is not False else {}
 
     for r, c in zip(recs, cands):

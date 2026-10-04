@@ -134,6 +134,12 @@ def main() -> int:
     s = plan.clips["clip0000000d"]["shots"]["clip0000000d:0"]
     check("no frames on disk: nothing is sent, the rules' pick stands", s["picked_by"] == "rules" and len(calls) == 1)
 
+    # -- a rejected clip isn't asked about ------------------------------------
+    asked = []
+    dup = _clips("clip0000000g", [range(3, 9), range(20, 26)])
+    plan = cut.compute(dup, cut.Plan(overrides={"clip0000000g": "reject"}), ask=lambda o: (asked.append(o), (1, "x"))[1])
+    check("a clip that's out costs no call", not asked and plan.clips["clip0000000g"]["rejected"], f"{len(asked)} calls")
+
     # -- frames ---------------------------------------------------------------
     rec = _clips("clip0000000e", [])["clip0000000e"]
     fs = moments.frames(rec, trim.Window(start=10.0, end=15.0, target=5, score=0, whole=False, reason_zh="", reason_en=""))
