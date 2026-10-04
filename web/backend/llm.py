@@ -473,3 +473,46 @@ def suggest_briefs(facts_text: str) -> list[str]:
     except (json.JSONDecodeError, AttributeError) as e:
         raise LLMError("unreadable suggestions") from e
     return [" ".join(str(x).split()).rstrip(".")[:70] for x in raw if str(x).strip()][:3]
+
+
+MOMENT_MODEL = "claude-opus-5-5"
+MOMENT_SYSTEM = """You are helping a vlogger with the first rough cut of their footage. From one clip, the editor has already found a few windows that are well made (sharp, steady, something in frame). For each window you see a few frames from its start, middle and end. Pick the one a good vlog editor would keep: the moment itself — something happening, a reaction, a reveal, the view opening up, the subject clearly the point — and a first frame that reads as intentional rather than the camera still finding its subject. Prefer what a viewer would want to see over what is merely tidy. Answer with the option number and a reason of at most 10 plain words a creator would understand (no camera jargon)."""
+
+MOMENT_SCHEMA = {
+    "type": "object", "additionalProperties": False, "required": ["best", "why"],
+    "properties": {"best": {"type": "integer"}, "why": {"type": "string"}},
+}
+
+
+def best_moment(options: list[dict]) -> tuple[int, str]:
+    """[{span: "0:03–0:08", frames: [jpeg bytes, ...]}] -> (0-based index, why).
+
+    Unlike the rest of this module, this one sends pictures: a few small
+    index frames (384 px wide) per option, nothing else of the clip."""
+    import anthropic
+    import base64
+
+    content: list[dict] = []
+    for i, o in enumerate(options):
+        content.append({"type": "text", "text": f"Option {i + 1} ({o['span']}): start, middle, end"})
+        for b in o["frames"]:
+            content.append({"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
+                                                        "data": base64.standard_b64encode(b).decode()}})
+    content.append({"type": "text", "text": f"Which option, 1 to {len(options)}, is the moment to keep?"})
+    try:
+        resp = client().messages.create(
+            model=MOMENT_MODEL, max_tokens=2000, system=MOMENT_SYSTEM,
+            messages=[{"role": "user", "content": content}],
+            output_config={"effort": "low", "format": {"type": "json_schema", "schema": MOMENT_SCHEMA}},
+        )
+    except anthropic.APIError as e:
+        raise LLMError(str(e)) from e
+    text = next((b.text for b in resp.content if b.type == "text"), "")
+    try:
+        d = json.loads(text)
+        best = int(d["best"]) - 1
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+        raise LLMError("unreadable choice") from e
+    if not 0 <= best < len(options):
+        raise LLMError(f"choice {best + 1} is not one of the options")
+    return best, " ".join(str(d.get("why", "")).split())[:80]

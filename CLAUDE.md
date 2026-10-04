@@ -70,6 +70,13 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   At the gate the kept range can be dragged by its ends (`set` override,
   min 1 s, undone by `auto`; `tests/test_cut_set.py`); hovering the bar shows
   the frame at that moment (index sample first, then the clip seeked).
+  **Best moment** (`web/backend/moments.py`, `trim.candidates`): the trim
+  offers up to 3 different windows per shot (share ≤ ⅓ of their seconds,
+  score within RUNNER_UP 0.1 of the best); with a key, Claude sees 3 index
+  frames from each and picks one (frames leave the Mac; nothing else).
+  Cached per shot in the clip dir's `moments.json`; no key, an error or a
+  bad answer leaves the rules' first pick. `VIBECUT_MOMENTS=0` turns it off.
+  `tests/test_moments.py`. Not yet judged against her picks on real footage.
 
 - Words on screen + export (`web/backend/overlays.py`, `export.py`,
   `web/frontend/src/overlayDraw.ts`; ideas from Overlay Studio — design
