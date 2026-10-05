@@ -78,11 +78,13 @@ export function OverlayCanvas({ view, width, height, edit }: { view: OverlayView
   }
   const hit = (x: number, y: number) =>
     [...boxes.current].reverse().find((b) => x >= b.x - 6 && x <= b.x + b.w + 6 && y >= b.y - 6 && y <= b.y + b.h + 6) ?? null
-  const onCorner = (x: number, y: number) => !!selBox &&
-    // the handles are drawn 4 px outside the box
-    [[selBox.x - 4, selBox.y - 4], [selBox.x + selBox.w + 4, selBox.y - 4], [selBox.x - 4, selBox.y + selBox.h + 4],
+  // which corner handle (0 tl, 1 tr, 2 bl, 3 br) is under the pointer, or -1;
+  // the handles are drawn 4 px outside the box
+  const cornerAt = (x: number, y: number) => !selBox ? -1
+    : [[selBox.x - 4, selBox.y - 4], [selBox.x + selBox.w + 4, selBox.y - 4], [selBox.x - 4, selBox.y + selBox.h + 4],
       [selBox.x + selBox.w + 4, selBox.y + selBox.h + 4]]
-      .some(([cx, cy]) => Math.abs(x - cx) <= 10 && Math.abs(y - cy) <= 10)
+      .findIndex(([cx, cy]) => Math.abs(x - cx) <= 10 && Math.abs(y - cy) <= 10)
+  const onCorner = (x: number, y: number) => cornerAt(x, y) >= 0
 
   if (!edit) return <canvas ref={ref} className="pointer-events-none absolute inset-0 z-[5] size-full" aria-hidden="true" />
 
@@ -101,7 +103,9 @@ export function OverlayCanvas({ view, width, height, edit }: { view: OverlayView
   const move = (e: React.PointerEvent) => {
     if (!drag) {
       const p = local(e)
-      ;(e.currentTarget as HTMLElement).style.cursor = onCorner(p.x, p.y) ? 'nwse-resize' : hit(p.x, p.y) ? 'move' : 'default'
+      const k = cornerAt(p.x, p.y)
+      ;(e.currentTarget as HTMLElement).style.cursor = k === 0 || k === 3 ? 'nwse-resize' : k > 0 ? 'nesw-resize'
+        : hit(p.x, p.y) ? 'move' : 'default'
       return
     }
     const p = local(e)
