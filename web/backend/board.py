@@ -217,8 +217,9 @@ def apply(board: dict | None, op: dict, cat: Catalog, proposals: dict | None,
     if kind not in OPS:
         raise OpError(f"unknown operation {kind!r}")
     # null means "not given" -- except an overlay's length, where it means
-    # "as long as what it hangs off" (a caption filling its spoken line).
-    op = {k: v for k, v in op.items() if v is not None or (k == "dur" and kind in OVERLAY_OPS)}
+    # "as long as what it hangs off" (a caption filling its spoken line) and its
+    # place, where it means "back where it usually goes" (undoing a drag).
+    op = {k: v for k, v in op.items() if v is not None or (k in ("dur", "place") and kind in OVERLAY_OPS)}
 
     if kind == "choose_option":
         snap = op.get("snapshot")

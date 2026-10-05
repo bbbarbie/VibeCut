@@ -240,8 +240,12 @@ function anchorFor(pos: Overlay['pos'], W: number, H: number): Anchor {
 
 // ---- draw -----------------------------------------------------------------
 
+// Where each block landed on this frame, in canvas pixels (for picking and
+// dragging words on the preview).
+export type OverlayBox = { id: string; x: number; y: number; w: number; h: number }
+
 export function drawOverlays(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, W: number, H: number,
-  items: Overlay[], style: OverlayStyle, parts: Part[], t: number): void {
+  items: Overlay[], style: OverlayStyle, parts: Part[], t: number, boxes?: OverlayBox[]): void {
   ctx.clearRect(0, 0, W, H)
   const u = Math.min(W, H)
   const motion = style.motion ?? null
@@ -252,15 +256,16 @@ export function drawOverlays(ctx: CanvasRenderingContext2D | OffscreenCanvasRend
     const typing = o.anim === 'type'
     const chars = typing ? Math.ceil(o.text.length * clamp01(p.pin * 1.6)) : o.text.length
     const pos = o.kind === 'caption' ? (style.captions === 'center' ? 'center' : 'bottom') : o.pos
-    const a = anchorFor(pos, W, H)
+    // placed by hand: centred where it was dropped, at its own size
+    const a: Anchor = o.place ? { x: o.place.x * W, align: 'center', v: 'middle', y: o.place.y * H } : anchorFor(pos, W, H)
     const at = (g: number) => pose(o, p.pin, p.pout, g, u, a.align, motion)
     if (at(0).alpha <= 0.001 && at(1).alpha <= 0.001) continue
-    drawBlock(ctx, W, H, u, linesFor(o, style, u, chars), o, style, a, at)
+    drawBlock(ctx, W, H, u, linesFor(o, style, u * (o.place?.scale ?? 1), chars), o, style, a, at, boxes)
   }
 }
 
 function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, W: number, H: number, u: number,
-  lines: Line[], o: Overlay, style: OverlayStyle, a: Anchor, at: (group: number) => Pose) {
+  lines: Line[], o: Overlay, style: OverlayStyle, a: Anchor, at: (group: number) => Pose, boxes?: OverlayBox[]) {
   const m = safe(W, H)
   const maxW = (a.align === 'center' ? W - m.l - m.r : (W - m.l - m.r) * 0.72)
   // measure and wrap
@@ -304,6 +309,8 @@ function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingConte
 
   ctx.save()
   const pl0 = place(p0)
+  boxes?.push({ id: o.id, x: cx + pl0.ox - (blockW * pl0.sc) / 2, y: cy + pl0.oy - (blockH * pl0.sc) / 2,
+                w: blockW * pl0.sc, h: blockH * pl0.sc })
   ctx.translate(cx + pl0.ox, cy + pl0.oy)
   ctx.rotate(p0.rot)
   ctx.scale(pl0.sc, pl0.sc)

@@ -167,7 +167,13 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   neutral only if none does; when none does (part light, part dark under
   the words) light words on a tight dark edge + soft shadow, never dark
   words (they vanished into hair and trousers on her footage). Derived per request, never stored in the log. The UI calls
-  overlays "Captions". `tests/test_ink.py`. Older answers (day / simple / bold /
+  overlays "Captions". `tests/test_ink.py`. **Dragged by hand**: click a
+  caption on the preview to select it, drag to move (snaps to the centre
+  lines), drag a corner to size it, double-click for its words; each drop is
+  one `edit_overlay` with `place: {x, y, scale}` (block centre, 0–1; null =
+  back to its usual spot), drawn by the same `overlayDraw` in export, still
+  pulled inside the safe area; checks still only warn. "Same place for all
+  captions" is one turn. `test_overlays.py`, `overlayLooks.test.ts`. Older answers (day / simple / bold /
   key) map to describe + a look. `tests/test_captions_answer.py`.
   The brief's suggestion chips are read from the shoot (`pitch.py`: days,
   morning→night, themes, faces, talking, rough GPS; templates, or Claude

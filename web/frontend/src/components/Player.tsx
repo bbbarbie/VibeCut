@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
 import type { Segment } from '../types'
 import { dur } from '../format'
 import { swapSource } from '../hold'
-import { OverlayCanvas, type OverlayView } from './OverlayCanvas'
+import { OverlayCanvas, type OverlayEdit, type OverlayView } from './OverlayCanvas'
 
 // One <video> element. Two drivers share it: a preview (a span or a queue
 // of spans from the shelf or a storyboard card, via `segment`) and the
@@ -12,7 +12,7 @@ import { OverlayCanvas, type OverlayView } from './OverlayCanvas'
 // When the transport drives it, the picture sits in a stage with the
 // export's shape (scaled to fit and padded, as the export does) and the
 // words on screen are drawn over it -- so the preview is the export.
-export function Player({ videoRef, backRef, veilRef, bars, segment, label, gap, onTime, onEnd, onPlayingChange, overlay, frame }: {
+export function Player({ videoRef, backRef, veilRef, bars, segment, label, gap, onTime, onEnd, onPlayingChange, overlay, frame, overlayEdit }: {
   videoRef: RefObject<HTMLVideoElement | null>
   // the next shot, waiting (transport.ts), and the dip/flash veil -- the join as the export renders it
   backRef?: RefObject<HTMLVideoElement | null>
@@ -25,6 +25,7 @@ export function Player({ videoRef, backRef, veilRef, bars, segment, label, gap, 
   onEnd: () => void
   onPlayingChange: (playing: boolean) => void
   overlay?: OverlayView | null
+  overlayEdit?: OverlayEdit
   frame?: { w: number; h: number } | null
 }) {
   const seg = useRef<Segment | null>(null)
@@ -100,7 +101,7 @@ export function Player({ videoRef, backRef, veilRef, bars, segment, label, gap, 
           {/* the last frame, held while the next clip loads (hold.ts) */}
           <canvas data-hold className={`pointer-events-none absolute inset-0 z-[4] size-full object-contain ${gap ? 'hidden' : ''}`} style={{ visibility: 'hidden' }} />
           {gap && <div className="absolute inset-0 grid place-items-center text-[11px] text-zinc-700">gap</div>}
-          {staged && overlay && overlay.items.length > 0 && <OverlayCanvas view={overlay} width={stage.w} height={stage.h} />}
+          {staged && overlay && overlay.items.length > 0 && <OverlayCanvas view={overlay} width={stage.w} height={stage.h} edit={overlayEdit} />}
         </div>
       </div>
       <div className="flex h-7 shrink-0 items-center justify-between border-t border-line bg-panel px-3 text-[11px] text-muted">

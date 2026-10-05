@@ -103,6 +103,10 @@ def palette(cells: np.ndarray) -> list[str]:
 # --------------------------------------------------------------------------
 
 def region(o: dict, style: dict) -> tuple[float, float, float, float]:
+    if o.get("place"):
+        p = o["place"]
+        hw, hh = 0.25 * p.get("scale", 1.0), 0.1 * p.get("scale", 1.0)
+        return (max(0.0, p["x"] - hw), min(1.0, p["x"] + hw), max(0.0, p["y"] - hh), min(1.0, p["y"] + hh))
     pos = ("center" if style.get("captions") == "center" else "bottom") if o["kind"] == "caption" else o.get("pos", "bottom")
     return REGIONS.get(pos, REGIONS["bottom"])
 

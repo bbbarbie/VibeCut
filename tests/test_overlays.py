@@ -186,6 +186,27 @@ def main() -> int:
           and mid_none is None and low_face is None,
           f"{mid_face and (mid_face['value'], mid_face['basis'])}")
 
+    # Dragged by hand onto the face: still only a warning, never moved back.
+    s.add({"kind": "direct", "text": "drag", "ops": [{"op": "edit_overlay", "overlay": cap["id"],
+                                                      "place": {"x": 0.5, "y": 0.5, "scale": 9}}]}, cat_face, mk)
+    placed = next(o for o in s.board["overlays"] if o["id"] == cap["id"])
+    dragged = rules(s.board, cat_face).get("over_face")
+    check("drag: kept where it was dropped, size clamped, still warned over a face, never moved",
+          placed["place"] == {"x": 0.5, "y": 0.5, "scale": ov.SCALE_MAX} and dragged is not None
+          and dragged["verdict"] == "warn", f"{placed.get('place')} {dragged}")
+    t = s.add({"kind": "direct", "text": "reset", "ops": [{"op": "edit_overlay", "overlay": cap["id"], "place": None}]}, cat_face, mk)
+    check("drag: reset puts it back in the caption line",
+          next(o for o in s.board["overlays"] if o["id"] == cap["id"]).get("place") is None, "")
+    s.toggle(t.id, cat_face, mk)
+    check("drag: undo brings the hand placement back",
+          (next(o for o in s.board["overlays"] if o["id"] == cap["id"]).get("place") or {}).get("x") == 0.5, "")
+    try:
+        ov.clean_fields({"place": {"x": 1.4, "y": 0.5}}, "caption")
+        bad = False
+    except ov.OverlayError:
+        bad = True
+    check("drag: off the picture is refused", bad, "")
+
     print()
     if failures:
         print(f"{len(failures)} failed: {', '.join(failures)}")

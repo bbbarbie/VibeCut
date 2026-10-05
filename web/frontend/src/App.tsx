@@ -13,6 +13,7 @@ import { Overlays } from './components/Overlays'
 import { TalkCut } from './components/TalkCut'
 import { Keys } from './components/Keys'
 import { Player } from './components/Player'
+import type { OverlayEdit } from './components/OverlayCanvas'
 import { Menu, SwapPicker, type MenuItem } from './components/Menus'
 import { Music } from './components/Music'
 import type { ClassifyReq } from './components/Remember'
@@ -717,6 +718,21 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     const o = id ? ovData.items.find((x) => x.id === id) : null
     if (o && level === 'frames') { setFramesTab('words'); timelineOwns(); showOverlay(o) }
   }
+  // Words dragged on the picture: one undoable edit per drop.
+  const overlayEdit: OverlayEdit | undefined = session?.board ? {
+    selected: selOverlay,
+    onSelect: (id) => setSelOverlay(id),
+    onPlace: (id, place) => {
+      const o = ovData.items.find((x) => x.id === id)
+      const name = o ? KIND_META[o.kind].label.toLowerCase() : 'words'
+      run([{ op: 'edit_overlay', overlay: id, place }], place ? `You moved the ${name}` : `You put the ${name} back in its usual place`)
+    },
+    onPlaceAll: (place) => {
+      const ops = ovData.items.filter((o) => o.kind === 'caption').map((o) => ({ op: 'edit_overlay', overlay: o.id, place }))
+      if (ops.length) run(ops, 'You put every caption in the same place')
+    },
+    onOpen: (id) => selectOverlay(id),
+  } : undefined
   const overlaysPanel = session?.board ? (
     <Overlays data={ovData} items={tl.items} level={level} selected={selOverlay} busy={!!pending}
               onSelect={selectOverlay} onRun={runOverlay} onSuggest={suggestOverlays} onWatch={watchOverlay} newAt={newOverlayAt} />
@@ -795,7 +811,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const player = (big: boolean) => (
     <Player videoRef={videoRef} backRef={backRef} veilRef={veilRef} bars={session?.mix?.bars} segment={segment}
             label={big ? label : tr.playing && !segment ? 'Your story, with its captions — click to pause' : storyLabel}
-            gap={tr.gap && !segment} overlay={overlayView} frame={tl.frame}
+            gap={tr.gap && !segment} overlay={overlayView} frame={tl.frame} overlayEdit={overlayEdit}
             onTime={() => {}} onEnd={() => { if (queue) playAt(queue, queue.index + 1) }} onPlayingChange={() => {}} />
   )
   const chat = (

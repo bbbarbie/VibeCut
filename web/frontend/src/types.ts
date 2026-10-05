@@ -138,7 +138,10 @@ export type Overlay = {
   start: number; end: number; shown_end: number
   // picked against the picture behind it (backend ink.py): main / accent colour, and a halo when nothing contrasts enough
   ink?: string; ink2?: string; halo?: string
+  // dragged on the picture by hand: block centre (0..1 of the frame) and size multiplier
+  place?: OverlayPlace | null
 }
+export type OverlayPlace = { x: number; y: number; scale: number }
 export type OverlayStyle = { font: 'Clean' | 'Editorial' | 'Rounded' | 'Mono' | 'Condensed'; color: string; accent: string; captions: 'bottom' | 'center'; backing: 'shadow' | 'box' | 'none'
   look?: string; motion?: Motion | null }
 // How a look moves words (backend looks/*.json): one curve and timing for the whole video.
