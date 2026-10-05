@@ -76,7 +76,7 @@ export function Player({ videoRef, backRef, veilRef, bars, segment, label, gap, 
           <video
             ref={videoRef}
             className={`absolute inset-0 size-full object-contain ${gap ? 'invisible' : ''}`}
-            playsInline
+            playsInline preload="auto"
             onTimeUpdate={(e) => {
               const s = seg.current
               if (!s) return

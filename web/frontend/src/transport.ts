@@ -102,10 +102,16 @@ export class Transport {
     const v = this.video
     if (!v) return
     const url = `/api/video/${clipId}`
-    if (v.getAttribute('src') === url && v.readyState >= 1) return
+    if (v.getAttribute('src') === url && v.readyState >= 2) return
+    // Wait for a decodable frame, not just the metadata: Safari paints black
+    // for a seek made before any frame data has arrived (the first jump on
+    // the timeline after loading). Never wait forever on a stuck load.
     await new Promise<void>((res) => {
-      v.addEventListener('loadedmetadata', () => res(), { once: true })
-      swapSource(v, url)
+      const done = () => { clearTimeout(timer); v.removeEventListener('loadeddata', done); res() }
+      const timer = setTimeout(done, 4000)
+      v.addEventListener('loadeddata', done)
+      if (v.getAttribute('src') !== url) swapSource(v, url)
+      else if (v.readyState >= 2) done()
     })
   }
 
