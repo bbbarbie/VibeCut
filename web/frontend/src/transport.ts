@@ -6,7 +6,7 @@
 import { useSyncExternalStore } from 'react'
 import { locate, toSource, type SeqItem } from './sequence'
 import type { Target } from './snap'
-import { swapSource } from './hold'
+import { hideStill, settleStill, swapSource } from './hold'
 import { dissolveAfter, mixAt, preloadAt, veilAt, type TransMap } from './joinView'
 
 export function createStore<T>(initial: T) {
@@ -125,6 +125,7 @@ export class Transport {
 
   // Coalesce paused seeks: while one is in flight, keep only the latest.
   private showFrame(t: number) {
+    hideStill()
     this.seekQueued = t
     if (this.seeking) return
     this.seeking = true
@@ -142,11 +143,13 @@ export class Transport {
         this.paint(at)
       }
       this.seeking = false
+      if (this.video && !transportStore.get().playing) settleStill(this.video)
     })()
   }
 
   play(rate = 1) {
     if (!this.items.length || !this.video) return
+    hideStill()
     cancelAnimationFrame(this.raf)
     this.state({ playing: true, rate })
     if (rate > 0) this.forward(rate)

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import type { Segment } from '../types'
 import { dur } from '../format'
-import { swapSource } from '../hold'
+import { hideStill, swapSource } from '../hold'
 import { OverlayCanvas, type OverlayEdit, type OverlayView } from './OverlayCanvas'
 
 // One <video> element. Two drivers share it: a preview (a span or a queue
@@ -45,6 +45,7 @@ export function Player({ videoRef, backRef, veilRef, bars, segment, label, gap, 
     seg.current = segment
     if (!el || !segment) return
     const src = `/api/video/${segment.clipId}`
+    hideStill()
     const go = () => {
       el.currentTime = segment.start
       if (segment.autoplay) el.play().catch(() => {})
