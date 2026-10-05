@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, type MomentAnswer, type MomentInfo } from '../api'
+import { locate, type SeqItem } from '../sequence'
 import { phStore, useStore } from '../transport'
 import { Button, cx } from '../ui'
 
@@ -17,11 +18,20 @@ const money = ([lo, hi]: [number, number]) => {
   return c(lo) === c(hi) ? c(lo) : `${c(lo)}–${c(hi)}`
 }
 
-export function PauseChat({ onApply, busy }: {
+const clock = (t: number) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`
+
+export function PauseChat({ onApply, busy, items, clipName }: {
   onApply: (ops: Record<string, unknown>[], label: string) => Promise<unknown>
   busy: boolean
+  items: SeqItem[]
+  clipName: (clipId: string) => string
 }) {
   const t = useStore(phStore)
+  // The header is read off the timeline already here, so it follows the
+  // playhead at once (a jump to another clip waited on the server before);
+  // only the cost comes from the server.
+  const it = items[locate(items, t)]
+  const here = it && (it.kind === 'gap' ? `Empty space · ${clock(t)}` : `Shot ${it.n} · ${clock(t)} · ${clipName(it.clip_id!)}`)
   const [info, setInfo] = useState<MomentInfo | null>(null)
   const [lines, setLines] = useState<Line[]>([])
   const [draft, setDraft] = useState('')
@@ -35,14 +45,18 @@ export function PauseChat({ onApply, busy }: {
     const id = setTimeout(() => {
       api.moment(t).then((m) => {
         if (!live) return
-        if (m.key !== key.current) { key.current = m.key; setLines([]); setError(null) }
         setInfo(m)
       }).catch(() => { if (live) setInfo(null) })
     }, 200)
     return () => { live = false; clearTimeout(id) }
   }, [t])
 
-  if (!info) return null
+  useEffect(() => {
+    if (it && it.key !== key.current) { key.current = it.key; setLines([]); setError(null) }
+  }, [it?.key]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!it) return null
+  const llm = info?.llm ?? false
   const send = async (text: string) => {
     const msg = text.trim()
     if (!msg || sending) return
@@ -72,8 +86,8 @@ export function PauseChat({ onApply, busy }: {
     <div className="flex min-h-0 flex-col border-t border-line bg-panel">
       <div className="flex items-center gap-2 px-3 pt-2 text-[11px]">
         <span className="size-1.5 rounded-full bg-accent" aria-hidden />
-        <span className="truncate font-medium text-zinc-200">{info.header}</span>
-        <span className="ml-auto shrink-0 text-muted">{info.llm ? `about ${money(info.estimate.usd)} a message` : 'AI off'}</span>
+        <span className="truncate font-medium text-zinc-200">{here}</span>
+        <span className="ml-auto shrink-0 text-muted">{!info ? '' : llm ? `about ${money(info.estimate.usd)} a message` : 'AI off'}</span>
       </div>
       {lines.length > 0 && (
         <div className="max-h-56 min-h-0 space-y-2 overflow-y-auto px-3 pt-2 text-[12px]">
@@ -94,7 +108,7 @@ export function PauseChat({ onApply, busy }: {
               {l.answer?.choices.length ? (
                 <div className="mt-1.5 flex flex-wrap gap-1">
                   {l.answer.choices.map((c) => (
-                    <button key={c} type="button" disabled={!info.llm || sending} onClick={() => send(c)}
+                    <button key={c} type="button" disabled={!llm || sending} onClick={() => send(c)}
                             className="rounded-full border border-line px-2 py-0.5 text-[11px] text-zinc-300 hover:bg-zinc-800">{c}</button>
                   ))}
                 </div>
@@ -105,7 +119,7 @@ export function PauseChat({ onApply, busy }: {
         </div>
       )}
       {error && <p className="px-3 pt-1.5 text-[11px] text-amber-200">{error}</p>}
-      {info.llm ? (
+      {!info ? null : llm ? (
         <form className="flex gap-2 p-3" onSubmit={(e) => { e.preventDefault(); send(draft) }}>
           <input value={draft} onChange={(e) => setDraft(e.target.value)} disabled={sending}
                  placeholder="What’s wrong here, or what should change?"

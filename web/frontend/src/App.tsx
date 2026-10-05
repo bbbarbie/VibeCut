@@ -147,6 +147,16 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     return () => { live = false; transport.stop() }
   }, [id])
   useEffect(() => { transport.setItems(tl.items, tl.total) }, [tl])
+  useEffect(() => {
+    const byId = new Map(clips.map((c) => [c.id, c.samples]))
+    transport.setSamples((id, t) => {
+      const s = byId.get(id)
+      if (!s?.times.length) return null
+      let k = 0
+      s.times.forEach((x, i) => { if (Math.abs(x - t) < Math.abs(s.times[k] - t)) k = i })
+      return `${s.base}${k}`
+    })
+  }, [clips])
   const wfState = session?.workflow?.state
   useEffect(() => { if (wfState && wfState !== 'intake') api.cut().then(setCutData).catch(() => {}) }, [wfState, clips])
   const atGate = wfState === 'cut-review'
@@ -817,7 +827,8 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   )
   // Chat on pause: only while the edit is stopped on a frame, about that frame.
   const pauseChat = session?.board && !tr.playing && !segment
-    ? <PauseChat busy={!!pending} onApply={(ops, label) => run(ops, label)} />
+    ? <PauseChat busy={!!pending} onApply={(ops, label) => run(ops, label)} items={tl.items}
+                 clipName={(id) => clips.find((c) => c.id === id)?.name ?? id} />
     : null
   const chat = (
     <Chat items={chatItems} pending={pending} onSend={send} onToggle={toggle}
