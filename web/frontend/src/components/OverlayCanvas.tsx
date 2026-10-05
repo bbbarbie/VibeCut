@@ -79,8 +79,10 @@ export function OverlayCanvas({ view, width, height, edit }: { view: OverlayView
   const hit = (x: number, y: number) =>
     [...boxes.current].reverse().find((b) => x >= b.x - 6 && x <= b.x + b.w + 6 && y >= b.y - 6 && y <= b.y + b.h + 6) ?? null
   const onCorner = (x: number, y: number) => !!selBox &&
-    [[selBox.x, selBox.y], [selBox.x + selBox.w, selBox.y], [selBox.x, selBox.y + selBox.h], [selBox.x + selBox.w, selBox.y + selBox.h]]
-      .some(([cx, cy]) => Math.abs(x - cx) <= 9 && Math.abs(y - cy) <= 9)
+    // the handles are drawn 4 px outside the box
+    [[selBox.x - 4, selBox.y - 4], [selBox.x + selBox.w + 4, selBox.y - 4], [selBox.x - 4, selBox.y + selBox.h + 4],
+      [selBox.x + selBox.w + 4, selBox.y + selBox.h + 4]]
+      .some(([cx, cy]) => Math.abs(x - cx) <= 10 && Math.abs(y - cy) <= 10)
 
   if (!edit) return <canvas ref={ref} className="pointer-events-none absolute inset-0 z-[5] size-full" aria-hidden="true" />
 
