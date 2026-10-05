@@ -271,14 +271,20 @@ function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingConte
   // measure and wrap
   type Row = { text: string; line: Line; w: number; h: number }
   const rows: Row[] = []
-  for (const ln of lines) {
-    ctx.font = fontCss(style, ln.px, ln.bold)
-    setTracking(ctx, ln.track ? ln.track * ln.px : 0)
-    const text = ln.upper ? ln.text.toUpperCase() : ln.text
+  for (const ln0 of lines) {
+    const text = ln0.upper ? ln0.text.toUpperCase() : ln0.text
     const max = o.kind === 'caption' ? 3 : o.kind === 'title' || o.kind === 'end' ? 3 : 2
-    for (const r of wrap((s) => ctx.measureText(s).width, text, maxW, max)) {
-      rows.push({ text: r, line: ln, w: ctx.measureText(r).width, h: ln.px * 1.18 })
+    // Words the creator wrote are never cut off: a line that won't fit
+    // gets smaller first (down to 60%); only then is the end dropped.
+    let ln = ln0, out: string[] = []
+    for (let k = 1; ; k *= 0.9) {
+      ln = k === 1 ? ln0 : { ...ln0, px: ln0.px * k }
+      ctx.font = fontCss(style, ln.px, ln.bold)
+      setTracking(ctx, ln.track ? ln.track * ln.px : 0)
+      out = wrap((s) => ctx.measureText(s).width, text, maxW, max)
+      if (!out[out.length - 1]?.endsWith('…') || text.endsWith('…') || k < 0.62) break
     }
+    for (const r of out) rows.push({ text: r, line: ln, w: ctx.measureText(r).width, h: ln.px * 1.18 })
   }
   if (!rows.length) return
   const gap = 0.012 * u

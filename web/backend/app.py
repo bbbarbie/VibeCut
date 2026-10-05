@@ -759,11 +759,13 @@ class MomentReq(BaseModel):
     history: list[dict] = []
 
 
-def _moment(t: float) -> dict:
+def _moment(t: float, words: bool = True) -> dict:
     b = SESSION.board
     if not b:
         raise HTTPException(409, "Pick a story first.")
-    items = _overlays_public(b, CATALOG["cat"], {})["items"]
+    # the words on screen need every overlay resolved (ink included), which
+    # is slow; the box's header doesn't need them, only the message does
+    items = _overlays_public(b, CATALOG["cat"], {})["items"] if words else []
     m = moment.at(b, CATALOG["cat"], CLIPS, items, t)
     if m is None:
         raise HTTPException(404, "Nothing in the edit at that moment.")
@@ -775,10 +777,18 @@ def api_moment(req: MomentReq) -> dict:
     """The paused moment: what the chat box is pinned to, and what one message
     about it would cost. Never calls the model."""
     with LOCK:
-        m = _moment(req.t)
-        prompt = llm.render_state(CATALOG["cat"], SESSION, PREFS.for_model()) + moment.describe(m)
+        m = _moment(req.t, words=False)
+        # the prompt's size hardly moves along the edit, so it is measured
+        # once per state of the edit, not on every pause
+        state = (id(SESSION), len(SESSION.turns), sum(1 for x in SESSION.turns if x.undone))
+        if _ESTIMATE.get("state") != state:
+            _ESTIMATE.update(state=state, chars=len(llm.render_state(CATALOG["cat"], SESSION, PREFS.for_model()))
+                             + len(llm.SYSTEM) + 400)   # + the moment's own lines and words, roughly
         return {"header": moment.header(m), "key": m["key"], "llm": llm.available(),
-                "estimate": moment.estimate(len(prompt) + len(llm.SYSTEM), bool(m.get("frame")))}
+                "estimate": moment.estimate(_ESTIMATE["chars"] + len(moment.describe(m)), bool(m.get("frame")))}
+
+
+_ESTIMATE: dict = {}
 
 
 @app.post("/api/moment/chat")

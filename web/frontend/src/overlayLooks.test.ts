@@ -132,3 +132,14 @@ test('a caption placed by hand is drawn there, sized, and held inside the safe a
   const edge = at({ x: 0.99, y: 0.99, scale: 1 }), sa = safe(W, H)
   assert.ok(edge.x + edge.w <= W - sa.r + 1 && edge.y + edge.h <= H - sa.b + 1, 'dropped at the edge, pulled back inside')
 })
+
+test('a long title is drawn whole, smaller, never cut off with …', () => {
+  const said: string[] = []
+  const { ctx } = recorder()
+  const fill = ctx.fillText
+  ctx.fillText = (t: string, x: number, y: number) => { said.push(t); fill(t, x, y) }
+  const title = ov('t', { kind: 'title', text: 'A day in my life, morning to night, with friends', size: 'L' })
+  drawOverlays(ctx as unknown as CanvasRenderingContext2D, 1080, 1920, [title], styleOf(LOOKS.find((r) => r.id === 'cozy')!), [], 2)
+  assert.ok(said.length && !said.some((t) => t.includes('…')), said.join(' / '))
+  assert.equal(said.join(' ').replace(/\s+/g, ' ').toLowerCase(), title.text.toLowerCase())
+})
