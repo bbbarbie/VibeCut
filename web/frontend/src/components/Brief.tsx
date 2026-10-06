@@ -24,7 +24,6 @@ export function Brief({ clips, brief, asking, caps, voiceover, onAsk, onVoiceove
   onContinue: () => void
 }) {
   const [text, setText] = useState(brief?.message ?? '')
-  const shots = clips.flatMap((c) => c.shots.map((s) => ({ ...s, clip: c })))
   const go = (t: string) => { if (t.trim() && !asking) onAsk(t.trim()) }
   // Three lines read from these clips, so a click can replace typing.
   const [ideas, setIdeas] = useState<string[] | null>(null)
@@ -40,9 +39,8 @@ export function Brief({ clips, brief, asking, caps, voiceover, onAsk, onVoiceove
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-8">
       <div className="mx-auto max-w-2xl">
-        <p className="text-[12px] text-muted">{clips.length} clip{clips.length === 1 ? '' : 's'} read</p>
-        <h2 className="mt-1 font-serif text-[26px] text-zinc-100">What’s this video about?</h2>
-        <p className="mt-1 text-[13px] text-zinc-400">One line is enough. Then a few quick questions about the style, and you’ll see what the rough cut leaves out before anything is built.</p>
+        <h2 className="font-serif text-[26px] text-zinc-100">What’s this video about?</h2>
+        <p className="mt-1 font-serif text-[17px] text-zinc-200">One line is enough.</p>
         <form className="mt-4 flex gap-2" onSubmit={(e) => { e.preventDefault(); go(text) }}>
           <input autoFocus value={text} onChange={(e) => setText(e.target.value)} disabled={asking}
                  placeholder="e.g. a weekend in Tokyo, mostly the food" className={inputCls + ' text-[14px]'} />
@@ -50,11 +48,11 @@ export function Brief({ clips, brief, asking, caps, voiceover, onAsk, onVoiceove
         </form>
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {ideas === null ? (
-            <span className="text-[11px] text-muted"><span className="mr-1.5 inline-block size-1.5 animate-pulse rounded-full bg-accent" />Reading your clips for ideas…</span>
+            <span className="font-serif text-[17px] text-zinc-200"><span className="mr-1.5 inline-block size-1.5 animate-pulse rounded-full bg-accent" />Reading your clips for ideas…</span>
           ) : ideas.map((x) => (
             <button key={x} type="button" disabled={asking} onClick={() => { setText(x); go(x) }}
                     title="Use this and go on"
-                    className="rounded-full border border-line px-2.5 py-1 text-[12px] text-zinc-300 hover:border-zinc-500 hover:text-zinc-100 disabled:opacity-40">{x}</button>
+                    className="rounded-full border border-line px-3 py-1.5 font-serif text-[16px] text-zinc-200 hover:border-zinc-500 hover:text-zinc-100 disabled:opacity-40">{x}</button>
           ))}
         </div>
 
@@ -73,10 +71,6 @@ export function Brief({ clips, brief, asking, caps, voiceover, onAsk, onVoiceove
             Talking to camera? Cut it by what you said…
             {!caps.speech && <span className="block text-[10px] text-muted">needs macOS 26</span>}
           </button>
-        </div>
-
-        <div className="mt-8 grid grid-cols-6 gap-1.5">
-          {shots.slice(0, 24).map((s) => <img key={s.id} src={s.thumb} alt="" className="aspect-video w-full rounded object-cover" />)}
         </div>
       </div>
     </div>

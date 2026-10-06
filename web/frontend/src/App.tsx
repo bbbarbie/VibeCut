@@ -894,7 +894,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const storyStage = shown === 'story' && !talkOpen
   const cols = storyStage && level === 'frames' ? (narrow ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[320px_minmax(0,1fr)]')
     : storyStage ? (narrow ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[320px_minmax(0,1fr)_420px]')
-      : narrow || shown === 'footage' ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)_400px]'
+      : narrow || shown === 'footage' || shown === 'brief' ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)_400px]'
 
   return (
     <>
@@ -1024,11 +1024,11 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
               {undoable && <UndoToast text={undoable.text} onUndo={() => { toggle(undoable.turn); setUndoable(null) }} />}
               {flash && <Flash text={flash} />}
             </main>
-            {/* Footage has no preview panel (sarah: the stacks use the width, a
-                clip plays in place). Hidden, not removed: the player's videos
+            {/* Footage and the brief have no preview panel (sarah: the stacks use
+                the width, a clip plays in place; the brief is just one line). Hidden, not removed: the player's videos
                 stay attached to the transport. */}
             <aside className={cx('flex min-h-0 flex-col gap-3 overflow-y-auto border-line bg-panel p-3',
-              narrow ? 'border-t max-h-[46vh]' : 'border-l', shown === 'footage' && 'hidden')}>
+              narrow ? 'border-t max-h-[46vh]' : 'border-l', (shown === 'footage' || shown === 'brief') && 'hidden')}>
               <div className="flex aspect-[16/10] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-line"
                    onClick={() => { if (tr.playing && !segment) transport.stop() }}>
                 {player(false)}
