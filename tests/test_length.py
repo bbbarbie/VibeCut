@@ -121,6 +121,15 @@ def main() -> int:
     ops, _ = brief.length_ops(one, cat2, pool2, 600, vision=True)
     check("the same view filmed 5 minutes later is never put back", not any(o["shot"].startswith("markettwin") for o in ops),
           str([o["shot"] for o in ops]))
+    print("the slider's end is what the edit can reach (her 2:28 that stopped at 1:34)")
+    every = sum(p.end - p.start for p in pool2)
+    reach = brief.reachable_s(one, cat2, pool2, vision=True)
+    got = 12.0 + sum(o["end"] - o["start"] for o in brief.length_ops(one, cat2, pool2, reach, vision=True)[0] if o["op"] == "add_shot")
+    check("look-alikes count once, so the end is less than every usable second", reach < every, f"{reach:.0f} < {every:.0f}")
+    check("dragging to the end gets there", abs(got - reach) <= max(2.0, 0.03 * reach), f"{got:.0f} vs {reach:.0f}")
+    fresh = brief.reachable_s(None, cat2, pool2, vision=True)
+    check("before there's an edit, the same count", abs(fresh - reach) <= 12.0, f"{fresh:.0f} vs {reach:.0f}")
+    check("without Vision nothing is a look-alike", brief.reachable_s(None, cat2, pool2, vision=False) == every)
 
     print("through the app")
     from web.backend import app as A

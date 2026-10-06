@@ -852,7 +852,10 @@ def _pool() -> list:
 
 
 def _usable_s() -> float:
-    return sum(s.end - s.start for s in _pool()) if CLIPS else 0.0
+    """The good footage an edit can actually use: look-alikes count once."""
+    if not CLIPS:
+        return 0.0
+    return brief.reachable_s(SESSION.board, CATALOG["cat"], _pool(), VISION_USED["value"])
 
 
 def _about() -> str:

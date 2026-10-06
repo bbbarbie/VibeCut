@@ -479,3 +479,21 @@ def length_ops(board: dict | None, cat, pool: list, target: float, vision: bool)
         return ops, (f"Now about {say_length(total)} (was {say_length(was)}): put back {added} "
                      f"shot{'s' * (added != 1)}, each where it happened.{more} Undo takes them out again.")
     return [], f"It's already about {say_length(total)}."
+
+
+def reachable_s(board: dict | None, cat, pool: list, vision: bool) -> float:
+    """How long the edit can get: what the length slider's end really means.
+    Not every usable second -- a look-alike of a shot already in the edit, or
+    of a better one, is never put back (sarah: no identical shots), so a total
+    that counted them promised 2:28 and delivered 1:34. With an edit, it is
+    exactly where `length_ops` stops; before one, the pool with look-alikes
+    collapsed the same way."""
+    if board and board.get("beats"):
+        now = sum(e["end"] - e["start"] for bt in board["beats"] for e in bt["shots"])
+        ops, _ = length_ops(board, cat, pool, 1e9, vision)
+        return now + sum(o["end"] - o["start"] for o in ops if o["op"] == "add_shot")
+    kept: list = []
+    for s in sorted(pool, key=lambda s: s.score, reverse=True):
+        if not (vision and any(alike(s, k) for k in kept)):
+            kept.append(s)
+    return sum(s.end - s.start for s in kept)

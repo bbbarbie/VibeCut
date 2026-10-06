@@ -156,7 +156,9 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   **Length is a slider** (sarah, 2026-10-06; `brief.length_marks`,
   `LengthSlider.tsx`): 15 s to everything the rough cut kept, Short / Medium
   / Long marks from how much there is and the kind of video the description
-  says (day vlog / trip / event / other), one suggested with a reason; it
+  says (day vlog / trip / event / other), one suggested with a reason; its
+  end is what the edit can reach (`brief.reachable_s`: look-alikes count once,
+  as `length_ops` never puts one back), not every usable second; it
   travels as `style.seconds` (≤ 75 s = one shot per moment, as `short` did).
   The same slider in Frames ("Length · 2:36") is one undoable turn
   (`brief.length_ops`, `/api/length`): weakest shots out first, else good
