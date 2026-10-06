@@ -75,9 +75,8 @@ export function Projects() {
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line bg-ink px-4">
         <Wordmark />
         <div className="flex-1" />
-        <Button variant="ghost" size="sm" onClick={() => go({ kind: 'polish' })}
-                title="Already have a finished video? Point at a moment and say what to put there">Polish a finished video</Button>
-        <span className="mx-1 h-5 w-px bg-line" aria-hidden />
+        {/* Polish (#polish) still works by its address; home doesn't offer it
+            (sarah, 2026-10-06: no need for it there). */}
         <button type="button" title="Your profile" aria-label="Your profile" onClick={() => go({ kind: 'profile' })}
                 className="grid size-8 place-items-center rounded-full bg-zinc-700 font-serif text-[15px] font-semibold text-zinc-100 ring-1 ring-zinc-500/40 hover:ring-accent">{initial}</button>
       </header>
