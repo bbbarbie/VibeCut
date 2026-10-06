@@ -16,6 +16,7 @@ import numpy as np
 from cutgrammar import reject, trim
 from cutgrammar.signals import ClipSignals
 
+from . import moments
 from . import storyboard as sb
 
 STEP_S = 2.0        # "longer" / "shorter" moves the target by this much
@@ -42,7 +43,9 @@ def _embedding(rec: dict) -> tuple[np.ndarray, float]:
     return np.asarray(rec["signals"]["thumb"], dtype=np.float32), DUP_THUMB
 
 
-def compute(clips: dict[str, dict], old: Plan | None = None) -> Plan:
+def compute(clips: dict[str, dict], old: Plan | None = None, ask=None) -> Plan:
+    """`ask`: who judges between the top windows -- None = Claude when there
+    is a key (moments.py), False = the rules alone, or a stand-in (tests)."""
     plan = Plan(overrides=dict(old.overrides) if old else {}, targets=dict(old.targets) if old else {},
                 windows={k: list(v) for k, v in old.windows.items()} if old else {})
     recs = [c for c in clips.values() if c.get("signals")]
@@ -58,20 +61,46 @@ def compute(clips: dict[str, dict], old: Plan | None = None) -> Plan:
         thresholds.append(thr)
     verdicts = reject.reject_all(cands, dup_threshold=min(thresholds) if thresholds else reject.DUP_SIMILARITY)
 
+    # Every shot's top windows first, so the picture judge (moments.py) can
+    # look at all of them at once rather than one shot at a time.
+    tops: dict[str, list[trim.Window]] = {}
+    jobs = []
+    for r, c in zip(recs, cands):
+        for s in r["shots"]:
+            sid = f"{r['id']}:{s['index']}"
+            tops[sid] = trim.candidates(c.sig, plan.targets.get(sid), c.faces, lo=s["start"], hi=s["end"])
+            # Only clips that stay in are worth asking about: a duplicate or a
+            # rejected clip would spend a call nobody sees.
+            o = plan.overrides.get(r["id"])
+            if not ((verdicts[r["id"]].rejected and o != "keep") or o == "reject"):
+                jobs.append((r, sid, tops[sid]))
+    picked = moments.choose(jobs, ask) if ask is not False else {}
+
     for r, c in zip(recs, cands):
         v = verdicts[r["id"]]
         shots = {}
         for s in r["shots"]:
             sid = f"{r['id']}:{s['index']}"
-            auto = trim.best_window(c.sig, None, c.faces, lo=s["start"], hi=s["end"])
+            w, by = tops[sid][0], None
+            if sid in picked:
+                i, why = picked[sid]
+                w, by = tops[sid][i], why
             tgt = plan.targets.get(sid)
-            w = trim.best_window(c.sig, tgt, c.faces, lo=s["start"], hi=s["end"]) if tgt else auto
+            # "Back to my suggestion" returns to the window at the clip's own length.
+            auto = w if not tgt else trim.best_window(c.sig, None, c.faces, lo=s["start"], hi=s["end"])
             # The creator dragged the ends: their range is the window, as set.
             hand = _clamp(plan.windows[sid], s["start"], s["end"]) if sid in plan.windows else None
+            reason_en, reason_zh = w.reason_en, w.reason_zh
+            if by is not None:
+                said = by or "the best moment of the ones that are well made"
+                reason_en = f"Claude picked this moment: {said}" + ("" if i == 0 else f" (the rules alone would have kept {_span(tops[sid][0])})")
+                reason_zh = f"Claude 选的片段：{said}"
             shots[sid] = {
                 "id": sid, "full": [s["start"], s["end"]], "auto": [auto.start, auto.end],
                 "window": hand or [w.start, w.end], "target": w.target, "whole": w.whole,
-                "reason_zh": w.reason_zh, "reason_en": w.reason_en, "notes": w.notes,
+                "reason_zh": reason_zh, "reason_en": reason_en, "notes": w.notes,
+                "picked_by": "claude" if by is not None else "rules",
+                "options": [[o.start, o.end] for o in tops[sid]],
                 "seconds": w.seconds[int(s["start"]):int(np.ceil(s["end"]))],
             }
         plan.clips[r["id"]] = {
@@ -82,6 +111,10 @@ def compute(clips: dict[str, dict], old: Plan | None = None) -> Plan:
         }
     _apply_overrides(plan)
     return plan
+
+
+def _span(w: trim.Window) -> str:
+    return f"{mmss(w.start)}–{mmss(w.end)}"
 
 
 def _apply_overrides(plan: Plan) -> None:

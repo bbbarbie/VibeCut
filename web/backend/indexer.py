@@ -23,7 +23,7 @@ import numpy as np
 
 from cutgrammar import bestframe, features, media, shots, signals
 
-from . import vision
+from . import sound, vision
 
 CACHE = Path(os.environ.get("VIBECUT_CACHE", "~/.cache/vibecut")).expanduser()
 VIDEO_EXT = {".mp4", ".mov"}
@@ -228,6 +228,7 @@ def load_indexed(cid: str) -> dict | None:
         v = json.loads((d / "vision.json").read_text()) if (d / "vision.json").exists() else {"shots": []}
         _attach_vision(rec, v)
         rec["faces"] = json.loads((d / "faces.json").read_text()) if (d / "faces.json").exists() else []
+        sound.attach(rec)
     except (OSError, ValueError):
         return None
     return rec
@@ -284,6 +285,7 @@ def start(paths: list[str], on_done, known: int = 0) -> Job:
                 job.done += 1
             job.stage = "looking"
             job.vision = add_vision(job.clips)
+            sound.add_sound(job.clips)
             on_done(job)
             job.stage = "done"
         except Exception as e:  # noqa: BLE001

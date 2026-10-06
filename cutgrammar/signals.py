@@ -183,3 +183,32 @@ def from_media(m: Media) -> ClipSignals:
         voiced=voiced,
         thumb=[float(x) for x in thumb],
     )
+
+
+# --------------------------------------------------------------------------
+# voice, from a real sound classifier
+# --------------------------------------------------------------------------
+
+# Below VOICE_LO a second has no voice in it; above VOICE_HI it is talking. [prior]
+VOICE_LO, VOICE_HI = 0.15, 0.45
+
+
+def with_voice(sig: ClipSignals, voice: list[float]) -> ClipSignals:
+    """The same signals, with `speech` counting only seconds where a voice is heard.
+
+    `speech` from the level alone can't tell a voice from a song: a clip
+    with music under it reads as someone talking the whole way through,
+    and a talking clip is never trimmed to a chosen length (trim.py). A
+    sound classifier's per-second probability of a voice decides which
+    loud seconds are words; the voiced intervals in seconds without a
+    voice are dropped too, so a cut isn't kept off a beat as if it were a word.
+    """
+    if not voice or sig.n == 0:
+        return sig
+    v = np.asarray(voice[:sig.n] + [voice[-1]] * max(0, sig.n - len(voice)), dtype=np.float64)
+    gate = np.clip((v - VOICE_LO) / (VOICE_HI - VOICE_LO), 0, 1)
+    d = sig.to_json()
+    d["speech"] = [round(float(s * g), 4) for s, g in zip(sig.speech, gate)]
+    d["voiced"] = [w for w in sig.voiced
+                   if gate[min(int((w[0] + w[1]) / 2), sig.n - 1)] > 0]
+    return ClipSignals.from_json(d)

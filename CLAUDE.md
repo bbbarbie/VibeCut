@@ -64,12 +64,26 @@ The promise to a user is therefore *not* "this will be beautiful." It is
 - Rough cut (`cutgrammar/reject.py`, `trim.py`, `signals.py`; gate in
   `web/backend/workflow.py`, design adapted from cut-motion — see NOTICE).
   Discrimination-tested on synthetic fixtures; thresholds are guesses and
-  every decision passes a human gate. **Known failure on real footage:**
-  `speech_mask` is level-based, so music reads as talking and those clips
-  are barely trimmed (3 real clips: 7:16 → 7:12). A real VAD is the fix.
+  every decision passes a human gate. `speech_mask` is level-based, so
+  music read as talking and those clips were barely trimmed (3 real clips:
+  7:16 → 7:12). **Voice reading** (`web/backend/sound.py`,
+  `sound/vibesound.swift`, `signals.with_voice`): Apple's on-device sound
+  classifier (macOS; audio track only, nothing leaves) gives per-second
+  voice / music / singing / laughter, cached as `sound.json`; speech counts
+  only where a voice is heard (VOICE_LO 0.15 → VOICE_HI 0.45, priors).
+  Filled once on project open for older clips. Elsewhere the level mask
+  stays. Silero was the brief's default but needs onnxruntime (not numpy-
+  only, and pip installs are blocked on her Mac). `tests/test_voice.py`.
   At the gate the kept range can be dragged by its ends (`set` override,
   min 1 s, undone by `auto`; `tests/test_cut_set.py`); hovering the bar shows
   the frame at that moment (index sample first, then the clip seeked).
+  **Best moment** (`web/backend/moments.py`, `trim.candidates`): the trim
+  offers up to 3 different windows per shot (share ≤ ⅓ of their seconds,
+  score within RUNNER_UP 0.1 of the best); with a key, Claude sees 3 index
+  frames from each and picks one (frames leave the Mac; nothing else).
+  Cached per shot in the clip dir's `moments.json`; no key, an error or a
+  bad answer leaves the rules' first pick. `VIBECUT_MOMENTS=0` turns it off.
+  `tests/test_moments.py`. Not yet judged against her picks on real footage.
 
 - Words on screen + export (`web/backend/overlays.py`, `export.py`,
   `web/frontend/src/overlayDraw.ts`; ideas from Overlay Studio — design
@@ -150,8 +164,9 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   - **Evidence levels** (`cutgrammar/evidence.py`): every finding names
     what it rests on — meta / still / motion / audio. A finding whose
     reading the media lacks gets verdict `pending` ("not checked"), value
-    kept. `load_index()` carries no motion. Rough-cut "shaky" rejects are
-    flagged as guessed from stills.
+    kept. `load_index()` carries no motion. Rough-cut "shaky" is only a warning
+    at the gate, never a rejection: guessed from stills, it threw out 17 of
+    42 handheld videos once music stopped counting as talking.
   - **Inventory** (`cutgrammar/inventory.py`, `inventory.py`): read-only
     sha256 manifest of a shoot folder; verify names missing / changed /
     unexpected files. CLI only, not wired into import.

@@ -38,6 +38,7 @@ GOOD = 0.55             # a second worth keeping
 W_IN, W_OUT = 0.5, 0.25  # a good start matters twice as much as a good end
 MIN_BOUNDARY = 0.45      # windows that start worse than this are a last resort
 SNAP_S = 0.6             # how far a boundary may move to get out of a word
+RUNNER_UP = 0.1          # a runner-up window may score at most this far below the best [prior]
 
 
 @dataclass
@@ -117,6 +118,20 @@ def target_length(sig: ClipSignals, scores: np.ndarray, lo: int = 0, hi: int | N
 def best_window(sig: ClipSignals, target: float | None = None, faces: np.ndarray | None = None,
                 lo: float = 0.0, hi: float | None = None) -> Window:
     """Best contiguous window of `target` seconds inside [lo, hi)."""
+    return candidates(sig, target, faces, lo, hi, k=1)[0]
+
+
+def candidates(sig: ClipSignals, target: float | None = None, faces: np.ndarray | None = None,
+               lo: float = 0.0, hi: float | None = None, k: int = 3) -> list[Window]:
+    """Up to `k` different windows of `target` seconds inside [lo, hi), best first.
+
+    The scores here know a second is sharp, steady and has *something* in
+    it -- not that it is the moment worth keeping (the laugh, the reveal,
+    the view opening up). So the runners-up are offered too, for a judge
+    that can look at the pictures (web/backend/moments.py) to choose from.
+    Each is a genuinely different moment: they share at most a third of their seconds,
+    and none scores far below the best.
+    """
     hi = sig.duration if hi is None else min(hi, sig.duration)
     s = second_scores(sig, faces)
     subj, edge = _subject(sig, faces)
@@ -125,8 +140,8 @@ def best_window(sig: ClipSignals, target: float | None = None, faces: np.ndarray
     L = int(round(target if target is not None else target_length(sig, s, a0, b0)))
     L = max(1, min(L, span))
     if L >= span:
-        return _finish(sig, float(lo), float(hi), float(L), float(s[a0:b0].mean()) if span else 0.0,
-                       True, s, a0, b0)
+        return [_finish(sig, float(lo), float(hi), float(L), float(s[a0:b0].mean()) if span else 0.0,
+                        True, s, a0, b0)]
 
     # Exact max over all windows: prefix sums for the body, boundary terms per edge.
     c = np.concatenate([[0.0], np.cumsum(s[a0:b0])])
@@ -136,12 +151,21 @@ def best_window(sig: ClipSignals, target: float | None = None, faces: np.ndarray
     b_out = np.array([boundary(sig, a0 + i + L, "out", subj, edge) for i in starts])
     value = body + W_IN * b_in + W_OUT * b_out
     ok = b_in >= MIN_BOUNDARY
-    pick = int(np.argmax(np.where(ok, value, -np.inf))) if ok.any() else int(np.argmax(value))
-    start, end = float(a0 + pick), float(a0 + pick + L)
-    w = _finish(sig, max(lo, start), min(hi, end), float(L), float(value[pick]), False, s, a0, b0)
-    if not ok.any():
-        w.notes.append("no clean start anywhere in this clip — least-bad one used")
-    return w
+    live = np.where(ok, value, -np.inf) if ok.any() else value.copy()
+    out: list[Window] = []
+    best = float(live.max())
+    while len(out) < k and np.isfinite(live).any():
+        pick = int(np.argmax(live))
+        if out and live[pick] < best - RUNNER_UP:
+            break
+        start, end = float(a0 + pick), float(a0 + pick + L)
+        w = _finish(sig, max(lo, start), min(hi, end), float(L), float(value[pick]), False, s, a0, b0)
+        if not ok.any():
+            w.notes.append("no clean start anywhere in this clip — least-bad one used")
+        out.append(w)
+        near = np.abs(starts - pick) < max(1, int(np.ceil(2 * L / 3)))
+        live[near] = -np.inf
+    return out
 
 
 def _snap(t: float, voiced: list[list[float]], kind: str, lo: float, hi: float) -> tuple[float, bool]:

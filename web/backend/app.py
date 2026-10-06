@@ -25,7 +25,7 @@ from pydantic import BaseModel
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, brief, cut, export, looks, pitch, seams, smooth, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, brief, cut, export, looks, pitch, seams, smooth, sound, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import Workflow, WorkflowError
 
@@ -73,6 +73,8 @@ def _open_project(pid: str) -> pj.Project:
     pr = pj.load(pid)
     with LOCK:
         clips, missing = pj.restore_clips(pr)
+        # Clips indexed before the voice reading existed get it once, here.
+        sound.add_sound(list(clips.values()))
         CLIPS.clear()
         CLIPS.update(clips)
         VISION_USED["value"] = vision.status() == "ready" and any(
@@ -131,6 +133,7 @@ def _capabilities() -> dict:
         "llm": llm.available(),
         "speech": sys.platform == "darwin" and shutil.which("swiftc") is not None,
         "vision": vision.status(),
+        "sound": sound.status(),
         "links": reference.ytdlp() is not None,
         "music_folder": musiclib.STATE.get("folder"),
         "platform": sys.platform,
