@@ -120,7 +120,7 @@ export function Footage({ clips, importing, errors, vision, onPick, onRetry, onD
           </div>
           <div className="ml-auto flex gap-2">
             <Button disabled={!!importing} onClick={() => files.current?.click()}>Add clips</Button>
-            <Button disabled={!!importing} onClick={() => folder.current?.click()}>Add a folder</Button>
+            <Button disabled={!!importing} onClick={() => folder.current?.click()}>Add folder</Button>
           </div>
         </div>
 
