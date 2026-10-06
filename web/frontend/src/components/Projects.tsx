@@ -155,28 +155,20 @@ function Start({ picked, dragging, creating, compact, onAdd, onRemove, onCreate 
   picked: Picked[]; dragging: boolean; creating: boolean; compact: boolean
   onAdd: (p: Picked[]) => void; onRemove: (i: number) => void; onCreate: () => void
 }) {
-  const folder = useRef<HTMLInputElement>(null)
   const files = useRef<HTMLInputElement>(null)
   const size = picked.reduce((n, p) => n + p.file.size, 0)
   const pick = (fl: FileList | null) => { if (fl) onAdd(fromInput(fl)) }
-  // A browser's file picker takes files or a folder, never both at once, so
-  // the folder is a small link under the one button.
-  const folderLink = (
-    <button type="button" className="mt-2 text-[12px] text-muted hover:text-zinc-200 hover:underline" onClick={() => folder.current?.click()}>or a whole folder</button>
-  )
   return (
     <div className={cx('mt-6 rounded-2xl border border-dashed text-center transition-colors',
       dragging ? 'border-accent bg-accent/5' : 'border-zinc-700', compact && !picked.length ? 'p-6' : 'p-10')}>
-      {/* @ts-expect-error -- non-standard but supported everywhere that matters */}
-      <input ref={folder} type="file" className="hidden" webkitdirectory="" multiple onChange={(e) => { pick(e.target.files); e.target.value = '' }} />
+      {/* Folders come in by dragging; the button picks clips. */}
       <input ref={files} type="file" className="hidden" multiple accept=".mp4,.mov,video/mp4,video/quicktime"
              onChange={(e) => { pick(e.target.files); e.target.value = '' }} />
       {!picked.length ? (
         <>
           <h2 className={cx('font-serif text-zinc-100', compact ? 'text-[20px]' : 'text-[26px]')}>{dragging ? 'Drop them here' : 'Start with your clips'}</h2>
-          <p className="mt-2 text-[13px] text-zinc-400">Drop in a day’s clips and I’ll make the edit.</p>
-          <Button variant="primary" size="lg" className="mt-5" onClick={() => files.current?.click()}>Upload clips</Button>
-          <div>{folderLink}</div>
+          <p className="mt-2 text-[13px] text-zinc-400">Drag clips / folder here</p>
+          <Button variant="primary" size="lg" className="mt-5" onClick={() => files.current?.click()}>Upload</Button>
         </>
       ) : (
         <>
