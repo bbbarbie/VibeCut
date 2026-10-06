@@ -1,13 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
-import { dur } from '../format'
+import { fromDataTransfer, fromInput, handOff, mergePicked, type Picked } from '../drop'
+import { bytes, dur } from '../format'
 import { loadProfile } from '../profile'
 import { go } from '../router'
 import type { ProjectMeta } from '../types'
-import { ago, Button, Confirm, Dialog, Field, inputCls, Notice, Wordmark } from '../ui'
+import { ago, Button, Confirm, cx, Dialog, Field, inputCls, Notice, Wordmark } from '../ui'
 
-// Home: every video you're making, and where each one stands. One primary
-// action (New video). Everything else you'd do lives inside a project.
+// Home: every video you're making, and where each one stands. A new video
+// starts from its clips, not from a name (sarah, 2026-10-06: "just be able to
+// drag or select clips, then a confirm create button"): drop or pick clips,
+// look at what's picked, Create. It's named from the day it was filmed.
 
 const STAGE_WORDS: Record<ProjectMeta['stage'], { label: string; next: string }> = {
   footage: { label: 'Footage', next: 'Add your clips' },
@@ -32,10 +35,36 @@ export function Projects() {
     try { await api.openProject(p.id); go({ kind: 'project', id: p.id, view: 'story' }) }
     catch (e) { setError((e as Error).message) }
   }
-  const create = async (name: string) => {
-    try { const r = await api.createProject(name); go({ kind: 'project', id: r.project.id, view: 'story' }) }
-    catch (e) { setError((e as Error).message) }
+  const [picked, setPicked] = useState<Picked[]>([])
+  const [creating, setCreating] = useState(false)
+  const create = async () => {
+    if (!picked.length || creating) return
+    setCreating(true)
+    try { const r = await api.createProject(''); handOff(picked); go({ kind: 'project', id: r.project.id, view: 'story' }) }
+    catch (e) { setError((e as Error).message); setCreating(false) }
   }
+
+  // The whole page takes a drop, not just the box.
+  const [dragging, setDragging] = useState(false)
+  useEffect(() => {
+    let depth = 0
+    const isFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes('Files')
+    const enter = (e: DragEvent) => { if (isFiles(e)) { depth++; setDragging(true) } }
+    const leave = (e: DragEvent) => { if (isFiles(e) && --depth <= 0) { depth = 0; setDragging(false) } }
+    const over = (e: DragEvent) => { if (isFiles(e)) e.preventDefault() }
+    const drop = async (e: DragEvent) => {
+      if (!isFiles(e)) return
+      e.preventDefault(); depth = 0; setDragging(false)
+      const more = await fromDataTransfer(e.dataTransfer!)
+      setPicked((p) => mergePicked(p, more))
+    }
+    window.addEventListener('dragenter', enter); window.addEventListener('dragleave', leave)
+    window.addEventListener('dragover', over); window.addEventListener('drop', drop)
+    return () => {
+      window.removeEventListener('dragenter', enter); window.removeEventListener('dragleave', leave)
+      window.removeEventListener('dragover', over); window.removeEventListener('drop', drop)
+    }
+  }, [])
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-ink">
@@ -55,16 +84,17 @@ export function Projects() {
             <div>
               <h1 className="font-serif text-[30px] leading-tight text-zinc-100">Your videos</h1>
             </div>
-            {/* With no videos yet, the one in the middle is the only way in. */}
-            {!!list?.length && <Button variant="primary" size="lg" className="ml-auto" onClick={() => create('')}>New video</Button>}
           </div>
           {error && <Notice tone="bad" className="mt-4">{error} <button type="button" className="underline" onClick={load}>Try again</button></Notice>}
 
+          <Start picked={picked} dragging={dragging} creating={creating} compact={!!list?.length}
+                 onAdd={(more) => setPicked((p) => mergePicked(p, more))}
+                 onRemove={(i) => setPicked((p) => p.filter((_, k) => k !== i))}
+                 onCreate={create} />
+
           {list === null ? (
             <p className="mt-10 text-[13px] text-muted">Loading…</p>
-          ) : list.length === 0 ? (
-            <EmptyHome onNew={() => create('')} />
-          ) : (
+          ) : list.length === 0 ? null : (
             <div className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
               {list.map((p) => <Card key={p.id} p={p} onOpen={() => open(p)} onRename={() => setRename(p)} onDelete={() => setRemove(p)} />)}
             </div>
@@ -115,12 +145,71 @@ function Card({ p, onOpen, onRename, onDelete }: { p: ProjectMeta; onOpen: () =>
   )
 }
 
-function EmptyHome({ onNew }: { onNew: () => void }) {
+// The way in: drop clips or a folder anywhere on the page, or choose them.
+// What's picked shows as a row (remove one with ×); Create makes the video.
+function Start({ picked, dragging, creating, compact, onAdd, onRemove, onCreate }: {
+  picked: Picked[]; dragging: boolean; creating: boolean; compact: boolean
+  onAdd: (p: Picked[]) => void; onRemove: (i: number) => void; onCreate: () => void
+}) {
+  const folder = useRef<HTMLInputElement>(null)
+  const files = useRef<HTMLInputElement>(null)
+  const size = picked.reduce((n, p) => n + p.file.size, 0)
+  const pick = (fl: FileList | null) => { if (fl) onAdd(fromInput(fl)) }
+  const choose = (
+    <span className="text-[13px] text-zinc-400">
+      <button type="button" className="text-accent hover:underline" onClick={() => files.current?.click()}>Choose clips</button>
+      {' or '}
+      <button type="button" className="text-accent hover:underline" onClick={() => folder.current?.click()}>a folder</button>
+    </span>
+  )
   return (
-    <div className="mt-8 rounded-2xl border border-dashed border-zinc-700 p-10 text-center">
-      <h2 className="font-serif text-[26px] text-zinc-100">Start with your clips</h2>
-      <p className="mt-2 text-[13px] text-zinc-400">Drop a day’s clips and VibeCut makes the edit.</p>
-      <Button variant="primary" size="lg" className="mt-6" onClick={onNew}>New video</Button>
+    <div className={cx('mt-6 rounded-2xl border border-dashed text-center transition-colors',
+      dragging ? 'border-accent bg-accent/5' : 'border-zinc-700', compact && !picked.length ? 'p-6' : 'p-10')}>
+      {/* @ts-expect-error -- non-standard but supported everywhere that matters */}
+      <input ref={folder} type="file" className="hidden" webkitdirectory="" multiple onChange={(e) => { pick(e.target.files); e.target.value = '' }} />
+      <input ref={files} type="file" className="hidden" multiple accept=".mp4,.mov,video/mp4,video/quicktime"
+             onChange={(e) => { pick(e.target.files); e.target.value = '' }} />
+      {!picked.length ? (
+        <>
+          <h2 className={cx('font-serif text-zinc-100', compact ? 'text-[20px]' : 'text-[26px]')}>{dragging ? 'Drop them here' : 'Start with your clips'}</h2>
+          <p className="mt-2 text-[13px] text-zinc-400">Drag a day’s clips or a folder here. {choose}</p>
+        </>
+      ) : (
+        <>
+          <h2 className="font-serif text-[22px] text-zinc-100">{picked.length} clip{picked.length === 1 ? '' : 's'}</h2>
+          <p className="mt-1 text-[12px] text-muted">{bytes(size)} · drop more, or {choose}</p>
+          <Thumbs picked={picked} onRemove={onRemove} />
+          <Button variant="primary" size="lg" className="mt-5" disabled={creating} onClick={onCreate}>{creating ? 'Creating…' : 'Create'}</Button>
+        </>
+      )}
+    </div>
+  )
+}
+
+// A first frame for each picked file, straight from the file in the browser:
+// nothing is read by the app until Create.
+function Thumbs({ picked, onRemove }: { picked: Picked[]; onRemove: (i: number) => void }) {
+  // One URL per file for as long as it's picked: removing one doesn't reload the rest.
+  const made = useRef(new Map<Picked, string>())
+  const urls = useMemo(() => picked.map((p) => {
+    let u = made.current.get(p)
+    if (!u) { u = URL.createObjectURL(p.file); made.current.set(p, u) }
+    return u
+  }), [picked])
+  useEffect(() => {
+    for (const [p, u] of made.current) if (!picked.includes(p)) { URL.revokeObjectURL(u); made.current.delete(p) }
+  }, [picked])
+  useEffect(() => () => { for (const u of made.current.values()) URL.revokeObjectURL(u); made.current.clear() }, [])
+  return (
+    <div className="mx-auto mt-4 flex max-h-[280px] max-w-3xl flex-wrap justify-center gap-1.5 overflow-y-auto p-1">
+      {picked.map((p, i) => (
+        <div key={`${p.relpath}|${p.file.size}`} className="group relative h-14 w-24 overflow-hidden rounded-md bg-zinc-900" title={p.file.name}>
+          <video src={`${urls[i]}#t=0.3`} muted playsInline preload="metadata" className="size-full object-cover" />
+          <span className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1 text-left text-[9px] text-zinc-300">{p.file.name}</span>
+          <button type="button" aria-label={`Remove ${p.file.name}`} onClick={() => onRemove(i)}
+                  className="absolute right-0.5 top-0.5 grid size-5 place-items-center rounded-full bg-black/75 text-[12px] leading-none text-zinc-100 opacity-0 hover:bg-black group-hover:opacity-100 focus:opacity-100">×</button>
+        </div>
+      ))}
     </div>
   )
 }

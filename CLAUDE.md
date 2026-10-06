@@ -42,7 +42,9 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   from project state (`web/frontend/src/stage.ts`), never set by hand.
   Projects persist on disk (`web/backend/projects.py`: clip ids, turn log,
   workflow, cut overrides, brief, exports) and survive restarts; the
-  middleware saves after every mutating request. A new video asks for no
+  middleware saves after every mutating request. A new video starts from
+  its clips on the home page (drop or choose, see the row, remove any,
+  Create; `drop.handOff` carries them into the project), and asks for no
   name: it is "New video" until its clips are read, then named from the
   days they were filmed (`projects.auto_name`, "Sep 22" / "Sep 22–24"; sarah:
   just the day for now) until the creator renames it. The Footage page is

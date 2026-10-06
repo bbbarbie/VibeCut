@@ -43,3 +43,17 @@ export function fromInput(files: FileList): Picked[] {
     .filter((f) => VIDEO.test(f.name) && !f.name.startsWith('.'))
     .map((f) => ({ file: f, relpath: f.webkitRelativePath || f.name }))
 }
+
+// Clips picked on the home page before the video exists. Create makes the
+// video, parks the clips here and opens it; the project reads them on open.
+// Files can't travel in a URL, and nothing here outlives the tab.
+let handoff: Picked[] | null = null
+export function handOff(picked: Picked[]): void { handoff = picked }
+export function takeHandoff(): Picked[] | null { const p = handoff; handoff = null; return p }
+
+/** Same file picked twice (dropped again, or in a folder and on its own): once. */
+export function mergePicked(have: Picked[], more: Picked[]): Picked[] {
+  const key = (p: Picked) => `${p.file.name}|${p.file.size}|${p.file.lastModified}`
+  const seen = new Set(have.map(key))
+  return [...have, ...more.filter((p) => !seen.has(key(p)) && seen.add(key(p)))]
+}

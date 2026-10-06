@@ -24,7 +24,7 @@ import { SmoothButton, Story, type PlayItem, type Selection } from './components
 import { Timeline, type Marks } from './components/Timeline'
 import { Footage, type Importing } from './components/Footage'
 import { Brief } from './components/Brief'
-import { fromDataTransfer, fromInput, type Picked } from './drop'
+import { fromDataTransfer, fromInput, takeHandoff, type Picked } from './drop'
 import { bytes, uid } from './format'
 import { clock, locate, toSource } from './sequence'
 import { cutWhilePlaying, step } from './snap'
@@ -364,6 +364,13 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       setImporting(null)
     }
   }, [importing, runImport, say, stage, shown, session?.board])
+
+  // Clips picked on the home page before this video existed: read them now.
+  useEffect(() => {
+    if (opened !== 'ok') return
+    const p = takeHandoff()
+    if (p?.length) importPicked(p)
+  }, [opened]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const retryImport = async (paths: string[]) => {
     if (importing) return
