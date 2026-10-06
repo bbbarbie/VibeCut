@@ -13,10 +13,15 @@ export function LengthButton({ total, onDone }: { total: number; onDone: (s: Ses
   const [value, setValue] = useState(total)
   const [busy, setBusy] = useState(false)
   const box = useRef<HTMLDivElement>(null)
+  const btn = useRef<HTMLButtonElement>(null)
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
 
   useEffect(() => { if (!busy) setValue(total) }, [total, busy])
   useEffect(() => {
     if (!open) return
+    // placed on the page, kept inside the window (the bar is narrow and sits at the edge)
+    const r = btn.current?.getBoundingClientRect()
+    if (r) setPos({ top: r.bottom + 6, left: Math.max(8, Math.min(r.right - 320, window.innerWidth - 328)) })
     api.length().then(setSlider).catch(() => setSlider(null))
     const away = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false) }
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
@@ -33,13 +38,13 @@ export function LengthButton({ total, onDone }: { total: number; onDone: (s: Ses
 
   return (
     <div ref={box} className="relative">
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
+      <button ref={btn} type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
               title="How long the video is. Drag to make it shorter or longer."
-              className="rounded-md border border-line px-2.5 py-1 text-[11px] tabular-nums text-zinc-300 hover:bg-raised">
+              className="whitespace-nowrap rounded-md border border-line px-2.5 py-1 text-[11px] tabular-nums text-zinc-300 hover:bg-raised">
         Length · {lengthLabel(total)}
       </button>
-      {open && (
-        <div className="absolute right-0 top-full z-30 mt-1.5 rounded-xl border border-line bg-raised p-4 shadow-2xl">
+      {open && pos && (
+        <div className="fixed z-40 w-[320px] rounded-xl border border-line bg-raised p-4 shadow-2xl" style={pos}>
           {slider ? (
             <>
               <LengthSlider compact slider={slider} value={value} onChange={setValue} onCommit={commit} />

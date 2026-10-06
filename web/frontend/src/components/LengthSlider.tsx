@@ -20,7 +20,7 @@ export function LengthSlider({ slider, value, onChange, onCommit, compact }: {
   const at = (s: number) => `${((Math.min(max, Math.max(min, s)) - min) / span) * 100}%`
   const step = max - min > 600 ? 5 : 1
   return (
-    <div className={cx('select-none', compact ? 'w-72' : 'w-full')}>
+    <div className={cx('select-none', 'w-full')}>
       <div className="flex items-baseline gap-2">
         <span className={cx('font-serif tabular-nums text-zinc-100', compact ? 'text-[18px]' : 'text-[28px]')}>About {lengthLabel(value)}</span>
         <span className="text-[11px] text-muted">of {lengthLabel(max)} good footage</span>
