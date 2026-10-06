@@ -155,12 +155,10 @@ function Start({ picked, dragging, creating, compact, onAdd, onRemove, onCreate 
   const files = useRef<HTMLInputElement>(null)
   const size = picked.reduce((n, p) => n + p.file.size, 0)
   const pick = (fl: FileList | null) => { if (fl) onAdd(fromInput(fl)) }
-  const choose = (
-    <span className="text-[13px] text-zinc-400">
-      <button type="button" className="text-accent hover:underline" onClick={() => files.current?.click()}>Choose clips</button>
-      {' or '}
-      <button type="button" className="text-accent hover:underline" onClick={() => folder.current?.click()}>a folder</button>
-    </span>
+  // A browser's file picker takes files or a folder, never both at once, so
+  // the folder is a small link under the one button.
+  const folderLink = (
+    <button type="button" className="mt-2 text-[12px] text-muted hover:text-zinc-200 hover:underline" onClick={() => folder.current?.click()}>or a whole folder</button>
   )
   return (
     <div className={cx('mt-6 rounded-2xl border border-dashed text-center transition-colors',
@@ -172,12 +170,15 @@ function Start({ picked, dragging, creating, compact, onAdd, onRemove, onCreate 
       {!picked.length ? (
         <>
           <h2 className={cx('font-serif text-zinc-100', compact ? 'text-[20px]' : 'text-[26px]')}>{dragging ? 'Drop them here' : 'Start with your clips'}</h2>
-          <p className="mt-2 text-[13px] text-zinc-400">Drag a day’s clips or a folder here. {choose}</p>
+          <p className="mt-2 text-[13px] text-zinc-400">Drag a day’s clips or a folder here.</p>
+          <Button variant="primary" size="lg" className="mt-5" onClick={() => files.current?.click()}>Upload clips</Button>
+          <div>{folderLink}</div>
         </>
       ) : (
         <>
           <h2 className="font-serif text-[22px] text-zinc-100">{picked.length} clip{picked.length === 1 ? '' : 's'}</h2>
-          <p className="mt-1 text-[12px] text-muted">{bytes(size)} · drop more, or {choose}</p>
+          <p className="mt-1 text-[12px] text-muted">{bytes(size)} · drop more, or{' '}
+            <button type="button" className="text-accent hover:underline" onClick={() => files.current?.click()}>add more</button></p>
           <Thumbs picked={picked} onRemove={onRemove} />
           <Button variant="primary" size="lg" className="mt-5" disabled={creating} onClick={onCreate}>{creating ? 'Creating…' : 'Create'}</Button>
         </>
