@@ -617,26 +617,10 @@ def _summaries() -> list[dict]:
     return out
 
 
-def _first_name() -> str:
-    """The first name of the account this runs as, so home can say hello to
-    the person (sarah: "talk to the user"). The Mac keeps the full name in
-    the account's GECOS field; a bare login name is not a name, so no guess."""
-    try:
-        import pwd
-        me = pwd.getpwuid(os.getuid())
-    except (ImportError, KeyError, OSError):
-        return ""
-    full = me.pw_gecos.split(",")[0].strip()
-    if not full or full.lower() in (me.pw_name.lower(), "root", "system administrator"):
-        return ""
-    first = full.split()[0]
-    return first[:1].upper() + first[1:]
-
-
 @app.get("/api/projects")
 def api_projects() -> dict:
     return {"projects": _summaries(), "open": PROJECT["p"].id if PROJECT["p"] else None,
-            "capabilities": _capabilities(), "first_name": _first_name()}
+            "capabilities": _capabilities()}
 
 
 @app.post("/api/projects")

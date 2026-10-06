@@ -28,11 +28,10 @@ export function Projects() {
   const mine = (() => { try { return loadProfile(window.localStorage).profile.name.trim() } catch { return '' } })()
   const initial = mine.charAt(0).toUpperCase() || '☺'
   // Home talks to the person (sarah: "hello, Sarah, like talk to the user"):
-  // the name they gave their profile, else the Mac account's first name.
-  const [macName, setMacName] = useState('')
-  const hello = mine.split(/\s+/)[0] || macName
+  // the first name on their profile, the one behind the avatar.
+  const hello = mine.split(/\s+/)[0]
 
-  const load = () => api.projects().then((r) => { setList(r.projects); setMacName(r.first_name ?? ''); setError(null) })
+  const load = () => api.projects().then((r) => { setList(r.projects); setError(null) })
     .catch((e) => setError((e as Error).message))
   useEffect(() => { load() }, [])
 

@@ -4,7 +4,7 @@ export type MomentInfo = { header: string; key: string; llm: boolean; estimate: 
 export type MomentAnswer = { reply: string; choices: string[]; ops: Record<string, unknown>[]
   preview: { lines: string[]; skipped: string[] } | null; header: string }
 
-export type ProjectList = { projects: ProjectMeta[]; open: string | null; capabilities: Capabilities; first_name?: string }
+export type ProjectList = { projects: ProjectMeta[]; open: string | null; capabilities: Capabilities }
 export type Opened = { project: ProjectMeta; session: Session }
 
 export type RemixJob = {
