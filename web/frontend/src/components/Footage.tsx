@@ -155,7 +155,7 @@ export function Footage({ clips, importing, errors, vision, onPick, onRetry, onD
                 <Stack side="kept" clips={kept} onOpen={() => setOpen('kept')} />
                 <Stack side="out" clips={out} onOpen={() => setOpen('out')} />
               </div>
-              {shown.length > 0 && <p className="text-center text-[11px] text-muted">Click or swipe a stack to look through it</p>}
+              {shown.length > 0 && <p className="text-center text-[15px] text-zinc-300">Click or swipe a stack to look through it</p>}
             </div>
           )}
       </div>
@@ -259,7 +259,7 @@ function Strip({ side: s, clips, other, onSwitch, onClose, onFlip }: {
       <div className="flex items-center gap-3">
         <Button size="sm" onClick={onClose}>‹ Both stacks</Button>
         <h3 className={cx('font-serif text-[20px]', red ? 'text-rose-200' : 'text-zinc-100')}>{red ? 'Left out' : 'Kept'} · {clips.length}</h3>
-        <span className="text-[11px] text-muted">Click to play · double-click to move it to {red ? 'Kept' : 'Left out'}</span>
+        <span className="text-[15px] text-zinc-300">Click to play · double-click to move it to {red ? 'Kept' : 'Left out'}</span>
         <Button size="sm" className="ml-auto" onClick={onSwitch}>{red ? 'Kept' : 'Left out'} · {other} ›</Button>
       </div>
       {!clips.length
