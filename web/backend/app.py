@@ -837,6 +837,14 @@ def api_moment_chat(req: MomentReq) -> dict:
 SUGGESTED: dict = {}     # clip ids -> suggestions, so a revisit doesn't ask again
 
 
+@app.get("/api/brief/guess")
+def api_brief_guess() -> dict:
+    """What the video is, read from the footage (no model, no cost)."""
+    with LOCK:
+        clips = list(CLIPS.values())
+    return {"about": pitch.guess(clips)}
+
+
 @app.get("/api/brief/suggestions")
 def api_brief_suggestions() -> dict:
     """Three one-line descriptions read from the footage, to click instead of typing."""

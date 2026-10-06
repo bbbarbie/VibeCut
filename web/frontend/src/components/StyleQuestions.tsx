@@ -3,11 +3,10 @@ import { applies, nearestMark, type Picks } from '../brief'
 import { LengthSlider } from './LengthSlider'
 import type { StyleQuestion } from '../types'
 
-// Asked once, after the first description and before anything is cut: a
+// Asked once, right after the footage and before anything is cut: a
 // few multiple-choice questions, one at a time, like an editor would ask.
 // Every question can be skipped; skipping all of them is fine too.
-export function StyleQuestions({ description, questions, tailored, onDone, onCancel }: {
-  description: string
+export function StyleQuestions({ questions, tailored, onDone, onCancel }: {
   questions: StyleQuestion[] | null        // null while they load
   tailored: boolean
   onDone: (picks: Picks, extra: string) => void
@@ -72,7 +71,6 @@ export function StyleQuestions({ description, questions, tailored, onDone, onCan
             )}
             <button type="button" onClick={onCancel} aria-label="Close" className="ml-2 text-[16px] leading-none text-muted hover:text-zinc-200">×</button>
           </div>
-          <p className="mt-1.5 truncate font-serif text-[15px] italic text-zinc-400" title={description}>“{description}”</p>
         </div>
 
         <div className="min-h-[260px] px-5 py-4">
@@ -117,12 +115,12 @@ export function StyleQuestions({ description, questions, tailored, onDone, onCan
           ) : (
             <>
               <h2 className="font-serif text-[22px] leading-tight text-zinc-100">Anything else I should know?</h2>
-              <p className="mt-1 text-[12px] text-muted">Optional. A moment you want in, something to leave out.</p>
+              <p className="mt-1 font-serif text-[16px] text-zinc-300">Optional. A moment you want in, something to leave out.</p>
               <textarea autoFocus value={extra} onChange={(e) => setExtra(e.target.value)} rows={3}
                         onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); finish() } }}
                         placeholder="e.g. end on the sunset, skip the lecture slides"
                         className="mt-3 w-full resize-none rounded-xl border border-line bg-panel px-3 py-2.5 text-[13px] text-zinc-100 outline-none placeholder:text-zinc-500 focus:border-zinc-500" />
-              {tailored && <p className="mt-2 text-[11px] text-zinc-600">Some of these questions were written by Claude from your description.</p>}
+              {tailored && <p className="mt-2 font-serif text-[15px] text-zinc-300">Some of these questions were written by Claude from your clips.</p>}
             </>
           )}
         </div>

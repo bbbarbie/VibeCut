@@ -124,6 +124,15 @@ def as_text(f: dict) -> str:
     ])
 
 
+def guess(clips: list[dict]) -> str:
+    """What the video is, read from the shoot alone, standing in for the
+    description the creator no longer types (sarah, 2026-10-06: the question
+    was a step she didn't need). The first template line: its span says day /
+    evening / weekend / days away, which `brief.kind_of` reads for the length
+    and the captions, and its theme words lean the story. Never the model."""
+    return offline(facts(clips))[0] if clips else ""
+
+
 def suggest(clips: list[dict], ask_model: bool | None = None) -> dict:
     """-> {"suggestions": [3 lines], "source": "claude" | "footage"}."""
     from . import llm

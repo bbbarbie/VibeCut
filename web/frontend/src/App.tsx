@@ -270,6 +270,12 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       .then((r) => setAsking((a) => a && a.text === text ? { ...a, questions: r.questions, tailored: r.tailored } : a))
       .catch(() => setAsking((a) => a && a.text === text ? { ...a, questions: [] } : a))
   }
+  // No "what's this video about?" any more (sarah, 2026-10-06): the clips
+  // say it (day / trip, what's in them), and the questions open straight away.
+  const startQuestions = () => {
+    if (asking) return
+    api.guess().then((r) => r.about, () => '').then((about) => askStyle(about || 'My video'))
+  }
   const answered = async (picks: Picks, extra: string) => {
     if (!asking?.questions) return
     const { text, questions } = asking
@@ -307,7 +313,6 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   }
 
   const toggle = async (turn: number) => { setSession(await api.toggle(turn)) }
-  const followVoiceover = async (text: string) => { setSession(await api.voiceover(text)) }
   const classify = async (req: ClassifyReq) => { setSession(await api.classify(req)) }
   const changeRule = async (id: string, action: 'forget' | 'narrow') => {
     try { setSession(await api.rule(id, action)) } catch (e) { note((e as Error).message) }
@@ -852,11 +857,9 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                onPick={(fl) => importPicked(fromInput(fl))} onRetry={retryImport}
                onDecide={(c, a) => { cutOverride(c.id, a).catch((e) => note((e as Error).message)) }}
                canContinue={!!clips.length && !importing && stage !== 'footage'} briefDone={!!brief}
-               onNext={() => showStep(stage === 'story' ? 'story' : brief ? 'cut' : 'brief')} />
+               onNext={() => { showStep(stage === 'story' ? 'story' : brief ? 'cut' : 'brief'); if (!brief) startQuestions() }} />
     ) : shown === 'brief' ? (
-      <Brief clips={clips} brief={brief} asking={!!pending || !!asking} caps={caps} voiceover={session?.voiceover ?? null}
-             onAsk={askStyle} onVoiceover={followVoiceover} onTalk={openTalk}
-             onContinue={() => showStep(stage === 'story' ? 'story' : 'cut')} />
+      <Brief brief={brief} busy={!!pending || !!asking} onStart={startQuestions} onContinue={() => showStep(stage === 'story' ? 'story' : 'cut')} />
     ) : shown === 'cut' && cutData ? (
       <CutReview data={cutData} clips={clips} approved={!atGate} busy={approving}
                  onOverride={cutOverride} onApprove={approveCut} onWatch={preview}
@@ -894,11 +897,11 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const storyStage = shown === 'story' && !talkOpen
   const cols = storyStage && level === 'frames' ? (narrow ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[320px_minmax(0,1fr)]')
     : storyStage ? (narrow ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[320px_minmax(0,1fr)_420px]')
-      : narrow || shown === 'footage' ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)_400px]'
+      : narrow || shown === 'footage' || shown === 'brief' ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)_400px]'
 
   return (
     <>
-    {asking && <StyleQuestions description={asking.text} questions={asking.questions} tailored={asking.tailored}
+    {asking && <StyleQuestions questions={asking.questions} tailored={asking.tailored}
                                onDone={answered} onCancel={() => setAsking(null)} />}
     <div className="grid h-full grid-rows-[48px_1fr]">
       <header className="flex items-center gap-2 border-b border-line bg-ink px-3">
@@ -1024,11 +1027,11 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
               {undoable && <UndoToast text={undoable.text} onUndo={() => { toggle(undoable.turn); setUndoable(null) }} />}
               {flash && <Flash text={flash} />}
             </main>
-            {/* Footage has no preview panel (sarah: the stacks use the width, a
-                clip plays in place). Hidden, not removed: the player's videos
+            {/* Footage and the brief have no preview panel (sarah: the stacks use
+                the width, a clip plays in place; the brief is just one line). Hidden, not removed: the player's videos
                 stay attached to the transport. */}
             <aside className={cx('flex min-h-0 flex-col gap-3 overflow-y-auto border-line bg-panel p-3',
-              narrow ? 'border-t max-h-[46vh]' : 'border-l', shown === 'footage' && 'hidden')}>
+              narrow ? 'border-t max-h-[46vh]' : 'border-l', (shown === 'footage' || shown === 'brief') && 'hidden')}>
               <div className="flex aspect-[16/10] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-line"
                    onClick={() => { if (tr.playing && !segment) transport.stop() }}>
                 {player(false)}
