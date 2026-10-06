@@ -1,26 +1,21 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
-import type { Brief as BriefData, Capabilities, Clip, Session } from '../types'
+import type { Brief as BriefData, Clip } from '../types'
 import { Button, Notice, inputCls } from '../ui'
-import { Voiceover } from './Voiceover'
 
 // The brief: what the video is, in one line. The style questions follow
-// (StyleQuestions.tsx), then the rough cut. Two opt-in side doors live
-// here because they change what the story is built from: the creator's own
-// narration, and talking-to-camera mode.
+// (StyleQuestions.tsx), then the rough cut. sarah (2026-10-06) hid the two
+// side doors that used to sit here (follow my voiceover, talking to camera):
+// the page is one question. Talking to camera is still under More.
 
 // Shown only if the footage can't be read for suggestions (pitch.py).
 const EXAMPLES = ['A weekend in Tokyo, mostly the food', 'My sister’s wedding day', 'A day at the beach with friends']
 
-export function Brief({ clips, brief, asking, caps, voiceover, onAsk, onVoiceover, onTalk, onContinue }: {
+export function Brief({ clips, brief, asking, onAsk, onContinue }: {
   clips: Clip[]
   brief: BriefData | null
   asking: boolean
-  caps: Capabilities
-  voiceover: Session['voiceover']
   onAsk: (text: string) => void
-  onVoiceover: (text: string) => Promise<void>
-  onTalk: () => void
   onContinue: () => void
 }) {
   const [text, setText] = useState(brief?.message ?? '')
@@ -62,16 +57,6 @@ export function Brief({ clips, brief, asking, caps, voiceover, onAsk, onVoiceove
             <Button size="sm" variant="primary" onClick={onContinue}>Rough cut →</Button>
           </Notice>
         )}
-
-        <div className="mt-6 flex flex-wrap items-start gap-2">
-          <Voiceover current={voiceover} busy={asking} onSubmit={onVoiceover} />
-          <button type="button" onClick={caps.speech ? onTalk : undefined} disabled={!caps.speech}
-                  title={caps.speech ? 'Transcribe on this Mac, cut pauses and retakes, add subtitles' : 'Transcribing runs on-device and needs macOS 26 with the Xcode command-line tools'}
-                  className="rounded-lg border border-line px-3 py-1.5 text-left text-[12px] text-zinc-300 hover:bg-raised disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent">
-            Talking to camera? Cut it by what you said…
-            {!caps.speech && <span className="block text-[10px] text-muted">needs macOS 26</span>}
-          </button>
-        </div>
       </div>
     </div>
   )

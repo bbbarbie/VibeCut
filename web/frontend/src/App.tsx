@@ -307,7 +307,6 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   }
 
   const toggle = async (turn: number) => { setSession(await api.toggle(turn)) }
-  const followVoiceover = async (text: string) => { setSession(await api.voiceover(text)) }
   const classify = async (req: ClassifyReq) => { setSession(await api.classify(req)) }
   const changeRule = async (id: string, action: 'forget' | 'narrow') => {
     try { setSession(await api.rule(id, action)) } catch (e) { note((e as Error).message) }
@@ -854,9 +853,8 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                canContinue={!!clips.length && !importing && stage !== 'footage'} briefDone={!!brief}
                onNext={() => showStep(stage === 'story' ? 'story' : brief ? 'cut' : 'brief')} />
     ) : shown === 'brief' ? (
-      <Brief clips={clips} brief={brief} asking={!!pending || !!asking} caps={caps} voiceover={session?.voiceover ?? null}
-             onAsk={askStyle} onVoiceover={followVoiceover} onTalk={openTalk}
-             onContinue={() => showStep(stage === 'story' ? 'story' : 'cut')} />
+      <Brief clips={clips} brief={brief} asking={!!pending || !!asking}
+             onAsk={askStyle} onContinue={() => showStep(stage === 'story' ? 'story' : 'cut')} />
     ) : shown === 'cut' && cutData ? (
       <CutReview data={cutData} clips={clips} approved={!atGate} busy={approving}
                  onOverride={cutOverride} onApprove={approveCut} onWatch={preview}
