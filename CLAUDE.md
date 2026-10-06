@@ -157,7 +157,9 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   guess; the selector has no model behind it (no key on this Mac).
 
 - **Style questions** (`web/backend/brief.py`, `StyleQuestions.tsx`,
-  `web/frontend/src/brief.ts`): after the first one-line description, a
+  `web/frontend/src/brief.ts`): straight after Footage's "Looks good" (no
+  "What's this video about?" box since 2026-10-06, sarah; the description is
+  guessed from the shoot, `pitch.guess`, never the model), a
   popup asks length / pace / opening / focus, one question at a time, before
   the rough cut is shown. Length, pace and opening travel as `style` on the
   direction and reshape each proposal (`brief.shape`); focus and any
@@ -179,7 +181,7 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   and a follow-up asked only when there are captions (`when` on the
   question), the look (clean / bold = hype / cozy / quiet), as
   `style.caption_look`. When a story is chosen it becomes one undoable turn
-  (`brief.caption_ops`: look + title + captions). **Describe** = per moment
+  (`brief.caption_ops`: look + captions; no opening title, sarah 2026-10-06 — a cover image is planned instead). **Describe** = per moment
   the day moves on, "7:42 am · coffee run" (`daylog.py`; clock from the
   clip's recording time + shot offset, phrase from Vision labels, a bigger
   table incl. scenery; with a key Claude may phrase labels + time, text
@@ -208,9 +210,9 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   pulled inside the safe area; checks still only warn. "Same place for all
   captions" is one turn. `test_overlays.py`, `overlayLooks.test.ts`. Older answers (day / simple / bold /
   key) map to describe + a look. `tests/test_captions_answer.py`.
-  The brief's suggestion chips are read from the shoot (`pitch.py`: days,
-  morning→night, themes, faces, talking, rough GPS; templates, or Claude
-  phrasing those text facts with a key); a chip goes straight to Next.
+  The description is read from the shoot (`pitch.py`: days,
+  morning→night, themes, faces, talking, rough GPS; `guess` = the first
+  template line, so `kind_of` sees day / weekend / days away).
   `tests/test_pitch.py`.
 - HDR (HLG/PQ) footage: thumbnails and samples are tone-mapped to SDR in
   `media.to_sdr` so they look like the phone showed them; measurement frames

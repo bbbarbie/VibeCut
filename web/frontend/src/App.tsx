@@ -270,6 +270,12 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       .then((r) => setAsking((a) => a && a.text === text ? { ...a, questions: r.questions, tailored: r.tailored } : a))
       .catch(() => setAsking((a) => a && a.text === text ? { ...a, questions: [] } : a))
   }
+  // No "what's this video about?" any more (sarah, 2026-10-06): the clips
+  // say it (day / trip, what's in them), and the questions open straight away.
+  const startQuestions = () => {
+    if (asking) return
+    api.guess().then((r) => r.about, () => '').then((about) => askStyle(about || 'My video'))
+  }
   const answered = async (picks: Picks, extra: string) => {
     if (!asking?.questions) return
     const { text, questions } = asking
@@ -851,10 +857,9 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                onPick={(fl) => importPicked(fromInput(fl))} onRetry={retryImport}
                onDecide={(c, a) => { cutOverride(c.id, a).catch((e) => note((e as Error).message)) }}
                canContinue={!!clips.length && !importing && stage !== 'footage'} briefDone={!!brief}
-               onNext={() => showStep(stage === 'story' ? 'story' : brief ? 'cut' : 'brief')} />
+               onNext={() => { showStep(stage === 'story' ? 'story' : brief ? 'cut' : 'brief'); if (!brief) startQuestions() }} />
     ) : shown === 'brief' ? (
-      <Brief clips={clips} brief={brief} asking={!!pending || !!asking}
-             onAsk={askStyle} onContinue={() => showStep(stage === 'story' ? 'story' : 'cut')} />
+      <Brief brief={brief} busy={!!pending || !!asking} onStart={startQuestions} onContinue={() => showStep(stage === 'story' ? 'story' : 'cut')} />
     ) : shown === 'cut' && cutData ? (
       <CutReview data={cutData} clips={clips} approved={!atGate} busy={approving}
                  onOverride={cutOverride} onApprove={approveCut} onWatch={preview}
@@ -896,7 +901,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
 
   return (
     <>
-    {asking && <StyleQuestions description={asking.text} questions={asking.questions} tailored={asking.tailored}
+    {asking && <StyleQuestions questions={asking.questions} tailored={asking.tailored}
                                onDone={answered} onCancel={() => setAsking(null)} />}
     <div className="grid h-full grid-rows-[48px_1fr]">
       <header className="flex items-center gap-2 border-b border-line bg-ink px-3">

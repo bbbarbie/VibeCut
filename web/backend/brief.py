@@ -49,7 +49,7 @@ OPENINGS = ("hook", "start")
 # (looks/*.json). Only words the footage knows: the clock, the place from
 # the clip's GPS and what the image labels see (describe, daylog.py), or
 # what was said, from the Mac's own recogniser (transcribe, subtitles.py).
-# Every answer also gets an opening title from the creator's own words.
+# No opening title (sarah, 2026-10-06): a short opens on the footage.
 CAPTIONS = ("describe", "transcribe", "none")
 CAPTION_LOOKS = {"clean": "clean", "bold": "hype", "cozy": "cozy", "quiet": "quiet"}
 DEFAULT_LOOK = {"describe": "cozy", "transcribe": "clean"}
@@ -76,7 +76,7 @@ KINDS = [
      "a day vlog", 60.0, 180.0),
     ("event", re.compile(r"\bwedding|birthday|party|concert|festival|graduation|game day|show\b", re.I),
      "an event", 90.0, 300.0),
-    ("trip", re.compile(r"\btrip\b|travel|holiday|vacation|weekend|\btour\b|road ?trip|\babroad\b", re.I),
+    ("trip", re.compile(r"\btrip\b|travel|holiday|vacation|weekend|\btour\b|road ?trip|\babroad\b|\bdays away\b", re.I),
      "a trip", 60.0, 300.0),
 ]
 OTHER_KIND = ("other", None, "a video like this", 60.0, 180.0)
@@ -231,9 +231,10 @@ def caption_ops(board: dict, cat, answer: str | None, title: str | None = None,
                 about: str = "", look: str | None = None, clips: dict | None = None,
                 places: dict | None = None) -> tuple[list[dict], list[str]]:
     """The captions the brief asked for, as ops for a freshly chosen
-    storyboard: the look, an opening title, then the captions themselves.
-    (ops, notes on what was left out)."""
-    from . import daylog, overlays, subtitles
+    storyboard: the look, then the captions themselves. (ops, notes on what
+    was left out.) No opening title (sarah, 2026-10-06: a short opens straight
+    into the footage); `title` only stands in for `about`."""
+    from . import daylog, subtitles
     about = about or title or ""
     if answer in LEGACY:
         answer, look = LEGACY[answer][0], look or LEGACY[answer][1]
@@ -241,7 +242,7 @@ def caption_ops(board: dict, cat, answer: str | None, title: str | None = None,
         answer = "describe"     # the genre's own captions, unless they said otherwise
     if answer not in ("describe", "transcribe"):
         return [], []
-    ops, notes = overlays.suggest(board, cat, None, title, ["title"])
+    ops, notes = [], []
     if answer == "describe":
         more, why = daylog.caption_ops(board, cat, about, places=places)
     else:

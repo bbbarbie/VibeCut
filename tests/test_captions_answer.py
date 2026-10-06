@@ -50,8 +50,7 @@ def main() -> int:
     print("describe")
     s, cat, t, cut, _ = words("describe")
     kinds = [o["kind"] for o in s.board["overlays"]]
-    check("describe: an opening title from the description", kinds.count("title") == 1
-          and next(o["text"] for o in s.board["overlays"] if o["kind"] == "title") == "A day in Tokyo", str(kinds))
+    check("describe: no opening title (the video opens on the footage)", "title" not in kinds, str(kinds))
     check("describe: captions with the time", kinds.count("caption") >= 3, str(kinds))
     check("describe: the cozy look unless asked otherwise", ov.style_of(s.board).get("look") == "cozy")
     check("the words draw in preview and export", len(ov.resolve(s.board)) == len(s.board["overlays"]))

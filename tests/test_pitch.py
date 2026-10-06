@@ -83,6 +83,16 @@ def main() -> int:
     bare = lines([dict(c, capture_time=None) for c in shoot(labels=("structure",))])
     check("no dates, nothing clear: still three honest lines", len(bare) == 3, str(bare))
 
+    # No description is typed any more: the guess stands in, and its kind
+    # (for the length and the captions) has to come out right.
+    from web.backend import brief
+    kind = lambda clips: brief.kind_of(pitch.guess(clips))[0]
+    check("one day guesses a day vlog", kind(shoot()) == "day", pitch.guess(shoot()))
+    check("a weekend guesses a trip", kind(shoot(days=("2026-05-02", "2026-05-03"))) == "trip")
+    check("days away guesses a trip", kind(shoot(days=("2026-05-04", "2026-05-05", "2026-05-06"))) == "trip")
+    check("the guess never asks the model", pitch.guess(shoot()) == lines(shoot())[0])
+    check("no clips, no guess", pitch.guess([]) == "")
+
     print(f"\n{'all passed' if not failures else f'{len(failures)} failed'}")
     return 1 if failures else 0
 

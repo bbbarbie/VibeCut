@@ -1,61 +1,29 @@
-import { useEffect, useState } from 'react'
-import { api } from '../api'
-import type { Brief as BriefData, Clip } from '../types'
-import { Button, Notice, inputCls } from '../ui'
+import type { Brief as BriefData } from '../types'
+import { Button, Notice } from '../ui'
 
-// The brief: what the video is, in one line. The style questions follow
-// (StyleQuestions.tsx), then the rough cut. sarah (2026-10-06) hid the two
-// side doors that used to sit here (follow my voiceover, talking to camera):
-// the page is one question. Talking to camera is still under More.
-
-// Shown only if the footage can't be read for suggestions (pitch.py).
-const EXAMPLES = ['A weekend in Tokyo, mostly the food', 'My sister’s wedding day', 'A day at the beach with friends']
-
-export function Brief({ clips, brief, asking, onAsk, onContinue }: {
-  clips: Clip[]
+// Between the footage and the rough cut. There used to be a "What's this
+// video about?" box here; sarah (2026-10-06) found it a step she didn't need,
+// so what the video is gets read from the clips (pitch.guess) and the style
+// questions open by themselves. This page is only what's behind the popup:
+// a way back into it if it was closed, and on to the rough cut once answered.
+export function Brief({ brief, busy, onStart, onContinue }: {
   brief: BriefData | null
-  asking: boolean
-  onAsk: (text: string) => void
+  busy: boolean
+  onStart: () => void
   onContinue: () => void
 }) {
-  const [text, setText] = useState(brief?.message ?? '')
-  const go = (t: string) => { if (t.trim() && !asking) onAsk(t.trim()) }
-  // Three lines read from these clips, so a click can replace typing.
-  const [ideas, setIdeas] = useState<string[] | null>(null)
-  const clipKey = clips.map((c) => c.id).join(',')
-  useEffect(() => {
-    if (!clipKey) return
-    let live = true
-    api.suggestions()
-      .then((r) => { if (live) setIdeas(r.suggestions.length ? r.suggestions : EXAMPLES) })
-      .catch(() => { if (live) setIdeas(EXAMPLES) })
-    return () => { live = false }
-  }, [clipKey])
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto p-8">
-      <div className="mx-auto max-w-2xl">
-        <h2 className="font-serif text-[26px] text-zinc-100">What’s this video about?</h2>
-        <p className="mt-1 font-serif text-[17px] text-zinc-200">One line is enough.</p>
-        <form className="mt-4 flex gap-2" onSubmit={(e) => { e.preventDefault(); go(text) }}>
-          <input autoFocus value={text} onChange={(e) => setText(e.target.value)} disabled={asking}
-                 placeholder="e.g. a weekend in Tokyo, mostly the food" className={inputCls + ' text-[14px]'} />
-          <Button variant="primary" size="lg" type="submit" disabled={asking || !text.trim()}>{asking ? 'Thinking…' : 'Next'}</Button>
-        </form>
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          {ideas === null ? (
-            <span className="font-serif text-[17px] text-zinc-200"><span className="mr-1.5 inline-block size-1.5 animate-pulse rounded-full bg-accent" />Reading your clips for ideas…</span>
-          ) : ideas.map((x) => (
-            <button key={x} type="button" disabled={asking} onClick={() => { setText(x); go(x) }}
-                    title="Use this and go on"
-                    className="rounded-full border border-line px-3 py-1.5 font-serif text-[16px] text-zinc-200 hover:border-zinc-500 hover:text-zinc-100 disabled:opacity-40">{x}</button>
-          ))}
-        </div>
-
-        {brief && (
-          <Notice tone="ok" className="mt-4 flex items-center gap-3">
-            <span className="min-w-0 flex-1">Brief written: “{brief.message}”{brief.said ? ` — ${brief.said}` : ''}</span>
+    <div className="grid min-h-0 flex-1 place-items-center p-8">
+      <div className="w-full max-w-md text-center">
+        <h2 className="font-serif text-[26px] text-zinc-100">A few quick questions</h2>
+        <p className="mt-2 font-serif text-[17px] text-zinc-200">How long, how fast, and what goes on screen.</p>
+        {brief ? (
+          <Notice tone="ok" className="mt-6 flex items-center gap-3 text-left">
+            <span className="min-w-0 flex-1 font-serif text-[16px]">{brief.said || 'Answered.'}</span>
             <Button size="sm" variant="primary" onClick={onContinue}>Rough cut →</Button>
           </Notice>
+        ) : (
+          <Button variant="primary" size="lg" className="mt-6" disabled={busy} onClick={onStart}>Start</Button>
         )}
       </div>
     </div>
