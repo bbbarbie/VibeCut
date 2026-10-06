@@ -74,7 +74,7 @@ export function Export({ tl, overlays, parts, music, style, history = [], onClos
 
   const pct = phase.kind === 'drawing' ? phase.done / Math.max(1, phase.of)
     : phase.kind === 'rendering' ? phase.job.progress : phase.kind === 'done' ? 1 : 0
-  const status = phase.kind === 'drawing' ? `Drawing the words on screen… ${phase.done}/${phase.of} frames`
+  const status = phase.kind === 'drawing' ? `Drawing the captions… ${phase.done}/${phase.of} frames`
     : phase.kind === 'rendering' ? ({
       waiting: 'Starting…', shots: `Rendering shots… ${phase.job.done} of ${phase.job.of}`, joining: 'Joining the shots…',
       finishing: `Adding ${phase.job.overlays ? 'words' : ''}${phase.job.overlays && phase.job.music ? ' and ' : ''}${phase.job.music ? 'music' : ''}${!phase.job.overlays && !phase.job.music ? 'sound' : ''}… ${Math.round(phase.job.progress * 100)}%`,
@@ -95,7 +95,7 @@ export function Export({ tl, overlays, parts, music, style, history = [], onClos
 
         <div className="mt-4 space-y-2 text-[12px]">
           <Toggle on={withWords} disabled={!overlays.items.length || busy} onChange={setWithWords}
-                  label={overlays.items.length ? `Words on screen (${overlays.items.length})` : 'Words on screen — none yet'} />
+                  label={overlays.items.length ? `Captions (${overlays.items.length})` : 'Captions — none yet'} />
           <Toggle on={withMusic} disabled={!music || busy} onChange={setWithMusic}
                   label={music ? `Music: ${music}` : 'Music — none chosen under the edit'} />
           {style && (style.look || style.transitions || style.letterbox) && (
@@ -106,7 +106,7 @@ export function Export({ tl, overlays, parts, music, style, history = [], onClos
           )}
           {withWords && issues > 0 && (
             <p className="rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-200">
-              {issues} overlay{issues === 1 ? ' has' : 's have'} a problem a viewer would notice (cut off, too quick to read, or overlapping). They’re marked in Words on screen.
+              {issues} overlay{issues === 1 ? ' has' : 's have'} a problem a viewer would notice (cut off, too quick to read, or overlapping). They’re marked in Captions.
             </p>
           )}
         </div>

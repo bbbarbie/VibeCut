@@ -32,23 +32,27 @@ SIMILAR = 0.78
 # retakes are (same window as cutgrammar.reject's duplicate rule): the same
 # café in the morning and again at night is two moments, not a stutter.
 RETAKE_WINDOW_S = 15 * 60
+# Filmed from the same spot (GPS within ~150 m) a lower cut-off already
+# means the same view: on her footage two lecture-hall shots from one seat,
+# 13 minutes apart, scored 0.766 and read as one shot twice. 0.72 sits at
+# the shoot's 95th percentile of shot-pair similarity. [prior]
+SAME_PLACE_SIMILAR = 0.72
+SAME_PLACE_M = 150.0
 OPENINGS = ("hook", "start")
-# Words on screen: which look (looks/*.json) and which overlay kinds
-# (overlays.KINDS). Only words the edit already knows -- part titles, dates,
-# the description, a voiceover's own lines -- so no answer invents copy.
-# Spoken words are captioned only where a transcript exists (voiceover or
-# talking-head mode); a plain vlog has none, by design.
-CAPTIONS = {
-    "none": None,
-    # the clock and what's happening, per moment (daylog.py), plus a title
-    "day": ("cozy", ["title"]),
-    "simple": ("clean", ["title", "part", "caption", "end"]),
-    "bold": ("hype", ["title", "part", "date", "caption"]),
-    "key": ("quiet", ["title", "date"]),
-}
+# Captions: what they say (describe / transcribe / none) and how they look
+# (looks/*.json). Only words the footage knows: the clock, the place from
+# the clip's GPS and what the image labels see (describe, daylog.py), or
+# what was said, from the Mac's own recogniser (transcribe, subtitles.py).
+# Every answer also gets an opening title from the creator's own words.
+CAPTIONS = ("describe", "transcribe", "none")
+CAPTION_LOOKS = {"clean": "clean", "bold": "hype", "cozy": "cozy", "quiet": "quiet"}
+DEFAULT_LOOK = {"describe": "cozy", "transcribe": "clean"}
+# Answers saved before the question changed: (what they say, how they look).
+LEGACY = {"day": ("describe", "cozy"), "simple": ("describe", "clean"), "bold": ("describe", "bold"),
+          "key": ("describe", "quiet")}
 DAY_IN_LIFE = re.compile(r"\bday in (my|the|a) life\b|\bdaily vlog\b|\bdiml\b", re.I)
 STYLE_KEYS = {"length": tuple(LENGTH_S), "pace": tuple(PACE_CAP_S), "opening": OPENINGS,
-              "captions": tuple(CAPTIONS)}
+              "captions": CAPTIONS + tuple(LEGACY), "caption_look": tuple(CAPTION_LOOKS)}
 
 # Focus choices, each a storyboard theme (storyboard.THEMES).
 FOCUS = [("people", "Me and the people I was with"), ("food", "Food and drinks"),
@@ -72,12 +76,17 @@ def fixed_questions(theme_counts: Counter | None = None) -> list[dict]:
         {"id": "opening", "question": "How should it start?", "multi": False, "choices": [
             {"key": "hook", "label": "With the best moment", "hint": "A hook first, then the story"},
             {"key": "start", "label": "From the beginning", "hint": "In the order it happened"}]},
-        {"id": "captions", "question": "What words should be on screen?", "multi": False, "choices": [
-            {"key": "day", "label": "Day in my life", "hint": "The time and what you're doing: “7:42 am · coffee run”"},
-            {"key": "none", "label": "No words", "hint": "Just the footage"},
-            {"key": "simple", "label": "Simple and clean", "hint": "A title and a small label for each part"},
-            {"key": "bold", "label": "Bold, Reels style", "hint": "Big capitals that hit on the beat, with dates"},
-            {"key": "key", "label": "Just the key words", "hint": "An opening title and the dates, nothing else"}]},
+        {"id": "captions", "question": "Captions?", "multi": False, "choices": [
+            {"key": "describe", "label": "Describe what's happening",
+             "hint": "The time, the place and what's in the shot: “7:42 am · coffee run”"},
+            {"key": "transcribe", "label": "Write out what's said", "hint": "Subtitles of the talking, made on this Mac"},
+            {"key": "none", "label": "No captions", "hint": "Just the footage"}]},
+        {"id": "caption_look", "question": "How should the captions look?", "multi": False,
+         "when": {"captions": ["describe", "transcribe"]}, "choices": [
+            {"key": "clean", "label": "Clean and simple", "hint": "Small, white, out of the way"},
+            {"key": "bold", "label": "Bold, Reels style", "hint": "Big capitals that hit on the beat"},
+            {"key": "cozy", "label": "Soft and cozy", "hint": "Warm and rounded, like a diary"},
+            {"key": "quiet", "label": "Quiet", "hint": "Thin and calm"}]},
     ]
     counts = theme_counts or Counter()
     focus = [{"key": k, "label": label} for k, label in FOCUS if counts.get(k, 0) >= MIN_FOCUS_SHOTS]
@@ -122,27 +131,28 @@ def describe(style: dict | None) -> str:
 
 
 def caption_ops(board: dict, cat, answer: str | None, title: str | None = None,
-                about: str = "") -> tuple[list[dict], list[str]]:
-    """The words the captions answer asks for, as ops for a freshly chosen
-    storyboard: the look first, then what overlays.suggest can fill truthfully.
+                about: str = "", look: str | None = None, clips: dict | None = None,
+                places: dict | None = None) -> tuple[list[dict], list[str]]:
+    """The captions the brief asked for, as ops for a freshly chosen
+    storyboard: the look, an opening title, then the captions themselves.
     (ops, notes on what was left out)."""
-    from . import daylog, overlays
+    from . import daylog, overlays, subtitles
     about = about or title or ""
+    if answer in LEGACY:
+        answer, look = LEGACY[answer][0], look or LEGACY[answer][1]
     if answer is None and DAY_IN_LIFE.search(about):
-        answer = "day"      # the genre's own captions, unless they said otherwise
-    want = CAPTIONS.get(answer or "")
-    if not want:
+        answer = "describe"     # the genre's own captions, unless they said otherwise
+    if answer not in ("describe", "transcribe"):
         return [], []
-    look, kinds = want
-    if board.get("option") != "voice":
-        kinds = [k for k in kinds if k != "caption"]    # no spoken lines to caption
-    ops, notes = overlays.suggest(board, cat, None, title, kinds)
-    if answer == "day":
-        more, why = daylog.caption_ops(board, cat, about)
-        ops, notes = ops + more, notes + why
-    if not ops:
+    ops, notes = overlays.suggest(board, cat, None, title, ["title"])
+    if answer == "describe":
+        more, why = daylog.caption_ops(board, cat, about, places=places)
+    else:
+        more, why = subtitles.caption_ops(board, cat, clips or {}, about)
+    ops, notes = ops + more, notes + why
+    if not more:
         return [], notes
-    return [{"op": "set_look", "look": look}, *ops], notes
+    return [{"op": "set_look", "look": CAPTION_LOOKS.get(look or "", DEFAULT_LOOK[answer])}, *ops], notes
 
 
 def _window(s, cap: float, best: dict[str, float]) -> None:
@@ -178,8 +188,7 @@ def one_per_look(options: list) -> None:
         for b in o.beats:
             keep: list = []
             for s in sorted(b.shots, key=rank, reverse=True):
-                if not any(s.clip_id != k.clip_id and s.vec.shape == k.vec.shape
-                           and float(s.vec @ k.vec) >= SIMILAR and _close(s, k) for k in keep):
+                if not any(alike(s, k) for k in keep):
                     keep.append(s)
             dropped += len(b.shots) - len(keep)
             b.shots = [s for s in b.shots if s in keep]
@@ -187,6 +196,43 @@ def one_per_look(options: list) -> None:
         if dropped:
             o.notes.append(f"Kept the best of each look-alike: {dropped} near-repeat shot"
                            f"{'s' * (dropped != 1)} left on the shelf.")
+
+
+def alike(a, b) -> bool:
+    """Two shots a viewer reads as the same shot twice: one view filmed
+    again (Vision feature print), close in time."""
+    return (a.clip_id != b.clip_id and a.vec.shape == b.vec.shape and _close(a, b)
+            and float(a.vec @ b.vec) >= (SAME_PLACE_SIMILAR if _same_place(a, b) else SIMILAR))
+
+
+def repeat_ops(board: dict | None, cat) -> tuple[list[dict], list[str]]:
+    """An edit that already exists: the shots that repeat another shot in it
+    -- a look-alike, or the same stretch of one clip twice -- as drop_shot
+    ops, keeping the better-made of each group wherever it sits. Returns
+    (ops, names of what goes). Vision-only, like `one_per_look`."""
+    entries = [e for bt in (board or {}).get("beats", []) for e in bt["shots"]
+               if not e.get("gap") and e.get("id") in cat.shots]
+    rank = lambda e: cat.shots[e["id"]].score + (0.15 if cat.shots[e["id"]].lean else 0.0)  # noqa: E731
+    keep: list[dict] = []
+    ops, names = [], []
+    for e in sorted(entries, key=rank, reverse=True):
+        s = cat.shots[e["id"]]
+        same = any(e["id"] == k["id"] and e["start"] < k["end"] and k["start"] < e["end"] for k in keep)
+        if same or any(alike(s, cat.shots[k["id"]]) for k in keep):
+            ops.append({"op": "drop_shot", "shot": e.get("key") or e["id"]})
+            names.append(s.clip_name)
+        else:
+            keep.append(e)
+    return ops, names
+
+
+def _same_place(a, b) -> bool:
+    if not a.gps or not b.gps:
+        return False
+    import math
+    dy = (a.gps[0] - b.gps[0]) * 111_000
+    dx = (a.gps[1] - b.gps[1]) * 111_000 * math.cos(math.radians(a.gps[0]))
+    return math.hypot(dx, dy) <= SAME_PLACE_M
 
 
 def _close(a, b) -> bool:

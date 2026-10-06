@@ -36,9 +36,9 @@ export function CutReview({ data, clips, approved, busy, onOverride, onApprove, 
         {thrown.length === 0 && <p className="mt-2 text-[12px] text-muted">Nothing — every clip had something usable.</p>}
         <div className="mt-2 grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2">
           {thrown.map((c) => (
-            <div key={c.id} className="rounded-lg border border-line bg-raised/60 p-2">
+            <div key={c.id} className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2">
               <div className="relative">
-                <img src={thumb(c.id)} className="aspect-video w-full rounded object-cover opacity-50 grayscale" />
+                <img src={thumb(c.id)} className="aspect-video w-full rounded object-cover" />
                 <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 text-[10px] tabular-nums text-zinc-300">{dur(c.duration)}</span>
               </div>
               <div className="mt-1.5 truncate text-[11px] text-zinc-400">{c.name}</div>

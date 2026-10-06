@@ -57,7 +57,10 @@ DEFAULT_STYLE = {"font": "Clean", "color": "#ffffff", "accent": "#b9d9eb", "capt
                  "backing": "shadow"}
 
 TEXT_MAX = 140
-EDITABLE = ("text", "sub", "pos", "size", "anim", "dur")
+EDITABLE = ("text", "sub", "pos", "size", "anim", "dur", "place")
+# Dragged on the picture by hand: block centre as a fraction of the frame and
+# a size multiplier. Overrides pos/size (and, for captions, the caption line).
+SCALE_MIN, SCALE_MAX = 0.4, 3.0
 
 
 class OverlayError(Exception):
@@ -132,6 +135,20 @@ def clean_fields(patch: dict, kind: str) -> dict:
                 raise OverlayError("an overlay lasts between 0.3 s and an hour")
             d = round(d, 3)
         out["dur"] = d
+    if "place" in patch:
+        p = patch["place"]
+        if p is None:
+            out["place"] = None
+        else:
+            try:
+                x, y = float(p["x"]), float(p["y"])
+                sc = float(p.get("scale", 1.0))
+            except (KeyError, TypeError, ValueError) as e:
+                raise OverlayError("a place is {x, y, scale}") from e
+            if not (0.0 <= x <= 1.0 and 0.0 <= y <= 1.0):
+                raise OverlayError("a place is inside the picture (0 to 1)")
+            out["place"] = {"x": round(x, 4), "y": round(y, 4),
+                            "scale": round(min(SCALE_MAX, max(SCALE_MIN, sc)), 3)}
     if kind != "chapters" and "text" in out and not out["text"]:
         raise OverlayError("an overlay needs some text")
     return out
@@ -367,7 +384,7 @@ def describe(a: dict | None, b: dict | None) -> list[dict]:
             what.append("timing")
         if old["dur"] != o["dur"]:
             what.append("length")
-        if (old["pos"], old["size"]) != (o["pos"], o["size"]):
+        if (old["pos"], old["size"], old.get("place")) != (o["pos"], o["size"], o.get("place")):
             what.append("place")
         if old["anim"] != o["anim"]:
             what.append("animation")
@@ -533,6 +550,12 @@ def read_time(text: str) -> float:
 
 
 def _region(o: dict, style: dict) -> str:
+    if o.get("place"):
+        # placed by hand: judge it where it is, still only warn
+        p = o["place"]
+        row = "top" if p["y"] < 0.33 else "bottom" if p["y"] > 0.67 else ""
+        col = "left" if p["x"] < 0.33 else "right" if p["x"] > 0.67 else ""
+        return "-".join(x for x in (row, col) if x) or "center"
     if o["kind"] == "caption":
         return "center" if style["captions"] == "center" else "bottom"
     return o["pos"]

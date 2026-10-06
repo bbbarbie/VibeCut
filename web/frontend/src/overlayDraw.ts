@@ -198,7 +198,8 @@ function linesFor(o: Overlay, style: OverlayStyle, u: number, chars: number): Li
 function baseLines(o: Overlay, style: OverlayStyle, u: number, chars: number): Line[] {
   const s = SIZE[o.size]
   const text = chars < o.text.length ? o.text.slice(0, chars) : o.text
-  const ink = style.color
+  const ink = o.ink ?? style.color
+  style = o.ink2 ? { ...style, accent: o.ink2 } : style
   switch (o.kind) {
     case 'title':
       return [{ text, px: 0.09 * u * s, bold: true, color: ink },
@@ -213,7 +214,9 @@ function baseLines(o: Overlay, style: OverlayStyle, u: number, chars: number): L
       return [{ text, px: 0.05 * u * s, bold: true, color: ink },
         ...(o.sub ? [{ text: o.sub, px: 0.03 * u * s, bold: false, color: style.accent }] : [])]
     case 'caption':
-      return [{ text, px: 0.046 * u * s, bold: false, color: ink }]
+      // a describing caption names the place where a new one starts, small, above the line
+      return [...(o.sub ? [{ text: o.sub, px: 0.026 * u * s, bold: true, color: style.accent, track: 0.12, upper: true }] : []),
+        { text, px: 0.046 * u * s, bold: false, color: ink }]
     case 'date':
       return [{ text, px: 0.03 * u * s, bold: true, color: ink, track: 0.12, upper: true }]
     default:
@@ -237,8 +240,12 @@ function anchorFor(pos: Overlay['pos'], W: number, H: number): Anchor {
 
 // ---- draw -----------------------------------------------------------------
 
+// Where each block landed on this frame, in canvas pixels (for picking and
+// dragging words on the preview).
+export type OverlayBox = { id: string; x: number; y: number; w: number; h: number }
+
 export function drawOverlays(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, W: number, H: number,
-  items: Overlay[], style: OverlayStyle, parts: Part[], t: number): void {
+  items: Overlay[], style: OverlayStyle, parts: Part[], t: number, boxes?: OverlayBox[]): void {
   ctx.clearRect(0, 0, W, H)
   const u = Math.min(W, H)
   const motion = style.motion ?? null
@@ -249,15 +256,16 @@ export function drawOverlays(ctx: CanvasRenderingContext2D | OffscreenCanvasRend
     const typing = o.anim === 'type'
     const chars = typing ? Math.ceil(o.text.length * clamp01(p.pin * 1.6)) : o.text.length
     const pos = o.kind === 'caption' ? (style.captions === 'center' ? 'center' : 'bottom') : o.pos
-    const a = anchorFor(pos, W, H)
+    // placed by hand: centred where it was dropped, at its own size
+    const a: Anchor = o.place ? { x: o.place.x * W, align: 'center', v: 'middle', y: o.place.y * H } : anchorFor(pos, W, H)
     const at = (g: number) => pose(o, p.pin, p.pout, g, u, a.align, motion)
     if (at(0).alpha <= 0.001 && at(1).alpha <= 0.001) continue
-    drawBlock(ctx, W, H, u, linesFor(o, style, u, chars), o, style, a, at)
+    drawBlock(ctx, W, H, u, linesFor(o, style, u * (o.place?.scale ?? 1), chars), o, style, a, at, boxes)
   }
 }
 
 function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, W: number, H: number, u: number,
-  lines: Line[], o: Overlay, style: OverlayStyle, a: Anchor, at: (group: number) => Pose) {
+  lines: Line[], o: Overlay, style: OverlayStyle, a: Anchor, at: (group: number) => Pose, boxes?: OverlayBox[]) {
   const m = safe(W, H)
   const maxW = (a.align === 'center' ? W - m.l - m.r : (W - m.l - m.r) * 0.72)
   // measure and wrap
@@ -301,6 +309,8 @@ function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingConte
 
   ctx.save()
   const pl0 = place(p0)
+  boxes?.push({ id: o.id, x: cx + pl0.ox - (blockW * pl0.sc) / 2, y: cy + pl0.oy - (blockH * pl0.sc) / 2,
+                w: blockW * pl0.sc, h: blockH * pl0.sc })
   ctx.translate(cx + pl0.ox, cy + pl0.oy)
   ctx.rotate(p0.rot)
   ctx.scale(pl0.sc, pl0.sc)
@@ -324,7 +334,12 @@ function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingConte
     const lx = a.align === 'left' ? x : a.align === 'right' ? x - w : x - w / 2
     ctx.fillRect(lx, y + blockH + 0.014 * u, w, Math.max(2, 0.004 * u))
   }
-  if (style.backing === 'shadow') {
+  if (o.halo) {
+    // nothing in the palette stands out from this frame enough on its own
+    ctx.shadowColor = o.halo
+    ctx.shadowBlur = 0.022 * u
+    ctx.shadowOffsetY = 0.002 * u
+  } else if (style.backing === 'shadow') {
     ctx.shadowColor = 'rgba(0,0,0,0.6)'
     ctx.shadowBlur = 0.018 * u
     ctx.shadowOffsetY = 0.003 * u
@@ -343,7 +358,16 @@ function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingConte
     ctx.globalAlpha = group ? at(group).alpha : p0.alpha
     // letter-spacing adds trailing space; shift so tracked text stays aligned
     const shift = r.line.track && a.align !== 'left' ? (r.line.track * r.line.px) / (a.align === 'center' ? 2 : 1) : 0
-    ctx.fillText(r.text, x + shift, y + (r.h - r.line.px) / 2)
+    const ty = y + (r.h - r.line.px) / 2
+    if (o.halo) {
+      // a tight dark edge hugging the letters carries them over the pale
+      // parts of a split frame; the soft glow set above adds the rest
+      const soft = ctx.shadowBlur
+      ctx.shadowBlur = 0.005 * u
+      ctx.fillText(r.text, x + shift, ty)
+      ctx.shadowBlur = soft
+    }
+    ctx.fillText(r.text, x + shift, ty)
     y += r.h
     prev = r.line
   }

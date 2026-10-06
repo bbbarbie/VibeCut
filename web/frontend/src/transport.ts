@@ -6,7 +6,7 @@
 import { useSyncExternalStore } from 'react'
 import { locate, toSource, type SeqItem } from './sequence'
 import type { Target } from './snap'
-import { swapSource } from './hold'
+import { hideStill, settleStill, swapSource } from './hold'
 import { dissolveAfter, mixAt, preloadAt, veilAt, type TransMap } from './joinView'
 
 export function createStore<T>(initial: T) {
@@ -102,10 +102,16 @@ export class Transport {
     const v = this.video
     if (!v) return
     const url = `/api/video/${clipId}`
-    if (v.getAttribute('src') === url && v.readyState >= 1) return
+    if (v.getAttribute('src') === url && v.readyState >= 2) return
+    // Wait for a decodable frame, not just the metadata: Safari paints black
+    // for a seek made before any frame data has arrived (the first jump on
+    // the timeline after loading). Never wait forever on a stuck load.
     await new Promise<void>((res) => {
-      v.addEventListener('loadedmetadata', () => res(), { once: true })
-      swapSource(v, url)
+      const done = () => { clearTimeout(timer); v.removeEventListener('loadeddata', done); res() }
+      const timer = setTimeout(done, 4000)
+      v.addEventListener('loadeddata', done)
+      if (v.getAttribute('src') !== url) swapSource(v, url)
+      else if (v.readyState >= 2) done()
     })
   }
 
@@ -119,6 +125,7 @@ export class Transport {
 
   // Coalesce paused seeks: while one is in flight, keep only the latest.
   private showFrame(t: number) {
+    hideStill()
     this.seekQueued = t
     if (this.seeking) return
     this.seeking = true
@@ -136,11 +143,13 @@ export class Transport {
         this.paint(at)
       }
       this.seeking = false
+      if (this.video && !transportStore.get().playing) settleStill(this.video)
     })()
   }
 
   play(rate = 1) {
     if (!this.items.length || !this.video) return
+    hideStill()
     cancelAnimationFrame(this.raf)
     this.state({ playing: true, rate })
     if (rate > 0) this.forward(rate)

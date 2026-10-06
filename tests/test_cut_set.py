@@ -96,6 +96,24 @@ def main() -> int:
     except ValueError:
         check("set without points is refused", True)
 
+    # A two-second clip with nothing found in it reads as a mis-tap; it may be
+    # a short video on purpose, and the creator's call wins and is kept.
+    short = ClipSignals(duration=2.0, quality=[0.5, 0.5], sharpness=[0.8] * 2, luma=[120.0] * 2,
+                        contrast=[0.8] * 2, motion=[2.0] * 2, subject=[0.1] * 2, edge=[0.0] * 2,
+                        speech=[0.0] * 2, voiced=[], thumb=[0.5] * 144)
+    tap = {"id": "clip00000002", "name": "b.mov", "duration": 2.0, "capture_time": None,
+           "signals": short.to_json(), "shots": [{"index": 0, "start": 0.0, "end": 2.0, "quality": 0.5}]}
+    both = {**_clips(), tap["id"]: tap}
+    plan = cut.compute(both)
+    c = plan.clips["clip00000002"]
+    check("a 2 s clip with nothing found is left out as a mis-tap", c["rejected"] and c["code"] == "accident", c["code"])
+    plan = cut.override(plan, "clip00000002", "keep", both)
+    check("keep puts it back in", not plan.clips["clip00000002"]["rejected"])
+    again = cut.compute(both, cut.Plan(overrides=dict(plan.overrides)))
+    check("and the choice is remembered", not again.clips["clip00000002"]["rejected"])
+    plan = cut.override(plan, "clip00000002", "auto", both)
+    check("undo gives the call back to the rough cut", plan.clips["clip00000002"]["rejected"])
+
     print(f"\n{'all passed' if not failures else f'{len(failures)} failed'}")
     return 1 if failures else 0
 

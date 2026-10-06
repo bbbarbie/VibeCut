@@ -34,3 +34,39 @@ export function swapSource(v: HTMLVideoElement, url: string): void {
   v.setAttribute('src', url)
   v.load()
 }
+
+// A paused seek inside the clip already on screen can decode its frame and
+// still leave the <video> painted black (seen on a 4K iPhone .MOV: the frame
+// draws fine onto a canvas, the element shows nothing until the next seek).
+// So after a paused seek, if no frame is presented promptly, the decoded frame
+// is drawn onto the hold canvas instead; it goes as soon as anything moves.
+let still: { v: HTMLVideoElement; c: HTMLCanvasElement } | null = null
+
+export function hideStill(): void {
+  if (still) { still.c.style.visibility = 'hidden'; still = null }
+}
+
+export function settleStill(v: HTMLVideoElement): void {
+  hideStill()
+  const c = holdCanvas(v)
+  if (!c) return
+  const fv = v as FrameVideo
+  let presented = false
+  const check = () => {
+    if (presented || !v.paused || v.seeking || v.readyState < 2 || !v.videoWidth) return
+    const scale = Math.min(1, 1920 / Math.max(v.videoWidth, v.videoHeight))
+    c.width = Math.round(v.videoWidth * scale)
+    c.height = Math.round(v.videoHeight * scale)
+    try {
+      c.getContext('2d')?.drawImage(v, 0, 0, c.width, c.height)
+      c.style.visibility = 'visible'
+      still = { v, c }
+    } catch { /* a tainted or unready frame: leave the element as it is */ }
+  }
+  const go = () => {
+    fv.requestVideoFrameCallback?.(() => { presented = true })
+    setTimeout(check, 250)
+  }
+  if (v.seeking) v.addEventListener('seeked', go, { once: true })
+  else go()
+}

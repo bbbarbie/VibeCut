@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Picks } from '../brief'
+import { applies, type Picks } from '../brief'
 import type { StyleQuestion } from '../types'
 
 // Asked once, after the first description and before anything is cut: a
@@ -16,7 +16,9 @@ export function StyleQuestions({ description, questions, tailored, onDone, onCan
   const [picks, setPicks] = useState<Picks>({})
   const [extra, setExtra] = useState('')
   const card = useRef<HTMLDivElement>(null)
-  const qs = questions ?? []
+  // A question that depends on an earlier answer (the captions' look) is
+  // only asked when that answer calls for it.
+  const qs = (questions ?? []).filter((x) => applies(x, picks))
   const last = step >= qs.length           // the "anything else?" step
   const q = last ? null : qs[step]
   const p = q ? picks[q.id] ?? { keys: [], other: '' } : null

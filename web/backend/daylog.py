@@ -46,10 +46,26 @@ PHRASES: list[tuple[str, str]] = [
     ("bus", "on the bus"), ("car", "on the way"), ("taxi", "on the way"), ("crosswalk", "heading out"),
     ("street", "out and about"), ("crowd", "out and about"), ("temple", "temple visit"),
     ("museum", "museum"), ("concert", "concert"), ("stage", "show time"), ("fireworks", "fireworks"),
-    ("sunset", "sunset"), ("sunrise", "sunrise"), ("night", "night out"), ("sky", "look up"),
+    ("sunset", "sunset"), ("sunrise", "sunrise"), ("night", "night out"),
     ("stairs", "up we go"), ("path", "walking"),
+    # scenery: what the place looks like, when nothing is happening in it
+    ("waterfall", "waterfall"), ("lake", "by the lake"), ("river", "along the river"), ("shore", "by the water"),
+    ("harbor", "harbour views"), ("harbour", "harbour views"), ("boat", "out on the water"), ("bridge", "over the bridge"),
+    ("snow", "snow day"), ("desert", "desert"), ("canyon", "canyon views"), ("cliff", "cliffside"),
+    ("volcano", "volcano"), ("field", "open fields"), ("vineyard", "vineyard"), ("rainforest", "into the jungle"),
+    ("castle", "castle"), ("palace", "palace"), ("church", "old church"), ("cathedral", "cathedral"),
+    ("shrine", "shrine visit"), ("pagoda", "temple visit"), ("monument", "sightseeing"), ("statue", "sightseeing"),
+    ("skyscraper", "city views"), ("cityscape", "city views"), ("skyline", "city views"), ("tower", "city views"),
+    ("alley", "back streets"), ("neon", "neon nights"), ("night_sky", "night sky"), ("rainbow", "rainbow"),
+    ("rain", "rainy day"), ("umbrella", "rainy day"), ("hotel", "check-in"), ("pool", "pool time"),
+    ("amusement_park", "theme park"), ("roller_coaster", "theme park"), ("zoo", "zoo day"), ("aquarium", "aquarium"),
+    ("stadium", "game day"), ("festival", "festival"), ("parade", "parade"), ("wedding", "wedding"),
+    ("cake_candles", "birthday"), ("gift", "presents"), ("balloon", "party"),
     # generic last: they speak only when nothing more specific does
     ("cup", "coffee run"), ("beverage", "drinks"), ("food", "food"),
+    ("water", "by the water"),
+    # no "sky": Vision sees sky in nearly every outdoor shot, so it said nothing ("look up" confused her)
+    ("plant", "greenery"), ("tree", "greenery"),
 ]
 _RANK = {k: i for i, (k, _) in enumerate(PHRASES)}
 _SAYS = dict(PHRASES)
@@ -71,11 +87,16 @@ def phrase(labels: dict[str, float]) -> str | None:
     return _SAYS[min(hits, key=_RANK.__getitem__)] if hits else None
 
 
-def moments(board: dict, cat) -> list[dict]:
-    """Shots on the board where the day moves on: [{key, len, when, labels}]."""
+def moments(board: dict, cat, places: dict | None = None) -> list[dict]:
+    """Shots on the board where the day moves on: [{key, len, when, labels, say, place}].
+
+    `places`: {rounded gps: geocoder answer} (places.lookup). A new place is
+    always a new moment, and is named once, where it starts."""
+    from . import places as pl
     out: list[dict] = []
     last_when: datetime | None = None
     last_say: str | None = None
+    last_place: str | None = None
     for bt in board.get("beats", []):
         for e in bt["shots"]:
             if e.get("gap") or not e.get("id") or e["end"] - e["start"] < MIN_SHOT_S:
@@ -85,18 +106,23 @@ def moments(board: dict, cat) -> list[dict]:
                 continue
             when = s.when + timedelta(seconds=max(0.0, e["start"] - s.start))
             say = phrase(s.labels)
+            place = pl.name_at(s.gps, places) if places else None
             moved = last_when is None or abs((when - last_when).total_seconds()) >= NEW_TIME_S
-            if moved or (say and say != last_say):
+            arrived = place is not None and place != last_place
+            if moved or arrived or (say and say != last_say):
                 out.append({"key": e.get("key") or e["id"], "len": e["end"] - e["start"], "when": when,
                             "labels": {k: round(v, 2) for k, v in sorted(s.labels.items(), key=lambda kv: -kv[1])[:6]},
-                            "say": say})
+                            "say": say, "place": place if arrived else None})
                 last_when, last_say = when, say or last_say
+                last_place = place or last_place
     return out
 
 
-def caption_ops(board: dict, cat, about: str = "", ask_model: bool | None = None) -> tuple[list[dict], list[str]]:
-    """-> (add_overlay ops, notes). One caption per moment the day moves on."""
-    ms = moments(board, cat)
+def caption_ops(board: dict, cat, about: str = "", ask_model: bool | None = None,
+                places: dict | None = None) -> tuple[list[dict], list[str]]:
+    """-> (add_overlay ops, notes). One caption per moment the day moves on;
+    where a new place starts, its name rides above the time."""
+    ms = moments(board, cat, places)
     if not ms:
         return [], ["No time stamps: none of the clips in this story carry a recording time."]
     from . import llm
@@ -113,8 +139,11 @@ def caption_ops(board: dict, cat, about: str = "", ask_model: bool | None = None
     ops = []
     for m in ms:
         text = clock(m["when"]) + (f" · {m['say']}" if m["say"] else "")
-        ops.append({"op": "add_overlay", "kind": "caption", "text": text, "anchor": {"to": "shot", "id": m["key"]},
-                    "at": AT_S, "dur": round(min(HOLD_S, m["len"] - AT_S), 2)})
+        op = {"op": "add_overlay", "kind": "caption", "text": text, "anchor": {"to": "shot", "id": m["key"]},
+              "at": AT_S, "dur": round(min(HOLD_S, m["len"] - AT_S), 2)}
+        if m.get("place"):
+            op["sub"] = m["place"]
+        ops.append(op)
     notes = []
     bare = sum(not m["say"] for m in ms)
     if bare:

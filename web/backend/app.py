@@ -25,7 +25,7 @@ from pydantic import BaseModel
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, brief, cut, export, looks, pitch, seams, smooth, sound, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, brief, ink, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import Workflow, WorkflowError
 
@@ -75,6 +75,7 @@ def _open_project(pid: str) -> pj.Project:
         clips, missing = pj.restore_clips(pr)
         # Clips indexed before the voice reading existed get it once, here.
         sound.add_sound(list(clips.values()))
+        ink.fill(list(clips.values()))
         CLIPS.clear()
         CLIPS.update(clips)
         VISION_USED["value"] = vision.status() == "ready" and any(
@@ -95,8 +96,36 @@ def _open_project(pid: str) -> pj.Project:
             WORKFLOW = Workflow()
         PROJECT["p"] = pr
         _refresh_catalog()
+        # A story picked before the repeat check existed gets it once, here.
+        _drop_repeats(only_once=True)
     pj.set_open(pid)
     return pr
+
+
+REPEATS_TEXT = "Took out shots that repeat another"
+
+
+def _drop_repeats(only_once: bool = False) -> None:
+    """No shot in the edit repeats another (sarah: never put identical
+    shots in): the weaker of each look-alike goes, as one undoable turn.
+    Runs when a story is chosen, and once for a story chosen before this
+    existed; after that the creator's own edits are never second-guessed."""
+    b = SESSION.board
+    if not b or not VISION_USED["value"]:
+        return
+    if only_once:
+        last = max((i for i, t in enumerate(SESSION.turns) if not t.undone
+                    and any(o.get("op") == "choose_option" for o in t.ops)), default=None)
+        if last is None or any(t.text == REPEATS_TEXT for t in SESSION.turns[last + 1:]):
+            return
+    ops, names = brief.repeat_ops(b, CATALOG["cat"])
+    if not ops:
+        return
+    words = ", ".join(names[:4]) + (f" and {len(names) - 4} more" if len(names) > 4 else "")
+    reply = (f"Took out {len(ops)} shot{'s' * (len(ops) != 1)} that repeated another one in the edit "
+             f"({words}); the better-made of each stays. Undo puts {'them' if len(ops) != 1 else 'it'} back.")
+    SESSION.add({"kind": "direct", "text": REPEATS_TEXT, "ops": ops, "reply": reply},
+                CATALOG["cat"], _make_proposals)
 
 
 def _close_project() -> None:
@@ -357,6 +386,8 @@ def _overlays_public(b: dict | None, cat, tl: dict) -> dict:
     items = overlays.resolve(b)
     if (style.get("motion") or {}).get("beat_lock"):
         items = looks.beat_lock(items, tl.get("grid"), tl.get("total", 0.0))
+    # each overlay's colour against what's behind it, from the video's own palette
+    items = ink.for_board(items, style, timeline.layout(b), CLIPS)
     return {"items": items, "style": style, "findings": overlays.check(b, cat),
             "look": {"id": (b or {}).get("look"), "overrides": looks.overrides(b), "all": looks.public()}}
 
@@ -655,6 +686,10 @@ def api_project_brief(req: BriefReq) -> dict:
     else:
         pr.brief = {"message": req.message.strip(), "style": brief.clean_style(req.style) or {},
                     "said": req.said, "at": time.time()}
+        if pr.brief["style"].get("captions") == "transcribe":
+            # Transcribing takes a while; start now so the subtitles are
+            # ready when a story is chosen. On this Mac, free, cached.
+            subtitles.prefetch(list(CLIPS.values()), req.message)
     return _session()
 
 
@@ -871,6 +906,7 @@ def api_ops(req: OpsReq) -> dict:
         SESSION.add({"kind": "direct", "text": req.label, "ops": req.ops},
                     CATALOG["cat"], _make_proposals)
         if [o.get("op") for o in req.ops] == ["choose_option"]:
+            _drop_repeats()
             _words_as_asked()
         return _session()
 
@@ -880,19 +916,22 @@ def _words_as_asked() -> None:
     asked for, as their own turn so Undo takes only the words away."""
     b = SESSION.board
     d = _direction() or {}
-    answer = (d.get("style") or {}).get("captions")
+    style = d.get("style") or {}
+    answer = style.get("captions")
     if not b or b.get("overlays") or not d:
         return
     said = (d.get("text") or "").split("\n")[0].strip()
-    ops, notes = brief.caption_ops(b, CATALOG["cat"], answer, said if len(said) <= 48 else None, said)
+    found = places.lookup([c.get("gps") for c in CLIPS.values()]) if answer in ("describe", None, "day") else {}
+    ops, notes = brief.caption_ops(b, CATALOG["cat"], answer, said if len(said) <= 48 else None, said,
+                                   look=style.get("caption_look"), clips=CLIPS, places=found)
     if not ops:
         return
     n = sum(o["op"] == "add_overlay" for o in ops)
-    reply = (f"Added {n} word overlay{'s' * (n != 1)}, as you asked at the start." if answer else
-             f"Added {n} day-in-my-life caption{'s' * (n != 1)}: the time and what's happening. Click one to retype it.")
+    what = {"transcribe": "subtitles of what's said", "none": "words"}.get(answer or "", "captions: the time, the place and what's happening")
+    reply = f"Added {n} caption{'s' * (n != 1)} — {what}, as you asked at the start. Click one to retype it."
     if notes:
         reply += " " + " ".join(notes)
-    SESSION.add({"kind": "direct", "text": "Words on screen, as you asked", "ops": ops, "reply": reply},
+    SESSION.add({"kind": "direct", "text": "Captions, as you asked", "ops": ops, "reply": reply},
                 CATALOG["cat"], _make_proposals)
 
 

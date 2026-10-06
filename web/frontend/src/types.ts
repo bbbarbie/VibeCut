@@ -136,7 +136,12 @@ export type Overlay = {
   id: string; kind: OverlayKind; text: string; sub: string; pos: OverlayPos; size: 'S' | 'M' | 'L'; anim: OverlayAnim
   dur: number | null; anchor: { to: 'edit' | 'end' | 'beat' | 'shot'; id?: string }; at: number
   start: number; end: number; shown_end: number
+  // picked against the picture behind it (backend ink.py): main / accent colour, and a halo when nothing contrasts enough
+  ink?: string; ink2?: string; halo?: string
+  // dragged on the picture by hand: block centre (0..1 of the frame) and size multiplier
+  place?: OverlayPlace | null
 }
+export type OverlayPlace = { x: number; y: number; scale: number }
 export type OverlayStyle = { font: 'Clean' | 'Editorial' | 'Rounded' | 'Mono' | 'Condensed'; color: string; accent: string; captions: 'bottom' | 'center'; backing: 'shadow' | 'box' | 'none'
   look?: string; motion?: Motion | null }
 // How a look moves words (backend looks/*.json): one curve and timing for the whole video.
@@ -229,8 +234,10 @@ export type TalkState = { job: TalkJob | null; plan: TalkPlan | null; llm: boole
 
 // The style questions asked once, after the first description (brief.py).
 export type StyleChoice = { key: string; label: string; hint?: string }
-export type StyleQuestion = { id: string; question: string; multi: boolean; hint?: string; choices: StyleChoice[] }
-export type StyleAnswers = { length?: string; pace?: string; opening?: string; captions?: string }
+export type StyleQuestion = { id: string; question: string; multi: boolean; hint?: string; choices: StyleChoice[]
+  /** asked only when an earlier answer is one of these: { captions: ['describe', 'transcribe'] } */
+  when?: Record<string, string[]> }
+export type StyleAnswers = { length?: string; pace?: string; opening?: string; captions?: string; caption_look?: string }
 
 // How the sound crosses a cut: carried out (L cut), carried in (J cut), or a clean break.
 export type JoinSound = 'cut' | 'carry_out' | 'carry_in' | 'default'

@@ -111,3 +111,24 @@ test('without a look, nothing about the words changes', () => {
   const keys = (s: OverlayStyle) => Array.from({ length: 40 }, (_, f) => frameKey(WORDS, [], f / 30, s.motion)).join(',')
   assert.equal(keys(plain), keys({ ...plain, motion: null }))
 })
+
+// Words dragged on the picture by hand: drawn where they were dropped, at
+// their own size, still never out of the safe area -- the export draws them
+// the same way, because it is the same function.
+test('a caption placed by hand is drawn there, sized, and held inside the safe area', () => {
+  const W = 1080, H = 1920
+  const style = styleOf(LOOKS.find((r) => r.id === 'clean') ?? LOOKS[0])
+  const cap = ov('c', { kind: 'caption', text: 'coffee run', anim: 'none' })
+  const at = (place: Overlay['place']) => {
+    const { ctx } = recorder()
+    const out: import('./overlayDraw.ts').OverlayBox[] = []
+    drawOverlays(ctx as unknown as CanvasRenderingContext2D, W, H, [{ ...cap, place }], style, [], 1.5, out)
+    return out[0]
+  }
+  const usual = at(null), top = at({ x: 0.5, y: 0.3, scale: 1 }), big = at({ x: 0.5, y: 0.3, scale: 2 })
+  assert.ok(usual.y > H * 0.6, 'a caption sits low by default')
+  assert.ok(Math.abs(top.y + top.h / 2 - 0.3 * H) < 2 && Math.abs(top.x + top.w / 2 - W / 2) < 2, 'centred where it was dropped')
+  assert.ok(Math.abs(big.w / top.w - 2) < 0.15, `twice the size: ${big.w / top.w}`)
+  const edge = at({ x: 0.99, y: 0.99, scale: 1 }), sa = safe(W, H)
+  assert.ok(edge.x + edge.w <= W - sa.r + 1 && edge.y + edge.h <= H - sa.b + 1, 'dropped at the edge, pulled back inside')
+})

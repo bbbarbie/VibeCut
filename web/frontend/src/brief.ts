@@ -4,7 +4,12 @@ import type { StyleAnswers, StyleQuestion } from './types.ts'
 // plus anything they typed under "Something else".
 export type Picks = Record<string, { keys: string[]; other: string }>
 
-const STYLE_IDS = ['length', 'pace', 'opening', 'captions'] as const
+const STYLE_IDS = ['length', 'pace', 'opening', 'captions', 'caption_look'] as const
+
+/** Whether a question applies, given what was picked so far (its `when`). */
+export function applies(q: StyleQuestion, picks: Picks): boolean {
+  return Object.entries(q.when ?? {}).every(([id, keys]) => keys.includes(picks[id]?.keys[0] ?? ''))
+}
 
 /** Picks -> the first chat message and the structured answers that shape
  * the proposals. Length, pace, opening and captions travel as `style`; focus and any
@@ -15,7 +20,7 @@ export function composeBrief(text: string, questions: StyleQuestion[], picks: Pi
   const lines = [text.trim()]
   for (const q of questions) {
     const p = picks[q.id]
-    if (!p) continue
+    if (!p || !applies(q, picks)) continue
     const other = p.other.trim()
     if ((STYLE_IDS as readonly string[]).includes(q.id)) {
       if (p.keys[0]) style[q.id as typeof STYLE_IDS[number]] = p.keys[0]
@@ -36,6 +41,7 @@ export function composeBrief(text: string, questions: StyleQuestion[], picks: Pi
 export function sayPicks(questions: StyleQuestion[], picks: Picks): string {
   const bits: string[] = []
   for (const q of questions) {
+    if (!applies(q, picks)) continue
     const labels = q.choices.filter((c) => picks[q.id]?.keys.includes(c.key)).map((c) => c.label.toLowerCase())
     if (labels.length) bits.push(labels.join(' + '))
   }

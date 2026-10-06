@@ -142,16 +142,39 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   direction and reshape each proposal (`brief.shape`); focus and any
   Claude-tailored question (key only) become direction words. Targets (60 s,
   180 s, pace caps 8 / 5 / 2.5 s) are guesses. Tests: `tests/test_brief.py`.
-  A fourth question, words on screen (none / simple / bold / key), travels
-  as `style.captions`; when a story is chosen it becomes one undoable turn
-  (`brief.caption_ops`: a look + `overlays.suggest` kinds), so it shows in
-  preview and export. Only words the edit knows; spoken words get captions
-  only on the voiceover proposal (no transcript on the default path).
-  `tests/test_captions_answer.py`. **Day in my life** (`daylog.py`, the
-  default when the description says so): per moment the day moves on,
-  "7:42 am · coffee run" — clock from the clip's recording time + shot
-  offset, phrase from Vision labels (table, or with a key Claude phrases the
-  labels + time; text only, no frames leave). No time → no caption.
+  **Captions** (none / describe / transcribe) travels as `style.captions`,
+  and a follow-up asked only when there are captions (`when` on the
+  question), the look (clean / bold = hype / cozy / quiet), as
+  `style.caption_look`. When a story is chosen it becomes one undoable turn
+  (`brief.caption_ops`: look + title + captions). **Describe** = per moment
+  the day moves on, "7:42 am · coffee run" (`daylog.py`; clock from the
+  clip's recording time + shot offset, phrase from Vision labels, a bigger
+  table incl. scenery; with a key Claude may phrase labels + time, text
+  only) plus, where a new place starts, its name above the line (`sub`):
+  GPS rounded to ~100 m → Apple's geocoder on the Mac (`places.py`,
+  `place/vibeplace.swift`; coordinates only, free, cached in
+  `$VIBECUT_CACHE/places.json`; a place, area or city, never an address).
+  The default when the description says day-in-my-life. **Transcribe** =
+  subtitles of what's said (`subtitles.py`): only clips where a voice is
+  heard, Apple SpeechTranscriber on the Mac (speech.py, cached), lines
+  broken at pauses ≥0.6 s / sentence ends / 42 chars (16 CJK), timed to the
+  words, anchored to the shot; prefetched in the background when the brief
+  is saved. Words never decide the cut. **Ink** (`ink.py`): each overlay's
+  colour is checked against the frame behind it (32×18 tone grid per index
+  sample, `tones.npy`, written at index time or once from the sample JPEGs
+  for older clips); where the look's colour is under WCAG 4.5 it takes a
+  tint / shade of the footage's own hue that reads over ≥95% of the band, a
+  neutral only if none does; when none does (part light, part dark under
+  the words) light words on a tight dark edge + soft shadow, never dark
+  words (they vanished into hair and trousers on her footage). Derived per request, never stored in the log. The UI calls
+  overlays "Captions". `tests/test_ink.py`. **Dragged by hand**: click a
+  caption on the preview to select it, drag to move (snaps to the centre
+  lines), drag a corner to size it, double-click for its words; each drop is
+  one `edit_overlay` with `place: {x, y, scale}` (block centre, 0–1; null =
+  back to its usual spot), drawn by the same `overlayDraw` in export, still
+  pulled inside the safe area; checks still only warn. "Same place for all
+  captions" is one turn. `test_overlays.py`, `overlayLooks.test.ts`. Older answers (day / simple / bold /
+  key) map to describe + a look. `tests/test_captions_answer.py`.
   The brief's suggestion chips are read from the shoot (`pitch.py`: days,
   morning→night, themes, faces, talking, rough GPS; templates, or Claude
   phrasing those text facts with a key); a chip goes straight to Next.
@@ -189,7 +212,12 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   (`set_music`: track, in-point, gains, ducks, sfx, level) — Remix writes it
   (and its grade via `apply_style`), so editing a remix no longer loses its
   mix. Default proposals keep one of each look-alike group filmed within
-  15 min (Vision only). Overlay ffconcat gets `option framerate 30` (10 of
+  15 min (Vision only; cos ≥ 0.78, or ≥ 0.72 from the same spot, GPS ≤150 m).
+  An edit that already exists gets the same check (`brief.repeat_ops`, also
+  the same stretch of one clip twice, across parts): when a story is chosen,
+  and once for stories chosen before it, one undoable turn drops the
+  weaker of each (sarah: never identical shots in the edit); later hand
+  edits are never second-guessed. Overlay ffconcat gets `option framerate 30` (10 of
   30 frames were wrong). CARRY_S 0.5 s and MICRO_S are priors — calibrate.
   Tests: `tests/test_audiomix.py`, additions in `test_export.py`,
   `test_brief.py`, `test_remix.py`.

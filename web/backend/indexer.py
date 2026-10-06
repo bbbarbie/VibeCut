@@ -23,7 +23,7 @@ import numpy as np
 
 from cutgrammar import bestframe, features, media, shots, signals
 
-from . import sound, vision
+from . import ink, sound, vision
 
 CACHE = Path(os.environ.get("VIBECUT_CACHE", "~/.cache/vibecut")).expanduser()
 VIDEO_EXT = {".mp4", ".mov"}
@@ -88,6 +88,8 @@ def index_clip(path: str) -> dict:
     (d / "samples").mkdir(exist_ok=True)
     sample_names = [f"samples/{i:04d}.jpg" for i in range(len(m.preview))]
     bestframe.write_jpegs(list(shown), [str(d / n) for n in sample_names], quality=6)
+    # What words on screen will sit on, as the viewer sees it (ink.py).
+    ink.write(d, shown)
 
     rec = {
         "signals": sig.to_json(),

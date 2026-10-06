@@ -13,11 +13,12 @@ import { Overlays } from './components/Overlays'
 import { TalkCut } from './components/TalkCut'
 import { Keys } from './components/Keys'
 import { Player } from './components/Player'
+import type { OverlayEdit } from './components/OverlayCanvas'
 import { Menu, SwapPicker, type MenuItem } from './components/Menus'
 import { Music } from './components/Music'
 import type { ClassifyReq } from './components/Remember'
 import { Shelf } from './components/Shelf'
-import { Story, type PlayItem, type Selection } from './components/Story'
+import { SmoothButton, Story, type PlayItem, type Selection } from './components/Story'
 import { Timeline, type Marks } from './components/Timeline'
 import { Footage, type Importing } from './components/Footage'
 import { Brief } from './components/Brief'
@@ -158,6 +159,16 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const shown: Stage = peek && done.includes(peek) ? peek : stage
   useEffect(() => { if (peek && !done.includes(peek)) setPeek(null) }, [peek, done])
   useEffect(() => { if (shown !== 'story' && level === 'frames') setLevel('story') }, [shown]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Once a story is chosen the edit lives in Frames (sarah, 2026-10-04): opening
+  // the project lands there; the Story view stays one click away.
+  const [othersOpen, setOthersOpen] = useState(false)
+  const landed = useRef(false)
+  useEffect(() => {
+    // wait until the stage is known (clips and the gate load after the session)
+    if (landed.current || !session?.board || shown !== 'story') return
+    landed.current = true
+    if (level === 'story' && !othersOpen) setLevel('frames')
+  }, [session, shown]) // eslint-disable-line react-hooks/exhaustive-deps
   const showStep = (s: Stage) => { setPeek(s === stage ? null : s); setMenu(null); stopQueue(); setSegment(null); if (s !== 'story') transport.stop() }
 
   const cutOverride = async (target: string, action: string, range?: [number, number]) => {
@@ -398,6 +409,27 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     if (queue?.source === source) { stopQueue(); videoRef.current?.pause(); return }
     if (list.length) playAt({ source, items: list, index: 0 }, 0)
   }
+  // A shot or a part of the story plays as the edit, not as its raw clip, so
+  // its words on screen, joins and sound are what you see.
+  const until = useRef<number | null>(null)
+  const playEdit = (from: number, to: number) => {
+    stopQueue()
+    setSegment(null)
+    transport.stop()
+    transport.attach(videoRef.current, backRef.current, veilRef.current)
+    transport.seek(from)
+    until.current = to
+    transport.play(1)
+    setBoardPlay(true)
+  }
+  useEffect(() => phStore.subscribe(() => {
+    if (until.current != null && phStore.get() >= until.current - 0.03) { until.current = null; transport.stop() }
+  }), [])
+  useEffect(() => { if (!tr.playing) until.current = null }, [tr.playing])
+  const spanOf = (keys: string[]) => {
+    const its = tl.items.filter((x) => keys.includes(x.key))
+    return its.length ? [Math.min(...its.map((x) => x.seq_start)), Math.max(...its.map((x) => x.seq_end))] as const : null
+  }
   const preview = (clipId: string, start: number, end: number, shotId: string) => {
     transport.stop()
     stopQueue()
@@ -575,7 +607,9 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     if (!b) return
     const i = beatIndex(id)
     if (action === 'play') {
-      playSource(`beat:${id}`, b.shots.filter((x) => !x.gap && x.clip_id).map((x) => ({ id: x.id, clipId: x.clip_id!, start: x.start, end: x.end })))
+      const span = spanOf(b.shots.map((x) => x.key))
+      if (span) playEdit(span[0], span[1])
+      else playSource(`beat:${id}`, b.shots.filter((x) => !x.gap && x.clip_id).map((x) => ({ id: x.id, clipId: x.clip_id!, start: x.start, end: x.end })))
     } else if (action === 'up') run([{ op: 'move_beat', beat: id, to_index: i - 1 }], `You moved “${b.title}” up`)
     else if (action === 'down') run([{ op: 'move_beat', beat: id, to_index: i + 1 }], `You moved “${b.title}” down`)
     else if (action === 'remove') { setStorySel(null); run([{ op: 'drop_beat', beat: id }], `You removed “${b.title}”`) }
@@ -606,7 +640,11 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     const openSwap = () => e && setSwap({ key: menu.key, thumb: e.thumb, id: e.id })
     if (menu.kind === 'story-shot') {
       return { title: `This shot · ${e ? (e.end - e.start).toFixed(1) : '?'}s`, items: [
-        { label: 'Watch this shot', onClick: () => e?.clip_id && preview(e.clip_id, e.start, e.end, e.id) },
+        { label: 'Watch this shot', onClick: () => {
+          const span = spanOf([menu.key])
+          if (span) playEdit(span[0], span[1])
+          else if (e?.clip_id) preview(e.clip_id, e.start, e.end, e.id)
+        } },
         { label: 'Swap for a different shot…', onClick: openSwap },
         { label: 'Remove from the story', danger: true, onClick: () => run([{ op: 'drop_shot', shot: menu.key }], 'You removed a shot') },
       ] }
@@ -680,6 +718,21 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     const o = id ? ovData.items.find((x) => x.id === id) : null
     if (o && level === 'frames') { setFramesTab('words'); timelineOwns(); showOverlay(o) }
   }
+  // Words dragged on the picture: one undoable edit per drop.
+  const overlayEdit: OverlayEdit | undefined = session?.board ? {
+    selected: selOverlay,
+    onSelect: (id) => setSelOverlay(id),
+    onPlace: (id, place) => {
+      const o = ovData.items.find((x) => x.id === id)
+      const name = o ? KIND_META[o.kind].label.toLowerCase() : 'words'
+      run([{ op: 'edit_overlay', overlay: id, place }], place ? `You moved the ${name}` : `You put the ${name} back in its usual place`)
+    },
+    onPlaceAll: (place) => {
+      const ops = ovData.items.filter((o) => o.kind === 'caption').map((o) => ({ op: 'edit_overlay', overlay: o.id, place }))
+      if (ops.length) run(ops, 'You put every caption in the same place')
+    },
+    onOpen: (id) => selectOverlay(id),
+  } : undefined
   const overlaysPanel = session?.board ? (
     <Overlays data={ovData} items={tl.items} level={level} selected={selOverlay} busy={!!pending}
               onSelect={selectOverlay} onRun={runOverlay} onSuggest={suggestOverlays} onWatch={watchOverlay} newAt={newOverlayAt} />
@@ -695,7 +748,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const openTalk = () => { transport.stop(); stopQueue(); setMenu(null); setLevel('story'); setTalkOpen(true) }
   const openExport = () => { transport.stop(); videoRef.current?.pause(); stopQueue(); setMenu(null); setExporting(true) }
   const openRemix = () => { transport.stop(); videoRef.current?.pause(); stopQueue(); setMenu(null); setReferencing(false); setRemixing(true) }
-  const remixDone = async () => { await refresh(); setPeek(null); setLevel('story') }
+  const remixDone = async () => { await refresh(); setPeek(null); setLevel('frames') }
   const startOver = async () => {
     setRestart(false)
     try { await api.clear(); await refresh(); setLocal([hello]); setPeek(null); setCutData(null); setLevel('story') }
@@ -708,7 +761,11 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   }
 
   const usedIds = useMemo(() => new Set((session?.board?.beats ?? []).flatMap((b) => b.shots.map((x) => x.id))), [session])
-  const apply = (o: Option) => run([{ op: 'choose_option', option: o.key }], `You started from “${o.name}”`)
+  const apply = async (o: Option) => {
+    await run([{ op: 'choose_option', option: o.key }], `You started from “${o.name}”`)
+    setOthersOpen(false)
+    setLevel('frames')
+  }
   const clear = () => session?.board && run(session.board.beats.map((b) => ({ op: 'drop_beat', beat: b.id })),
     'You cleared the timeline')
 
@@ -753,8 +810,8 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
 
   const player = (big: boolean) => (
     <Player videoRef={videoRef} backRef={backRef} veilRef={veilRef} bars={session?.mix?.bars} segment={segment}
-            label={big ? label : tr.playing && !segment ? 'Your story, with its words on screen — click to pause' : storyLabel}
-            gap={tr.gap && !segment} overlay={overlayView} frame={tl.frame}
+            label={big ? label : tr.playing && !segment ? 'Your story, with its captions — click to pause' : storyLabel}
+            gap={tr.gap && !segment} overlay={overlayView} frame={tl.frame} overlayEdit={overlayEdit}
             onTime={() => {}} onEnd={() => { if (queue) playAt(queue, queue.index + 1) }} onPlayingChange={() => {}} />
   )
   const chat = (
@@ -770,6 +827,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       <Footage clips={clips} importing={importing} errors={session?.import_errors ?? []} vision={caps.vision}
                onPick={(fl) => importPicked(fromInput(fl))} onRetry={retryImport}
                onPreview={(c, sh) => preview(c.id, sh.start, sh.end, sh.id)}
+               onDecide={(c, a) => { cutOverride(c.id, a).catch((e) => note((e as Error).message)) }}
                canContinue={!!clips.length && !importing && stage !== 'footage'} briefDone={!!brief}
                onNext={() => showStep(stage === 'story' ? 'story' : brief ? 'cut' : 'brief')} />
     ) : shown === 'brief' ? (
@@ -802,6 +860,8 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
         onRetitle={retitle}
         onBeatAction={beatAction}
         onReference={() => setReferencing(true)}
+        othersOpen={othersOpen}
+        onOthersOpen={setOthersOpen}
         onSmooth={async (order, nudge) => { const s = await api.smooth(order, nudge); setSession(s); offerUndo(s) }}
         onJoin={(after, sound) => run([{ op: 'set_join', shot: after, sound }],
           sound === 'default' ? 'Sound back to automatic' : 'Changed how the sound crosses a cut')}
@@ -872,7 +932,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
           {profileInitial}
         </button>
         <Button variant="primary" size="sm" disabled={!session?.board} onClick={openExport}
-                title={session?.board ? 'Render the edit, its words on screen and its music to one video file' : 'Pick a story first'}>
+                title={session?.board ? 'Render the edit, its captions and its music to one video file' : 'Pick a story first'}>
           Export{session?.exports.length ? ` · ${session.exports.length}` : ''}
         </Button>
       </header>
@@ -888,10 +948,24 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
               <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-panel">
                 {session?.board && (
                   <div className="flex h-8 shrink-0 items-end gap-1 border-b border-line px-3" role="tablist">
-                    {([['shots', 'Shots'], ['words', `Words on screen${ovData.items.length ? ` · ${ovData.items.length}` : ''}`]] as const).map(([k, name]) => (
+                    {([['shots', 'Shots'], ['words', `Captions${ovData.items.length ? ` · ${ovData.items.length}` : ''}`]] as const).map(([k, name]) => (
                       <button key={k} type="button" role="tab" aria-selected={framesTab === k} onClick={() => setFramesTab(k)}
                               className={`rounded-t-md px-2.5 py-1 text-[11px] ${framesTab === k ? 'bg-raised text-zinc-100' : 'text-muted hover:text-zinc-200'}`}>{name}</button>
                     ))}
+                    {/* what used to live only on the Story page */}
+                    <div className="ml-auto flex items-center gap-1.5 self-center">
+                      <button type="button" onClick={() => playSource('board', [])}
+                              className="rounded-md bg-zinc-800 px-2.5 py-1 text-[11px] text-zinc-100 hover:bg-zinc-700">
+                        {boardPlay ? 'Stop' : 'Watch it all'}
+                      </button>
+                      <SmoothButton small rough={(session.seams ?? []).filter((x) => x.verdict !== 'ok').length}
+                                    onSmooth={async (order, nudge) => { const r = await api.smooth(order, nudge); setSession(r); offerUndo(r) }} />
+                      {session.proposals && (
+                        <button type="button" onClick={() => { setOthersOpen(true); setLevel('story') }}
+                                title="The other proposals built from your brief"
+                                className="rounded-md border border-line px-2.5 py-1 text-[11px] text-zinc-300 hover:bg-raised">Other ways to tell it</button>
+                      )}
+                    </div>
                   </div>
                 )}
                 {framesTab === 'words' && overlaysPanel ? (
@@ -953,7 +1027,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                             history={session?.exports ?? []} onClose={() => { setExporting(false); api.session().then(setSession).catch(() => {}) }} />}
       {remixing && <Remix onClose={() => setRemixing(false)} onDone={remixDone} canLinks={caps.links} />}
       {referencing && <BorrowStyle onClose={() => setReferencing(false)} onRemix={openRemix}
-                                   onApplied={(s) => { setSession(s); offerUndo(s); setReferencing(false); setPeek(null); setLevel('story') }} />}
+                                   onApplied={(s) => { setSession(s); offerUndo(s); setReferencing(false); setPeek(null); setLevel('frames') }} />}
       {restart && <Confirm title="Start this video over?" action="Start over" danger onNo={() => setRestart(false)} onYes={startOver}
                            text="The footage list, the rough cut, the story and its history are cleared. Your clip files and anything you exported are untouched." />}
 
