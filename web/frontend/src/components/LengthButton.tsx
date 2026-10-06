@@ -40,8 +40,8 @@ export function LengthButton({ total, onDone }: { total: number; onDone: (s: Ses
     <div ref={box} className="relative">
       <button ref={btn} type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
               title="How long the video is. Drag to make it shorter or longer."
-              className="whitespace-nowrap rounded-md border border-line px-2.5 py-1 text-[11px] tabular-nums text-zinc-300 hover:bg-raised">
-        Length · {lengthLabel(total)}
+              className="whitespace-nowrap rounded-md border border-line px-2 py-1 text-[11px] tabular-nums text-zinc-300 hover:bg-raised">
+        Length {lengthLabel(total)}
       </button>
       {open && pos && (
         <div className="fixed z-40 w-[320px] rounded-xl border border-line bg-raised p-4 shadow-2xl" style={pos}>

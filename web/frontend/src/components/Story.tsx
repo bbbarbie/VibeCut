@@ -315,9 +315,9 @@ export function SmoothButton({ rough, onSmooth, small }: { rough: number; onSmoo
     <div className="relative">
       <button type="button" onClick={() => setOpen((o) => !o)}
               title="See which cuts feel rough, and try a smoother version you can undo"
-              className={small ? 'rounded-md border border-line px-2.5 py-1 text-[11px] text-zinc-300 hover:bg-raised'
+              className={small ? 'rounded-md border border-line px-2 py-1 text-[11px] text-zinc-300 hover:bg-raised'
                 : 'rounded-lg border border-line px-3 py-1.5 text-[12px] text-zinc-300 hover:bg-raised'}>
-        Smoother cuts{rough > 0 && <span className="ml-1.5 rounded bg-amber-300/15 px-1 text-[10px] text-amber-200">{rough} rough</span>}
+        Smoother cuts{rough > 0 && <span className="ml-1.5 rounded bg-amber-300/15 px-1 text-[10px] text-amber-200">{rough}{small ? '' : ' rough'}</span>}
       </button>
       {open && (
         <div className="absolute right-0 top-9 z-30 w-72 rounded-xl border border-line bg-panel p-3 text-[12px] shadow-xl">

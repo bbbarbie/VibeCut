@@ -967,13 +967,13 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                   <div className="flex h-8 shrink-0 items-end gap-1 border-b border-line px-3" role="tablist">
                     {([['shots', 'Shots'], ['words', `Captions${ovData.items.length ? ` · ${ovData.items.length}` : ''}`]] as const).map(([k, name]) => (
                       <button key={k} type="button" role="tab" aria-selected={framesTab === k} onClick={() => setFramesTab(k)}
-                              className={`rounded-t-md px-2.5 py-1 text-[11px] ${framesTab === k ? 'bg-raised text-zinc-100' : 'text-muted hover:text-zinc-200'}`}>{name}</button>
+                              className={`shrink-0 whitespace-nowrap rounded-t-md px-2.5 py-1 text-[11px] ${framesTab === k ? 'bg-raised text-zinc-100' : 'text-muted hover:text-zinc-200'}`}>{name}</button>
                     ))}
                     {/* what used to live only on the Story page */}
-                    <div className="ml-auto flex min-w-0 items-center gap-1.5 self-center overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&_button]:shrink-0 [&_button]:whitespace-nowrap">
+                    <div className="ml-auto flex items-center gap-1 self-center whitespace-nowrap [&_button]:shrink-0 [&_button]:whitespace-nowrap">
                       <button type="button" onClick={() => playSource('board', [])}
-                              className="rounded-md bg-zinc-800 px-2.5 py-1 text-[11px] text-zinc-100 hover:bg-zinc-700">
-                        {boardPlay ? 'Stop' : 'Watch it all'}
+                              className="rounded-md bg-zinc-800 px-2 py-1 text-[11px] text-zinc-100 hover:bg-zinc-700">
+                        {boardPlay ? 'Stop' : 'Play all'}
                       </button>
                       <LengthButton total={tl.total} onDone={(r) => { setSession(r); offerUndo(r); note(r.length_note) }} />
                       <SmoothButton small rough={(session.seams ?? []).filter((x) => x.verdict !== 'ok').length}
@@ -981,7 +981,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                       {session.proposals && (
                         <button type="button" onClick={() => { setOthersOpen(true); setLevel('story') }}
                                 title="The other proposals built from your brief"
-                                className="rounded-md border border-line px-2.5 py-1 text-[11px] text-zinc-300 hover:bg-raised">Other ways to tell it</button>
+                                className="rounded-md border border-line px-2 py-1 text-[11px] text-zinc-300 hover:bg-raised">Other stories</button>
                       )}
                     </div>
                   </div>
