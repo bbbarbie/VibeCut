@@ -244,15 +244,19 @@ class LLMError(Exception):
     pass
 
 
-def interpret(message: str, cat: bd.Catalog, session: bd.Session, rules: str = "") -> dict:
+def interpret(message: str, cat: bd.Catalog, session: bd.Session, rules: str = "",
+              moment: str = "", image_b64: str | None = None) -> dict:
     """-> {"reply", "question", "choices", "direction", "ops"}. `rules` are the
-    creator's confirmed preferences (preferences.py), never candidates."""
+    creator's confirmed preferences (preferences.py), never candidates.
+    `moment` / `image_b64`: the paused moment the message is about (moment.py)."""
     import anthropic
 
-    messages = _history(session) + [{
-        "role": "user",
-        "content": f"{render_state(cat, session, rules)}\n\nUSER: {message}",
-    }]
+    text = f"{render_state(cat, session, rules)}\n\n{moment + chr(10) + chr(10) if moment else ''}USER: {message}"
+    content: str | list = text
+    if image_b64:
+        content = [{"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": image_b64}},
+                   {"type": "text", "text": text}]
+    messages = _history(session) + [{"role": "user", "content": content}]
     try:
         resp = client().beta.messages.create(
             model=MODEL,

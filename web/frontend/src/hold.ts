@@ -10,10 +10,33 @@ function holdCanvas(v: HTMLVideoElement): HTMLCanvasElement | null {
   return v.parentElement?.querySelector<HTMLCanvasElement>('canvas[data-hold]') ?? null
 }
 
-/** Point `v` at `url`, keeping the current picture up until the new one is ready. */
-export function swapSource(v: HTMLVideoElement, url: string): void {
+/** Point `v` at `url`, keeping the current picture up until the new one is
+ *  ready. With `sample` (the index frame nearest where the new clip will be
+ *  shown) that small frame is put up instead: a jump to another clip shows
+ *  the right picture at once, not the old one for the seconds a 4K file
+ *  takes to load. */
+export function swapSource(v: HTMLVideoElement, url: string, sample?: string | null): void {
   const c = holdCanvas(v)
-  if (c && v.readyState >= 2 && v.videoWidth) {
+  if (c && sample) {
+    hideStill()
+    const fv = v as FrameVideo
+    const img = new Image()
+    let done = false
+    const hide = () => { if (!done) { done = true; c.style.visibility = 'hidden' } }
+    img.onload = () => {
+      if (done) return
+      c.width = img.naturalWidth
+      c.height = img.naturalHeight
+      c.getContext('2d')?.drawImage(img, 0, 0)
+      c.style.visibility = 'visible'
+    }
+    img.src = sample
+    v.addEventListener('seeked', () => {
+      if (fv.requestVideoFrameCallback) fv.requestVideoFrameCallback(hide)
+      else hide()
+    }, { once: true })
+    setTimeout(hide, 10000)   // it is the right picture, only smaller: no hurry
+  } else if (c && v.readyState >= 2 && v.videoWidth) {
     const scale = Math.min(1, 960 / Math.max(v.videoWidth, v.videoHeight))
     c.width = Math.round(v.videoWidth * scale)
     c.height = Math.round(v.videoHeight * scale)

@@ -1,5 +1,9 @@
 import type { Capabilities, CutData, ExportJob, Job, LookFit, PrefClass, Project, ProjectMeta, RefCard, RefJob, RefSummary, Session, StyleAnswers, StyleQuestion, TalkState } from './types'
 
+export type MomentInfo = { header: string; key: string; llm: boolean; estimate: { tokens_in: number; usd: [number, number] } }
+export type MomentAnswer = { reply: string; choices: string[]; ops: Record<string, unknown>[]
+  preview: { lines: string[]; skipped: string[] } | null; header: string }
+
 export type ProjectList = { projects: ProjectMeta[]; open: string | null; capabilities: Capabilities }
 export type Opened = { project: ProjectMeta; session: Session }
 
@@ -62,6 +66,10 @@ export const api = {
   questions: (message: string) => j<{ questions: StyleQuestion[]; tailored: boolean }>(post('/api/brief/questions', { message })),
   ops: (ops: Record<string, unknown>[], label: string) => j<Session>(post('/api/ops', { ops, label })),
   smooth: (order: boolean, nudge: boolean) => j<Session>(post('/api/smooth', { order, nudge })),
+  // chat on pause: what the paused moment is (free), then one message about it (calls the model)
+  moment: (t: number) => j<MomentInfo>(post('/api/moment', { t })),
+  momentChat: (t: number, message: string, history: { who: 'you' | 'ai'; text: string }[]) =>
+    j<MomentAnswer>(post('/api/moment/chat', { t, message, history })),
   toggle: (turn: number) => j<Session>(post(`/api/turns/${turn}/toggle`, {})),
   voiceover: (text: string) => j<Session>(post('/api/voiceover', { text })),
   classify: (req: { turn: number; klass: PrefClass; rule?: string; scope?: string; counter?: string; reason?: string }) =>

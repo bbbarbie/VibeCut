@@ -98,7 +98,11 @@ export class Transport {
     transportStore.set({ ...transportStore.get(), ...p })
   }
 
-  private async ensureClip(clipId: string) {
+  // the index frame nearest a moment of a clip, put up while a jump loads
+  private sampleAt: (clipId: string, srcT: number) => string | null = () => null
+  setSamples(fn: (clipId: string, srcT: number) => string | null) { this.sampleAt = fn }
+
+  private async ensureClip(clipId: string, srcT?: number) {
     const v = this.video
     if (!v) return
     const url = `/api/video/${clipId}`
@@ -110,7 +114,7 @@ export class Transport {
       const done = () => { clearTimeout(timer); v.removeEventListener('loadeddata', done); res() }
       const timer = setTimeout(done, 4000)
       v.addEventListener('loadeddata', done)
-      if (v.getAttribute('src') !== url) swapSource(v, url)
+      if (v.getAttribute('src') !== url) swapSource(v, url, srcT == null ? null : this.sampleAt(clipId, srcT))
       else if (v.readyState >= 2) done()
     })
   }
@@ -138,7 +142,7 @@ export class Transport {
         if (!it) break
         if (it.kind === 'gap') { this.state({ gap: true }); continue }
         this.state({ gap: false })
-        await this.ensureClip(it.clip_id!)
+        await this.ensureClip(it.clip_id!, toSource(it, at))
         if (this.video) this.video.currentTime = Math.min(toSource(it, at), it.src_end - EPS)
         this.paint(at)
       }

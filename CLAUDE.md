@@ -52,6 +52,17 @@ The promise to a user is therefore *not* "this will be beautiful." It is
 - Chat editing rule: a turn applies operations to the working storyboard
   (`web/backend/board.py`), never regenerates it. The LLM only emits ops;
   the diff is computed, not reported by the model. Keep it that way.
+- **Chat on pause** (`web/backend/moment.py`, `/api/moment`, `/api/moment/chat`,
+  `PauseChat.tsx`; sarah, 2026-10-05: pausing means something should change).
+  While the edit is paused a box under the preview is pinned to that moment
+  ("Shot 12 · 0:34 · IMG_4492"): the model gets the shot, its clip time and
+  kept range, its neighbours, the words on screen and the paused index frame
+  (small JPEG) with the message, through the same `llm.interpret`; its ops
+  are only previewed (diff computed on a copy of the log) until Apply sends
+  them to `/api/ops` as one undoable turn. `/api/moment` never calls the model
+  and returns a per-message cost estimate (Opus 5 list price, output 600–2500
+  tokens, priors). No key: the box says so and sends nothing.
+  `tests/test_moment.py` (mocked model).
 
 - `cutgrammar/music.py` — energy-shape matching of the user's own tracks to
   the storyboard. Built, synthetic-tested; **not yet judged on a real music

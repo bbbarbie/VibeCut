@@ -6,6 +6,7 @@ the storyboard *text* goes to the chat model (see llm.py).
 
 from __future__ import annotations
 
+import copy
 import os
 import shutil
 import subprocess
@@ -25,7 +26,7 @@ from pydantic import BaseModel
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, brief, ink, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, brief, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import Workflow, WorkflowError
 
@@ -749,6 +750,82 @@ def api_chat(req: ChatReq) -> dict:
                      "choices": out.get("choices", []) if out.get("question") else [],
                      "direction": direction}, cat, _make_proposals)
         return _session()
+
+
+class MomentReq(BaseModel):
+    t: float
+    message: str = ""
+    # earlier exchanges in this pause's chat box, oldest first: {"who": "you"|"ai", "text"}
+    history: list[dict] = []
+
+
+def _moment(t: float, words: bool = True) -> dict:
+    b = SESSION.board
+    if not b:
+        raise HTTPException(409, "Pick a story first.")
+    # the words on screen need every overlay resolved (ink included), which
+    # is slow; the box's header doesn't need them, only the message does
+    items = _overlays_public(b, CATALOG["cat"], {})["items"] if words else []
+    m = moment.at(b, CATALOG["cat"], CLIPS, items, t)
+    if m is None:
+        raise HTTPException(404, "Nothing in the edit at that moment.")
+    return m
+
+
+@app.post("/api/moment")
+def api_moment(req: MomentReq) -> dict:
+    """The paused moment: what the chat box is pinned to, and what one message
+    about it would cost. Never calls the model."""
+    with LOCK:
+        m = _moment(req.t, words=False)
+        # the prompt's size hardly moves along the edit, so it is measured
+        # once per state of the edit, not on every pause
+        state = (id(SESSION), len(SESSION.turns), sum(1 for x in SESSION.turns if x.undone))
+        if _ESTIMATE.get("state") != state:
+            _ESTIMATE.update(state=state, chars=len(llm.render_state(CATALOG["cat"], SESSION, PREFS.for_model()))
+                             + len(llm.SYSTEM) + 400)   # + the moment's own lines and words, roughly
+        return {"header": moment.header(m), "key": m["key"], "llm": llm.available(),
+                "estimate": moment.estimate(_ESTIMATE["chars"] + len(moment.describe(m)), bool(m.get("frame")))}
+
+
+_ESTIMATE: dict = {}
+
+
+@app.post("/api/moment/chat")
+def api_moment_chat(req: MomentReq) -> dict:
+    """One message about the paused moment -> a reply and, where it fits, the
+    edit it proposes. Proposed only: Apply sends the ops to /api/ops, one
+    undoable turn, like every other edit."""
+    msg = req.message.strip()
+    if not msg:
+        raise HTTPException(400, "empty message")
+    if not llm.available():
+        raise HTTPException(409, "Chatting about a moment needs the AI turned on (the Anthropic key in web/.env).")
+    with LOCK:
+        m = _moment(req.t)
+        said = "\n".join(f"{'CREATOR' if h.get('who') == 'you' else 'YOU (earlier)'}: {h.get('text', '')}"
+                         for h in req.history[-6:] if isinstance(h, dict))
+        context = moment.describe(m) + (f"\nEarlier in this conversation about this moment:\n{said}" if said else "")
+        try:
+            out = llm.interpret(msg, CATALOG["cat"], SESSION, PREFS.for_model(), moment=context,
+                                image_b64=moment.image(m))
+        except llm.LLMError as e:
+            raise HTTPException(502, str(e)) from e
+        ops = [o for o in out.get("ops") or [] if o.get("op") != "choose_option"]
+        preview = None
+        if ops:
+            # what Apply would change, computed on a copy -- never reported by the model
+            try:
+                trial = bd.Session()
+                trial.turns = copy.deepcopy(SESSION.turns)
+                trial._next = SESSION._next
+                trial.replay(CATALOG["cat"], _make_proposals)
+                t = trial.add({"kind": "direct", "text": msg, "ops": ops}, CATALOG["cat"], _make_proposals)
+                preview = {"lines": [l["text"] for l in t.lines], "skipped": t.skipped}
+            except Exception as e:  # noqa: BLE001 -- a proposal that can't apply is shown as such
+                preview = {"lines": [], "skipped": [str(e)]}
+        return {"reply": out.get("question") or out.get("reply") or "", "choices": out.get("choices", []),
+                "ops": ops, "preview": preview, "header": moment.header(m)}
 
 
 SUGGESTED: dict = {}     # clip ids -> suggestions, so a revisit doesn't ask again

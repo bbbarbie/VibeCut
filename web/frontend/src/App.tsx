@@ -13,6 +13,7 @@ import { Overlays } from './components/Overlays'
 import { TalkCut } from './components/TalkCut'
 import { Keys } from './components/Keys'
 import { Player } from './components/Player'
+import { PauseChat } from './components/PauseChat'
 import type { OverlayEdit } from './components/OverlayCanvas'
 import { Menu, SwapPicker, type MenuItem } from './components/Menus'
 import { Music } from './components/Music'
@@ -146,6 +147,16 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     return () => { live = false; transport.stop() }
   }, [id])
   useEffect(() => { transport.setItems(tl.items, tl.total) }, [tl])
+  useEffect(() => {
+    const byId = new Map(clips.map((c) => [c.id, c.samples]))
+    transport.setSamples((id, t) => {
+      const s = byId.get(id)
+      if (!s?.times.length) return null
+      let k = 0
+      s.times.forEach((x, i) => { if (Math.abs(x - t) < Math.abs(s.times[k] - t)) k = i })
+      return `${s.base}${k}`
+    })
+  }, [clips])
   const wfState = session?.workflow?.state
   useEffect(() => { if (wfState && wfState !== 'intake') api.cut().then(setCutData).catch(() => {}) }, [wfState, clips])
   const atGate = wfState === 'cut-review'
@@ -814,6 +825,11 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
             gap={tr.gap && !segment} overlay={overlayView} frame={tl.frame} overlayEdit={overlayEdit}
             onTime={() => {}} onEnd={() => { if (queue) playAt(queue, queue.index + 1) }} onPlayingChange={() => {}} />
   )
+  // Chat on pause: only while the edit is stopped on a frame, about that frame.
+  const pauseChat = session?.board && !tr.playing && !segment
+    ? <PauseChat busy={!!pending} onApply={(ops, label) => run(ops, label)} items={tl.items}
+                 clipName={(id) => clips.find((c) => c.id === id)?.name ?? id} />
+    : null
   const chat = (
     <Chat items={chatItems} pending={pending} onSend={send} onToggle={toggle}
           disabled={!!pending} llm={caps.llm} hasBoard={!!session?.board || !!session?.proposals}
@@ -978,7 +994,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                          onUseRejected={(c) => cutOverride(c.id, 'keep')} />
                 )}
               </div>
-              <div className="flex w-[44%] min-w-[320px] flex-col">{player(true)}</div>
+              <div className="flex w-[44%] min-w-[320px] flex-col">{player(true)}{pauseChat}</div>
             </div>
             <Timeline tl={tl} marks={marks} marksOf={marksOf} selected={selected} flash={flash} alt={alt}
                       onSelect={(key, anchor) => {
@@ -1006,7 +1022,8 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                    onClick={() => { if (tr.playing && !segment) transport.stop() }}>
                 {player(false)}
               </div>
-              {!segment && !tr.playing && <p className="px-1 text-[12px] text-muted">Press Watch on anything to see it here.</p>}
+              {!segment && !tr.playing && !session?.board && <p className="px-1 text-[12px] text-muted">Press Watch on anything to see it here.</p>}
+              {pauseChat && <div className="overflow-hidden rounded-xl border border-line">{pauseChat}</div>}
               {storyStage && overlaysPanel}
               {storyStage && session?.board && <Music board={session.board} inUse={session.music?.id ?? null} onSession={setSession} />}
             </aside>
