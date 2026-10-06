@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { applies, type Picks } from '../brief'
+import { applies, nearestMark, type Picks } from '../brief'
+import { LengthSlider } from './LengthSlider'
 import type { StyleQuestion } from '../types'
 
 // Asked once, after the first description and before anything is cut: a
@@ -29,8 +30,14 @@ export function StyleQuestions({ description, questions, tailored, onDone, onCan
     return () => window.removeEventListener('keydown', key)
   }, [onCancel])
   useEffect(() => { card.current?.focus() }, [step, questions])
+  // The length slider starts on its suggestion, already answered: Next keeps it.
+  useEffect(() => {
+    if (q?.slider && !picks[q.id]) {
+      setPicks((ps) => ({ ...ps, [q.id]: { keys: [q.slider!.suggest], other: '', seconds: q.slider!.seconds } }))
+    }
+  }, [q]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const set = (id: string, next: { keys: string[]; other: string }) => setPicks((ps) => ({ ...ps, [id]: next }))
+  const set = (id: string, next: Picks[string]) => setPicks((ps) => ({ ...ps, [id]: next }))
   const choose = (key: string) => {
     if (!q || !p) return
     if (q.multi) {
@@ -49,7 +56,7 @@ export function StyleQuestions({ description, questions, tailored, onDone, onCan
            onKeyDown={(e) => {
              const typing = (e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA'
              const n = Number(e.key)
-             if (!typing && q && n >= 1 && n <= q.choices.length) choose(q.choices[n - 1].key)
+             if (!typing && q && !q.slider && n >= 1 && n <= q.choices.length) choose(q.choices[n - 1].key)
            }}
            className="w-full max-w-[520px] rounded-2xl border border-line bg-raised shadow-2xl outline-none">
         <div className="border-b border-line px-5 pb-3 pt-4">
@@ -76,6 +83,13 @@ export function StyleQuestions({ description, questions, tailored, onDone, onCan
           ) : q && p ? (
             <>
               <h2 className="font-serif text-[22px] leading-tight text-zinc-100">{q.question}</h2>
+              {q.slider ? (
+                <div className="mt-5">
+                  <LengthSlider slider={q.slider} value={p.seconds ?? q.slider.seconds}
+                                onChange={(sec) => set(q.id, { ...p, seconds: sec, keys: [nearestMark(q.slider!.marks, sec)] })} />
+                  <p className="mt-3 text-[11px] text-zinc-600">Drag, or click Short, Medium or Long. You can change it later in Frames.</p>
+                </div>
+              ) : (<>
               <p className="mt-1 text-[12px] text-muted">{q.multi ? q.hint ?? 'Pick any' : 'Pick one'}</p>
               <div className="mt-3 space-y-1.5">
                 {q.choices.map((c, i) => {
@@ -98,6 +112,7 @@ export function StyleQuestions({ description, questions, tailored, onDone, onCan
                        placeholder="Something else…"
                        className="w-full rounded-xl border border-dashed border-line bg-transparent px-3 py-2.5 text-[13px] text-zinc-100 outline-none placeholder:text-zinc-500 focus:border-zinc-500" />
               </div>
+              </>)}
             </>
           ) : (
             <>

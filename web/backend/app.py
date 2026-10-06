@@ -845,12 +845,61 @@ def api_brief_suggestions() -> dict:
     return SUGGESTED[key]
 
 
+def _pool() -> list:
+    """Every shot an edit may use: kept by the rough cut, as its window."""
+    shots, _ = storyboard.usable(storyboard.shots_from_clips(list(CLIPS.values()), cut.for_story(PLAN["plan"])))
+    return shots
+
+
+def _usable_s() -> float:
+    """The good footage an edit can actually use: look-alikes count once."""
+    if not CLIPS:
+        return 0.0
+    return brief.reachable_s(SESSION.board, CATALOG["cat"], _pool(), VISION_USED["value"])
+
+
+def _about() -> str:
+    """What the creator said the video is, for the length marks."""
+    text = (_direction() or {}).get("text") or ""
+    if not text and PROJECT["p"] is not None:
+        text = (PROJECT["p"].brief or {}).get("message", "")
+    return text.split("\n")[0]
+
+
+class LengthReq(BaseModel):
+    seconds: float
+
+
+@app.get("/api/length")
+def api_length() -> dict:
+    """The length slider in Frames: the same marks the questions showed, and
+    how long the edit is now. Free; nothing leaves the Mac."""
+    with LOCK:
+        b = SESSION.board
+        now = sum(e["end"] - e["start"] for bt in (b or {}).get("beats", []) for e in bt["shots"])
+        return {**brief.length_marks(_usable_s(), _about()), "current": round(now, 1)}
+
+
+@app.post("/api/length")
+def api_length_set(req: LengthReq) -> dict:
+    """Bring the edit to about this long, as one undoable turn."""
+    with LOCK:
+        if not SESSION.board:
+            raise HTTPException(409, "Pick a story first.")
+        target = max(5.0, float(req.seconds))
+        ops, said = brief.length_ops(SESSION.board, CATALOG["cat"], _pool(), target, VISION_USED["value"])
+        if ops:
+            SESSION.add({"kind": "direct", "text": f"Make it about {brief.say_length(target)}", "ops": ops,
+                         "reply": said}, CATALOG["cat"], _make_proposals)
+        return {**_session(), "length_note": said}
+
+
 @app.post("/api/brief/questions")
 def api_brief_questions(req: QuestionsReq) -> dict:
     """The style questions asked once, after the first description."""
     with LOCK:
         shots, _ = storyboard.usable(storyboard.shots_from_clips(list(CLIPS.values())))
-        qs = brief.fixed_questions(brief.theme_counts(shots))
+        qs = brief.fixed_questions(brief.theme_counts(shots), _usable_s(), req.message)
     tailored = False
     if llm.available() and req.message.strip():
         try:

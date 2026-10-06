@@ -153,6 +153,18 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   direction and reshape each proposal (`brief.shape`); focus and any
   Claude-tailored question (key only) become direction words. Targets (60 s,
   180 s, pace caps 8 / 5 / 2.5 s) are guesses. Tests: `tests/test_brief.py`.
+  **Length is a slider** (sarah, 2026-10-06; `brief.length_marks`,
+  `LengthSlider.tsx`): 15 s to everything the rough cut kept, Short / Medium
+  / Long marks from how much there is and the kind of video the description
+  says (day vlog / trip / event / other), one suggested with a reason; its
+  end is what the edit can reach (`brief.reachable_s`: look-alikes count once,
+  as `length_ops` never puts one back), not every usable second; it
+  travels as `style.seconds` (≤ 75 s = one shot per moment, as `short` did).
+  The same slider in Frames ("Length · 2:36") is one undoable turn
+  (`brief.length_ops`, `/api/length`): weakest shots out first, else good
+  shots back in filming order, their rough-cut window only (`add_shot` takes
+  start/end), never a look-alike. Kind lengths and the "plenty" rule are
+  priors. `tests/test_length.py`.
   **Captions** (none / describe / transcribe) travels as `style.captions`,
   and a follow-up asked only when there are captions (`when` on the
   question), the look (clean / bold = hype / cozy / quiet), as

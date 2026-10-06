@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Board, BoardBeat, BoardShot, Clip, JoinInfo, JoinSound, Option, Seam, Session } from '../types'
 import { dur } from '../format'
 import { Button } from '../ui'
@@ -307,20 +307,30 @@ export function SmoothButton({ rough, onSmooth, small }: { rough: number; onSmoo
   const [nudge, setNudge] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const box = useRef<HTMLDivElement>(null)
+  // closes like every other panel: Escape, or a click anywhere else
+  useEffect(() => {
+    if (!open) return
+    const away = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false) }
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    window.addEventListener('mousedown', away)
+    window.addEventListener('keydown', esc)
+    return () => { window.removeEventListener('mousedown', away); window.removeEventListener('keydown', esc) }
+  }, [open])
   const go = async () => {
     setBusy(true); setError(null)
     try { await onSmooth(order, nudge); setOpen(false) } catch (e) { setError((e as Error).message) } finally { setBusy(false) }
   }
   return (
-    <div className="relative">
+    <div ref={box} className="relative">
       <button type="button" onClick={() => setOpen((o) => !o)}
               title="See which cuts feel rough, and try a smoother version you can undo"
-              className={small ? 'rounded-md border border-line px-2.5 py-1 text-[11px] text-zinc-300 hover:bg-raised'
+              className={small ? 'rounded-md border border-line px-2 py-1 text-[11px] text-zinc-300 hover:bg-raised'
                 : 'rounded-lg border border-line px-3 py-1.5 text-[12px] text-zinc-300 hover:bg-raised'}>
-        Smoother cuts{rough > 0 && <span className="ml-1.5 rounded bg-amber-300/15 px-1 text-[10px] text-amber-200">{rough} rough</span>}
+        Smoother cuts{rough > 0 && <span className="ml-1.5 rounded bg-amber-300/15 px-1 text-[10px] text-amber-200">{rough}{small ? '' : ' rough'}</span>}
       </button>
       {open && (
-        <div className="absolute right-0 top-9 z-30 w-72 rounded-xl border border-line bg-panel p-3 text-[12px] shadow-xl">
+        <div className="absolute right-0 top-9 z-30 w-72 whitespace-normal rounded-xl border border-line bg-panel p-3 text-[12px] shadow-xl">
           <p className="text-zinc-300">{rough ? `${rough} cut${rough === 1 ? '' : 's'} may feel rough — marked ! between shots.` : 'No cut is flagged as rough.'} Try:</p>
           <label className="mt-2 flex items-start gap-2 text-zinc-200">
             <input type="checkbox" checked={order} onChange={(e) => setOrder(e.target.checked)} className="mt-0.5" />

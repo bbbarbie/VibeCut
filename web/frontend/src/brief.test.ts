@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { applies, composeBrief, sayPicks } from './brief.ts'
+import { applies, composeBrief, lengthLabel, nearestMark, sayPicks } from './brief.ts'
 import type { StyleQuestion } from './types.ts'
 
 const Q: StyleQuestion[] = [
@@ -56,4 +56,14 @@ test('the captions look is asked only when there are captions', () => {
   // a look picked, then captions switched off: the look doesn't travel
   const off = composeBrief('a day', caps, { captions: { keys: ['none'], other: '' }, caption_look: { keys: ['bold'], other: '' } })
   assert.deepEqual(off.style, { captions: 'none' })
+})
+
+test('the length slider travels as seconds, with the nearest mark', () => {
+  const marks = [{ key: 'short', label: 'Short', seconds: 60 }, { key: 'medium', label: 'Medium', seconds: 116 }, { key: 'long', label: 'Long', seconds: 233 }]
+  const qs: StyleQuestion[] = [{ id: 'length', question: 'How long should it be?', multi: false, choices: marks,
+    slider: { min: 15, max: 233, marks, suggest: 'short', seconds: 60, why: '', kind: 'day' } }]
+  const picks = { length: { keys: [nearestMark(marks, 100)], other: '', seconds: 100 } }
+  assert.deepEqual(composeBrief('a day', qs, picks).style, { length: 'medium', seconds: 100 })
+  assert.equal(sayPicks(qs, picks), 'about 1:40')
+  assert.equal(lengthLabel(45), '45 s')
 })

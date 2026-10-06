@@ -19,8 +19,14 @@ import copy
 import re
 from collections import Counter
 
-# Rough target lengths. "long" keeps every usable shot.
+# Rough target lengths. "long" keeps every usable shot. Only for answers
+# saved before the slider; the slider sends `seconds` (length_marks).
 LENGTH_S = {"short": 60.0, "medium": 180.0, "long": None}
+# At or under this a video is a short (Reels, TikTok, Shorts): each moment
+# once, as `short` always did. [prior]
+SHORT_S = 75.0
+# The slider never goes below this: a few shots, still a video.
+MIN_LENGTH_S = 15.0
 # Longest a single shot may run at each pace, around its best frame.
 PACE_CAP_S = {"calm": 8.0, "balanced": 5.0, "fast": 2.5}
 MIN_SHOT_S = 1.5
@@ -61,9 +67,87 @@ FOCUS = [("people", "Me and the people I was with"), ("food", "Food and drinks")
 MIN_FOCUS_SHOTS = 3
 
 
-def fixed_questions(theme_counts: Counter | None = None) -> list[dict]:
+# What kind of video the description says it is, and how long such a video
+# usually runs when made from a lot of material. Social-first kinds want a
+# short; a trip or an event earns more time as the footage grows. [priors:
+# typical lengths of creator vlogs, not measured on her videos]
+KINDS = [
+    ("day", re.compile(r"\bday in (my|the|a) life\b|\bdaily\b|\bdiml\b|\bmorning\b.*\bnight\b|\bmy day\b", re.I),
+     "a day vlog", 60.0, 180.0),
+    ("event", re.compile(r"\bwedding|birthday|party|concert|festival|graduation|game day|show\b", re.I),
+     "an event", 90.0, 300.0),
+    ("trip", re.compile(r"\btrip\b|travel|holiday|vacation|weekend|\btour\b|road ?trip|\babroad\b", re.I),
+     "a trip", 60.0, 300.0),
+]
+OTHER_KIND = ("other", None, "a video like this", 60.0, 180.0)
+
+
+def kind_of(about: str) -> tuple:
+    for k in KINDS:
+        if k[1].search(about or ""):
+            return k
+    return OTHER_KIND
+
+
+def _clock(s: float) -> str:
+    s = int(round(s))
+    return f"{s // 60}:{s % 60:02d}"
+
+
+def say_length(s: float) -> str:
+    """'45 seconds', '1 minute', '3 minutes', '1:45'."""
+    s = int(round(s))
+    if s < 60:
+        return f"{s} seconds"
+    if s % 60 == 0:
+        return f"{s // 60} minute{'s' * (s != 60)}"
+    return _clock(s)
+
+
+def length_marks(usable_s: float, about: str = "") -> dict:
+    """The length slider: from MIN_LENGTH_S to everything usable, with Short /
+    Medium / Long marks read from how much good footage there is and what
+    kind of video it is, and one of them suggested, with why.
+
+    Short is the kind's social length; Long keeps every good moment; Medium
+    sits between, at the kind's usual full-vlog length when there's that much
+    to choose from. The suggestion is Short unless there's plenty more than a
+    medium video's worth -- cutting hard is what makes a vlog watchable."""
+    top = max(5.0, round(usable_s))
+    kind, _, says, short_s, medium_s = kind_of(about)
+    short = min(short_s, top)
+    # a medium video grows with the material, up to twice the kind's usual
+    medium = min(max(medium_s, top * 0.3), 2 * medium_s)
+    medium = min(medium, max(short + 30.0, top * 0.5))
+    marks = [{"key": "short", "label": "Short", "seconds": round(short)}]
+    if medium < top - 15 and medium > short + 15:
+        marks.append({"key": "medium", "label": "Medium", "seconds": round(medium)})
+    if top > (marks[-1]["seconds"] + 15):
+        marks.append({"key": "long", "label": "Long", "seconds": round(top)})
+    # Plenty = two and a half medium videos' worth: then a medium one is
+    # still a real cut, not everything strung together. Less than that and a
+    # short is the edit that will get watched.
+    suggest = "medium" if any(m["key"] == "medium" for m in marks) and top >= 2.5 * medium else "short"
+    pick = next(m for m in marks if m["key"] == suggest)
+    why = (f"You have {_clock(top)} of good footage; for {says} we suggest about {say_length(pick['seconds'])}."
+           if top > pick["seconds"] else f"You have {_clock(top)} of good footage, so it all fits.")
+    return {"min": round(min(MIN_LENGTH_S, top)), "max": round(top), "marks": marks,
+            "suggest": suggest, "seconds": pick["seconds"], "why": why, "kind": kind}
+
+
+def target_s(style: dict | None) -> float | None:
+    """The length the edit should come out at, if one was asked for."""
+    style = style or {}
+    if style.get("seconds"):
+        return float(style["seconds"])
+    return LENGTH_S.get(style.get("length", ""))
+
+
+def fixed_questions(theme_counts: Counter | None = None, usable_s: float | None = None,
+                    about: str = "") -> list[dict]:
     """The questions every creator gets. Focus lists only themes the
-    footage actually has, so no answer points at nothing."""
+    footage actually has, so no answer points at nothing. With the usable
+    length known, the length question is a slider over it (length_marks)."""
     qs = [
         {"id": "length", "question": "How long should it be?", "multi": False, "choices": [
             {"key": "short", "label": "Short", "hint": "Under a minute, for Reels, TikTok or Shorts"},
@@ -88,6 +172,11 @@ def fixed_questions(theme_counts: Counter | None = None) -> list[dict]:
             {"key": "cozy", "label": "Soft and cozy", "hint": "Warm and rounded, like a diary"},
             {"key": "quiet", "label": "Quiet", "hint": "Thin and calm"}]},
     ]
+    if usable_s:
+        sl = length_marks(usable_s, about)
+        qs[0] = {"id": "length", "question": "How long should it be?", "multi": False, "slider": sl,
+                 "choices": [{"key": m["key"], "label": m["label"], "hint": f"About {_clock(m['seconds'])}",
+                              "seconds": m["seconds"]} for m in sl["marks"]]}
     counts = theme_counts or Counter()
     focus = [{"key": k, "label": label} for k, label in FOCUS if counts.get(k, 0) >= MIN_FOCUS_SHOTS]
     if len(focus) >= 2:
@@ -111,6 +200,12 @@ def clean_style(style: dict | None) -> dict | None:
     if not style:
         return None
     out = {k: style[k] for k, allowed in STYLE_KEYS.items() if style.get(k) in allowed}
+    try:
+        sec = float(style.get("seconds") or 0)
+    except (TypeError, ValueError):
+        sec = 0.0
+    if sec > 0:
+        out["seconds"] = round(min(max(sec, 5.0), 4 * 3600.0), 1)
     return out or None
 
 
@@ -120,7 +215,9 @@ def describe(style: dict | None) -> str:
         return ""
     bits = {"short": "short (about a minute)", "medium": "about three minutes", "long": "long"}
     words = []
-    if style.get("length"):
+    if style.get("seconds"):
+        words.append(f"about {_clock(style['seconds'])}")
+    elif style.get("length"):
         words.append(bits[style["length"]])
     if style.get("pace"):
         words.append({"calm": "calm", "balanced": "steady", "fast": "fast-cut"}[style["pace"]])
@@ -265,7 +362,8 @@ def shape(options: list, style: dict | None, best: dict[str, float]) -> None:
                 for s in b.shots:
                     _window(s, max(cap, MIN_SHOT_S), best)
 
-        if style.get("length") == "short" or style.get("pace") == "fast":
+        target = target_s(style)
+        if (target is not None and target <= SHORT_S) or style.get("pace") == "fast":
             for b in o.beats:
                 b.shots = one_per_moment(b.shots, rank)
         if style.get("opening") == "hook":
@@ -278,7 +376,6 @@ def shape(options: list, style: dict | None, best: dict[str, float]) -> None:
                 o.beats = [b for b in o.beats if b.shots]
                 o.beats.insert(0, Beat("Opening", "The strongest moment first, as a hook.", [top], top.lean))
 
-        target = LENGTH_S.get(style.get("length", ""))
         if target:
             total = sum(s.end - s.start for b in o.beats for s in b.shots)
             # Drop the weakest shot that isn't the last one left in its part.
@@ -302,3 +399,101 @@ def shape(options: list, style: dict | None, best: dict[str, float]) -> None:
         said = describe(style)
         if said:
             o.summary = f"{o.summary} Shaped to your answers: {said}.".strip()
+
+
+def length_ops(board: dict | None, cat, pool: list, target: float, vision: bool) -> tuple[list[dict], str]:
+    """An edit that already exists, brought to about `target` seconds (the
+    length slider in Frames): shorter by the same rule `shape` uses (weakest
+    shots first, every part keeps its best; then whole parts, never a hook),
+    longer by putting back the best-made usable shots it doesn't have yet,
+    each in filming order next to its neighbours and only its rough-cut
+    window, never one that repeats a shot already in (`alike`). Returns the
+    ops and a sentence saying what happened."""
+    from . import board as bd
+    beats = [{"id": bt["id"], "title": bt.get("title", ""),
+              "shots": [{"key": bd.key(e), "id": e.get("id"), "len": e["end"] - e["start"], "gap": bool(e.get("gap"))}
+                        for e in bt["shots"]]} for bt in (board or {}).get("beats", [])]
+    rank = lambda sid: cat.shots[sid].score + (0.15 if cat.shots[sid].lean else 0.0)  # noqa: E731
+    total = sum(e["len"] for bt in beats for e in bt["shots"])
+    was = total
+    tol = max(2.0, 0.03 * target)
+    ops: list[dict] = []
+    hook = 1 if beats and beats[0]["title"] == "Opening" and len(beats) > 1 else 0
+    if total > target + tol:
+        while total > target + tol:
+            spare = [(rank(e["id"]), bi, e) for bi, bt in enumerate(beats) if len(bt["shots"]) > 1
+                     for e in bt["shots"] if not e["gap"] and e["id"] in cat.shots]
+            if not spare:
+                break
+            _, bi, e = min(spare, key=lambda t: t[0])
+            beats[bi]["shots"].remove(e)
+            ops.append({"op": "drop_shot", "shot": e["key"]})
+            total -= e["len"]
+        while total > target + tol and len(beats) - hook > 1:
+            bi = min(range(hook, len(beats)), key=lambda i: max(
+                (rank(e["id"]) for e in beats[i]["shots"] if e["id"] in cat.shots), default=-9))
+            total -= sum(e["len"] for e in beats[bi]["shots"])
+            ops.append({"op": "drop_beat", "beat": beats[bi]["id"]})
+            del beats[bi]
+        n = sum(o["op"] == "drop_shot" for o in ops)
+        parts = sum(o["op"] == "drop_beat" for o in ops)
+        what = f"took out {n} of the weaker shot{'s' * (n != 1)}" if n else ""
+        if parts:
+            what += (" and " if what else "took out ") + f"{parts} part{'s' * (parts != 1)}"
+        return ops, f"Now about {say_length(total)} (was {say_length(was)}): {what}. Undo puts them back."
+
+    if total < target - tol:
+        on = {e["id"] for bt in beats for e in bt["shots"] if e["id"]}
+        kept = [cat.shots[i] for i in on if i in cat.shots]
+        added = 0
+        for s in sorted(pool, key=lambda s: rank(s.id) if s.id in cat.shots else s.score, reverse=True):
+            if total >= target - tol:
+                break
+            d = s.end - s.start
+            if s.id in on or s.id not in cat.shots or d <= 0 or total + d > target + max(tol, d / 2):
+                continue
+            if vision and any(alike(s, k) for k in kept):
+                continue
+            # next to the shot filmed just before it, else before the first one filmed after it
+            when = lambda sid: cat.shots[sid].when if sid in cat.shots else None  # noqa: E731
+            spots = [(bi, i, when(e["id"])) for bi, bt in enumerate(beats) for i, e in enumerate(bt["shots"])
+                     if e["id"] and when(e["id"]) is not None and bi >= hook]
+            if s.when is not None and spots:
+                before = [t for t in spots if t[2] <= s.when]
+                bi, i = (max(before, key=lambda t: t[2])[:2] if before else min(spots, key=lambda t: t[2])[:2])
+                at = i + 1 if before else i
+            elif beats:
+                bi, at = len(beats) - 1, len(beats[-1]["shots"])
+            else:
+                break
+            beats[bi]["shots"].insert(at, {"key": s.id, "id": s.id, "len": d, "gap": False})
+            ops.append({"op": "add_shot", "shot": s.id, "beat": beats[bi]["id"], "to_index": at,
+                        "start": round(s.start, 3), "end": round(s.end, 3)})
+            on.add(s.id)
+            kept.append(s)
+            total += d
+            added += 1
+        if not added:
+            return [], f"That's all the good footage there is: the edit stays about {say_length(total)}."
+        more = "" if total >= target - tol else " That's all the good footage there is."
+        return ops, (f"Now about {say_length(total)} (was {say_length(was)}): put back {added} "
+                     f"shot{'s' * (added != 1)}, each where it happened.{more} Undo takes them out again.")
+    return [], f"It's already about {say_length(total)}."
+
+
+def reachable_s(board: dict | None, cat, pool: list, vision: bool) -> float:
+    """How long the edit can get: what the length slider's end really means.
+    Not every usable second -- a look-alike of a shot already in the edit, or
+    of a better one, is never put back (sarah: no identical shots), so a total
+    that counted them promised 2:28 and delivered 1:34. With an edit, it is
+    exactly where `length_ops` stops; before one, the pool with look-alikes
+    collapsed the same way."""
+    if board and board.get("beats"):
+        now = sum(e["end"] - e["start"] for bt in board["beats"] for e in bt["shots"])
+        ops, _ = length_ops(board, cat, pool, 1e9, vision)
+        return now + sum(o["end"] - o["start"] for o in ops if o["op"] == "add_shot")
+    kept: list = []
+    for s in sorted(pool, key=lambda s: s.score, reverse=True):
+        if not (vision and any(alike(s, k) for k in kept)):
+            kept.append(s)
+    return sum(s.end - s.start for s in kept)

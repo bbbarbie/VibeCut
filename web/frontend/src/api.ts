@@ -1,4 +1,4 @@
-import type { Capabilities, CutData, ExportJob, Job, LookFit, PrefClass, Project, ProjectMeta, RefCard, RefJob, RefSummary, Session, StyleAnswers, StyleQuestion, TalkState } from './types'
+import type { Capabilities, CutData, ExportJob, Job, LengthSlider, LookFit, PrefClass, Project, ProjectMeta, RefCard, RefJob, RefSummary, Session, StyleAnswers, StyleQuestion, TalkState } from './types'
 
 export type MomentInfo = { header: string; key: string; llm: boolean; estimate: { tokens_in: number; usd: [number, number] } }
 export type MomentAnswer = { reply: string; choices: string[]; ops: Record<string, unknown>[]
@@ -65,6 +65,8 @@ export const api = {
   suggestions: () => j<{ suggestions: string[]; source: string }>(fetch('/api/brief/suggestions')),
   questions: (message: string) => j<{ questions: StyleQuestion[]; tailored: boolean }>(post('/api/brief/questions', { message })),
   ops: (ops: Record<string, unknown>[], label: string) => j<Session>(post('/api/ops', { ops, label })),
+  length: () => j<LengthSlider & { current: number }>(fetch('/api/length')),
+  setLength: (seconds: number) => j<Session & { length_note: string }>(post('/api/length', { seconds })),
   smooth: (order: boolean, nudge: boolean) => j<Session>(post('/api/smooth', { order, nudge })),
   // chat on pause: what the paused moment is (free), then one message about it (calls the model)
   moment: (t: number) => j<MomentInfo>(post('/api/moment', { t })),
