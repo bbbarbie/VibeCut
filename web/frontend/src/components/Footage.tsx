@@ -91,12 +91,12 @@ export function Footage({ clips, importing, errors, vision, onPick, onRetry, onD
         {inputs}
         <div className="w-full max-w-xl rounded-2xl border border-dashed border-zinc-700 p-10 text-center">
           <h2 className="font-serif text-[26px] text-zinc-100">Start with your clips</h2>
-          <p className="mt-2 text-[13px] text-zinc-400">Drag a folder of videos anywhere onto this window, or choose one. Every clip is read once, on this computer.</p>
+          <p className="mt-2 font-serif text-[17px] text-zinc-200">Drag a folder of videos anywhere onto this window, or choose one. Every clip is read once, on this computer.</p>
           <div className="mt-6 flex justify-center gap-2">
             <Button variant="primary" size="lg" onClick={() => folder.current?.click()}>Choose a folder</Button>
             <Button size="lg" onClick={() => files.current?.click()}>Choose some clips</Button>
           </div>
-          <p className="mt-4 text-[11px] text-muted">.mp4 and .mov · nothing is uploaded or changed</p>
+          <p className="mt-4 font-serif text-[17px] text-zinc-200">.mp4 and .mov · nothing is uploaded or changed</p>
         </div>
       </div>
     )
@@ -114,7 +114,7 @@ export function Footage({ clips, importing, errors, vision, onPick, onRetry, onD
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-0">
             <h2 className="font-serif text-[24px] leading-tight text-zinc-100">Footage</h2>
-            <p className="mt-0.5 text-[12px] text-zinc-400">
+            <p className="mt-0.5 font-serif text-[16px] text-zinc-300">
               {clips.length ? <>{clips.length} clip{clips.length === 1 ? '' : 's'} · {dur(clips.reduce((n, c) => n + c.duration, 0))}</> : 'Nothing read yet'}
             </p>
           </div>
@@ -139,7 +139,7 @@ export function Footage({ clips, importing, errors, vision, onPick, onRetry, onD
         )}
 
         {vision !== 'ready' && clips.length > 0 && (
-          <p className="mt-3 text-[11px] text-muted">
+          <p className="mt-3 font-serif text-[17px] text-zinc-200">
             {vision === 'building' ? 'Building the on-device helper that names what’s in each shot…'
               : 'On-device labels (what’s in each shot, faces) need macOS — shots are grouped by colour instead, so “subject by subject” is cruder.'}
           </p>
@@ -155,7 +155,7 @@ export function Footage({ clips, importing, errors, vision, onPick, onRetry, onD
                 <Stack side="kept" clips={kept} onOpen={() => setOpen('kept')} />
                 <Stack side="out" clips={out} onOpen={() => setOpen('out')} />
               </div>
-              {shown.length > 0 && <p className="text-center text-[15px] text-zinc-300">Click or swipe a stack to look through it</p>}
+              {shown.length > 0 && <p className="text-center font-serif text-[17px] text-zinc-200">Click or swipe a stack to look through it</p>}
             </div>
           )}
       </div>
@@ -166,13 +166,13 @@ export function Footage({ clips, importing, errors, vision, onPick, onRetry, onD
         {!done ? (
           <div className="mx-auto max-w-xl">
             <Progress frac={importing ? (importing.frac ?? 0.05) : dealt / Math.max(1, batch.current)} />
-            <p className="mt-1.5 truncate text-center text-[12px] text-zinc-300">
+            <p className="mt-1.5 truncate text-center font-serif text-[17px] text-zinc-200">
               {importing ? importing.text : `Sorting clip ${Math.min(dealt + 1, batch.current)} of ${batch.current}…`}
             </p>
           </div>
         ) : (
           <div className="flex items-center gap-4">
-            <div className="min-w-0 text-[12px] text-zinc-400">
+            <div className="min-w-0 font-serif text-[17px] text-zinc-200">
               {moved
                 ? <>Moved {moved.clip.name} to {moved.to === 'kept' ? 'Kept' : 'Left out'}. <button type="button" className="text-zinc-200 underline decoration-zinc-500 hover:text-white"
                     onClick={() => { const c = clips.find((x) => x.id === moved.clip.id); if (c) onDecide(c, flipAction(c)); setMoved(null) }}>Undo</button></>
@@ -204,8 +204,8 @@ function Stack({ side: s, clips, onOpen }: { side: Side; clips: Clip[]; onOpen: 
               onWheel={(e) => { if (clips.length && Math.abs(e.deltaX) > 20) onOpen() }}
               className="group relative h-[150px] w-[210px] touch-pan-y">
         {!clips.length && (
-          <div className={cx('absolute inset-0 grid place-items-center rounded-2xl border-2 border-dashed text-[12px]',
-            red ? 'border-rose-900/70 text-rose-300/60' : 'border-zinc-700 text-muted')}>
+          <div className={cx('absolute inset-0 grid place-items-center rounded-2xl border-2 border-dashed font-serif text-[17px]',
+            red ? 'border-rose-900/70 text-rose-300/80' : 'border-zinc-700 text-zinc-400')}>
             {red ? 'Nothing left out' : 'Nothing yet'}
           </div>
         )}

@@ -96,7 +96,7 @@ export function Projects() {
                  onCreate={create} />
 
           {list === null ? (
-            <p className="mt-10 text-[13px] text-muted">Loading…</p>
+            <p className="mt-10 font-serif text-[17px] text-zinc-200">Loading…</p>
           ) : list.length === 0 ? null : (
             <div className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
               {list.map((p) => <Card key={p.id} p={p} onOpen={() => open(p)} onRename={() => setRename(p)} onDelete={() => setRemove(p)} />)}
@@ -170,7 +170,7 @@ function Start({ picked, dragging, creating, compact, onAdd, onRemove, onCreate 
       {!picked.length ? (
         <>
           <h2 className={cx('font-serif text-zinc-100', compact ? 'text-[20px]' : 'text-[26px]')}>{dragging ? 'Drop them here' : 'Start with your clips'}</h2>
-          <p className="mt-2 text-[15px] text-zinc-300">Drag clips / folder here</p>
+          <p className="mt-2 font-serif text-[17px] text-zinc-200">Drag clips / folder here</p>
           <div className="mt-5 flex justify-center gap-2">
             <Button variant="primary" size="lg" onClick={() => files.current?.click()}>Add clips</Button>
             <Button variant="primary" size="lg" onClick={() => folder.current?.click()}>Add folder</Button>
@@ -179,7 +179,7 @@ function Start({ picked, dragging, creating, compact, onAdd, onRemove, onCreate 
       ) : (
         <>
           <h2 className="font-serif text-[22px] text-zinc-100">{picked.length} clip{picked.length === 1 ? '' : 's'}</h2>
-          <p className="mt-1 text-[15px] text-zinc-300">{bytes(size)} · drop more, or{' '}
+          <p className="mt-1 font-serif text-[17px] text-zinc-200">{bytes(size)} · drop more, or{' '}
             <button type="button" className="text-accent hover:underline" onClick={() => files.current?.click()}>add more</button></p>
           <Thumbs picked={picked} onRemove={onRemove} />
           <Button variant="primary" size="lg" className="mt-5" disabled={creating} onClick={onCreate}>{creating ? 'Creating…' : 'Create'}</Button>
