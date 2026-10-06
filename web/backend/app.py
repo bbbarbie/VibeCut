@@ -549,6 +549,12 @@ def api_import(req: ImportReq) -> dict:
             else:
                 WORKFLOW.reopen("system", f"{len(job.clips)} new clip(s) to review")
             SESSION.replay(CATALOG["cat"], _make_proposals)
+        if pr is not None and pr.auto_name and job.clips:
+            # Named from its clips' days, so a new video needs no name typed in.
+            name = pj.auto_name(list(CLIPS.values()))
+            with LOCK:
+                if pr.auto_name:
+                    pr.name = name
         if pr is not None and pr is PROJECT["p"]:
             _save()
 
@@ -651,14 +657,14 @@ def api_project_rename(pid: str, req: ProjectReq) -> dict:
         raise HTTPException(400, "give it a name")
     cur = PROJECT["p"]
     if cur is not None and cur.id == pid:
-        cur.name = name
+        cur.name, cur.auto_name = name, False
         _save()
         return {"project": _meta()}
     try:
         pr = pj.load(pid)
     except pj.ProjectError as e:
         raise HTTPException(404, str(e)) from e
-    pr.name = name
+    pr.name, pr.auto_name = name, False
     pj.save(pr)
     return {"project": pr.summary()}
 

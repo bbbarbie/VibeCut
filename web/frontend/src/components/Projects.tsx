@@ -1,13 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
-import { dur } from '../format'
+import { fromDataTransfer, fromInput, handOff, mergePicked, type Picked } from '../drop'
+import { bytes, dur } from '../format'
 import { loadProfile } from '../profile'
 import { go } from '../router'
-import type { Capabilities, ProjectMeta } from '../types'
-import { ago, Button, Confirm, Dialog, Field, inputCls, Notice, Wordmark } from '../ui'
+import type { ProjectMeta } from '../types'
+import { ago, Button, Confirm, cx, Dialog, Field, inputCls, Notice, Wordmark } from '../ui'
 
-// Home: every video you're making, and where each one stands. One primary
-// action (New video). Everything else you'd do lives inside a project.
+// Home: every video you're making, and where each one stands. A new video
+// starts from its clips, not from a name (sarah, 2026-10-06: "just be able to
+// drag or select clips, then a confirm create button"): drop or pick clips,
+// look at what's picked, Create. It's named from the day it was filmed.
 
 const STAGE_WORDS: Record<ProjectMeta['stage'], { label: string; next: string }> = {
   footage: { label: 'Footage', next: 'Add your clips' },
@@ -19,14 +22,16 @@ const STAGE_WORDS: Record<ProjectMeta['stage'], { label: string; next: string }>
 
 export function Projects() {
   const [list, setList] = useState<ProjectMeta[] | null>(null)
-  const [caps, setCaps] = useState<Capabilities | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [creating, setCreating] = useState(false)
   const [rename, setRename] = useState<ProjectMeta | null>(null)
   const [remove, setRemove] = useState<ProjectMeta | null>(null)
-  const initial = (() => { try { return loadProfile(window.localStorage).profile.name.trim().charAt(0).toUpperCase() || '☺' } catch { return '☺' } })()
+  const mine = (() => { try { return loadProfile(window.localStorage).profile.name.trim() } catch { return '' } })()
+  const initial = mine.charAt(0).toUpperCase() || '☺'
+  // Home talks to the person (sarah: "hello, Sarah, like talk to the user"):
+  // the first name on their profile, the one behind the avatar.
+  const hello = mine.split(/\s+/)[0]
 
-  const load = () => api.projects().then((r) => { setList(r.projects); setCaps(r.capabilities); setError(null) })
+  const load = () => api.projects().then((r) => { setList(r.projects); setError(null) })
     .catch((e) => setError((e as Error).message))
   useEffect(() => { load() }, [])
 
@@ -34,19 +39,44 @@ export function Projects() {
     try { await api.openProject(p.id); go({ kind: 'project', id: p.id, view: 'story' }) }
     catch (e) { setError((e as Error).message) }
   }
-  const create = async (name: string) => {
-    try { const r = await api.createProject(name); go({ kind: 'project', id: r.project.id, view: 'story' }) }
+  const [picked, setPicked] = useState<Picked[]>([])
+  const [creating, setCreating] = useState(false)
+  const create = async () => {
+    if (!picked.length || creating) return
+    setCreating(true)
+    try { const r = await api.createProject(''); handOff(picked); go({ kind: 'project', id: r.project.id, view: 'story' }) }
     catch (e) { setError((e as Error).message); setCreating(false) }
   }
+
+  // The whole page takes a drop, not just the box.
+  const [dragging, setDragging] = useState(false)
+  useEffect(() => {
+    let depth = 0
+    const isFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes('Files')
+    const enter = (e: DragEvent) => { if (isFiles(e)) { depth++; setDragging(true) } }
+    const leave = (e: DragEvent) => { if (isFiles(e) && --depth <= 0) { depth = 0; setDragging(false) } }
+    const over = (e: DragEvent) => { if (isFiles(e)) e.preventDefault() }
+    const drop = async (e: DragEvent) => {
+      if (!isFiles(e)) return
+      e.preventDefault(); depth = 0; setDragging(false)
+      const more = await fromDataTransfer(e.dataTransfer!)
+      setPicked((p) => mergePicked(p, more))
+    }
+    window.addEventListener('dragenter', enter); window.addEventListener('dragleave', leave)
+    window.addEventListener('dragover', over); window.addEventListener('drop', drop)
+    return () => {
+      window.removeEventListener('dragenter', enter); window.removeEventListener('dragleave', leave)
+      window.removeEventListener('dragover', over); window.removeEventListener('drop', drop)
+    }
+  }, [])
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-ink">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line bg-ink px-4">
         <Wordmark />
         <div className="flex-1" />
-        <Button variant="ghost" size="sm" onClick={() => go({ kind: 'polish' })}
-                title="Already have a finished video? Point at a moment and say what to put there">Polish a finished video</Button>
-        <span className="mx-1 h-5 w-px bg-line" aria-hidden />
+        {/* Polish (#polish) still works by its address; home doesn't offer it
+            (sarah, 2026-10-06: no need for it there). */}
         <button type="button" title="Your profile" aria-label="Your profile" onClick={() => go({ kind: 'profile' })}
                 className="grid size-8 place-items-center rounded-full bg-zinc-700 font-serif text-[15px] font-semibold text-zinc-100 ring-1 ring-zinc-500/40 hover:ring-accent">{initial}</button>
       </header>
@@ -55,28 +85,27 @@ export function Projects() {
         <div className="mx-auto max-w-[1100px] px-6 py-8">
           <div className="flex flex-wrap items-end gap-4">
             <div>
-              <h1 className="font-serif text-[30px] leading-tight text-zinc-100">Your videos</h1>
-              <p className="mt-1 text-[13px] text-zinc-400">Each one starts from your clips and ends as one file. Nothing leaves this computer.</p>
+              <h1 className="font-serif text-[30px] leading-tight text-zinc-100">{greeting(hello)}</h1>
             </div>
-            <Button variant="primary" size="lg" className="ml-auto" onClick={() => setCreating(true)}>New video</Button>
           </div>
           {error && <Notice tone="bad" className="mt-4">{error} <button type="button" className="underline" onClick={load}>Try again</button></Notice>}
 
+          <Start picked={picked} dragging={dragging} creating={creating} compact={!!list?.length}
+                 onAdd={(more) => setPicked((p) => mergePicked(p, more))}
+                 onRemove={(i) => setPicked((p) => p.filter((_, k) => k !== i))}
+                 onCreate={create} />
+
           {list === null ? (
             <p className="mt-10 text-[13px] text-muted">Loading…</p>
-          ) : list.length === 0 ? (
-            <EmptyHome onNew={() => setCreating(true)} />
-          ) : (
+          ) : list.length === 0 ? null : (
             <div className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
               {list.map((p) => <Card key={p.id} p={p} onOpen={() => open(p)} onRename={() => setRename(p)} onDelete={() => setRemove(p)} />)}
             </div>
           )}
 
-          {caps && <Machine caps={caps} />}
         </div>
       </main>
 
-      {creating && <NewProject onClose={() => setCreating(false)} onCreate={create} />}
       {rename && <RenameProject p={rename} onClose={() => setRename(null)} onDone={() => { setRename(null); load() }} />}
       {remove && (
         <Confirm title={`Delete “${remove.name}”?`} action="Delete the project" danger onNo={() => setRemove(null)}
@@ -119,60 +148,65 @@ function Card({ p, onOpen, onRename, onDelete }: { p: ProjectMeta; onOpen: () =>
   )
 }
 
-function EmptyHome({ onNew }: { onNew: () => void }) {
+// The way in: drop clips or a folder anywhere on the page, or choose them.
+// What's picked shows as a row (remove one with ×); Create makes the video.
+function Start({ picked, dragging, creating, compact, onAdd, onRemove, onCreate }: {
+  picked: Picked[]; dragging: boolean; creating: boolean; compact: boolean
+  onAdd: (p: Picked[]) => void; onRemove: (i: number) => void; onCreate: () => void
+}) {
+  const files = useRef<HTMLInputElement>(null)
+  const size = picked.reduce((n, p) => n + p.file.size, 0)
+  const pick = (fl: FileList | null) => { if (fl) onAdd(fromInput(fl)) }
   return (
-    <div className="mt-8 rounded-2xl border border-dashed border-zinc-700 p-10 text-center">
-      <h2 className="font-serif text-[26px] text-zinc-100">Start with your clips</h2>
-      <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-zinc-400">
-        Drop the clips from a trip or a day out. VibeCut reads them, throws away what a viewer would notice, proposes three ways to tell it, and you shape the rest by talking or by hand.
-      </p>
-      <ol className="mx-auto mt-6 grid max-w-2xl grid-cols-2 gap-x-6 gap-y-2 text-left text-[12px] text-zinc-400 sm:grid-cols-4">
-        {[['1', 'Footage', 'your clips, read here'], ['2', 'Brief', 'one line about the video'], ['3', 'Rough cut', 'what to leave out, and why'], ['4', 'Story', 'edit, then export one file']]
-          .map(([n, t, s]) => <li key={n}><span className="text-muted">{n} · </span><span className="text-zinc-200">{t}</span><span className="block text-[11px] text-muted">{s}</span></li>)}
-      </ol>
-      <Button variant="primary" size="lg" className="mt-6" onClick={onNew}>New video</Button>
+    <div className={cx('mt-6 rounded-2xl border border-dashed text-center transition-colors',
+      dragging ? 'border-accent bg-accent/5' : 'border-zinc-700', compact && !picked.length ? 'p-6' : 'p-10')}>
+      {/* Folders come in by dragging; the button picks clips. */}
+      <input ref={files} type="file" className="hidden" multiple accept=".mp4,.mov,video/mp4,video/quicktime"
+             onChange={(e) => { pick(e.target.files); e.target.value = '' }} />
+      {!picked.length ? (
+        <>
+          <h2 className={cx('font-serif text-zinc-100', compact ? 'text-[20px]' : 'text-[26px]')}>{dragging ? 'Drop them here' : 'Start with your clips'}</h2>
+          <p className="mt-2 text-[13px] text-zinc-400">Drag clips / folder here</p>
+          <Button variant="primary" size="lg" className="mt-5" onClick={() => files.current?.click()}>Upload</Button>
+        </>
+      ) : (
+        <>
+          <h2 className="font-serif text-[22px] text-zinc-100">{picked.length} clip{picked.length === 1 ? '' : 's'}</h2>
+          <p className="mt-1 text-[12px] text-muted">{bytes(size)} · drop more, or{' '}
+            <button type="button" className="text-accent hover:underline" onClick={() => files.current?.click()}>add more</button></p>
+          <Thumbs picked={picked} onRemove={onRemove} />
+          <Button variant="primary" size="lg" className="mt-5" disabled={creating} onClick={onCreate}>{creating ? 'Creating…' : 'Create'}</Button>
+        </>
+      )}
     </div>
   )
 }
 
-// What this machine can do, in the creator's words. Nothing is promised that would then fail.
-function Machine({ caps }: { caps: Capabilities }) {
-  const mac = caps.platform === 'darwin'
-  const rows: [string, boolean, string][] = [
-    ['Cuts, stories, captions, sound and export', true, 'always on, all on this computer'],
-    ['Typed edits (“the opening is too slow”)', caps.llm, caps.llm ? 'a language model is set up' : 'needs ANTHROPIC_API_KEY in web/.env — the storyboard’s text is sent, never footage'],
-    ['What’s in each shot (on-device labels, faces)', caps.vision === 'ready', caps.vision === 'ready' ? 'on' : mac ? 'building the helper…' : 'macOS only — colour grouping is used instead'],
-    ['Talking to camera (transcribe, cut pauses and retakes)', caps.speech, caps.speech ? 'on' : 'needs macOS 26 with the Xcode command-line tools'],
-    ['Reference videos from a link', caps.links, caps.links ? 'yt-dlp found' : 'drop a file instead, or install yt-dlp'],
-  ]
+// A first frame for each picked file, straight from the file in the browser:
+// nothing is read by the app until Create.
+function Thumbs({ picked, onRemove }: { picked: Picked[]; onRemove: (i: number) => void }) {
+  // One URL per file for as long as it's picked: removing one doesn't reload the rest.
+  const made = useRef(new Map<Picked, string>())
+  const urls = useMemo(() => picked.map((p) => {
+    let u = made.current.get(p)
+    if (!u) { u = URL.createObjectURL(p.file); made.current.set(p, u) }
+    return u
+  }), [picked])
+  useEffect(() => {
+    for (const [p, u] of made.current) if (!picked.includes(p)) { URL.revokeObjectURL(u); made.current.delete(p) }
+  }, [picked])
+  useEffect(() => () => { for (const u of made.current.values()) URL.revokeObjectURL(u); made.current.clear() }, [])
   return (
-    <section className="mt-10 border-t border-line pt-5">
-      <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted">On this computer</h2>
-      <ul className="mt-2 grid gap-1.5 text-[12px] sm:grid-cols-2">
-        {rows.map(([what, on, why]) => (
-          <li key={what} className="flex items-start gap-2">
-            <span className={on ? 'text-emerald-300' : 'text-zinc-500'} aria-hidden>{on ? '●' : '○'}</span>
-            <span className={on ? 'text-zinc-200' : 'text-zinc-400'}>{what}<span className="block text-[11px] text-muted">{why}</span></span>
-          </li>
-        ))}
-      </ul>
-    </section>
-  )
-}
-
-function NewProject({ onClose, onCreate }: { onClose: () => void; onCreate: (name: string) => Promise<void> }) {
-  const [name, setName] = useState('')
-  const [busy, setBusy] = useState(false)
-  const submit = async () => { setBusy(true); await onCreate(name.trim()) }
-  return (
-    <Dialog title="New video" sub="Give it a name you'll recognise — the trip, the day, the person. You can change it later." onClose={onClose} busy={busy} width={420}
-            footer={<><Button variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" onClick={submit} disabled={busy}>{busy ? 'Creating…' : 'Create'}</Button></>}>
-      <form onSubmit={(e) => { e.preventDefault(); if (!busy) submit() }}>
-        <Field label="Name">
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="A weekend in Tokyo" className={inputCls} disabled={busy} />
-        </Field>
-      </form>
-    </Dialog>
+    <div className="mx-auto mt-4 flex max-h-[280px] max-w-3xl flex-wrap justify-center gap-1.5 overflow-y-auto p-1">
+      {picked.map((p, i) => (
+        <div key={`${p.relpath}|${p.file.size}`} className="group relative h-14 w-24 overflow-hidden rounded-md bg-zinc-900" title={p.file.name}>
+          <video src={`${urls[i]}#t=0.3`} muted playsInline preload="metadata" className="size-full object-cover" />
+          <span className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1 text-left text-[9px] text-zinc-300">{p.file.name}</span>
+          <button type="button" aria-label={`Remove ${p.file.name}`} onClick={() => onRemove(i)}
+                  className="absolute right-0.5 top-0.5 grid size-5 place-items-center rounded-full bg-black/75 text-[12px] leading-none text-zinc-100 opacity-0 hover:bg-black group-hover:opacity-100 focus:opacity-100">×</button>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -191,4 +225,10 @@ function RenameProject({ p, onClose, onDone }: { p: ProjectMeta; onClose: () => 
       </form>
     </Dialog>
   )
+}
+
+// Glad to see you, by the clock (sarah: "sound more enthusiastic").
+function greeting(name: string, hour = new Date().getHours()): string {
+  const part = hour >= 5 && hour < 12 ? 'Good morning' : hour >= 12 && hour < 18 ? 'Good afternoon' : 'Good evening'
+  return name ? `${part}, ${name}!` : `${part}!`
 }

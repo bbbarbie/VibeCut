@@ -42,13 +42,21 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   from project state (`web/frontend/src/stage.ts`), never set by hand.
   Projects persist on disk (`web/backend/projects.py`: clip ids, turn log,
   workflow, cut overrides, brief, exports) and survive restarts; the
-  middleware saves after every mutating request. Two levels inside Story:
+  middleware saves after every mutating request. A new video starts from
+  its clips on the home page (drop or choose, see the row, remove any,
+  Create; `drop.handOff` carries them into the project), and asks for no
+  name: it is "New video" until its clips are read, then named from the
+  days they were filmed (`projects.auto_name`, "Sep 22" / "Sep 22–24"; sarah:
+  just the day for now) until the creator renames it. The Footage page is
+  two stacks, Kept / Left out, dealt as clips are read (`Footage.tsx`). Two levels inside Story:
   **Story** (parts and shots, no timecodes) and **Frames** (the precise
   timeline). Select, then act; no jargon in the UI. One design system
   (`web/frontend/src/ui.tsx`); the old Creative-tools page and its four
   "coming soon" cards are gone (see `web/feature-roadmap.md`). What the
-  machine can't do (no key, not macOS, no yt-dlp) is stated on the home
-  screen and where the action would be, never hidden. See `web/README.md`.
+  machine can't do (no key, not macOS, no yt-dlp) is stated where the action
+  would be, never hidden. Home is as bare as it can be (sarah, 2026-10-06:
+  "as simple as possible"): "Good morning / afternoon / evening, <profile first name>!", then
+  "Start with your clips", "Drag clips / folder here" and one Upload button. See `web/README.md`.
 - Chat editing rule: a turn applies operations to the working storyboard
   (`web/backend/board.py`), never regenerates it. The LLM only emits ops;
   the diff is computed, not reported by the model. Keep it that way.
