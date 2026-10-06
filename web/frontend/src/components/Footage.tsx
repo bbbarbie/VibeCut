@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Clip, ImportError, Shot } from '../types'
+import type { Clip, ImportError } from '../types'
 import { dur, when } from '../format'
 import { Button, Notice, Progress, cx } from '../ui'
 
@@ -11,8 +11,8 @@ import { Button, Notice, Progress, cx } from '../ui'
 // What she needs from this page is the rough cut's first call -- which clips
 // it keeps, which it leaves out -- and a way to overrule it. So clips are
 // sorted into two photo stacks as they're read; opening a stack shows its
-// clips one by one (left-out ones say why), a double-click moves a clip to
-// the other stack, and "Looks good" moves on.
+// clips in a column (left-out ones say why), a clip is moved by dragging it
+// onto the other stack or with its "Move to" button, and "Looks good" moves on.
 
 export type Importing = { text: string; frac: number | null } | null
 
@@ -33,14 +33,13 @@ function flipAction(c: Clip): Decide {
 // long enough to see clips land, short enough never to be waited on.
 const SORT_MS = 2400
 
-export function Footage({ clips, importing, errors, vision, onPick, onRetry, onPreview, onDecide, onNext, canContinue, briefDone }: {
+export function Footage({ clips, importing, errors, vision, onPick, onRetry, onDecide, onNext, canContinue, briefDone }: {
   clips: Clip[]
   importing: Importing
   errors: ImportError[]
   vision: string
   onPick: (files: FileList) => void
   onRetry: (paths: string[]) => void
-  onPreview: (clip: Clip, shot: Shot) => void
   /** keep / reject a clip the rough cut left out, or 'auto' to give the call back */
   onDecide: (clip: Clip, action: Decide) => void
   onNext: () => void
@@ -92,12 +91,12 @@ export function Footage({ clips, importing, errors, vision, onPick, onRetry, onP
         {inputs}
         <div className="w-full max-w-xl rounded-2xl border border-dashed border-zinc-700 p-10 text-center">
           <h2 className="font-serif text-[26px] text-zinc-100">Start with your clips</h2>
-          <p className="mt-2 text-[13px] text-zinc-400">Drag a folder of videos anywhere onto this window, or choose one. Every clip is read once, on this computer.</p>
+          <p className="mt-2 font-serif text-[17px] text-zinc-200">Drag a folder of videos anywhere onto this window, or choose one. Every clip is read once, on this computer.</p>
           <div className="mt-6 flex justify-center gap-2">
             <Button variant="primary" size="lg" onClick={() => folder.current?.click()}>Choose a folder</Button>
             <Button size="lg" onClick={() => files.current?.click()}>Choose some clips</Button>
           </div>
-          <p className="mt-4 text-[11px] text-muted">.mp4 and .mov · nothing is uploaded or changed</p>
+          <p className="mt-4 font-serif text-[17px] text-zinc-200">.mp4 and .mov · nothing is uploaded or changed</p>
         </div>
       </div>
     )
@@ -115,13 +114,13 @@ export function Footage({ clips, importing, errors, vision, onPick, onRetry, onP
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-0">
             <h2 className="font-serif text-[24px] leading-tight text-zinc-100">Footage</h2>
-            <p className="mt-0.5 text-[12px] text-zinc-400">
+            <p className="mt-0.5 font-serif text-[16px] text-zinc-300">
               {clips.length ? <>{clips.length} clip{clips.length === 1 ? '' : 's'} · {dur(clips.reduce((n, c) => n + c.duration, 0))}</> : 'Nothing read yet'}
             </p>
           </div>
           <div className="ml-auto flex gap-2">
             <Button disabled={!!importing} onClick={() => files.current?.click()}>Add clips</Button>
-            <Button disabled={!!importing} onClick={() => folder.current?.click()}>Add a folder</Button>
+            <Button disabled={!!importing} onClick={() => folder.current?.click()}>Add folder</Button>
           </div>
         </div>
 
@@ -140,23 +139,23 @@ export function Footage({ clips, importing, errors, vision, onPick, onRetry, onP
         )}
 
         {vision !== 'ready' && clips.length > 0 && (
-          <p className="mt-3 text-[11px] text-muted">
+          <p className="mt-3 font-serif text-[17px] text-zinc-200">
             {vision === 'building' ? 'Building the on-device helper that names what’s in each shot…'
               : 'On-device labels (what’s in each shot, faces) need macOS — shots are grouped by colour instead, so “subject by subject” is cruder.'}
           </p>
         )}
 
         {open
-          ? <Strip side={open} clips={open === 'kept' ? kept : out} other={open === 'kept' ? out.length : kept.length}
+          ? <Opened side={open} clips={open === 'kept' ? kept : out} others={open === 'kept' ? out : kept}
                    onSwitch={() => setOpen(open === 'kept' ? 'out' : 'kept')} onClose={() => setOpen(null)}
-                   onPreview={onPreview} onFlip={flip} />
+                   onFlip={flip} />
           : (
             <div className="flex flex-1 flex-col items-center justify-center gap-4 py-4">
               <div className="flex flex-wrap items-center justify-center gap-x-16 gap-y-6">
                 <Stack side="kept" clips={kept} onOpen={() => setOpen('kept')} />
                 <Stack side="out" clips={out} onOpen={() => setOpen('out')} />
               </div>
-              {shown.length > 0 && <p className="text-center text-[11px] text-muted">Click or swipe a stack to look through it</p>}
+              {shown.length > 0 && <p className="text-center font-serif text-[17px] text-zinc-200">Click or swipe a stack to look through it</p>}
             </div>
           )}
       </div>
@@ -167,13 +166,13 @@ export function Footage({ clips, importing, errors, vision, onPick, onRetry, onP
         {!done ? (
           <div className="mx-auto max-w-xl">
             <Progress frac={importing ? (importing.frac ?? 0.05) : dealt / Math.max(1, batch.current)} />
-            <p className="mt-1.5 truncate text-center text-[12px] text-zinc-300">
+            <p className="mt-1.5 truncate text-center font-serif text-[17px] text-zinc-200">
               {importing ? importing.text : `Sorting clip ${Math.min(dealt + 1, batch.current)} of ${batch.current}…`}
             </p>
           </div>
         ) : (
           <div className="flex items-center gap-4">
-            <div className="min-w-0 text-[12px] text-zinc-400">
+            <div className="min-w-0 font-serif text-[17px] text-zinc-200">
               {moved
                 ? <>Moved {moved.clip.name} to {moved.to === 'kept' ? 'Kept' : 'Left out'}. <button type="button" className="text-zinc-200 underline decoration-zinc-500 hover:text-white"
                     onClick={() => { const c = clips.find((x) => x.id === moved.clip.id); if (c) onDecide(c, flipAction(c)); setMoved(null) }}>Undo</button></>
@@ -205,8 +204,8 @@ function Stack({ side: s, clips, onOpen }: { side: Side; clips: Clip[]; onOpen: 
               onWheel={(e) => { if (clips.length && Math.abs(e.deltaX) > 20) onOpen() }}
               className="group relative h-[150px] w-[210px] touch-pan-y">
         {!clips.length && (
-          <div className={cx('absolute inset-0 grid place-items-center rounded-2xl border-2 border-dashed text-[12px]',
-            red ? 'border-rose-900/70 text-rose-300/60' : 'border-zinc-700 text-muted')}>
+          <div className={cx('absolute inset-0 grid place-items-center rounded-2xl border-2 border-dashed font-serif text-[17px]',
+            red ? 'border-rose-900/70 text-rose-300/80' : 'border-zinc-700 text-zinc-400')}>
             {red ? 'Nothing left out' : 'Nothing yet'}
           </div>
         )}
@@ -235,82 +234,121 @@ function Stack({ side: s, clips, onOpen }: { side: Side; clips: Clip[]; onOpen: 
   )
 }
 
-// One stack laid out to swipe through. A click plays the clip; a double-click
-// moves it to the other stack. Left-out clips say why the rough cut left them.
-function Strip({ side: s, clips, other, onSwitch, onClose, onPreview, onFlip }: {
-  side: Side; clips: Clip[]; other: number
+// One stack opened, as in sarah's sketch (2026-10-06): its clips become a
+// column you scroll down, on the side the stack already sits on, and the other
+// stack shrinks to the opposite side as the place to drop a clip. A click
+// plays a clip where it is and offers the move as a button; no double-click.
+const CLIP = 'text/x-vibecut-clip'
+
+function Opened({ side: s, clips, others, onSwitch, onClose, onFlip }: {
+  side: Side; clips: Clip[]; others: Clip[]
   onSwitch: () => void; onClose: () => void
-  onPreview: (clip: Clip, shot: Shot) => void; onFlip: (clip: Clip) => void
+  onFlip: (clip: Clip) => void
 }) {
-  const row = useRef<HTMLDivElement>(null)
-  const click = useRef<number | undefined>(undefined)
+  const [playing, setPlaying] = useState<string | null>(null)
+  const [over, setOver] = useState(false)
+  const [dragging, setDragging] = useState(false)
   const red = s === 'out'
+  const there = red ? 'Kept' : 'Left out'
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
   }, [onClose])
-  useEffect(() => () => window.clearTimeout(click.current), [])
-  const by = (n: number) => row.current?.scrollBy({ left: n * 256, behavior: 'smooth' })
-  return (
-    <div className="mt-3 flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-3">
-        <Button size="sm" onClick={onClose}>‹ Both stacks</Button>
-        <h3 className={cx('font-serif text-[20px]', red ? 'text-rose-200' : 'text-zinc-100')}>{red ? 'Left out' : 'Kept'} · {clips.length}</h3>
-        <span className="text-[11px] text-muted">Click to watch · double-click to move it to {red ? 'Kept' : 'Left out'}</span>
-        <Button size="sm" className="ml-auto" onClick={onSwitch}>{red ? 'Kept' : 'Left out'} · {other} ›</Button>
+  useEffect(() => setPlaying(null), [s])
+  const byId = (id: string) => clips.find((c) => c.id === id)
+
+  const target = (
+    <div onDragOver={(e) => { if (e.dataTransfer.types.includes(CLIP)) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setOver(true) } }}
+         onDragLeave={() => setOver(false)}
+         onDrop={(e) => { e.preventDefault(); setOver(false); const c = byId(e.dataTransfer.getData(CLIP)); if (c) onFlip(c) }}
+         className={cx('flex w-full max-w-[260px] flex-col items-center justify-center gap-3 self-stretch rounded-3xl border-2 border-dashed transition-all duration-300',
+           over ? (red ? 'border-zinc-300 bg-zinc-100/10' : 'border-rose-400 bg-rose-950/50')
+             : dragging ? 'border-zinc-600' : 'border-transparent')}>
+      <div className={cx('origin-center transition-all duration-300 motion-safe:animate-[vc-zoom_300ms_ease-out]',
+        over ? 'scale-90 opacity-100' : dragging ? 'scale-75 opacity-90' : 'scale-[.6] opacity-75 hover:opacity-100')}>
+        <Stack side={red ? 'kept' : 'out'} clips={others} onOpen={onSwitch} />
       </div>
+      <p className="max-w-[200px] text-center font-serif text-[17px] leading-snug text-zinc-200">
+        {dragging ? `Drop here to move it to ${there}` : `Drag a clip here to move it to ${there}`}
+      </p>
+    </div>
+  )
+
+  const column = (
+    <div className="flex min-h-0 min-w-0 flex-col">
       {!clips.length
-        ? <p className="mt-10 text-center text-[13px] text-muted">{red ? 'The rough cut kept everything.' : 'Nothing kept yet.'}</p>
+        ? <p className="mt-10 text-center font-serif text-[17px] text-zinc-200">{red ? 'The rough cut kept everything.' : 'Nothing kept yet.'}</p>
         : (
-          <div className="relative mt-3">
-            <div ref={row} className="flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth px-1 pb-3">
+          <div className="min-h-0 flex-1 overflow-y-auto px-1 motion-safe:animate-[vc-zoom_300ms_ease-out]">
+            <div className="mx-auto flex max-w-[400px] flex-col gap-4 pb-4">
               {clips.map((c) => {
                 const first = c.shots[0]
                 const mine = c.cut?.override
+                const on = playing === c.id
                 return (
-                  <div key={c.id} title="Double-click to move it to the other stack"
-                       onClick={() => { window.clearTimeout(click.current); click.current = window.setTimeout(() => first && onPreview(c, first), 230) }}
-                       onDoubleClick={() => { window.clearTimeout(click.current); onFlip(c) }}
-                       className={cx('w-[240px] shrink-0 cursor-pointer select-none snap-center rounded-2xl border p-2 transition-colors motion-safe:animate-[vc-deal_260ms_ease-out]',
-                         red ? 'border-rose-900/80 bg-rose-950/70 hover:bg-rose-950' : 'border-line bg-raised hover:border-zinc-600')}>
+                  <div key={c.id} draggable
+                       onDragStart={(e) => { e.dataTransfer.setData(CLIP, c.id); e.dataTransfer.effectAllowed = 'move'; setDragging(true) }}
+                       onDragEnd={() => { setDragging(false); setOver(false) }}
+                       onClick={() => setPlaying((p) => (p === c.id ? null : c.id))}
+                       className={cx('cursor-pointer select-none rounded-2xl border p-2 transition-colors',
+                         red ? 'border-rose-900/80 bg-rose-950/70 hover:bg-rose-950' : 'border-line bg-raised hover:border-zinc-600',
+                         on && (red ? 'border-rose-500' : 'border-zinc-400'))}>
                     <div className="relative aspect-video overflow-hidden rounded-xl bg-black">
-                      {first && <img src={first.thumb} alt="" loading="lazy" draggable={false}
-                                     className={cx('size-full', c.height > c.width ? 'object-contain' : 'object-cover')} />}
-                      <span className="absolute right-1 top-1 rounded bg-black/70 px-1 text-[10px] tabular-nums text-zinc-200">{dur(c.duration)}</span>
-                      {c.shots.length > 1 && <span className="absolute left-1 top-1 rounded bg-black/70 px-1 text-[10px] text-zinc-200">{c.shots.length} shots</span>}
+                      {on
+                        ? <video src={`/api/video/${c.id}`} autoPlay playsInline onEnded={() => setPlaying(null)}
+                                 className="size-full object-contain" />
+                        : first && <img src={first.thumb} alt="" loading="lazy" draggable={false}
+                                        className={cx('size-full', c.height > c.width ? 'object-contain' : 'object-cover')} />}
+                      <span className="absolute right-1.5 top-1.5 rounded bg-black/70 px-1.5 text-[12px] tabular-nums text-zinc-200">{dur(c.duration)}</span>
+                      {c.shots.length > 1 && <span className="absolute left-1.5 top-1.5 rounded bg-black/70 px-1.5 text-[12px] text-zinc-200">{c.shots.length} shots</span>}
                       {/* The reason sits on the picture so it's seen even when the page
                           is short. The rough cut's call is a suggestion: a two-second clip
                           may be a mis-tap or a short video on purpose; only the creator knows. */}
-                      {red && (
-                        <p className="absolute inset-x-0 bottom-0 bg-rose-950/90 px-2 py-1 text-[11px] leading-snug text-rose-100">
+                      {red && !on && (
+                        <p className="absolute inset-x-0 bottom-0 bg-rose-950/90 px-2.5 py-1.5 text-[13px] leading-snug text-rose-100">
                           {mine === 'reject' ? 'You moved it here.' : `Left out: ${c.cut?.en}`}
                         </p>
                       )}
-                      {!red && mine === 'keep' && c.cut?.auto_rejected && (
-                        <p className="absolute inset-x-0 bottom-0 bg-emerald-950/90 px-2 py-1 text-[11px] leading-snug text-emerald-100">
+                      {!red && !on && mine === 'keep' && c.cut?.auto_rejected && (
+                        <p className="absolute inset-x-0 bottom-0 bg-emerald-950/90 px-2.5 py-1.5 text-[13px] leading-snug text-emerald-100">
                           You kept it. The rough cut would have left it out: {c.cut.en}
                         </p>
                       )}
                     </div>
-                    <div className="mt-1.5 flex items-baseline gap-2 px-0.5">
-                      <span className="min-w-0 truncate text-[12px] text-zinc-100" title={c.name}>{c.name}</span>
-                      <span className="ml-auto shrink-0 text-[10px] text-muted">{when(c.capture_time) || 'no date'}</span>
+                    <div className="mt-2 flex items-center gap-3 px-0.5">
+                      <span className="min-w-0 truncate text-[13px] text-zinc-100" title={c.name}>{c.name}</span>
+                      <span className="shrink-0 text-[12px] text-zinc-400">{when(c.capture_time) || 'no date'}</span>
+                      {on && (
+                        <Button size="sm" variant="primary" className="ml-auto shrink-0"
+                                onClick={(e) => { e.stopPropagation(); setPlaying(null); onFlip(c) }}>
+                          Move to {there}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 )
               })}
             </div>
-            {clips.length > 3 && (
-              <>
-                <button type="button" aria-label="Back" onClick={() => by(-2)}
-                        className="absolute -left-2 top-[58px] grid size-9 place-items-center rounded-full bg-black/70 text-[18px] text-zinc-100 hover:bg-black">‹</button>
-                <button type="button" aria-label="More" onClick={() => by(2)}
-                        className="absolute -right-2 top-[58px] grid size-9 place-items-center rounded-full bg-black/70 text-[18px] text-zinc-100 hover:bg-black">›</button>
-              </>
-            )}
           </div>
         )}
+    </div>
+  )
+
+  return (
+    // Header and column stay in the middle whichever stack is open (sarah:
+    // it moved left or right); only the small stack changes side.
+    <div className="mt-3 flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center justify-center gap-3">
+        <Button size="sm" onClick={onClose}>‹ Both stacks</Button>
+        <h3 className={cx('font-serif text-[22px]', red ? 'text-rose-200' : 'text-zinc-100')}>{red ? 'Left out' : 'Kept'} · {clips.length}</h3>
+      </div>
+      <p className="mt-1.5 text-center font-serif text-[17px] text-zinc-200">Click a clip to play it</p>
+      <div className="mt-3 grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,420px)_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] gap-6">
+        <div className="flex min-h-0 justify-end">{red && target}</div>
+        {column}
+        <div className="flex min-h-0 justify-start">{!red && target}</div>
+      </div>
     </div>
   )
 }

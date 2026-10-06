@@ -13,12 +13,14 @@ const VARIANT: Record<Variant, string> = {
   ghost: 'text-muted hover:text-zinc-100',
   danger: 'border border-rose-400/40 text-rose-200 hover:bg-rose-500/10',
 }
-const SIZE = { sm: 'px-2.5 py-1 text-[12px]', md: 'px-3 py-1.5 text-[12px]', lg: 'px-4 py-2 text-[13px]' } as const
+// Buttons speak in the same serif as the headings and captions (sarah,
+// 2026-10-06: one font); Garamond runs small, hence the larger sizes.
+const SIZE = { sm: 'px-2.5 py-1 text-[14px]', md: 'px-3 py-1.5 text-[15px]', lg: 'px-4 py-2 text-[17px]' } as const
 
 export function Button({ variant = 'secondary', size = 'md', className, ...props }:
   ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: keyof typeof SIZE }) {
   return <button type="button" {...props}
-                 className={cx('inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg leading-none transition-colors disabled:cursor-default disabled:opacity-35 disabled:hover:bg-transparent',
+                 className={cx('inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg font-serif leading-none transition-colors disabled:cursor-default disabled:opacity-35 disabled:hover:bg-transparent',
                    VARIANT[variant], SIZE[size], variant === 'primary' && 'disabled:hover:bg-accent', className)} />
 }
 

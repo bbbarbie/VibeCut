@@ -96,7 +96,7 @@ export function Projects() {
                  onCreate={create} />
 
           {list === null ? (
-            <p className="mt-10 text-[13px] text-muted">Loading…</p>
+            <p className="mt-10 font-serif text-[17px] text-zinc-200">Loading…</p>
           ) : list.length === 0 ? null : (
             <div className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
               {list.map((p) => <Card key={p.id} p={p} onOpen={() => open(p)} onRename={() => setRename(p)} onDelete={() => setRemove(p)} />)}
@@ -155,24 +155,31 @@ function Start({ picked, dragging, creating, compact, onAdd, onRemove, onCreate 
   onAdd: (p: Picked[]) => void; onRemove: (i: number) => void; onCreate: () => void
 }) {
   const files = useRef<HTMLInputElement>(null)
+  const folder = useRef<HTMLInputElement>(null)
   const size = picked.reduce((n, p) => n + p.file.size, 0)
   const pick = (fl: FileList | null) => { if (fl) onAdd(fromInput(fl)) }
   return (
     <div className={cx('mt-6 rounded-2xl border border-dashed text-center transition-colors',
       dragging ? 'border-accent bg-accent/5' : 'border-zinc-700', compact && !picked.length ? 'p-6' : 'p-10')}>
-      {/* Folders come in by dragging; the button picks clips. */}
+      {/* A browser's picker takes clips or a folder, never both, so two buttons.
+          (sarah: a phone version will only need Add clips.) */}
+      {/* @ts-expect-error -- non-standard but supported everywhere that matters */}
+      <input ref={folder} type="file" className="hidden" webkitdirectory="" multiple onChange={(e) => { pick(e.target.files); e.target.value = '' }} />
       <input ref={files} type="file" className="hidden" multiple accept=".mp4,.mov,video/mp4,video/quicktime"
              onChange={(e) => { pick(e.target.files); e.target.value = '' }} />
       {!picked.length ? (
         <>
           <h2 className={cx('font-serif text-zinc-100', compact ? 'text-[20px]' : 'text-[26px]')}>{dragging ? 'Drop them here' : 'Start with your clips'}</h2>
-          <p className="mt-2 text-[13px] text-zinc-400">Drag clips / folder here</p>
-          <Button variant="primary" size="lg" className="mt-5" onClick={() => files.current?.click()}>Upload</Button>
+          <p className="mt-2 font-serif text-[17px] text-zinc-200">Drag clips / folder here</p>
+          <div className="mt-5 flex justify-center gap-2">
+            <Button variant="primary" size="lg" onClick={() => files.current?.click()}>Add clips</Button>
+            <Button variant="primary" size="lg" onClick={() => folder.current?.click()}>Add folder</Button>
+          </div>
         </>
       ) : (
         <>
           <h2 className="font-serif text-[22px] text-zinc-100">{picked.length} clip{picked.length === 1 ? '' : 's'}</h2>
-          <p className="mt-1 text-[12px] text-muted">{bytes(size)} · drop more, or{' '}
+          <p className="mt-1 font-serif text-[17px] text-zinc-200">{bytes(size)} · drop more, or{' '}
             <button type="button" className="text-accent hover:underline" onClick={() => files.current?.click()}>add more</button></p>
           <Thumbs picked={picked} onRemove={onRemove} />
           <Button variant="primary" size="lg" className="mt-5" disabled={creating} onClick={onCreate}>{creating ? 'Creating…' : 'Create'}</Button>

@@ -56,7 +56,9 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   machine can't do (no key, not macOS, no yt-dlp) is stated where the action
   would be, never hidden. Home is as bare as it can be (sarah, 2026-10-06:
   "as simple as possible"): "Good morning / afternoon / evening, <profile first name>!", then
-  "Start with your clips", "Drag clips / folder here" and one Upload button. See `web/README.md`.
+  "Start with your clips", "Drag clips / folder here", Add clips + Add folder (a
+  browser picker can't take both; a phone version only needs Add clips).
+  Footage has no preview panel: an opened stack is a vertical column on its own side (Kept left, Left out right), the other stack shrinks opposite as the drop target; a clicked clip plays in place with a "Move to …" button (no double-click). See `web/README.md`.
 - Chat editing rule: a turn applies operations to the working storyboard
   (`web/backend/board.py`), never regenerates it. The LLM only emits ops;
   the diff is computed, not reported by the model. Keep it that way.
