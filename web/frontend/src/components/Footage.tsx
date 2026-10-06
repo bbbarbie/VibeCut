@@ -276,23 +276,26 @@ function Strip({ side: s, clips, other, onSwitch, onClose, onPreview, onFlip }: 
                     <div className="relative aspect-video overflow-hidden rounded-xl bg-black">
                       {first && <img src={first.thumb} alt="" loading="lazy" draggable={false}
                                      className={cx('size-full', c.height > c.width ? 'object-contain' : 'object-cover')} />}
-                      <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 text-[10px] tabular-nums text-zinc-200">{dur(c.duration)}</span>
+                      <span className="absolute right-1 top-1 rounded bg-black/70 px-1 text-[10px] tabular-nums text-zinc-200">{dur(c.duration)}</span>
                       {c.shots.length > 1 && <span className="absolute left-1 top-1 rounded bg-black/70 px-1 text-[10px] text-zinc-200">{c.shots.length} shots</span>}
+                      {/* The reason sits on the picture so it's seen even when the page
+                          is short. The rough cut's call is a suggestion: a two-second clip
+                          may be a mis-tap or a short video on purpose; only the creator knows. */}
+                      {red && (
+                        <p className="absolute inset-x-0 bottom-0 bg-rose-950/90 px-2 py-1 text-[11px] leading-snug text-rose-100">
+                          {mine === 'reject' ? 'You moved it here.' : `Left out: ${c.cut?.en}`}
+                        </p>
+                      )}
+                      {!red && mine === 'keep' && c.cut?.auto_rejected && (
+                        <p className="absolute inset-x-0 bottom-0 bg-emerald-950/90 px-2 py-1 text-[11px] leading-snug text-emerald-100">
+                          You kept it. The rough cut would have left it out: {c.cut.en}
+                        </p>
+                      )}
                     </div>
-                    <div className="mt-2 truncate px-0.5 text-[12px] text-zinc-100" title={c.name}>{c.name}</div>
-                    <div className="truncate px-0.5 text-[10px] text-muted">{when(c.capture_time) || 'no date'}</div>
-                    {/* The rough cut's call is a suggestion: a two-second clip may be a
-                        mis-tap or a short video on purpose, and only the creator knows. */}
-                    {red && (
-                      <p className="mt-1.5 rounded-lg bg-rose-900/40 px-2 py-1.5 text-[11px] leading-snug text-rose-100">
-                        {mine === 'reject' ? 'You moved it here.' : `Left out: ${c.cut?.en}`}
-                      </p>
-                    )}
-                    {!red && mine === 'keep' && c.cut?.auto_rejected && (
-                      <p className="mt-1.5 rounded-lg bg-emerald-500/10 px-2 py-1.5 text-[11px] leading-snug text-emerald-200">
-                        You kept it. The rough cut would have left it out: {c.cut.en}
-                      </p>
-                    )}
+                    <div className="mt-1.5 flex items-baseline gap-2 px-0.5">
+                      <span className="min-w-0 truncate text-[12px] text-zinc-100" title={c.name}>{c.name}</span>
+                      <span className="ml-auto shrink-0 text-[10px] text-muted">{when(c.capture_time) || 'no date'}</span>
+                    </div>
                   </div>
                 )
               })}
