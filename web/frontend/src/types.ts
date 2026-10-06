@@ -233,11 +233,16 @@ export type TalkJob = { stage: 'transcribing' | 'reviewing' | 'done' | 'error'; 
 export type TalkState = { job: TalkJob | null; plan: TalkPlan | null; llm: boolean }
 
 // The style questions asked once, after the first description (brief.py).
-export type StyleChoice = { key: string; label: string; hint?: string }
+export type StyleChoice = { key: string; label: string; hint?: string; seconds?: number }
+// The length slider (brief.length_marks): 15 s up to everything the rough cut kept,
+// with Short / Medium / Long marks read from the footage and the kind of video.
+export type LengthMark = { key: string; label: string; seconds: number }
+export type LengthSlider = { min: number; max: number; marks: LengthMark[]; suggest: string; seconds: number; why: string; kind: string }
 export type StyleQuestion = { id: string; question: string; multi: boolean; hint?: string; choices: StyleChoice[]
+  slider?: LengthSlider
   /** asked only when an earlier answer is one of these: { captions: ['describe', 'transcribe'] } */
   when?: Record<string, string[]> }
-export type StyleAnswers = { length?: string; pace?: string; opening?: string; captions?: string; caption_look?: string }
+export type StyleAnswers = { length?: string; seconds?: number; pace?: string; opening?: string; captions?: string; caption_look?: string }
 
 // How the sound crosses a cut: carried out (L cut), carried in (J cut), or a clean break.
 export type JoinSound = 'cut' | 'carry_out' | 'carry_in' | 'default'

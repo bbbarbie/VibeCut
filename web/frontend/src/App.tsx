@@ -14,6 +14,7 @@ import { TalkCut } from './components/TalkCut'
 import { Keys } from './components/Keys'
 import { Player } from './components/Player'
 import { PauseChat } from './components/PauseChat'
+import { LengthButton } from './components/LengthButton'
 import type { OverlayEdit } from './components/OverlayCanvas'
 import { Menu, SwapPicker, type MenuItem } from './components/Menus'
 import { Music } from './components/Music'
@@ -974,6 +975,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                               className="rounded-md bg-zinc-800 px-2.5 py-1 text-[11px] text-zinc-100 hover:bg-zinc-700">
                         {boardPlay ? 'Stop' : 'Watch it all'}
                       </button>
+                      <LengthButton total={tl.total} onDone={(r) => { setSession(r); offerUndo(r); note(r.length_note) }} />
                       <SmoothButton small rough={(session.seams ?? []).filter((x) => x.verdict !== 'ok').length}
                                     onSmooth={async (order, nudge) => { const r = await api.smooth(order, nudge); setSession(r); offerUndo(r) }} />
                       {session.proposals && (

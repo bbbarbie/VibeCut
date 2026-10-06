@@ -1,8 +1,19 @@
 import type { StyleAnswers, StyleQuestion } from './types.ts'
 
 // What the creator picked in the style questions: choice keys per question,
-// plus anything they typed under "Something else".
-export type Picks = Record<string, { keys: string[]; other: string }>
+// plus anything they typed under "Something else", and the slider's seconds.
+export type Picks = Record<string, { keys: string[]; other: string; seconds?: number }>
+
+/** '45 s', '1:45' */
+export function lengthLabel(s: number): string {
+  s = Math.round(s)
+  return s < 60 ? `${s} s` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
+/** The mark nearest a slider position. */
+export function nearestMark(marks: { key: string; seconds: number }[], s: number): string {
+  return marks.reduce((a, m) => (Math.abs(m.seconds - s) < Math.abs(a.seconds - s) ? m : a), marks[0]).key
+}
 
 const STYLE_IDS = ['length', 'pace', 'opening', 'captions', 'caption_look'] as const
 
@@ -24,6 +35,7 @@ export function composeBrief(text: string, questions: StyleQuestion[], picks: Pi
     const other = p.other.trim()
     if ((STYLE_IDS as readonly string[]).includes(q.id)) {
       if (p.keys[0]) style[q.id as typeof STYLE_IDS[number]] = p.keys[0]
+      if (q.id === 'length' && p.seconds) style.seconds = Math.round(p.seconds)
       if (other) lines.push(`${q.question} ${other}`)
     } else if (q.id === 'focus') {
       const words = [...p.keys, ...(other ? [other] : [])]
@@ -42,6 +54,7 @@ export function sayPicks(questions: StyleQuestion[], picks: Picks): string {
   const bits: string[] = []
   for (const q of questions) {
     if (!applies(q, picks)) continue
+    if (q.id === 'length' && picks.length?.seconds) { bits.push(`about ${lengthLabel(picks.length.seconds)}`); continue }
     const labels = q.choices.filter((c) => picks[q.id]?.keys.includes(c.key)).map((c) => c.label.toLowerCase())
     if (labels.length) bits.push(labels.join(' + '))
   }

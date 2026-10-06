@@ -393,6 +393,11 @@ def apply(board: dict | None, op: dict, cat: Catalog, proposals: dict | None,
             if sid in _on_board(b):
                 raise OpError(f"shot {sid} is already in the storyboard")
             entry = {"id": sid, "start": s.start, "end": s.end}
+            # a window of it (the rough cut's trim) when one is given
+            if op.get("start") is not None and op.get("end") is not None:
+                a, z = max(s.start, float(op["start"])), min(s.end, float(op["end"]))
+                if z - a >= min(MIN_SHOT_S, s.end - s.start):
+                    entry = {"id": sid, "start": round(a, 3), "end": round(z, 3)}
         else:
             src, i = _where(b, sid)
             entry = src["shots"].pop(i)
