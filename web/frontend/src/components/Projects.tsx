@@ -3,7 +3,7 @@ import { api } from '../api'
 import { dur } from '../format'
 import { loadProfile } from '../profile'
 import { go } from '../router'
-import type { Capabilities, ProjectMeta } from '../types'
+import type { ProjectMeta } from '../types'
 import { ago, Button, Confirm, Dialog, Field, inputCls, Notice, Wordmark } from '../ui'
 
 // Home: every video you're making, and where each one stands. One primary
@@ -19,13 +19,12 @@ const STAGE_WORDS: Record<ProjectMeta['stage'], { label: string; next: string }>
 
 export function Projects() {
   const [list, setList] = useState<ProjectMeta[] | null>(null)
-  const [caps, setCaps] = useState<Capabilities | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [rename, setRename] = useState<ProjectMeta | null>(null)
   const [remove, setRemove] = useState<ProjectMeta | null>(null)
   const initial = (() => { try { return loadProfile(window.localStorage).profile.name.trim().charAt(0).toUpperCase() || '☺' } catch { return '☺' } })()
 
-  const load = () => api.projects().then((r) => { setList(r.projects); setCaps(r.capabilities); setError(null) })
+  const load = () => api.projects().then((r) => { setList(r.projects); setError(null) })
     .catch((e) => setError((e as Error).message))
   useEffect(() => { load() }, [])
 
@@ -55,7 +54,6 @@ export function Projects() {
           <div className="flex flex-wrap items-end gap-4">
             <div>
               <h1 className="font-serif text-[30px] leading-tight text-zinc-100">Your videos</h1>
-              <p className="mt-1 text-[13px] text-zinc-400">Each one starts from your clips and ends as one file. Nothing leaves this computer.</p>
             </div>
             {/* With no videos yet, the one in the middle is the only way in. */}
             {!!list?.length && <Button variant="primary" size="lg" className="ml-auto" onClick={() => create('')}>New video</Button>}
@@ -72,7 +70,6 @@ export function Projects() {
             </div>
           )}
 
-          {caps && <Machine caps={caps} />}
         </div>
       </main>
 
@@ -122,40 +119,9 @@ function EmptyHome({ onNew }: { onNew: () => void }) {
   return (
     <div className="mt-8 rounded-2xl border border-dashed border-zinc-700 p-10 text-center">
       <h2 className="font-serif text-[26px] text-zinc-100">Start with your clips</h2>
-      <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-zinc-400">
-        Drop the clips from a trip or a day out. VibeCut reads them, throws away what a viewer would notice, proposes three ways to tell it, and you shape the rest by talking or by hand.
-      </p>
-      <ol className="mx-auto mt-6 grid max-w-2xl grid-cols-2 gap-x-6 gap-y-2 text-left text-[12px] text-zinc-400 sm:grid-cols-4">
-        {[['1', 'Footage', 'your clips, read here'], ['2', 'Brief', 'one line about the video'], ['3', 'Rough cut', 'what to leave out, and why'], ['4', 'Story', 'edit, then export one file']]
-          .map(([n, t, s]) => <li key={n}><span className="text-muted">{n} · </span><span className="text-zinc-200">{t}</span><span className="block text-[11px] text-muted">{s}</span></li>)}
-      </ol>
+      <p className="mt-2 text-[13px] text-zinc-400">Drop a day’s clips and VibeCut makes the edit.</p>
       <Button variant="primary" size="lg" className="mt-6" onClick={onNew}>New video</Button>
     </div>
-  )
-}
-
-// What this machine can do, in the creator's words. Nothing is promised that would then fail.
-function Machine({ caps }: { caps: Capabilities }) {
-  const mac = caps.platform === 'darwin'
-  const rows: [string, boolean, string][] = [
-    ['Cuts, stories, captions, sound and export', true, 'always on, all on this computer'],
-    ['Typed edits (“the opening is too slow”)', caps.llm, caps.llm ? 'a language model is set up' : 'needs ANTHROPIC_API_KEY in web/.env — the storyboard’s text is sent, never footage'],
-    ['What’s in each shot (on-device labels, faces)', caps.vision === 'ready', caps.vision === 'ready' ? 'on' : mac ? 'building the helper…' : 'macOS only — colour grouping is used instead'],
-    ['Talking to camera (transcribe, cut pauses and retakes)', caps.speech, caps.speech ? 'on' : 'needs macOS 26 with the Xcode command-line tools'],
-    ['Reference videos from a link', caps.links, caps.links ? 'yt-dlp found' : 'drop a file instead, or install yt-dlp'],
-  ]
-  return (
-    <section className="mt-10 border-t border-line pt-5">
-      <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted">On this computer</h2>
-      <ul className="mt-2 grid gap-1.5 text-[12px] sm:grid-cols-2">
-        {rows.map(([what, on, why]) => (
-          <li key={what} className="flex items-start gap-2">
-            <span className={on ? 'text-emerald-300' : 'text-zinc-500'} aria-hidden>{on ? '●' : '○'}</span>
-            <span className={on ? 'text-zinc-200' : 'text-zinc-400'}>{what}<span className="block text-[11px] text-muted">{why}</span></span>
-          </li>
-        ))}
-      </ul>
-    </section>
   )
 }
 

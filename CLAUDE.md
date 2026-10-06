@@ -51,8 +51,10 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   timeline). Select, then act; no jargon in the UI. One design system
   (`web/frontend/src/ui.tsx`); the old Creative-tools page and its four
   "coming soon" cards are gone (see `web/feature-roadmap.md`). What the
-  machine can't do (no key, not macOS, no yt-dlp) is stated on the home
-  screen and where the action would be, never hidden. See `web/README.md`.
+  machine can't do (no key, not macOS, no yt-dlp) is stated where the action
+  would be, never hidden. Home is as bare as it can be (sarah, 2026-10-06:
+  "as simple as possible"): with no videos, only "Start with your clips",
+  one line and New video. See `web/README.md`.
 - Chat editing rule: a turn applies operations to the working storyboard
   (`web/backend/board.py`), never regenerates it. The LLM only emits ops;
   the diff is computed, not reported by the model. Keep it that way.
