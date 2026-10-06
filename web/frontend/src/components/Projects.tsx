@@ -57,7 +57,8 @@ export function Projects() {
               <h1 className="font-serif text-[30px] leading-tight text-zinc-100">Your videos</h1>
               <p className="mt-1 text-[13px] text-zinc-400">Each one starts from your clips and ends as one file. Nothing leaves this computer.</p>
             </div>
-            <Button variant="primary" size="lg" className="ml-auto" onClick={() => create('')}>New video</Button>
+            {/* With no videos yet, the one in the middle is the only way in. */}
+            {!!list?.length && <Button variant="primary" size="lg" className="ml-auto" onClick={() => create('')}>New video</Button>}
           </div>
           {error && <Notice tone="bad" className="mt-4">{error} <button type="button" className="underline" onClick={load}>Try again</button></Notice>}
 
