@@ -262,30 +262,25 @@ function Opened({ side: s, clips, others, onSwitch, onClose, onFlip }: {
     <div onDragOver={(e) => { if (e.dataTransfer.types.includes(CLIP)) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setOver(true) } }}
          onDragLeave={() => setOver(false)}
          onDrop={(e) => { e.preventDefault(); setOver(false); const c = byId(e.dataTransfer.getData(CLIP)); if (c) onFlip(c) }}
-         className={cx('flex w-[260px] shrink-0 flex-col items-center justify-center gap-3 self-stretch rounded-3xl border-2 border-dashed transition-all duration-300',
+         className={cx('flex w-full max-w-[260px] flex-col items-center justify-center gap-3 self-stretch rounded-3xl border-2 border-dashed transition-all duration-300',
            over ? (red ? 'border-zinc-300 bg-zinc-100/10' : 'border-rose-400 bg-rose-950/50')
              : dragging ? 'border-zinc-600' : 'border-transparent')}>
       <div className={cx('origin-center transition-all duration-300 motion-safe:animate-[vc-zoom_300ms_ease-out]',
         over ? 'scale-90 opacity-100' : dragging ? 'scale-75 opacity-90' : 'scale-[.6] opacity-75 hover:opacity-100')}>
         <Stack side={red ? 'kept' : 'out'} clips={others} onOpen={onSwitch} />
       </div>
-      <p className="max-w-[200px] text-center text-[15px] leading-snug text-zinc-300">
+      <p className="max-w-[200px] text-center font-serif text-[17px] leading-snug text-zinc-200">
         {dragging ? `Drop here to move it to ${there}` : `Drag a clip here to move it to ${there}`}
       </p>
     </div>
   )
 
   const column = (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex items-center gap-3">
-        <Button size="sm" onClick={onClose}>‹ Both stacks</Button>
-        <h3 className={cx('font-serif text-[22px]', red ? 'text-rose-200' : 'text-zinc-100')}>{red ? 'Left out' : 'Kept'} · {clips.length}</h3>
-      </div>
-      <p className="mt-2 text-[15px] text-zinc-300">Click a clip to play it</p>
+    <div className="flex min-h-0 min-w-0 flex-col">
       {!clips.length
-        ? <p className="mt-10 text-center text-[15px] text-zinc-300">{red ? 'The rough cut kept everything.' : 'Nothing kept yet.'}</p>
+        ? <p className="mt-10 text-center font-serif text-[17px] text-zinc-200">{red ? 'The rough cut kept everything.' : 'Nothing kept yet.'}</p>
         : (
-          <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-2 motion-safe:animate-[vc-zoom_300ms_ease-out]">
+          <div className="min-h-0 flex-1 overflow-y-auto px-1 motion-safe:animate-[vc-zoom_300ms_ease-out]">
             <div className="mx-auto flex max-w-[400px] flex-col gap-4 pb-4">
               {clips.map((c) => {
                 const first = c.shots[0]
@@ -341,8 +336,19 @@ function Opened({ side: s, clips, others, onSwitch, onClose, onFlip }: {
   )
 
   return (
-    <div className="mt-3 flex min-h-0 flex-1 gap-6">
-      {red ? <>{target}{column}</> : <>{column}{target}</>}
+    // Header and column stay in the middle whichever stack is open (sarah:
+    // it moved left or right); only the small stack changes side.
+    <div className="mt-3 flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center justify-center gap-3">
+        <Button size="sm" onClick={onClose}>‹ Both stacks</Button>
+        <h3 className={cx('font-serif text-[22px]', red ? 'text-rose-200' : 'text-zinc-100')}>{red ? 'Left out' : 'Kept'} · {clips.length}</h3>
+      </div>
+      <p className="mt-1.5 text-center font-serif text-[17px] text-zinc-200">Click a clip to play it</p>
+      <div className="mt-3 grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,420px)_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] gap-6">
+        <div className="flex min-h-0 justify-end">{red && target}</div>
+        {column}
+        <div className="flex min-h-0 justify-start">{!red && target}</div>
+      </div>
     </div>
   )
 }
