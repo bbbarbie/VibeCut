@@ -180,16 +180,10 @@ NEW_NAME = "New video"
 _MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
 
 
-def auto_name(clips: list[dict], found: dict[str, dict] | None = None) -> str:
+def auto_name(clips: list[dict]) -> str:
     """A name a creator would recognise, read from the clips alone: the days
-    they were filmed and where, e.g. "Sep 22 · Morningside Heights".
-
-    Dates are the camera's own wall-clock day. The place is the
-    neighbourhood most of the clips share, else the city most share, never a
-    single spot (a café is one clip, not the video). `found` is the
-    geocoder's answers (places.lookup); without them the date alone."""
-    from collections import Counter
-    from . import places
+    they were filmed, e.g. "Sep 22" or "Sep 22–24" (sarah, 2026-10-06: just
+    the day for now). Dates are the camera's own wall-clock day."""
     days = sorted({str(c.get("capture_time") or "")[:10] for c in clips if len(str(c.get("capture_time") or "")) >= 10})
     days = [d for d in days if d[4:5] == "-" and d[7:8] == "-" and d[5:7].isdigit() and d[8:10].isdigit()]
     when = ""
@@ -200,18 +194,7 @@ def auto_name(clips: list[dict], found: dict[str, dict] | None = None) -> str:
         when = md(a) if a == b else (f"{md(a)}–{int(b[8:10])}" if a[:7] == b[:7] else f"{md(a)} – {md(b)}")
         if a[:4] != b[:4]:
             when = f"{md(a)}, {a[:4]} – {md(b)}, {b[:4]}"
-    where = ""
-    if found:
-        answers = [found.get(places.key(c.get("gps")) or "") for c in clips]
-        answers = [r for r in answers if r]
-        for k in ("area", "city"):
-            names = Counter((r.get(k) or "").strip() for r in answers if (r.get(k) or "").strip())
-            if names:
-                top, n = names.most_common(1)[0]
-                if n * 2 > len(answers) or k == "city":
-                    where = top
-                    break
-    return " · ".join(x for x in (when, where) if x) or NEW_NAME
+    return when or NEW_NAME
 
 
 def list_all() -> list[Project]:

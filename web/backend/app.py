@@ -550,10 +550,8 @@ def api_import(req: ImportReq) -> dict:
                 WORKFLOW.reopen("system", f"{len(job.clips)} new clip(s) to review")
             SESSION.replay(CATALOG["cat"], _make_proposals)
         if pr is not None and pr.auto_name and job.clips:
-            # Named from its clips, so a new video needs no name typed in.
-            # Only coordinates go to Apple's free geocoder (places.py).
-            cs = list(CLIPS.values())
-            name = pj.auto_name(cs, places.lookup([c.get("gps") for c in cs]))
+            # Named from its clips' days, so a new video needs no name typed in.
+            name = pj.auto_name(list(CLIPS.values()))
             with LOCK:
                 if pr.auto_name:
                     pr.name = name

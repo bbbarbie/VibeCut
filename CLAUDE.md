@@ -43,9 +43,9 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   Projects persist on disk (`web/backend/projects.py`: clip ids, turn log,
   workflow, cut overrides, brief, exports) and survive restarts; the
   middleware saves after every mutating request. A new video asks for no
-  name: it is "New video" until its clips are read, then named from their
-  days and place (`projects.auto_name`, e.g. "Sep 22 · Morningside Heights";
-  geocoder as `places.py`) until the creator renames it. The Footage page is
+  name: it is "New video" until its clips are read, then named from the
+  days they were filmed (`projects.auto_name`, "Sep 22" / "Sep 22–24"; sarah:
+  just the day for now) until the creator renames it. The Footage page is
   two stacks, Kept / Left out, dealt as clips are read (`Footage.tsx`). Two levels inside Story:
   **Story** (parts and shots, no timecodes) and **Frames** (the precise
   timeline). Select, then act; no jargon in the UI. One design system
