@@ -151,9 +151,12 @@ export function Footage({ clips, importing, errors, vision, onPick, onRetry, onP
                    onSwitch={() => setOpen(open === 'kept' ? 'out' : 'kept')} onClose={() => setOpen(null)}
                    onPreview={onPreview} onFlip={flip} />
           : (
-            <div className="flex flex-1 flex-wrap items-center justify-center gap-x-16 gap-y-6 py-4">
-              <Stack side="kept" clips={kept} onOpen={() => setOpen('kept')} />
-              <Stack side="out" clips={out} onOpen={() => setOpen('out')} />
+            <div className="flex flex-1 flex-col items-center justify-center gap-4 py-4">
+              <div className="flex flex-wrap items-center justify-center gap-x-16 gap-y-6">
+                <Stack side="kept" clips={kept} onOpen={() => setOpen('kept')} />
+                <Stack side="out" clips={out} onOpen={() => setOpen('out')} />
+              </div>
+              {shown.length > 0 && <p className="text-center text-[11px] text-muted">Click or swipe a stack to look through it</p>}
             </div>
           )}
       </div>
@@ -174,8 +177,7 @@ export function Footage({ clips, importing, errors, vision, onPick, onRetry, onP
               {moved
                 ? <>Moved {moved.clip.name} to {moved.to === 'kept' ? 'Kept' : 'Left out'}. <button type="button" className="text-zinc-200 underline decoration-zinc-500 hover:text-white"
                     onClick={() => { const c = clips.find((x) => x.id === moved.clip.id); if (c) onDecide(c, flipAction(c)); setMoved(null) }}>Undo</button></>
-                : !clips.length ? 'Add some clips to begin.'
-                  : `${kept.length} kept · ${out.length} left out. Open a stack to check; double-click a clip to move it.`}
+                : !clips.length ? 'Add some clips to begin.' : null}
             </div>
             <Button variant="primary" size="lg" className="ml-auto" disabled={!canContinue} onClick={onNext}
                     title={briefDone ? 'On to the rough cut' : 'Next, say what this video is'}>
@@ -228,7 +230,6 @@ function Stack({ side: s, clips, onOpen }: { side: Side; clips: Clip[]; onOpen: 
       </button>
       <div className="text-center">
         <div className={cx('font-serif text-[20px]', red ? 'text-rose-200' : 'text-zinc-100')}>{red ? 'Left out' : 'Kept'}</div>
-        <div className="text-[11px] text-muted">{clips.length ? 'Click or swipe to look through' : ' '}</div>
       </div>
     </div>
   )
