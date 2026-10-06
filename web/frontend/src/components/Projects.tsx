@@ -25,9 +25,14 @@ export function Projects() {
   const [error, setError] = useState<string | null>(null)
   const [rename, setRename] = useState<ProjectMeta | null>(null)
   const [remove, setRemove] = useState<ProjectMeta | null>(null)
-  const initial = (() => { try { return loadProfile(window.localStorage).profile.name.trim().charAt(0).toUpperCase() || '☺' } catch { return '☺' } })()
+  const mine = (() => { try { return loadProfile(window.localStorage).profile.name.trim() } catch { return '' } })()
+  const initial = mine.charAt(0).toUpperCase() || '☺'
+  // Home talks to the person (sarah: "hello, Sarah, like talk to the user"):
+  // the name they gave their profile, else the Mac account's first name.
+  const [macName, setMacName] = useState('')
+  const hello = mine.split(/\s+/)[0] || macName
 
-  const load = () => api.projects().then((r) => { setList(r.projects); setError(null) })
+  const load = () => api.projects().then((r) => { setList(r.projects); setMacName(r.first_name ?? ''); setError(null) })
     .catch((e) => setError((e as Error).message))
   useEffect(() => { load() }, [])
 
@@ -82,7 +87,7 @@ export function Projects() {
         <div className="mx-auto max-w-[1100px] px-6 py-8">
           <div className="flex flex-wrap items-end gap-4">
             <div>
-              <h1 className="font-serif text-[30px] leading-tight text-zinc-100">Your videos</h1>
+              <h1 className="font-serif text-[30px] leading-tight text-zinc-100">{hello ? `Hello, ${hello}` : 'Hello'}</h1>
             </div>
           </div>
           {error && <Notice tone="bad" className="mt-4">{error} <button type="button" className="underline" onClick={load}>Try again</button></Notice>}
@@ -170,7 +175,7 @@ function Start({ picked, dragging, creating, compact, onAdd, onRemove, onCreate 
       {!picked.length ? (
         <>
           <h2 className={cx('font-serif text-zinc-100', compact ? 'text-[20px]' : 'text-[26px]')}>{dragging ? 'Drop them here' : 'Start with your clips'}</h2>
-          <p className="mt-2 text-[13px] text-zinc-400">Drag a day’s clips or a folder here.</p>
+          <p className="mt-2 text-[13px] text-zinc-400">Drop in a day’s clips and I’ll make the edit.</p>
           <Button variant="primary" size="lg" className="mt-5" onClick={() => files.current?.click()}>Upload clips</Button>
           <div>{folderLink}</div>
         </>
