@@ -970,7 +970,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                               className={`shrink-0 whitespace-nowrap rounded-t-md px-2.5 py-1 text-[11px] ${framesTab === k ? 'bg-raised text-zinc-100' : 'text-muted hover:text-zinc-200'}`}>{name}</button>
                     ))}
                     {/* what used to live only on the Story page */}
-                    <div className="ml-auto flex items-center gap-1 self-center whitespace-nowrap [&_button]:shrink-0 [&_button]:whitespace-nowrap">
+                    <div className="ml-auto flex items-center gap-1 self-center [&>*]:shrink-0 [&>button]:whitespace-nowrap [&>div>button]:whitespace-nowrap">
                       <button type="button" onClick={() => playSource('board', [])}
                               className="rounded-md bg-zinc-800 px-2 py-1 text-[11px] text-zinc-100 hover:bg-zinc-700">
                         {boardPlay ? 'Stop' : 'Play all'}
