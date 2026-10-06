@@ -111,7 +111,7 @@ export function Footage({ clips, importing, errors, vision, onPick, onRetry, onP
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {inputs}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-5 pb-24">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-0">
             <h2 className="font-serif text-[24px] leading-tight text-zinc-100">Footage</h2>
@@ -151,14 +151,16 @@ export function Footage({ clips, importing, errors, vision, onPick, onRetry, onP
                    onSwitch={() => setOpen(open === 'kept' ? 'out' : 'kept')} onClose={() => setOpen(null)}
                    onPreview={onPreview} onFlip={flip} />
           : (
-            <div className="flex flex-1 flex-wrap items-center justify-center gap-x-20 gap-y-10 py-8">
+            <div className="flex flex-1 flex-wrap items-center justify-center gap-x-16 gap-y-6 py-4">
               <Stack side="kept" clips={kept} onOpen={() => setOpen('kept')} />
               <Stack side="out" clips={out} onOpen={() => setOpen('out')} />
             </div>
           )}
       </div>
 
-      <div className="absolute inset-x-0 bottom-0 border-t border-line bg-panel/95 px-5 py-3 backdrop-blur" aria-live="polite">
+      {/* In the page's flow, not floating over it: on a short window it used to
+          hide the stack names and the left-out reasons. */}
+      <div className="shrink-0 border-t border-line bg-panel px-5 py-3" aria-live="polite">
         {!done ? (
           <div className="mx-auto max-w-xl">
             <Progress frac={importing ? (importing.frac ?? 0.05) : dealt / Math.max(1, batch.current)} />
@@ -194,12 +196,12 @@ function Stack({ side: s, clips, onOpen }: { side: Side; clips: Clip[]; onOpen: 
   const tilt = ['-rotate-6 -translate-x-3', 'rotate-4 translate-x-3', 'rotate-0']
   const red = s === 'out'
   return (
-    <div className="flex flex-col items-center gap-4">
+    <div className="flex flex-col items-center gap-3">
       <button type="button" disabled={!clips.length} onClick={onOpen} aria-label={`Open ${red ? 'Left out' : 'Kept'}, ${clips.length} clips`}
               onPointerDown={(e) => { down.current = e.clientX }}
               onPointerUp={(e) => { if (down.current !== null && Math.abs(e.clientX - down.current) > 30) onOpen(); down.current = null }}
               onWheel={(e) => { if (clips.length && Math.abs(e.deltaX) > 20) onOpen() }}
-              className="group relative h-[190px] w-[260px] touch-pan-y">
+              className="group relative h-[150px] w-[210px] touch-pan-y">
         {!clips.length && (
           <div className={cx('absolute inset-0 grid place-items-center rounded-2xl border-2 border-dashed text-[12px]',
             red ? 'border-rose-900/70 text-rose-300/60' : 'border-zinc-700 text-muted')}>
@@ -248,9 +250,9 @@ function Strip({ side: s, clips, other, onSwitch, onClose, onPreview, onFlip }: 
     return () => window.removeEventListener('keydown', key)
   }, [onClose])
   useEffect(() => () => window.clearTimeout(click.current), [])
-  const by = (n: number) => row.current?.scrollBy({ left: n * 296, behavior: 'smooth' })
+  const by = (n: number) => row.current?.scrollBy({ left: n * 256, behavior: 'smooth' })
   return (
-    <div className="mt-5 flex min-h-0 flex-1 flex-col">
+    <div className="mt-3 flex min-h-0 flex-1 flex-col">
       <div className="flex items-center gap-3">
         <Button size="sm" onClick={onClose}>‹ Both stacks</Button>
         <h3 className={cx('font-serif text-[20px]', red ? 'text-rose-200' : 'text-zinc-100')}>{red ? 'Left out' : 'Kept'} · {clips.length}</h3>
@@ -260,7 +262,7 @@ function Strip({ side: s, clips, other, onSwitch, onClose, onPreview, onFlip }: 
       {!clips.length
         ? <p className="mt-10 text-center text-[13px] text-muted">{red ? 'The rough cut kept everything.' : 'Nothing kept yet.'}</p>
         : (
-          <div className="relative mt-4">
+          <div className="relative mt-3">
             <div ref={row} className="flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth px-1 pb-3">
               {clips.map((c) => {
                 const first = c.shots[0]
@@ -269,7 +271,7 @@ function Strip({ side: s, clips, other, onSwitch, onClose, onPreview, onFlip }: 
                   <div key={c.id} title="Double-click to move it to the other stack"
                        onClick={() => { window.clearTimeout(click.current); click.current = window.setTimeout(() => first && onPreview(c, first), 230) }}
                        onDoubleClick={() => { window.clearTimeout(click.current); onFlip(c) }}
-                       className={cx('w-[280px] shrink-0 cursor-pointer select-none snap-center rounded-2xl border p-2 transition-colors motion-safe:animate-[vc-deal_260ms_ease-out]',
+                       className={cx('w-[240px] shrink-0 cursor-pointer select-none snap-center rounded-2xl border p-2 transition-colors motion-safe:animate-[vc-deal_260ms_ease-out]',
                          red ? 'border-rose-900/80 bg-rose-950/70 hover:bg-rose-950' : 'border-line bg-raised hover:border-zinc-600')}>
                     <div className="relative aspect-video overflow-hidden rounded-xl bg-black">
                       {first && <img src={first.thumb} alt="" loading="lazy" draggable={false}
@@ -298,9 +300,9 @@ function Strip({ side: s, clips, other, onSwitch, onClose, onPreview, onFlip }: 
             {clips.length > 3 && (
               <>
                 <button type="button" aria-label="Back" onClick={() => by(-2)}
-                        className="absolute -left-2 top-[72px] grid size-9 place-items-center rounded-full bg-black/70 text-[18px] text-zinc-100 hover:bg-black">‹</button>
+                        className="absolute -left-2 top-[58px] grid size-9 place-items-center rounded-full bg-black/70 text-[18px] text-zinc-100 hover:bg-black">‹</button>
                 <button type="button" aria-label="More" onClick={() => by(2)}
-                        className="absolute -right-2 top-[72px] grid size-9 place-items-center rounded-full bg-black/70 text-[18px] text-zinc-100 hover:bg-black">›</button>
+                        className="absolute -right-2 top-[58px] grid size-9 place-items-center rounded-full bg-black/70 text-[18px] text-zinc-100 hover:bg-black">›</button>
               </>
             )}
           </div>
