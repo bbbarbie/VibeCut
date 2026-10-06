@@ -86,7 +86,7 @@ export function Projects() {
         <div className="mx-auto max-w-[1100px] px-6 py-8">
           <div className="flex flex-wrap items-end gap-4">
             <div>
-              <h1 className="font-serif text-[30px] leading-tight text-zinc-100">{hello ? `Hello, ${hello}` : 'Hello'}</h1>
+              <h1 className="font-serif text-[30px] leading-tight text-zinc-100">{greeting(hello)}</h1>
             </div>
           </div>
           {error && <Notice tone="bad" className="mt-4">{error} <button type="button" className="underline" onClick={load}>Try again</button></Notice>}
@@ -226,4 +226,10 @@ function RenameProject({ p, onClose, onDone }: { p: ProjectMeta; onClose: () => 
       </form>
     </Dialog>
   )
+}
+
+// Glad to see you, by the clock (sarah: "sound more enthusiastic").
+function greeting(name: string, hour = new Date().getHours()): string {
+  const part = hour >= 5 && hour < 12 ? 'Good morning' : hour >= 12 && hour < 18 ? 'Good afternoon' : 'Good evening'
+  return name ? `${part}, ${name}!` : `${part}!`
 }
