@@ -204,9 +204,13 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
         )}
         <span className={`flex shrink-0 items-center gap-1.5 text-[11px] ${alt ? 'text-amber-200' : 'text-muted'}`}
               title="The playhead sticks to these moments: a new shot, sound stopping or starting, movement, a music beat. Hold ⌥ (Alt) to place it exactly where you point.">
-          {alt ? 'sticking off' : 'sticks to'}
-          {!alt && (['shot', 'silence', 'motion', 'beat'] as TargetType[]).map((t) => (
-            <i key={t} className="inline-block h-2.5 w-[3px] rounded-sm" style={{ background: TICK[t] }} title={t} />
+          {/* what the coloured ticks on the ruler mean; she asked "what is this for"
+              when it was four bars and "sticks to" */}
+          {alt ? 'Snapping off (⌥ held)' : 'Playhead snaps to'}
+          {!alt && ([['shot', 'cuts'], ['silence', 'pauses'], ['motion', 'movement'], ['beat', 'beats']] as [TargetType, string][]).map(([t, word]) => (
+            <span key={t} className="flex items-center gap-1">
+              <i className="inline-block h-2.5 w-[3px] rounded-sm" style={{ background: TICK[t] }} />{word}
+            </span>
           ))}
         </span>
         <label className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted">
