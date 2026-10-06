@@ -266,7 +266,7 @@ function Opened({ side: s, clips, others, onSwitch, onClose, onFlip }: {
            over ? (red ? 'border-zinc-300 bg-zinc-100/10' : 'border-rose-400 bg-rose-950/50')
              : dragging ? 'border-zinc-600' : 'border-transparent')}>
       <div className={cx('origin-center transition-all duration-300 motion-safe:animate-[vc-zoom_300ms_ease-out]',
-        over ? 'scale-90 opacity-100' : dragging ? 'scale-75 opacity-90' : 'scale-[.6] opacity-50 hover:opacity-80')}>
+        over ? 'scale-90 opacity-100' : dragging ? 'scale-75 opacity-90' : 'scale-[.6] opacity-75 hover:opacity-100')}>
         <Stack side={red ? 'kept' : 'out'} clips={others} onOpen={onSwitch} />
       </div>
       <p className="max-w-[200px] text-center text-[15px] leading-snug text-zinc-300">
@@ -286,7 +286,7 @@ function Opened({ side: s, clips, others, onSwitch, onClose, onFlip }: {
         ? <p className="mt-10 text-center text-[15px] text-zinc-300">{red ? 'The rough cut kept everything.' : 'Nothing kept yet.'}</p>
         : (
           <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-2 motion-safe:animate-[vc-zoom_300ms_ease-out]">
-            <div className="mx-auto flex max-w-[560px] flex-col gap-4 pb-4">
+            <div className="mx-auto flex max-w-[400px] flex-col gap-4 pb-4">
               {clips.map((c) => {
                 const first = c.shots[0]
                 const mine = c.cut?.override
