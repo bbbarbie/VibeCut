@@ -59,6 +59,8 @@ class Project:
     prefs: dict = field(default_factory=lambda: {"project": [], "decisions": {}})
     # what the dashboard shows for a project that isn't open: taken at save time
     snapshot: dict = field(default_factory=dict)
+    # named by VibeCut from its clips (auto_name) until the creator renames it
+    auto_name: bool = False
     format: int = FORMAT
 
     # ---- what the UI lists -------------------------------------------------
@@ -165,15 +167,51 @@ def save(project: Project) -> None:
 
 
 def create(name: str = "") -> Project:
-    name = (name or "").strip()[:80] or default_name()
-    pr = Project(id=uuid.uuid4().hex[:12], name=name)
+    """A video starts without asking for a name (sarah, 2026-10-06: naming it
+    is one more decision before anything happens). It is called "New video"
+    until its clips are read, then named from them (auto_name)."""
+    name = (name or "").strip()[:80]
+    pr = Project(id=uuid.uuid4().hex[:12], name=name or NEW_NAME, auto_name=not name)
     save(pr)
     return pr
 
 
-def default_name() -> str:
-    n = len(list_all()) + 1
-    return f"Untitled video {n}" if n > 1 else "Untitled video"
+NEW_NAME = "New video"
+_MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
+
+
+def auto_name(clips: list[dict], found: dict[str, dict] | None = None) -> str:
+    """A name a creator would recognise, read from the clips alone: the days
+    they were filmed and where, e.g. "Sep 22 · Morningside Heights".
+
+    Dates are the camera's own wall-clock day. The place is the
+    neighbourhood most of the clips share, else the city most share, never a
+    single spot (a café is one clip, not the video). `found` is the
+    geocoder's answers (places.lookup); without them the date alone."""
+    from collections import Counter
+    from . import places
+    days = sorted({str(c.get("capture_time") or "")[:10] for c in clips if len(str(c.get("capture_time") or "")) >= 10})
+    days = [d for d in days if d[4:5] == "-" and d[7:8] == "-" and d[5:7].isdigit() and d[8:10].isdigit()]
+    when = ""
+    if days:
+        def md(d: str) -> str:
+            return f"{_MONTHS[int(d[5:7]) - 1]} {int(d[8:10])}"
+        a, b = days[0], days[-1]
+        when = md(a) if a == b else (f"{md(a)}–{int(b[8:10])}" if a[:7] == b[:7] else f"{md(a)} – {md(b)}")
+        if a[:4] != b[:4]:
+            when = f"{md(a)}, {a[:4]} – {md(b)}, {b[:4]}"
+    where = ""
+    if found:
+        answers = [found.get(places.key(c.get("gps")) or "") for c in clips]
+        answers = [r for r in answers if r]
+        for k in ("area", "city"):
+            names = Counter((r.get(k) or "").strip() for r in answers if (r.get(k) or "").strip())
+            if names:
+                top, n = names.most_common(1)[0]
+                if n * 2 > len(answers) or k == "city":
+                    where = top
+                    break
+    return " · ".join(x for x in (when, where) if x) or NEW_NAME
 
 
 def list_all() -> list[Project]:

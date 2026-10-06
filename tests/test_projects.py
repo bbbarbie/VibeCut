@@ -111,6 +111,8 @@ def main() -> int:
         r = c.post("/api/projects", json={"name": ""}).json()
         second = r["project"]["id"]
         check("a new project starts empty and is open", r["session"]["timeline"]["total"] == 0 and r["project"]["clips"] == 0)
+        check("no name asked: it's a New video until its clips name it", r["project"]["name"] == "New video" and pj.load(second).auto_name)
+        check("a name given or typed later is kept", not pj.load(pid).auto_name)
         rows = {p["id"]: p for p in c.get("/api/projects").json()["projects"]}
         check("the closed project is listed with its snapshot",
               rows[pid]["clips"] == 2 and rows[pid]["stage"] == "story" and rows[pid]["board"]["parts"] == len(board["beats"])

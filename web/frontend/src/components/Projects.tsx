@@ -21,7 +21,6 @@ export function Projects() {
   const [list, setList] = useState<ProjectMeta[] | null>(null)
   const [caps, setCaps] = useState<Capabilities | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [creating, setCreating] = useState(false)
   const [rename, setRename] = useState<ProjectMeta | null>(null)
   const [remove, setRemove] = useState<ProjectMeta | null>(null)
   const initial = (() => { try { return loadProfile(window.localStorage).profile.name.trim().charAt(0).toUpperCase() || '☺' } catch { return '☺' } })()
@@ -36,7 +35,7 @@ export function Projects() {
   }
   const create = async (name: string) => {
     try { const r = await api.createProject(name); go({ kind: 'project', id: r.project.id, view: 'story' }) }
-    catch (e) { setError((e as Error).message); setCreating(false) }
+    catch (e) { setError((e as Error).message) }
   }
 
   return (
@@ -58,14 +57,14 @@ export function Projects() {
               <h1 className="font-serif text-[30px] leading-tight text-zinc-100">Your videos</h1>
               <p className="mt-1 text-[13px] text-zinc-400">Each one starts from your clips and ends as one file. Nothing leaves this computer.</p>
             </div>
-            <Button variant="primary" size="lg" className="ml-auto" onClick={() => setCreating(true)}>New video</Button>
+            <Button variant="primary" size="lg" className="ml-auto" onClick={() => create('')}>New video</Button>
           </div>
           {error && <Notice tone="bad" className="mt-4">{error} <button type="button" className="underline" onClick={load}>Try again</button></Notice>}
 
           {list === null ? (
             <p className="mt-10 text-[13px] text-muted">Loading…</p>
           ) : list.length === 0 ? (
-            <EmptyHome onNew={() => setCreating(true)} />
+            <EmptyHome onNew={() => create('')} />
           ) : (
             <div className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
               {list.map((p) => <Card key={p.id} p={p} onOpen={() => open(p)} onRename={() => setRename(p)} onDelete={() => setRemove(p)} />)}
@@ -76,7 +75,6 @@ export function Projects() {
         </div>
       </main>
 
-      {creating && <NewProject onClose={() => setCreating(false)} onCreate={create} />}
       {rename && <RenameProject p={rename} onClose={() => setRename(null)} onDone={() => { setRename(null); load() }} />}
       {remove && (
         <Confirm title={`Delete “${remove.name}”?`} action="Delete the project" danger onNo={() => setRemove(null)}
@@ -157,22 +155,6 @@ function Machine({ caps }: { caps: Capabilities }) {
         ))}
       </ul>
     </section>
-  )
-}
-
-function NewProject({ onClose, onCreate }: { onClose: () => void; onCreate: (name: string) => Promise<void> }) {
-  const [name, setName] = useState('')
-  const [busy, setBusy] = useState(false)
-  const submit = async () => { setBusy(true); await onCreate(name.trim()) }
-  return (
-    <Dialog title="New video" sub="Give it a name you'll recognise — the trip, the day, the person. You can change it later." onClose={onClose} busy={busy} width={420}
-            footer={<><Button variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" onClick={submit} disabled={busy}>{busy ? 'Creating…' : 'Create'}</Button></>}>
-      <form onSubmit={(e) => { e.preventDefault(); if (!busy) submit() }}>
-        <Field label="Name">
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="A weekend in Tokyo" className={inputCls} disabled={busy} />
-        </Field>
-      </form>
-    </Dialog>
   )
 }
 
