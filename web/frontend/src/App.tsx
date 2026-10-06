@@ -850,7 +850,6 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     : shown === 'footage' ? (
       <Footage clips={clips} importing={importing} errors={session?.import_errors ?? []} vision={caps.vision}
                onPick={(fl) => importPicked(fromInput(fl))} onRetry={retryImport}
-               onPreview={(c, sh) => preview(c.id, sh.start, sh.end, sh.id)}
                onDecide={(c, a) => { cutOverride(c.id, a).catch((e) => note((e as Error).message)) }}
                canContinue={!!clips.length && !importing && stage !== 'footage'} briefDone={!!brief}
                onNext={() => showStep(stage === 'story' ? 'story' : brief ? 'cut' : 'brief')} />
@@ -895,7 +894,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const storyStage = shown === 'story' && !talkOpen
   const cols = storyStage && level === 'frames' ? (narrow ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[320px_minmax(0,1fr)]')
     : storyStage ? (narrow ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[320px_minmax(0,1fr)_420px]')
-      : narrow ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)_400px]'
+      : narrow || shown === 'footage' ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)_400px]'
 
   return (
     <>
@@ -1025,8 +1024,11 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
               {undoable && <UndoToast text={undoable.text} onUndo={() => { toggle(undoable.turn); setUndoable(null) }} />}
               {flash && <Flash text={flash} />}
             </main>
+            {/* Footage has no preview panel (sarah: the stacks use the width, a
+                clip plays in place). Hidden, not removed: the player's videos
+                stay attached to the transport. */}
             <aside className={cx('flex min-h-0 flex-col gap-3 overflow-y-auto border-line bg-panel p-3',
-              narrow ? 'border-t max-h-[46vh]' : 'border-l')}>
+              narrow ? 'border-t max-h-[46vh]' : 'border-l', shown === 'footage' && 'hidden')}>
               <div className="flex aspect-[16/10] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-line"
                    onClick={() => { if (tr.playing && !segment) transport.stop() }}>
                 {player(false)}

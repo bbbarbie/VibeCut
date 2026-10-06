@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Clip, ImportError, Shot } from '../types'
+import type { Clip, ImportError } from '../types'
 import { dur, when } from '../format'
 import { Button, Notice, Progress, cx } from '../ui'
 
@@ -33,14 +33,13 @@ function flipAction(c: Clip): Decide {
 // long enough to see clips land, short enough never to be waited on.
 const SORT_MS = 2400
 
-export function Footage({ clips, importing, errors, vision, onPick, onRetry, onPreview, onDecide, onNext, canContinue, briefDone }: {
+export function Footage({ clips, importing, errors, vision, onPick, onRetry, onDecide, onNext, canContinue, briefDone }: {
   clips: Clip[]
   importing: Importing
   errors: ImportError[]
   vision: string
   onPick: (files: FileList) => void
   onRetry: (paths: string[]) => void
-  onPreview: (clip: Clip, shot: Shot) => void
   /** keep / reject a clip the rough cut left out, or 'auto' to give the call back */
   onDecide: (clip: Clip, action: Decide) => void
   onNext: () => void
@@ -149,7 +148,7 @@ export function Footage({ clips, importing, errors, vision, onPick, onRetry, onP
         {open
           ? <Strip side={open} clips={open === 'kept' ? kept : out} other={open === 'kept' ? out.length : kept.length}
                    onSwitch={() => setOpen(open === 'kept' ? 'out' : 'kept')} onClose={() => setOpen(null)}
-                   onPreview={onPreview} onFlip={flip} />
+                   onFlip={flip} />
           : (
             <div className="flex flex-1 flex-col items-center justify-center gap-4 py-4">
               <div className="flex flex-wrap items-center justify-center gap-x-16 gap-y-6">
@@ -237,13 +236,16 @@ function Stack({ side: s, clips, onOpen }: { side: Side; clips: Clip[]; onOpen: 
 
 // One stack laid out to swipe through. A click plays the clip; a double-click
 // moves it to the other stack. Left-out clips say why the rough cut left them.
-function Strip({ side: s, clips, other, onSwitch, onClose, onPreview, onFlip }: {
+function Strip({ side: s, clips, other, onSwitch, onClose, onFlip }: {
   side: Side; clips: Clip[]; other: number
   onSwitch: () => void; onClose: () => void
-  onPreview: (clip: Clip, shot: Shot) => void; onFlip: (clip: Clip) => void
+  onFlip: (clip: Clip) => void
 }) {
   const row = useRef<HTMLDivElement>(null)
   const click = useRef<number | undefined>(undefined)
+  // A clip plays right where it sits (sarah: no preview panel on this page);
+  // a second click, or the end, puts the picture back.
+  const [playing, setPlaying] = useState<string | null>(null)
   const red = s === 'out'
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -257,7 +259,7 @@ function Strip({ side: s, clips, other, onSwitch, onClose, onPreview, onFlip }: 
       <div className="flex items-center gap-3">
         <Button size="sm" onClick={onClose}>‹ Both stacks</Button>
         <h3 className={cx('font-serif text-[20px]', red ? 'text-rose-200' : 'text-zinc-100')}>{red ? 'Left out' : 'Kept'} · {clips.length}</h3>
-        <span className="text-[11px] text-muted">Click to watch · double-click to move it to {red ? 'Kept' : 'Left out'}</span>
+        <span className="text-[11px] text-muted">Click to play · double-click to move it to {red ? 'Kept' : 'Left out'}</span>
         <Button size="sm" className="ml-auto" onClick={onSwitch}>{red ? 'Kept' : 'Left out'} · {other} ›</Button>
       </div>
       {!clips.length
@@ -270,13 +272,16 @@ function Strip({ side: s, clips, other, onSwitch, onClose, onPreview, onFlip }: 
                 const mine = c.cut?.override
                 return (
                   <div key={c.id} title="Double-click to move it to the other stack"
-                       onClick={() => { window.clearTimeout(click.current); click.current = window.setTimeout(() => first && onPreview(c, first), 230) }}
+                       onClick={() => { window.clearTimeout(click.current); click.current = window.setTimeout(() => setPlaying((p) => (p === c.id ? null : c.id)), 230) }}
                        onDoubleClick={() => { window.clearTimeout(click.current); onFlip(c) }}
                        className={cx('w-[240px] shrink-0 cursor-pointer select-none snap-center rounded-2xl border p-2 transition-colors motion-safe:animate-[vc-deal_260ms_ease-out]',
                          red ? 'border-rose-900/80 bg-rose-950/70 hover:bg-rose-950' : 'border-line bg-raised hover:border-zinc-600')}>
                     <div className="relative aspect-video overflow-hidden rounded-xl bg-black">
-                      {first && <img src={first.thumb} alt="" loading="lazy" draggable={false}
-                                     className={cx('size-full', c.height > c.width ? 'object-contain' : 'object-cover')} />}
+                      {playing === c.id
+                        ? <video src={`/api/video/${c.id}`} autoPlay playsInline onEnded={() => setPlaying(null)}
+                                 className="size-full object-contain" />
+                        : first && <img src={first.thumb} alt="" loading="lazy" draggable={false}
+                                        className={cx('size-full', c.height > c.width ? 'object-contain' : 'object-cover')} />}
                       <span className="absolute right-1 top-1 rounded bg-black/70 px-1 text-[10px] tabular-nums text-zinc-200">{dur(c.duration)}</span>
                       {c.shots.length > 1 && <span className="absolute left-1 top-1 rounded bg-black/70 px-1 text-[10px] text-zinc-200">{c.shots.length} shots</span>}
                       {/* The reason sits on the picture so it's seen even when the page
