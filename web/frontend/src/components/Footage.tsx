@@ -179,7 +179,7 @@ export function Footage({ clips, importing, errors, vision, onPick, onRetry, onD
                 : !clips.length ? 'Add some clips to begin.' : null}
             </div>
             <Button variant="primary" size="lg" className="ml-auto" disabled={!canContinue} onClick={onNext}
-                    title={briefDone ? 'On to the rough cut' : 'Next, say what this video is'}>
+                    title={briefDone ? 'On to the rough trim' : 'Next, say what this video is'}>
               Looks good →
             </Button>
           </div>

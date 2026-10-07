@@ -42,7 +42,7 @@ export function Story({ session, clips, asking, playing, nowShot, selected, onUs
   if (!clips.length || (!board && !proposals)) {
     return (
       <div className="grid min-h-0 flex-1 place-items-center p-8 text-center">
-        <p className="max-w-sm text-[13px] text-zinc-400">{asking ? 'Building three ways to tell it…' : 'Nothing to show yet — the story is built from your brief, after the rough cut.'}</p>
+        <p className="max-w-sm text-[13px] text-zinc-400">{asking ? 'Building three ways to tell it…' : 'Nothing to show yet — the story is built after the rough trim.'}</p>
       </div>
     )
   }
@@ -52,7 +52,7 @@ export function Story({ session, clips, asking, playing, nowShot, selected, onUs
       <div className="min-h-0 flex-1 overflow-y-auto p-5">
         <div className="mb-1 flex flex-wrap items-baseline gap-3">
           <h2 className="font-serif text-[24px] text-zinc-100">{n === 4 ? 'Four' : 'Three'} ways to tell it</h2>
-          {board && <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setShowOthers(false)}>Back to my story</Button>}
+          {board && <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setShowOthers(false)}>Back to my edit</Button>}
         </div>
         <p className="mb-4 text-[12px] text-zinc-400">Watch one, then start from the one closest to what you want. You can change anything after — by talking, or by hand.</p>
         <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${n > 3 ? 2 : n}, minmax(0, 1fr))` }}>

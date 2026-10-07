@@ -14,9 +14,9 @@ import { ago, Button, Confirm, cx, Dialog, Field, inputCls, Notice, Wordmark } f
 
 const STAGE_WORDS: Record<ProjectMeta['stage'], { label: string; next: string }> = {
   footage: { label: 'Footage', next: 'Add your clips' },
-  brief: { label: 'Brief', next: 'Say what the video is' },
-  cut: { label: 'Rough cut', next: 'Look over the rough cut' },
-  story: { label: 'Story', next: 'Keep editing' },
+  brief: { label: 'Getting ready', next: 'Keep going' },
+  cut: { label: 'Getting ready', next: 'Keep going' },
+  story: { label: 'Editing', next: 'Keep editing' },
   exported: { label: 'Exported', next: 'Open it' },
 }
 

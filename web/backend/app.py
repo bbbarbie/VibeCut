@@ -26,7 +26,7 @@ from pydantic import BaseModel
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, brief, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, brief, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import Workflow, WorkflowError
 
@@ -837,6 +837,80 @@ def api_moment_chat(req: MomentReq) -> dict:
 SUGGESTED: dict = {}     # clip ids -> suggestions, so a revisit doesn't ask again
 
 
+@app.post("/api/brief/auto")
+def api_brief_auto() -> dict:
+    """No questions (sarah, 2026-10-07: "build" -- skip the popup): what the
+    video is comes from the clips, its length is the suggested one, and it
+    has captions. All changeable in Frames (Length, Captions). No model."""
+    pr = PROJECT["p"]
+    if pr is None:
+        raise HTTPException(409, "Open a project first.")
+    with LOCK:
+        about = pitch.guess(list(CLIPS.values())) or "My video"
+        marks = brief.length_marks(_usable_s(), about)
+        # the tempo the footage asks for (sarah, 2026-10-07), not a question
+        feel = tempo.read(list(CLIPS.values()), cut.for_story(PLAN["plan"]))
+        style = {"seconds": marks["seconds"], "captions": "describe", "pace": feel["pace"]}
+        pr.brief = {"message": about, "style": brief.clean_style(style) or {}, "tempo": feel["why"],
+                    "said": f"about {brief.say_length(marks['seconds'])} · {tempo.NAMES[feel['pace']].lower()} · captions",
+                    "at": time.time()}
+        return _session()
+
+
+class PaceReq(BaseModel):
+    pace: str
+
+
+@app.post("/api/pace")
+def api_pace(req: PaceReq) -> dict:
+    """Quick / steady / calm cuts in Frames, as one undoable turn: every shot
+    back to its rough-trim window, at most the pace's longest shot around its
+    best frame. Talking keeps its whole window."""
+    if req.pace not in brief.PACE_CAP_S:
+        raise HTTPException(422, "pace is fast, balanced or calm")
+    with LOCK:
+        if not SESSION.board:
+            raise HTTPException(409, "Pick a story first.")
+        cat = CATALOG["cat"]
+        _, windows = cut.for_story(PLAN["plan"])
+        talk = tempo.talking(list(CLIPS.values()), _pool())
+        ops = tempo.pace_ops(SESSION.board, cat, windows, req.pace, talk)
+        name = tempo.NAMES[req.pace]
+        if ops:
+            SESSION.add({"kind": "direct", "text": name, "ops": ops,
+                         "reply": f"{name} now. Talking keeps its whole sentence. Undo puts it back."},
+                        cat, _make_proposals)
+        pr = PROJECT["p"]
+        if pr is not None and pr.brief:
+            pr.brief = {**pr.brief, "style": {**(pr.brief.get("style") or {}), "pace": req.pace},
+                        "tempo": f"{name}, as you chose."}
+        return _session()
+
+
+class CaptionsReq(BaseModel):
+    on: bool
+
+
+@app.post("/api/captions")
+def api_captions(req: CaptionsReq) -> dict:
+    """Captions on or off in Frames, as one undoable turn. Off takes every
+    caption away; on puts back what the style asked for (else the time and
+    place of each moment)."""
+    with LOCK:
+        b = SESSION.board
+        if not b:
+            raise HTTPException(409, "Choose a story first.")
+        if not req.on:
+            ops = [{"op": "drop_overlay", "overlay": o["id"]} for o in b.get("overlays", [])]
+            if ops:
+                SESSION.add({"kind": "direct", "text": "Captions off", "ops": ops,
+                             "reply": "Captions off. Undo puts them back."}, CATALOG["cat"], _make_proposals)
+            return _session()
+        if not b.get("overlays"):
+            _words_as_asked(force=True)
+        return _session()
+
+
 @app.get("/api/brief/guess")
 def api_brief_guess() -> dict:
     """What the video is, read from the footage (no model, no cost)."""
@@ -1051,14 +1125,17 @@ def api_ops(req: OpsReq) -> dict:
         return _session()
 
 
-def _words_as_asked() -> None:
+def _words_as_asked(force: bool = False) -> None:
     """A story was just chosen: put on screen the words the style questions
-    asked for, as their own turn so Undo takes only the words away."""
+    asked for, as their own turn so Undo takes only the words away. `force`
+    (the Captions switch in Frames) puts captions on even if none were asked."""
     b = SESSION.board
     d = _direction() or {}
     style = d.get("style") or {}
     answer = style.get("captions")
-    if not b or b.get("overlays") or not d:
+    if force and answer not in ("describe", "transcribe"):
+        answer = "describe"
+    if not b or b.get("overlays") or not (d or force):
         return
     said = (d.get("text") or "").split("\n")[0].strip()
     found = places.lookup([c.get("gps") for c in CLIPS.values()]) if answer in ("describe", None, "day") else {}
@@ -1068,7 +1145,7 @@ def _words_as_asked() -> None:
         return
     n = sum(o["op"] == "add_overlay" for o in ops)
     what = {"transcribe": "subtitles of what's said", "none": "words"}.get(answer or "", "captions: the time, the place and what's happening")
-    reply = f"Added {n} caption{'s' * (n != 1)} — {what}, as you asked at the start. Click one to retype it."
+    reply = f"Added {n} caption{'s' * (n != 1)} — {what}. Click one to retype it."
     if notes:
         reply += " " + " ".join(notes)
     SESSION.add({"kind": "direct", "text": "Captions, as you asked", "ops": ops, "reply": reply},
@@ -1616,5 +1693,18 @@ from . import polish_api  # noqa: E402
 app.include_router(polish_api.router)
 
 DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+
+
+class _UI(StaticFiles):
+    """The page always asks again (sarah kept seeing a page removed two
+    builds earlier); the hashed assets it names can be cached for good."""
+
+    async def get_response(self, path, scope):
+        r = await super().get_response(path, scope)
+        if r.headers.get("content-type", "").startswith("text/html"):
+            r.headers["Cache-Control"] = "no-cache"
+        return r
+
+
 if DIST.exists():
-    app.mount("/", StaticFiles(directory=DIST, html=True), name="ui")
+    app.mount("/", _UI(directory=DIST, html=True), name="ui")

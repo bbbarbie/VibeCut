@@ -3,7 +3,6 @@ import { api } from './api'
 import { Chat, type ChatItem } from './components/Chat'
 import { KIND_META, partsOf } from './overlayDraw'
 import { loadProfile } from './profile'
-import { CutReview } from './components/CutReview'
 import { StyleQuestions } from './components/StyleQuestions'
 import { composeBrief, sayPicks, type Picks } from './brief'
 import { Export } from './components/Export'
@@ -14,6 +13,7 @@ import { TalkCut } from './components/TalkCut'
 import { Keys } from './components/Keys'
 import { Player } from './components/Player'
 import { PauseChat } from './components/PauseChat'
+import { PaceButton } from './components/PaceButton'
 import { LengthButton } from './components/LengthButton'
 import type { OverlayEdit } from './components/OverlayCanvas'
 import { Menu, SwapPicker, type MenuItem } from './components/Menus'
@@ -23,7 +23,6 @@ import { Shelf } from './components/Shelf'
 import { SmoothButton, Story, type PlayItem, type Selection } from './components/Story'
 import { Timeline, type Marks } from './components/Timeline'
 import { Footage, type Importing } from './components/Footage'
-import { Brief } from './components/Brief'
 import { fromDataTransfer, fromInput, takeHandoff, type Picked } from './drop'
 import { bytes, uid } from './format'
 import { clock, locate, toSource } from './sequence'
@@ -33,11 +32,11 @@ import { go } from './router'
 import { deriveStage, reached, STAGES, type Stage } from './stage'
 import { phStore, snapStore, transport, transportStore, useStore } from './transport'
 import { Button, Confirm, cx, Wordmark } from './ui'
-import type { Capabilities, Clip, CutData, Msg, Option, Overlay, OverlayKind, Overlays as OverlayData, Segment, Session, Shot, StyleAnswers, StyleQuestion, TimelineData } from './types'
+import type { Capabilities, Clip, Msg, Option, Overlay, OverlayKind, Overlays as OverlayData, Segment, Session, Shot, StyleAnswers, StyleQuestion, TimelineData } from './types'
 
 const hello: Msg = {
   id: 'hello', role: 'app', at: 0,
-  text: 'Pick a story, then tell me what to change: “the opening is too slow”, “take out the market”, “end on the sunset”. Each message edits — nothing is regenerated, and everything can be undone.',
+  text: 'Your edit is ready. Tell me what to change: “the opening is too slow”, “take out the market”, “end on the sunset”. Everything can be undone.',
 }
 const EMPTY_TL: TimelineData = { fps: 30, total: 0, items: [], targets: [], grid: null }
 const EMPTY_OVERLAYS: OverlayData = {
@@ -85,7 +84,6 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const [swap, setSwap] = useState<{ key: string; thumb: string; id: string } | null>(null)
   const [undoable, setUndoable] = useState<{ turn: number; text: string } | null>(null)
   // The rough cut and its gate.
-  const [cutData, setCutData] = useState<CutData | null>(null)
   const [approving, setApproving] = useState(false)
   const [segment, setSegment] = useState<Segment | null>(null)
   const [queue, setQueue] = useState<Queue | null>(null)
@@ -159,7 +157,6 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     })
   }, [clips])
   const wfState = session?.workflow?.state
-  useEffect(() => { if (wfState && wfState !== 'intake') api.cut().then(setCutData).catch(() => {}) }, [wfState, clips])
   const atGate = wfState === 'cut-review'
 
   // ---- where we are ----------------------------------------------------------
@@ -169,22 +166,23 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   })
   const done = reached({ clips: clips.length, workflow: wfState ?? 'intake', brief: !!brief, proposals: !!session?.proposals, board: !!session?.board })
   const shown: Stage = peek && done.includes(peek) ? peek : stage
+  // The style step has no page of its own (sarah, 2026-10-07: "delete this
+  // entire page"): its questions open over the stacks, and once answered the
+  // rough cut is next. What the video is comes from the clips (pitch.guess).
+  const screen: Stage = shown === 'brief' ? (brief ? 'cut' : 'footage') : shown
   useEffect(() => { if (peek && !done.includes(peek)) setPeek(null) }, [peek, done])
   useEffect(() => { if (shown !== 'story' && level === 'frames') setLevel('story') }, [shown]) // eslint-disable-line react-hooks/exhaustive-deps
-  // Once a story is chosen the edit lives in Frames (sarah, 2026-10-04): opening
-  // the project lands there; the Story view stays one click away.
+  // Once a story is chosen the edit lives in Frames (sarah, 2026-10-04), and
+  // since 2026-10-07 only there: the other stories open from More and close
+  // back into Frames. No Story / Frames switch.
   const [othersOpen, setOthersOpen] = useState(false)
-  const landed = useRef(false)
   useEffect(() => {
-    // wait until the stage is known (clips and the gate load after the session)
-    if (landed.current || !session?.board || shown !== 'story') return
-    landed.current = true
-    if (level === 'story' && !othersOpen) setLevel('frames')
-  }, [session, shown]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (session?.board && shown === 'story' && !talkOpen && level === 'story' && !othersOpen) setLevel('frames')
+  }, [session?.board, shown, talkOpen, level, othersOpen])
   const showStep = (s: Stage) => { setPeek(s === stage ? null : s); setMenu(null); stopQueue(); setSegment(null); if (s !== 'story') transport.stop() }
 
   const cutOverride = async (target: string, action: string, range?: [number, number]) => {
-    setCutData(await api.override(target, action, range))
+    await api.override(target, action, range)
     await refresh()
   }
   const approveCut = async () => {
@@ -197,6 +195,24 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       if (s.brief && !s.proposals && !s.board) await send(s.brief.message, s.brief.style)
     } catch (e) { note((e as Error).message) } finally { setApproving(false) }
   }
+  // The rough trim has no page any more (sarah, 2026-10-07): once the style
+  // questions are answered it's approved as it stands and the story is built.
+  // Every trim stays changeable in Frames by dragging a shot's ends.
+  const autoApproved = useRef(false)
+  useEffect(() => {
+    // after the clips load: building the story needs them
+    if (atGate && brief && clips.length && !approving && !autoApproved.current) { autoApproved.current = true; approveCut() }
+    if (!atGate) autoApproved.current = false
+  }, [atGate, !!brief, clips.length > 0]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Past the gate with the questions answered but no story yet (the build was
+  // interrupted, or the page reloaded mid-way): build it, once.
+  const built = useRef(false)
+  const waiting = !!wfState && !['intake', 'indexing', 'rough-cut', 'cut-review'].includes(wfState)
+    && !!brief && !session?.proposals && !session?.board
+  useEffect(() => {
+    if (waiting && clips.length && !pending && !approving && !built.current) { built.current = true; send(brief!.message, brief!.style) }
+    if (!waiting) built.current = false
+  }, [waiting, clips.length > 0, !!pending, approving]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     transport.attach(videoRef.current, backRef.current, veilRef.current)
     if (level === 'frames') transport.seek(phStore.get())
@@ -272,10 +288,18 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   }
   // No "what's this video about?" any more (sarah, 2026-10-06): the clips
   // say it (day / trip, what's in them), and the questions open straight away.
+  // No questions either (sarah, 2026-10-07): the suggested length, captions
+  // on, straight to the stories. Length and Captions are in Frames.
+  const autoBrief = useRef(false)
   const startQuestions = () => {
-    if (asking) return
-    api.guess().then((r) => r.about, () => '').then((about) => askStyle(about || 'My video'))
+    if (asking || autoBrief.current) return
+    autoBrief.current = true
+    api.autoBrief().then(setSession, (e) => note((e as Error).message)).finally(() => { autoBrief.current = false })
   }
+  // Opening a project that's waiting on them: the questions are simply there.
+  useEffect(() => {
+    if (shown === 'brief' && !brief && clips.length && !asking) startQuestions()
+  }, [shown, !!brief, clips.length > 0]) // eslint-disable-line react-hooks/exhaustive-deps
   const answered = async (picks: Picks, extra: string) => {
     if (!asking?.questions) return
     const { text, questions } = asking
@@ -775,7 +799,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const remixDone = async () => { await refresh(); setPeek(null); setLevel('frames') }
   const startOver = async () => {
     setRestart(false)
-    try { await api.clear(); await refresh(); setLocal([hello]); setPeek(null); setCutData(null); setLevel('story') }
+    try { await api.clear(); await refresh(); setLocal([hello]); setPeek(null); setLevel('story') }
     catch (e) { note((e as Error).message) }
   }
   const rename = async (name: string) => {
@@ -790,6 +814,16 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     setOthersOpen(false)
     setLevel('frames')
   }
+  // No story choice for now (sarah, 2026-10-07: "jump immediately into
+  // frames"): the story the shoot suggests (tempo.pick_story) is taken and
+  // the edit opens in Frames. The others stay under Story.
+  const autoChosen = useRef(false)
+  const props = session?.proposals
+  const firstOption = !session?.board && !pending && props
+    ? props.options.find((o) => o.key === props.recommended) ?? props.options[0] : undefined
+  useEffect(() => {
+    if (firstOption && !autoChosen.current) { autoChosen.current = true; apply(firstOption).finally(() => { autoChosen.current = false }) }
+  }, [firstOption?.key]) // eslint-disable-line react-hooks/exhaustive-deps
   const clear = () => session?.board && run(session.board.beats.map((b) => ({ op: 'drop_beat', beat: b.id })),
     'You cleared the timeline')
 
@@ -852,20 +886,14 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
 
   const centre = talkOpen && caps.speech
     ? <TalkCut onApply={applyTalk} onWatch={preview} onClose={() => setTalkOpen(false)} />
-    : shown === 'footage' ? (
+    : screen === 'footage' ? (
       <Footage clips={clips} importing={importing} errors={session?.import_errors ?? []} vision={caps.vision}
                onPick={(fl) => importPicked(fromInput(fl))} onRetry={retryImport}
                onDecide={(c, a) => { cutOverride(c.id, a).catch((e) => note((e as Error).message)) }}
                canContinue={!!clips.length && !importing && stage !== 'footage'} briefDone={!!brief}
                onNext={() => { showStep(stage === 'story' ? 'story' : brief ? 'cut' : 'brief'); if (!brief) startQuestions() }} />
-    ) : shown === 'brief' ? (
-      <Brief brief={brief} busy={!!pending || !!asking} onStart={startQuestions} onContinue={() => showStep(stage === 'story' ? 'story' : 'cut')} />
-    ) : shown === 'cut' && cutData ? (
-      <CutReview data={cutData} clips={clips} approved={!atGate} busy={approving}
-                 onOverride={cutOverride} onApprove={approveCut} onWatch={preview}
-                 onClose={() => showStep('story')} />
-    ) : shown === 'cut' ? (
-      <div className="grid flex-1 place-items-center text-[13px] text-muted">Working out the rough cut…</div>
+    ) : screen === 'cut' ? (
+      <div className="grid flex-1 place-items-center font-serif text-[17px] text-zinc-200">Trimming your clips…</div>
     ) : (
       <Story
         session={session}
@@ -887,7 +915,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
         onBeatAction={beatAction}
         onReference={() => setReferencing(true)}
         othersOpen={othersOpen}
-        onOthersOpen={setOthersOpen}
+        onOthersOpen={(o) => { setOthersOpen(o); if (!o) setLevel('frames') }}
         onSmooth={async (order, nudge) => { const s = await api.smooth(order, nudge); setSession(s); offerUndo(s) }}
         onJoin={(after, sound) => run([{ op: 'set_join', shot: after, sound }],
           sound === 'default' ? 'Sound back to automatic' : 'Changed how the sound crosses a cut')}
@@ -897,7 +925,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const storyStage = shown === 'story' && !talkOpen
   const cols = storyStage && level === 'frames' ? (narrow ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[320px_minmax(0,1fr)]')
     : storyStage ? (narrow ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[320px_minmax(0,1fr)_420px]')
-      : narrow || shown === 'footage' || shown === 'brief' ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)_400px]'
+      : narrow || screen === 'footage' ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)_400px]'
 
   return (
     <>
@@ -922,17 +950,6 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
 
         <div className="flex-1" />
         <Stepper current={shown} derived={stage} done={done} onGo={showStep} compact={narrow} />
-        {storyStage && (
-          <div className="ml-2 flex rounded-lg border border-line bg-panel p-0.5 text-[12px]">
-            {([['story', 'Story', 'Your video as parts and shots — reorder, remove, swap'],
-               ['frames', 'Frames', 'The detailed timeline — cut and trim frame by frame']] as const).map(([k, name, tip]) => (
-              <button key={k} type="button" title={tip} onClick={() => setLevel(k)}
-                      className={`rounded-md px-2.5 py-1 ${level === k ? 'bg-zinc-700 text-zinc-100' : 'text-muted hover:text-zinc-200'}`}>
-                {name}
-              </button>
-            ))}
-          </div>
-        )}
         <div className="flex-1" />
 
         {narrow && storyStage && <Button size="sm" onClick={() => setChatOpen((o) => !o)} aria-pressed={chatOpen}>Chat</Button>}
@@ -944,6 +961,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
           <Button size="sm" variant="ghost" onClick={() => setMore((m) => !m)} aria-haspopup="menu" aria-expanded={more}>More ▾</Button>
           {more && (
             <MoreMenu onClose={() => setMore(false)} items={[
+              { label: 'Other stories…', hint: 'The same clips told another way', disabled: !session?.proposals || !session?.board || shown !== 'story', onClick: () => { transport.stop(); setOthersOpen(true); setLevel('story') } },
               { label: 'Talking to camera…', hint: caps.speech ? 'Transcribe on this Mac, cut pauses and retakes' : 'Needs macOS 26 with the Xcode command-line tools', disabled: !caps.speech || !clips.length, onClick: openTalk },
               { label: 'Build a short from reference reels…', hint: caps.links ? 'Their pace and length, your clips, free music' : 'Links need yt-dlp; files work', disabled: !clips.length, onClick: openRemix },
               { label: 'Keyboard shortcuts', hint: 'Frames view', onClick: () => setHelp(true) },
@@ -958,7 +976,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
           {profileInitial}
         </button>
         <Button variant="primary" size="sm" disabled={!session?.board} onClick={openExport}
-                title={session?.board ? 'Render the edit, its captions and its music to one video file' : 'Pick a story first'}>
+                title={session?.board ? 'Render the edit, its captions and its music to one video file' : 'Your edit is still being made'}>
           Export{session?.exports.length ? ` · ${session.exports.length}` : ''}
         </Button>
       </header>
@@ -973,25 +991,32 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
             <div className="flex min-h-0 flex-1">
               <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-panel">
                 {session?.board && (
-                  <div className="flex h-8 shrink-0 items-end gap-1 border-b border-line px-3" role="tablist">
+                  <div className="flex min-h-8 shrink-0 flex-wrap items-end gap-1 border-b border-line px-3" role="tablist">
                     {([['shots', 'Shots'], ['words', `Captions${ovData.items.length ? ` · ${ovData.items.length}` : ''}`]] as const).map(([k, name]) => (
                       <button key={k} type="button" role="tab" aria-selected={framesTab === k} onClick={() => setFramesTab(k)}
                               className={`shrink-0 whitespace-nowrap rounded-t-md px-2.5 py-1 text-[11px] ${framesTab === k ? 'bg-raised text-zinc-100' : 'text-muted hover:text-zinc-200'}`}>{name}</button>
                     ))}
                     {/* what used to live only on the Story page */}
-                    <div className="ml-auto flex items-center gap-1 self-center [&>*]:shrink-0 [&>button]:whitespace-nowrap [&>div>button]:whitespace-nowrap">
+                    <div className="ml-auto flex flex-wrap items-center justify-end gap-1 self-center py-1 [&>*]:shrink-0 [&>button]:whitespace-nowrap [&>div>button]:whitespace-nowrap">
                       <button type="button" onClick={() => playSource('board', [])}
                               className="rounded-md bg-zinc-800 px-2 py-1 text-[11px] text-zinc-100 hover:bg-zinc-700">
                         {boardPlay ? 'Stop' : 'Play all'}
                       </button>
                       <LengthButton total={tl.total} onDone={(r) => { setSession(r); offerUndo(r); note(r.length_note) }} />
+                      <button type="button" aria-pressed={!!ovData.items.length}
+                              title="Captions on the video: the time and place of each moment"
+                              onClick={async () => {
+                                try { const r = await api.captions(!ovData.items.length); setSession(r); offerUndo(r) }
+                                catch (e) { note((e as Error).message) }
+                              }}
+                              className="whitespace-nowrap rounded-md border border-line px-2 py-1 text-[11px] text-zinc-300 hover:bg-raised">
+                        Captions {ovData.items.length ? 'on' : 'off'}
+                      </button>
+                      <PaceButton pace={brief?.style?.pace} why={brief?.tempo}
+                                  story={session.board?.option === session.proposals?.recommended ? session.proposals?.why : undefined}
+                                  onDone={(r) => { setSession(r); offerUndo(r) }} />
                       <SmoothButton small rough={(session.seams ?? []).filter((x) => x.verdict !== 'ok').length}
                                     onSmooth={async (order, nudge) => { const r = await api.smooth(order, nudge); setSession(r); offerUndo(r) }} />
-                      {session.proposals && (
-                        <button type="button" onClick={() => { setOthersOpen(true); setLevel('story') }}
-                                title="The other proposals built from your brief"
-                                className="rounded-md border border-line px-2 py-1 text-[11px] text-zinc-300 hover:bg-raised">Other stories</button>
-                      )}
                     </div>
                   </div>
                 )}
@@ -1008,6 +1033,12 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
               <div className="flex w-[44%] min-w-[320px] flex-col">{player(true)}{pauseChat}</div>
             </div>
             <Timeline tl={tl} marks={marks} marksOf={marksOf} selected={selected} flash={flash} alt={alt}
+                      onTrimEdge={(key, edge, to) => {
+                        const it = tl.items.find((x) => x.key === key)
+                        const longer = edge === 'out' ? to > (it?.src_end ?? to) : to < (it?.src_start ?? to)
+                        run([{ op: 'trim', shot: key, edge, to: r3(to) }],
+                          `You made shot ${it?.n ?? ''} ${longer ? 'longer' : 'shorter'} at the ${edge === 'in' ? 'start' : 'end'}`)
+                      }}
                       onSelect={(key, anchor) => {
                         timelineOwns()
                         setSelected(key)
@@ -1016,7 +1047,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                       }}
                       onReorder={reorder} onInsertShot={insertShot} onClear={clear} onHelp={() => setHelp(true)}
                       overlays={ovData.items} selectedOverlay={selOverlay} onSelectOverlay={selectOverlay}
-                      onOverlayEdit={editOverlayOnTimeline} onExport={openExport} />
+                      onOverlayEdit={editOverlayOnTimeline} />
             {undoable && <UndoToast text={undoable.text} onUndo={() => { toggle(undoable.turn); setUndoable(null) }} />}
             {flash && level !== 'frames' && <Flash text={flash} />}
           </main>
@@ -1027,11 +1058,11 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
               {undoable && <UndoToast text={undoable.text} onUndo={() => { toggle(undoable.turn); setUndoable(null) }} />}
               {flash && <Flash text={flash} />}
             </main>
-            {/* Footage and the brief have no preview panel (sarah: the stacks use
-                the width, a clip plays in place; the brief is just one line). Hidden, not removed: the player's videos
+            {/* Footage has no preview panel (sarah: the stacks use the width, a
+                clip plays in place). Hidden, not removed: the player's videos
                 stay attached to the transport. */}
             <aside className={cx('flex min-h-0 flex-col gap-3 overflow-y-auto border-line bg-panel p-3',
-              narrow ? 'border-t max-h-[46vh]' : 'border-l', (shown === 'footage' || shown === 'brief') && 'hidden')}>
+              narrow ? 'border-t max-h-[46vh]' : 'border-l', screen === 'footage' && 'hidden')}>
               <div className="flex aspect-[16/10] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-line"
                    onClick={() => { if (tr.playing && !segment) transport.stop() }}>
                 {player(false)}
@@ -1060,7 +1091,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       {referencing && <BorrowStyle onClose={() => setReferencing(false)} onRemix={openRemix}
                                    onApplied={(s) => { setSession(s); offerUndo(s); setReferencing(false); setPeek(null); setLevel('frames') }} />}
       {restart && <Confirm title="Start this video over?" action="Start over" danger onNo={() => setRestart(false)} onYes={startOver}
-                           text="The footage list, the rough cut, the story and its history are cleared. Your clip files and anything you exported are untouched." />}
+                           text="The footage list, the rough trim, the story and its history are cleared. Your clip files and anything you exported are untouched." />}
 
       {dragging && (
         <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-[2px]">
@@ -1075,17 +1106,19 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   )
 }
 
-// Footage · Brief · Rough cut · Story. The current one is lit; passed ones
+// Footage · Edit (sarah 2026-10-07: the style questions, the rough trim and the
+// story choice all run on their own). The current one is lit; passed ones
 // can be looked at again; the ones ahead say what will happen there.
 function Stepper({ current, derived, done, onGo, compact }: {
   current: Stage; derived: Stage; done: Stage[]; onGo: (s: Stage) => void; compact: boolean
 }) {
   return (
     <nav aria-label="Steps" className="flex items-center rounded-lg border border-line bg-panel p-0.5">
-      {STAGES.map((s, i) => {
+      {STAGES.filter((s) => s.id === 'footage' || s.id === 'story').map((s, i) => {
         const passed = done.includes(s.id) && s.id !== derived
         const can = done.includes(s.id)
-        const cur = s.id === current
+        // the style and trim steps run on their own now: they count as Footage
+        const cur = s.id === (current === 'story' ? 'story' : 'footage')
         return (
           <button key={s.id} type="button" disabled={!can} onClick={() => onGo(s.id)} aria-current={cur ? 'step' : undefined}
                   title={s.hint}

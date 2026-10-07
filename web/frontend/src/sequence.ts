@@ -7,6 +7,8 @@ export type SeqItem = {
   clip_id: string | null
   src_start: number
   src_end: number
+  src_min?: number   // how far the ends can be dragged: the whole shot as filmed
+  src_max?: number
   seq_start: number
   seq_end: number
   beat_id: string

@@ -36,7 +36,7 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   `web/backend/storyboard.py`.
 - `web/` — the app (FastAPI + Vite/React). Built at the user's explicit
   request despite the "no web UI" non-goal below; scope is deliberately one
-  path: **Projects → Footage → Brief → Rough cut → Story → Export**
+  path: **Projects → Footage → (style questions) → Story → Export**, the rough trim automatic
   (Phase 1 baseline, 2026-09-28; audit, parity matrix against Vyra and the
   plan in `design/specs/phase1-baseline.md`). The stage shown is *derived*
   from project state (`web/frontend/src/stage.ts`), never set by hand.
@@ -84,8 +84,12 @@ The promise to a user is therefore *not* "this will be beautiful." It is
 
 - Rough cut (`cutgrammar/reject.py`, `trim.py`, `signals.py`; gate in
   `web/backend/workflow.py`, design adapted from cut-motion — see NOTICE).
-  Discrimination-tested on synthetic fixtures; thresholds are guesses and
-  every decision passes a human gate. `speech_mask` is level-based, so
+  Discrimination-tested on synthetic fixtures; thresholds are guesses. The
+  gate's page is gone (sarah, 2026-10-07: "skip it"): once the style questions
+  are answered the trim is approved as it stands, and every trim stays
+  changeable in Frames by dragging a shot's ends out to the whole shot as
+  filmed (`timeline.build` gives `src_min`/`src_max`); left-out clips are
+  overruled on Footage's stacks. `speech_mask` is level-based, so
   music read as talking and those clips were barely trimmed (3 real clips:
   7:16 → 7:12). **Voice reading** (`web/backend/sound.py`,
   `sound/vibesound.swift`, `signals.with_voice`): Apple's on-device sound
@@ -159,7 +163,7 @@ The promise to a user is therefore *not* "this will be beautiful." It is
 - **Style questions** (`web/backend/brief.py`, `StyleQuestions.tsx`,
   `web/frontend/src/brief.ts`): straight after Footage's "Looks good" (no
   "What's this video about?" box since 2026-10-06, sarah; the description is
-  guessed from the shoot, `pitch.guess`, never the model), a
+  guessed from the shoot, `pitch.guess`, never the model). Since 2026-10-07 (sarah: "build") the popup isn't shown on the main path either: `/api/brief/auto` writes the brief itself (suggested length from `length_marks`, captions = describe, no pace question any more) and the stories are built, the one the shoot suggests is taken and the edit opens in Frames (sarah, 2026-10-07: no story choice for now; the others stay under Story). **Tempo** (`web/backend/tempo.py`, `PaceButton.tsx`; sarah: "you should be able to realize what kind of editing tempo we want"): quick / steady / calm read from the shoot (share of moving vs still shots by `activity`, talking and music from sound.json, median clip length), travels as `style.pace`; talking shots keep their whole window at any pace. The story: on camera most of the time → subject, several days over ≥3 places → place, else time. The top bar is Footage · Edit only, there is no Story / Frames switch (Other stories is under More and closes back into Frames), Media cards are thumbnail + length (+ a dark-red reason when left out), one Export button (sarah, 2026-10-07). Both shown with their reason under the tempo button in Frames, changeable there (`/api/pace`, one undoable turn). MOVING 30 / STILL 10 were set on her one shoot; the rest are priors. `tests/test_tempo.py`; Length and a Captions on/off switch (`/api/captions`, one undoable turn) sit in Frames. The popup code remains for the chat's first message: a
   popup asks length / pace / opening / focus, one question at a time, before
   the rough cut is shown. Length, pace and opening travel as `style` on the
   direction and reshape each proposal (`brief.shape`); focus and any

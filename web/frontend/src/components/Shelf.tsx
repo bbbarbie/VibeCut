@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import type { Clip, Shot } from '../types'
-import { dur, when } from '../format'
+import { dur } from '../format'
 
 export const SHOT_MIME = 'application/x-vibecut-shot'
 
@@ -43,7 +43,7 @@ export function Shelf({ clips, activeShot, onPreview, onAdd, onPick, busy, onUse
           onClick={() => folderInput.current?.click()}
           className="rounded-md border border-line px-2.5 py-1 text-[12px] text-zinc-300 hover:bg-raised disabled:opacity-40"
         >
-          Import folder
+          Add folder
         </button>
         <input
           ref={fileInput}
@@ -98,8 +98,6 @@ function ShotCard({ clip, shot, active, onPreview, onAdd, onUseRejected }: {
   clip: Clip; shot: Shot; active: boolean; onPreview: () => void; onAdd: () => void; onUseRejected?: () => void
 }) {
   const thrown = clip.cut?.rejected
-  const w = clip.cut?.windows[shot.id]
-  const q = shot.quality
   const portrait = clip.height > clip.width
   return (
     <div
@@ -122,13 +120,6 @@ function ShotCard({ clip, shot, active, onPreview, onAdd, onUseRejected }: {
         <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 text-[10px] tabular-nums text-zinc-200">
           {dur(shot.end - shot.start)}
         </span>
-        <span
-          className="absolute left-1 top-1 h-1 w-8 overflow-hidden rounded-full bg-black/60"
-          title={`quality ${q.toFixed(2)}${shot.aesthetic != null ? ` · aesthetic ${shot.aesthetic.toFixed(2)}` : ''}`}
-        >
-          <span className={`block h-full ${q > 0.6 ? 'bg-emerald-400' : q > 0.4 ? 'bg-amber-300' : 'bg-rose-400'}`}
-                style={{ width: `${Math.round(q * 100)}%` }} />
-        </span>
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onAdd() }}
@@ -138,19 +129,15 @@ function ShotCard({ clip, shot, active, onPreview, onAdd, onUseRejected }: {
           +
         </button>
       </div>
-      <div className="mt-1 truncate px-0.5 text-[11px] text-zinc-300">
-        {clip.name}{clip.shots.length > 1 && <span className="text-muted"> · {shot.index + 1}/{clip.shots.length}</span>}
-      </div>
-      <div className="truncate px-0.5 text-[10px] text-muted">{when(clip.capture_time) || 'no date'}{clip.gps ? ' · GPS' : ''}</div>
-      {thrown ? (
-        <div className="mt-1 rounded bg-rose-500/10 px-1.5 py-1 text-[10px] leading-snug text-rose-200" title={clip.cut!.en}>
-          Left out: {clip.cut!.override === 'reject' ? 'you threw this away' : clip.cut!.en}
+      {/* Thumbnail and length only while editing (sarah, 2026-10-07); a left-out
+          clip still says why, readable, in dark red. */}
+      {thrown && (
+        <div className="mt-1 rounded bg-rose-950/70 px-1.5 py-1 font-serif text-[14px] leading-snug text-rose-200" title={clip.cut!.en}>
+          Left out: {clip.cut!.override === 'reject' ? 'you moved it out' : clip.cut!.en}
           {onUseRejected && <button type="button" onClick={(e) => { e.stopPropagation(); onUseRejected() }}
-                                    className="ml-1 underline">Use it</button>}
+                                    className="ml-1.5 underline">Use it</button>}
         </div>
-      ) : w && (w[1] - w[0]) < (shot.end - shot.start) - 0.5 ? (
-        <div className="px-0.5 text-[10px] text-zinc-500">keeps {(w[1] - w[0]).toFixed(0)}s of {(shot.end - shot.start).toFixed(0)}s</div>
-      ) : null}
+      )}
     </div>
   )
 }

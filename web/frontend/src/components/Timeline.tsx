@@ -22,7 +22,7 @@ const LANE_ROW = 17
 type Drag = { id: string; mode: 'move' | 'end'; x0: number; grab: number; start: number; end: number; moved: boolean }
 
 export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, onReorder,
-  onInsertShot, onClear, onHelp, overlays = [], selectedOverlay = null, onSelectOverlay, onOverlayEdit, onExport }: {
+  onInsertShot, onClear, onHelp, overlays = [], selectedOverlay = null, onSelectOverlay, onOverlayEdit, onExport, onTrimEdge }: {
   tl: TimelineData
   marks: Marks
   marksOf: Record<string, 'added' | 'moved' | 'trimmed' | undefined>
@@ -40,6 +40,8 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   onSelectOverlay?: (id: string) => void
   onOverlayEdit?: (id: string, patch: { start?: number; dur?: number }) => void
   onExport?: () => void
+  /** a shot's start ('in') or end ('out') dragged to this source time */
+  onTrimEdge?: (key: string, edge: 'in' | 'out', to: number) => void
 }) {
   const ph = useStore(phStore)
   const tr = useStore(transportStore)
@@ -51,6 +53,9 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   const [tc, setTc] = useState<string | null>(null)   // timecode being typed
   const [tcBad, setTcBad] = useState(false)
   const scrubbing = useRef(false)
+  // A shot's end being dragged: where it would land, in source seconds.
+  const [edge, setEdge] = useState<{ key: string; edge: 'in' | 'out'; to: number } | null>(null)
+  const edging = useRef<{ x: number; base: number; pps: number } | null>(null)
   const items = tl.items
 
   useEffect(() => {
@@ -245,7 +250,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
       >
         {items.length === 0 ? (
           <div className="absolute inset-3 grid place-items-center rounded-lg border border-dashed border-zinc-800 text-[12px] text-zinc-600">
-            Choose a story first — or drag shots here from above
+            Your edit is on its way. You can also drag shots here from above
           </div>
         ) : (
           <div className="relative h-full" style={{ width: geo.end + 2 * PAD }}>
@@ -332,11 +337,44 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
             {items.map((it, k) => {
               const thumb = it.kind === 'shot' ? `/api/thumbs/${it.clip_id}/shot${String(Number(it.shot_id!.split(':')[1])).padStart(3, '0')}.jpg` : null
               const mark = marksOf[it.key]
+              const ed = edge?.key === it.key ? edge : null
+              const grow = ed ? (ed.edge === 'out' ? ed.to - it.src_end : it.src_start - ed.to) : 0
+              const w = Math.max(MIN_W, geo.w[k] + grow * (geo.w[k] / Math.max(it.seq_end - it.seq_start, 1e-6)))
+              const lo = it.src_min ?? it.src_start
+              const hi = it.src_max ?? it.src_end
+              // Drag either end: shorter, or longer up to the whole shot as filmed.
+              const handle = (side: 'in' | 'out') => onTrimEdge && it.kind === 'shot' && (
+                <div
+                  title={side === 'in' ? 'Drag to change where this shot starts' : 'Drag to change where this shot ends'}
+                  className={`absolute inset-y-0 z-10 w-2.5 cursor-ew-resize bg-white/0 hover:bg-white/60 ${side === 'in' ? 'left-0 rounded-l-md' : 'right-0 rounded-r-md'} ${ed?.edge === side ? 'bg-white/80' : ''}`}
+                  onPointerDown={(e) => {
+                    if (e.button !== 0) return
+                    e.stopPropagation(); e.preventDefault()
+                    e.currentTarget.setPointerCapture(e.pointerId)
+                    edging.current = { x: e.clientX, base: side === 'in' ? it.src_start : it.src_end, pps: geo.w[k] / Math.max(it.seq_end - it.seq_start, 1e-6) }
+                    setEdge({ key: it.key, edge: side, to: edging.current.base })
+                  }}
+                  onPointerMove={(e) => {
+                    const g = edging.current
+                    if (!g) return
+                    const t = g.base + (e.clientX - g.x) / g.pps
+                    const to = side === 'in' ? Math.max(lo, Math.min(t, it.src_end - 0.2)) : Math.min(hi, Math.max(t, it.src_start + 0.2))
+                    setEdge({ key: it.key, edge: side, to })
+                  }}
+                  onPointerUp={() => {
+                    const g = edging.current
+                    edging.current = null
+                    const cur = edge
+                    setEdge(null)
+                    if (g && cur && Math.abs(cur.to - g.base) > 1 / 30) onTrimEdge(it.key, side, cur.to)
+                  }}
+                />
+              )
               return (
                 <div
                   key={it.key}
-                  draggable
-                  onDragStart={(e) => { e.dataTransfer.setData(TL_MIME, it.key); e.dataTransfer.effectAllowed = 'move' }}
+                  draggable={!edge}
+                  onDragStart={(e) => { if (edging.current) { e.preventDefault(); return } e.dataTransfer.setData(TL_MIME, it.key); e.dataTransfer.effectAllowed = 'move' }}
                   onPointerDown={(e) => {
                     if (e.button !== 0) return
                     const rect = e.currentTarget.getBoundingClientRect()
@@ -347,13 +385,16 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                     ? 'bg-[repeating-linear-gradient(45deg,#18181b,#18181b_6px,#27272a_6px,#27272a_12px)]' : 'bg-black'} ${
                     selected === it.key ? 'ring-2 ring-accent' : 'ring-1 ring-zinc-800 hover:ring-zinc-600'}`}
                   style={{
-                    top: 50 + laneH, left: geo.left[k] + PAD, width: geo.w[k],
+                    top: 50 + laneH, left: geo.left[k] + PAD, width: w, zIndex: ed ? 5 : undefined,
                     backgroundImage: thumb ? `url(${thumb})` : undefined,
                     backgroundSize: 'auto 100%', backgroundRepeat: 'repeat-x', backgroundPosition: 'center',
                   }}
                   title={it.kind === 'gap' ? `${(it.seq_end - it.seq_start).toFixed(2)}s gap` : `Shot ${it.n} · ${(it.seq_end - it.seq_start).toFixed(2)}s`}
                 >
                   {mark && <div className={`absolute inset-x-0 top-0 h-1 ${MARK_CLS[mark]}`} />}
+                  {handle('in')}
+                  {handle('out')}
+                  {ed && <div className="pointer-events-none absolute left-1/2 top-1 -translate-x-1/2 rounded bg-black/80 px-1.5 text-[12px] tabular-nums text-zinc-100">{(it.src_end - it.src_start + grow).toFixed(1)}s</div>}
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 pb-1 pt-3 text-[10px] tabular-nums text-zinc-200">
                     {it.kind === 'gap' ? 'gap ' : it.n != null ? `${it.n} · ` : ''}{(it.seq_end - it.seq_start).toFixed(1)}s
                   </div>

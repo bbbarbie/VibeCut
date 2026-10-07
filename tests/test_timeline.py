@@ -75,6 +75,16 @@ def main() -> int:
     check("a track without a reliable tempo adds nothing",
           not any(x["type"] == "beat" for x in timeline.build(BOARD, CLIPS, nobpm)["targets"]), "none")
 
+    # The rough trim has no page of its own: a shot's ends are dragged in
+    # Frames, as far as the whole shot as filmed, not just the trimmed window.
+    filmed = {**CLIPS, "aaa": {**CLIPS["aaa"], "shots": [{"index": 0, "start": 0.0, "end": 31.5}]}}
+    shot = timeline.build(BOARD, filmed, None)["items"][0]
+    check("a shot can be dragged out to the whole shot as filmed",
+          (shot["src_min"], shot["src_max"]) == (0.0, 31.5), str(shot))
+    bare = timeline.build(BOARD, CLIPS, None)["items"]
+    check("without the clip's shots, the ends stay where they are",
+          (bare[2]["src_min"], bare[2]["src_max"]) == (0.0, 8.0) and "src_min" not in bare[1], str(bare))
+
     print()
     if failures:
         print(f"{len(failures)} failed: {', '.join(failures)}")

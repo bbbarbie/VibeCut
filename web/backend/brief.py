@@ -153,10 +153,8 @@ def fixed_questions(theme_counts: Counter | None = None, usable_s: float | None 
             {"key": "short", "label": "Short", "hint": "Under a minute, for Reels, TikTok or Shorts"},
             {"key": "medium", "label": "Medium", "hint": "About three minutes"},
             {"key": "long", "label": "Long", "hint": "Keep every good moment, a full vlog"}]},
-        {"id": "pace", "question": "How should it feel?", "multi": False, "choices": [
-            {"key": "calm", "label": "Slow and calm", "hint": "Let the shots breathe"},
-            {"key": "balanced", "label": "Balanced", "hint": "A steady rhythm"},
-            {"key": "fast", "label": "Fast and punchy", "hint": "Quick cuts, lots of energy"}]},
+        # No pace question (sarah, 2026-10-07); `shape` still reads an older
+        # project's answer.
         {"id": "opening", "question": "How should it start?", "multi": False, "choices": [
             {"key": "hook", "label": "With the best moment", "hint": "A hook first, then the story"},
             {"key": "start", "label": "From the beginning", "hint": "In the order it happened"}]},
@@ -339,7 +337,7 @@ def _close(a, b) -> bool:
     return abs((a.when - b.when).total_seconds()) <= RETAKE_WINDOW_S
 
 
-def shape(options: list, style: dict | None, best: dict[str, float]) -> None:
+def shape(options: list, style: dict | None, best: dict[str, float], keep: set | frozenset = frozenset()) -> None:
     """Reshape storyboard.Option objects in place to the creator's answers.
 
     Order within the story is never changed except by the hook, which lifts
@@ -361,7 +359,8 @@ def shape(options: list, style: dict | None, best: dict[str, float]) -> None:
         if cap:
             for b in o.beats:
                 for s in b.shots:
-                    _window(s, max(cap, MIN_SHOT_S), best)
+                    if s.id not in keep:  # talking keeps its whole window: never cut mid-sentence
+                        _window(s, max(cap, MIN_SHOT_S), best)
 
         target = target_s(style)
         if (target is not None and target <= SHORT_S) or style.get("pace") == "fast":

@@ -41,7 +41,7 @@ export type ProjectMeta = {
 }
 export type ExportRecord = { job: string; file: string; path: string; at: number; seconds: number; size: { w: number; h: number }
   music: boolean; overlays: number; bytes: number | null }
-export type Brief = { message: string; style: StyleAnswers; said: string; at: number }
+export type Brief = { message: string; style: StyleAnswers; said: string; at: number; tempo?: string }
 // What this machine can do -- shown, so nothing is offered that then fails.
 export type Capabilities = { llm: boolean; speech: boolean; vision: string; links: boolean; music_folder: string | null; platform: string }
 export type ImportError = { path: string | null; error: string }
@@ -77,6 +77,9 @@ export type Proposals = {
   understood: { themes: string[]; used: string[]; ignored: string[]; matched_shots: number }
   notes: string[]
   options: Option[]
+  // the story to start from, read from the shoot (tempo.pick_story), and why
+  recommended?: string
+  why?: string
 }
 
 // The working storyboard -- edited by operations, never regenerated.
