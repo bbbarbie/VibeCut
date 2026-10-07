@@ -816,6 +816,14 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     setOthersOpen(false)
     setLevel('frames')
   }
+  // No story choice for now (sarah, 2026-10-07: "jump immediately into
+  // frames"): the first story is taken and the edit opens in Frames. The
+  // others stay under Story.
+  const autoChosen = useRef(false)
+  const firstOption = !session?.board && !pending ? session?.proposals?.options?.[0] : undefined
+  useEffect(() => {
+    if (firstOption && !autoChosen.current) { autoChosen.current = true; apply(firstOption).finally(() => { autoChosen.current = false }) }
+  }, [firstOption?.key]) // eslint-disable-line react-hooks/exhaustive-deps
   const clear = () => session?.board && run(session.board.beats.map((b) => ({ op: 'drop_beat', beat: b.id })),
     'You cleared the timeline')
 
