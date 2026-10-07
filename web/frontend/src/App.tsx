@@ -13,6 +13,7 @@ import { TalkCut } from './components/TalkCut'
 import { Keys } from './components/Keys'
 import { Player } from './components/Player'
 import { PauseChat } from './components/PauseChat'
+import { PaceButton } from './components/PaceButton'
 import { LengthButton } from './components/LengthButton'
 import type { OverlayEdit } from './components/OverlayCanvas'
 import { Menu, SwapPicker, type MenuItem } from './components/Menus'
@@ -817,10 +818,12 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     setLevel('frames')
   }
   // No story choice for now (sarah, 2026-10-07: "jump immediately into
-  // frames"): the first story is taken and the edit opens in Frames. The
-  // others stay under Story.
+  // frames"): the story the shoot suggests (tempo.pick_story) is taken and
+  // the edit opens in Frames. The others stay under Story.
   const autoChosen = useRef(false)
-  const firstOption = !session?.board && !pending ? session?.proposals?.options?.[0] : undefined
+  const props = session?.proposals
+  const firstOption = !session?.board && !pending && props
+    ? props.options.find((o) => o.key === props.recommended) ?? props.options[0] : undefined
   useEffect(() => {
     if (firstOption && !autoChosen.current) { autoChosen.current = true; apply(firstOption).finally(() => { autoChosen.current = false }) }
   }, [firstOption?.key]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -1022,6 +1025,9 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                               className="whitespace-nowrap rounded-md border border-line px-2 py-1 text-[11px] text-zinc-300 hover:bg-raised">
                         Captions {ovData.items.length ? 'on' : 'off'}
                       </button>
+                      <PaceButton pace={brief?.style?.pace} why={brief?.tempo}
+                                  story={session.board?.option === session.proposals?.recommended ? session.proposals?.why : undefined}
+                                  onDone={(r) => { setSession(r); offerUndo(r) }} />
                       <SmoothButton small rough={(session.seams ?? []).filter((x) => x.verdict !== 'ok').length}
                                     onSmooth={async (order, nudge) => { const r = await api.smooth(order, nudge); setSession(r); offerUndo(r) }} />
                       {session.proposals && (

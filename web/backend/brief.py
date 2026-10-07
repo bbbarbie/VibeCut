@@ -337,7 +337,7 @@ def _close(a, b) -> bool:
     return abs((a.when - b.when).total_seconds()) <= RETAKE_WINDOW_S
 
 
-def shape(options: list, style: dict | None, best: dict[str, float]) -> None:
+def shape(options: list, style: dict | None, best: dict[str, float], keep: set | frozenset = frozenset()) -> None:
     """Reshape storyboard.Option objects in place to the creator's answers.
 
     Order within the story is never changed except by the hook, which lifts
@@ -359,7 +359,8 @@ def shape(options: list, style: dict | None, best: dict[str, float]) -> None:
         if cap:
             for b in o.beats:
                 for s in b.shots:
-                    _window(s, max(cap, MIN_SHOT_S), best)
+                    if s.id not in keep:  # talking keeps its whole window: never cut mid-sentence
+                        _window(s, max(cap, MIN_SHOT_S), best)
 
         target = target_s(style)
         if (target is not None and target <= SHORT_S) or style.get("pace") == "fast":

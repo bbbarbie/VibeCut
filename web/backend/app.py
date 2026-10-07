@@ -26,7 +26,7 @@ from pydantic import BaseModel
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, brief, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, brief, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import Workflow, WorkflowError
 
@@ -848,9 +848,42 @@ def api_brief_auto() -> dict:
     with LOCK:
         about = pitch.guess(list(CLIPS.values())) or "My video"
         marks = brief.length_marks(_usable_s(), about)
-        style = {"seconds": marks["seconds"], "captions": "describe"}
-        pr.brief = {"message": about, "style": brief.clean_style(style) or {},
-                    "said": f"about {brief.say_length(marks['seconds'])} · captions", "at": time.time()}
+        # the tempo the footage asks for (sarah, 2026-10-07), not a question
+        feel = tempo.read(list(CLIPS.values()), cut.for_story(PLAN["plan"]))
+        style = {"seconds": marks["seconds"], "captions": "describe", "pace": feel["pace"]}
+        pr.brief = {"message": about, "style": brief.clean_style(style) or {}, "tempo": feel["why"],
+                    "said": f"about {brief.say_length(marks['seconds'])} · {tempo.NAMES[feel['pace']].lower()} · captions",
+                    "at": time.time()}
+        return _session()
+
+
+class PaceReq(BaseModel):
+    pace: str
+
+
+@app.post("/api/pace")
+def api_pace(req: PaceReq) -> dict:
+    """Quick / steady / calm cuts in Frames, as one undoable turn: every shot
+    back to its rough-trim window, at most the pace's longest shot around its
+    best frame. Talking keeps its whole window."""
+    if req.pace not in brief.PACE_CAP_S:
+        raise HTTPException(422, "pace is fast, balanced or calm")
+    with LOCK:
+        if not SESSION.board:
+            raise HTTPException(409, "Pick a story first.")
+        cat = CATALOG["cat"]
+        _, windows = cut.for_story(PLAN["plan"])
+        talk = tempo.talking(list(CLIPS.values()), _pool())
+        ops = tempo.pace_ops(SESSION.board, cat, windows, req.pace, talk)
+        name = tempo.NAMES[req.pace]
+        if ops:
+            SESSION.add({"kind": "direct", "text": name, "ops": ops,
+                         "reply": f"{name} now. Talking keeps its whole sentence. Undo puts it back."},
+                        cat, _make_proposals)
+        pr = PROJECT["p"]
+        if pr is not None and pr.brief:
+            pr.brief = {**pr.brief, "style": {**(pr.brief.get("style") or {}), "pace": req.pace},
+                        "tempo": f"{name}, as you chose."}
         return _session()
 
 

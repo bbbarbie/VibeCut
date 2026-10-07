@@ -588,11 +588,12 @@ def build(clips: list[dict], direction: str, vision: bool,
 
     options = [by_time(shots, d), by_place(shots, d, everyone), by_subject(shots, d, everyone, vision)]
     best = {f"{c['id']}:{s['index']}": s["best_t"] for c in clips for s in c["shots"] if "best_t" in s}
-    from . import brief
+    from . import brief, tempo
+    pick, why = tempo.pick_story(options, shots)
     if vision:
         brief.one_per_look(options)
     if style:
-        brief.shape(options, style, best)
+        brief.shape(options, style, best, tempo.talking(clips, shots))
 
     base = [s.id for b in options[0].beats for s in b.shots]
     out = []
@@ -612,6 +613,7 @@ def build(clips: list[dict], direction: str, vision: bool,
     if voiceover and voiceover.get("lines"):
         from . import voiceover as vo
         out.insert(0, vo.propose(voiceover, shots, best))
+        pick, why = "voice", "It follows your voiceover."
 
     n_lean = sum(s.lean for s in shots)
     return {
@@ -622,4 +624,6 @@ def build(clips: list[dict], direction: str, vision: bool,
         },
         "notes": notes,
         "options": out,
+        # the story to start from, read from the shoot (tempo.pick_story)
+        "recommended": pick, "why": why,
     }
