@@ -1001,13 +1001,13 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
             <div className="flex min-h-0 flex-1">
               <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-panel">
                 {session?.board && (
-                  <div className="flex h-8 shrink-0 items-end gap-1 border-b border-line px-3" role="tablist">
+                  <div className="flex min-h-8 shrink-0 flex-wrap items-end gap-1 border-b border-line px-3" role="tablist">
                     {([['shots', 'Shots'], ['words', `Captions${ovData.items.length ? ` · ${ovData.items.length}` : ''}`]] as const).map(([k, name]) => (
                       <button key={k} type="button" role="tab" aria-selected={framesTab === k} onClick={() => setFramesTab(k)}
                               className={`shrink-0 whitespace-nowrap rounded-t-md px-2.5 py-1 text-[11px] ${framesTab === k ? 'bg-raised text-zinc-100' : 'text-muted hover:text-zinc-200'}`}>{name}</button>
                     ))}
                     {/* what used to live only on the Story page */}
-                    <div className="ml-auto flex items-center gap-1 self-center [&>*]:shrink-0 [&>button]:whitespace-nowrap [&>div>button]:whitespace-nowrap">
+                    <div className="ml-auto flex flex-wrap items-center justify-end gap-1 self-center py-1 [&>*]:shrink-0 [&>button]:whitespace-nowrap [&>div>button]:whitespace-nowrap">
                       <button type="button" onClick={() => playSource('board', [])}
                               className="rounded-md bg-zinc-800 px-2 py-1 text-[11px] text-zinc-100 hover:bg-zinc-700">
                         {boardPlay ? 'Stop' : 'Play all'}
