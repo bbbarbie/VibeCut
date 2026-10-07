@@ -870,7 +870,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                  onOverride={cutOverride} onApprove={approveCut} onWatch={preview}
                  onClose={() => showStep('story')} />
     ) : screen === 'cut' ? (
-      <div className="grid flex-1 place-items-center text-[13px] text-muted">Working out the rough cut…</div>
+      <div className="grid flex-1 place-items-center text-[13px] text-muted">Working out the rough trim…</div>
     ) : (
       <Story
         session={session}
@@ -1065,7 +1065,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       {referencing && <BorrowStyle onClose={() => setReferencing(false)} onRemix={openRemix}
                                    onApplied={(s) => { setSession(s); offerUndo(s); setReferencing(false); setPeek(null); setLevel('frames') }} />}
       {restart && <Confirm title="Start this video over?" action="Start over" danger onNo={() => setRestart(false)} onYes={startOver}
-                           text="The footage list, the rough cut, the story and its history are cleared. Your clip files and anything you exported are untouched." />}
+                           text="The footage list, the rough trim, the story and its history are cleared. Your clip files and anything you exported are untouched." />}
 
       {dragging && (
         <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-[2px]">

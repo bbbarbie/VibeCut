@@ -42,7 +42,7 @@ export function Story({ session, clips, asking, playing, nowShot, selected, onUs
   if (!clips.length || (!board && !proposals)) {
     return (
       <div className="grid min-h-0 flex-1 place-items-center p-8 text-center">
-        <p className="max-w-sm text-[13px] text-zinc-400">{asking ? 'Building three ways to tell it…' : 'Nothing to show yet — the story is built from your brief, after the rough cut.'}</p>
+        <p className="max-w-sm text-[13px] text-zinc-400">{asking ? 'Building three ways to tell it…' : 'Nothing to show yet — the story is built after the rough trim.'}</p>
       </div>
     )
   }

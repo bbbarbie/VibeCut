@@ -20,11 +20,7 @@ export function CutReview({ data, clips, approved, busy, onOverride, onApprove, 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto p-5 pb-28">
-        <p className="text-[12px] text-muted">{approved ? 'The rough cut · approved — changes here still apply to the story' : 'The rough cut · before the story is built'}</p>
-        <h2 className="mt-1 font-serif text-[26px] text-zinc-100">Here’s what I’d throw away</h2>
-        <p className="mt-1 max-w-2xl text-[13px] text-zinc-400">
-          Nothing is deleted from your clips. Thrown-away clips wait on the shelf, and every trim is just a start and an end point. Change anything with one click, then approve.
-        </p>
+        <h2 className="font-serif text-[26px] text-zinc-100">Rough trim</h2>
         {s && (
           <div className="mt-4 rounded-xl border border-line bg-raised px-4 py-3">
             <div className="font-serif text-[22px] text-zinc-100">{s.line_en}</div>
@@ -33,17 +29,12 @@ export function CutReview({ data, clips, approved, busy, onOverride, onApprove, 
 
         {/* No "thrown away" cards (sarah, 2026-10-07): those clips are the
             Left out stack she already went through on Footage. */}
-        <h3 className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-muted">Kept, and trimmed to the best part · {kept.length}</h3>
-        <div className="mt-2 space-y-2">
+        <div className="mt-4 space-y-2">
           {kept.map((c) => <KeptRow key={c.id} c={c} clip={clips.find((x) => x.id === c.id)} thumb={thumb(c.id)} onOverride={onOverride} onWatch={onWatch} />)}
         </div>
       </div>
 
       <div className="absolute inset-x-0 bottom-0 flex items-center gap-4 border-t border-line bg-panel/95 px-5 py-3 backdrop-blur">
-        <div className="min-w-0">
-          <div className="truncate font-serif text-[17px] text-zinc-100">{s?.line_en}</div>
-          <div className="text-[11px] text-muted">{approved ? 'Already approved. Your changes are recorded.' : 'Nothing is built on this until you approve it.'}</div>
-        </div>
         <div className="ml-auto flex gap-2">
           {approved && onClose && <Btn onClick={onClose}>Back to my story</Btn>}
           {!approved && (
