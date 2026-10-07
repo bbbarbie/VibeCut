@@ -36,7 +36,7 @@ import type { Capabilities, Clip, Msg, Option, Overlay, OverlayKind, Overlays as
 
 const hello: Msg = {
   id: 'hello', role: 'app', at: 0,
-  text: 'Pick a story, then tell me what to change: “the opening is too slow”, “take out the market”, “end on the sunset”. Each message edits — nothing is regenerated, and everything can be undone.',
+  text: 'Your edit is ready. Tell me what to change: “the opening is too slow”, “take out the market”, “end on the sunset”. Everything can be undone.',
 }
 const EMPTY_TL: TimelineData = { fps: 30, total: 0, items: [], targets: [], grid: null }
 const EMPTY_OVERLAYS: OverlayData = {
@@ -172,16 +172,13 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const screen: Stage = shown === 'brief' ? (brief ? 'cut' : 'footage') : shown
   useEffect(() => { if (peek && !done.includes(peek)) setPeek(null) }, [peek, done])
   useEffect(() => { if (shown !== 'story' && level === 'frames') setLevel('story') }, [shown]) // eslint-disable-line react-hooks/exhaustive-deps
-  // Once a story is chosen the edit lives in Frames (sarah, 2026-10-04): opening
-  // the project lands there; the Story view stays one click away.
+  // Once a story is chosen the edit lives in Frames (sarah, 2026-10-04), and
+  // since 2026-10-07 only there: the other stories open from More and close
+  // back into Frames. No Story / Frames switch.
   const [othersOpen, setOthersOpen] = useState(false)
-  const landed = useRef(false)
   useEffect(() => {
-    // wait until the stage is known (clips and the gate load after the session)
-    if (landed.current || !session?.board || shown !== 'story') return
-    landed.current = true
-    if (level === 'story' && !othersOpen) setLevel('frames')
-  }, [session, shown]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (session?.board && shown === 'story' && !talkOpen && level === 'story' && !othersOpen) setLevel('frames')
+  }, [session?.board, shown, talkOpen, level, othersOpen])
   const showStep = (s: Stage) => { setPeek(s === stage ? null : s); setMenu(null); stopQueue(); setSegment(null); if (s !== 'story') transport.stop() }
 
   const cutOverride = async (target: string, action: string, range?: [number, number]) => {
@@ -918,7 +915,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
         onBeatAction={beatAction}
         onReference={() => setReferencing(true)}
         othersOpen={othersOpen}
-        onOthersOpen={setOthersOpen}
+        onOthersOpen={(o) => { setOthersOpen(o); if (!o) setLevel('frames') }}
         onSmooth={async (order, nudge) => { const s = await api.smooth(order, nudge); setSession(s); offerUndo(s) }}
         onJoin={(after, sound) => run([{ op: 'set_join', shot: after, sound }],
           sound === 'default' ? 'Sound back to automatic' : 'Changed how the sound crosses a cut')}
@@ -953,17 +950,6 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
 
         <div className="flex-1" />
         <Stepper current={shown} derived={stage} done={done} onGo={showStep} compact={narrow} />
-        {storyStage && (
-          <div className="ml-2 flex rounded-lg border border-line bg-panel p-0.5 text-[12px]">
-            {([['story', 'Story', 'Your video as parts and shots — reorder, remove, swap'],
-               ['frames', 'Frames', 'The detailed timeline — cut and trim frame by frame']] as const).map(([k, name, tip]) => (
-              <button key={k} type="button" title={tip} onClick={() => setLevel(k)}
-                      className={`rounded-md px-2.5 py-1 ${level === k ? 'bg-zinc-700 text-zinc-100' : 'text-muted hover:text-zinc-200'}`}>
-                {name}
-              </button>
-            ))}
-          </div>
-        )}
         <div className="flex-1" />
 
         {narrow && storyStage && <Button size="sm" onClick={() => setChatOpen((o) => !o)} aria-pressed={chatOpen}>Chat</Button>}
@@ -975,6 +961,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
           <Button size="sm" variant="ghost" onClick={() => setMore((m) => !m)} aria-haspopup="menu" aria-expanded={more}>More ▾</Button>
           {more && (
             <MoreMenu onClose={() => setMore(false)} items={[
+              { label: 'Other stories…', hint: 'The same clips told another way', disabled: !session?.proposals || !session?.board || shown !== 'story', onClick: () => { transport.stop(); setOthersOpen(true); setLevel('story') } },
               { label: 'Talking to camera…', hint: caps.speech ? 'Transcribe on this Mac, cut pauses and retakes' : 'Needs macOS 26 with the Xcode command-line tools', disabled: !caps.speech || !clips.length, onClick: openTalk },
               { label: 'Build a short from reference reels…', hint: caps.links ? 'Their pace and length, your clips, free music' : 'Links need yt-dlp; files work', disabled: !clips.length, onClick: openRemix },
               { label: 'Keyboard shortcuts', hint: 'Frames view', onClick: () => setHelp(true) },
@@ -989,7 +976,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
           {profileInitial}
         </button>
         <Button variant="primary" size="sm" disabled={!session?.board} onClick={openExport}
-                title={session?.board ? 'Render the edit, its captions and its music to one video file' : 'Pick a story first'}>
+                title={session?.board ? 'Render the edit, its captions and its music to one video file' : 'Your edit is still being made'}>
           Export{session?.exports.length ? ` · ${session.exports.length}` : ''}
         </Button>
       </header>
@@ -1030,11 +1017,6 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                                   onDone={(r) => { setSession(r); offerUndo(r) }} />
                       <SmoothButton small rough={(session.seams ?? []).filter((x) => x.verdict !== 'ok').length}
                                     onSmooth={async (order, nudge) => { const r = await api.smooth(order, nudge); setSession(r); offerUndo(r) }} />
-                      {session.proposals && (
-                        <button type="button" onClick={() => { setOthersOpen(true); setLevel('story') }}
-                                title="The other proposals built from your brief"
-                                className="rounded-md border border-line px-2 py-1 text-[11px] text-zinc-300 hover:bg-raised">Other stories</button>
-                      )}
                     </div>
                   </div>
                 )}
@@ -1065,7 +1047,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                       }}
                       onReorder={reorder} onInsertShot={insertShot} onClear={clear} onHelp={() => setHelp(true)}
                       overlays={ovData.items} selectedOverlay={selOverlay} onSelectOverlay={selectOverlay}
-                      onOverlayEdit={editOverlayOnTimeline} onExport={openExport} />
+                      onOverlayEdit={editOverlayOnTimeline} />
             {undoable && <UndoToast text={undoable.text} onUndo={() => { toggle(undoable.turn); setUndoable(null) }} />}
             {flash && level !== 'frames' && <Flash text={flash} />}
           </main>
@@ -1124,18 +1106,19 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   )
 }
 
-// Footage · Style · Story (the rough trim runs on its own, sarah 2026-10-07:
-// "skip it"; Frames drags a shot's ends instead). The current one is lit; passed ones
+// Footage · Edit (sarah 2026-10-07: the style questions, the rough trim and the
+// story choice all run on their own). The current one is lit; passed ones
 // can be looked at again; the ones ahead say what will happen there.
 function Stepper({ current, derived, done, onGo, compact }: {
   current: Stage; derived: Stage; done: Stage[]; onGo: (s: Stage) => void; compact: boolean
 }) {
   return (
     <nav aria-label="Steps" className="flex items-center rounded-lg border border-line bg-panel p-0.5">
-      {STAGES.filter((s) => s.id !== 'cut').map((s, i) => {
+      {STAGES.filter((s) => s.id === 'footage' || s.id === 'story').map((s, i) => {
         const passed = done.includes(s.id) && s.id !== derived
         const can = done.includes(s.id)
-        const cur = s.id === current
+        // the style and trim steps run on their own now: they count as Footage
+        const cur = s.id === (current === 'story' ? 'story' : 'footage')
         return (
           <button key={s.id} type="button" disabled={!can} onClick={() => onGo(s.id)} aria-current={cur ? 'step' : undefined}
                   title={s.hint}

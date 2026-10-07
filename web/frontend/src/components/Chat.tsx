@@ -168,7 +168,7 @@ function TurnView({ t, onToggle, onChoice, candidate, onClassify, review }: {
             <div className={`min-w-0 flex-1 font-serif text-[16px] leading-snug ${t.undone ? 'line-through decoration-zinc-600' : ''}`}>
               {t.question ? <span className="text-zinc-100">{t.question}</span>
                 : t.reply ? <span className="text-zinc-300">{t.reply}</span>
-                  : t.direction ? <span className="text-zinc-300">Three proposals{t.direction.themes.length ? `, leaning into ${t.direction.themes.join(' + ')}` : ''} — choose one in the middle.</span>
+                  : t.direction ? <span className="text-zinc-300">Made your edit from your clips{t.direction.themes.length ? `, leaning into ${t.direction.themes.join(' + ')}` : ''}.</span>
                     : null}
             </div>
             {undo}

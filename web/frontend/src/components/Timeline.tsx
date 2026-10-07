@@ -250,7 +250,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
       >
         {items.length === 0 ? (
           <div className="absolute inset-3 grid place-items-center rounded-lg border border-dashed border-zinc-800 text-[12px] text-zinc-600">
-            Choose a story first — or drag shots here from above
+            Your edit is on its way. You can also drag shots here from above
           </div>
         ) : (
           <div className="relative h-full" style={{ width: geo.end + 2 * PAD }}>

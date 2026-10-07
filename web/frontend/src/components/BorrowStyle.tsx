@@ -202,7 +202,7 @@ function Card({ card, onBack, onApplied, onReload }: { card: RefCard; onBack: ()
       <div className="flex flex-wrap items-center gap-3 border-t border-line pt-3">
         <p className="min-w-0 flex-1 text-[11px] text-muted">One change in your edit history — Undo takes all of it back. Transitions and bars show as you play; the grade appears in the export.</p>
         <Button variant="primary" disabled={busy || !picked.length || !card.has_story} onClick={() => void apply()}>
-          {busy ? 'Applying…' : !card.has_story ? 'Choose a story first'
+          {busy ? 'Applying…' : !card.has_story ? 'Your edit is still being made'
             : picked.length ? `Borrow ${picked.length === 1 ? 'this' : `these ${picked.length}`}` : 'Tick something to borrow'}
         </Button>
       </div>

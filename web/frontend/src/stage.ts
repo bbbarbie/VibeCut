@@ -7,7 +7,7 @@ export const STAGES: { id: Stage; label: string; hint: string }[] = [
   { id: 'footage', label: 'Footage', hint: 'Your clips, read on this machine' },
   { id: 'brief', label: 'Style', hint: 'A few quick questions: length, pace, captions' },
   { id: 'cut', label: 'Rough trim', hint: 'Each clip trimmed to its best part' },
-  { id: 'story', label: 'Story', hint: 'The edit — parts and shots, or frame by frame' },
+  { id: 'story', label: 'Edit', hint: 'Your video, shot by shot' },
 ]
 
 export type StageInput = {
