@@ -1616,5 +1616,18 @@ from . import polish_api  # noqa: E402
 app.include_router(polish_api.router)
 
 DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+
+
+class _UI(StaticFiles):
+    """The page always asks again (sarah kept seeing a page removed two
+    builds earlier); the hashed assets it names can be cached for good."""
+
+    async def get_response(self, path, scope):
+        r = await super().get_response(path, scope)
+        if r.headers.get("content-type", "").startswith("text/html"):
+            r.headers["Cache-Control"] = "no-cache"
+        return r
+
+
 if DIST.exists():
-    app.mount("/", StaticFiles(directory=DIST, html=True), name="ui")
+    app.mount("/", _UI(directory=DIST, html=True), name="ui")
