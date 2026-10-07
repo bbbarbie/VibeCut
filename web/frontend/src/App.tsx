@@ -290,9 +290,13 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   }
   // No "what's this video about?" any more (sarah, 2026-10-06): the clips
   // say it (day / trip, what's in them), and the questions open straight away.
+  // No questions either (sarah, 2026-10-07): the suggested length, captions
+  // on, straight to the stories. Length and Captions are in Frames.
+  const autoBrief = useRef(false)
   const startQuestions = () => {
-    if (asking) return
-    api.guess().then((r) => r.about, () => '').then((about) => askStyle(about || 'My video'))
+    if (asking || autoBrief.current) return
+    autoBrief.current = true
+    api.autoBrief().then(setSession, (e) => note((e as Error).message)).finally(() => { autoBrief.current = false })
   }
   // Opening a project that's waiting on them: the questions are simply there.
   useEffect(() => {
@@ -1001,6 +1005,15 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                         {boardPlay ? 'Stop' : 'Play all'}
                       </button>
                       <LengthButton total={tl.total} onDone={(r) => { setSession(r); offerUndo(r); note(r.length_note) }} />
+                      <button type="button" aria-pressed={!!ovData.items.length}
+                              title="Captions on the video: the time and place of each moment"
+                              onClick={async () => {
+                                try { const r = await api.captions(!ovData.items.length); setSession(r); offerUndo(r) }
+                                catch (e) { note((e as Error).message) }
+                              }}
+                              className="whitespace-nowrap rounded-md border border-line px-2 py-1 text-[11px] text-zinc-300 hover:bg-raised">
+                        Captions {ovData.items.length ? 'on' : 'off'}
+                      </button>
                       <SmoothButton small rough={(session.seams ?? []).filter((x) => x.verdict !== 'ok').length}
                                     onSmooth={async (order, nudge) => { const r = await api.smooth(order, nudge); setSession(r); offerUndo(r) }} />
                       {session.proposals && (

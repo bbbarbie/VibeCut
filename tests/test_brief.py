@@ -95,7 +95,7 @@ def main() -> int:
 
     print("questions")
     ids = [q["id"] for q in brief.fixed_questions()]
-    check("length, pace, opening always asked", ids[:3] == ["length", "pace", "opening"], str(ids))
+    check("length and opening always asked, pace no more", ids[:2] == ["length", "opening"] and "pace" not in ids, str(ids))
     check("no focus question without matching footage", "focus" not in ids)
     shots, _ = sb.usable(sb.shots_from_clips(CLIPS))
     counts = brief.theme_counts(shots)

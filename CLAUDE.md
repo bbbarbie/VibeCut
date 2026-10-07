@@ -163,7 +163,7 @@ The promise to a user is therefore *not* "this will be beautiful." It is
 - **Style questions** (`web/backend/brief.py`, `StyleQuestions.tsx`,
   `web/frontend/src/brief.ts`): straight after Footage's "Looks good" (no
   "What's this video about?" box since 2026-10-06, sarah; the description is
-  guessed from the shoot, `pitch.guess`, never the model; the step has no page, the popup opens over the stacks), a
+  guessed from the shoot, `pitch.guess`, never the model). Since 2026-10-07 (sarah: "build") the popup isn't shown on the main path either: `/api/brief/auto` writes the brief itself (suggested length from `length_marks`, captions = describe, no pace question any more) and the stories are built; Length and a Captions on/off switch (`/api/captions`, one undoable turn) sit in Frames. The popup code remains for the chat's first message: a
   popup asks length / pace / opening / focus, one question at a time, before
   the rough cut is shown. Length, pace and opening travel as `style` on the
   direction and reshape each proposal (`brief.shape`); focus and any

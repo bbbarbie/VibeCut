@@ -153,10 +153,8 @@ def fixed_questions(theme_counts: Counter | None = None, usable_s: float | None 
             {"key": "short", "label": "Short", "hint": "Under a minute, for Reels, TikTok or Shorts"},
             {"key": "medium", "label": "Medium", "hint": "About three minutes"},
             {"key": "long", "label": "Long", "hint": "Keep every good moment, a full vlog"}]},
-        {"id": "pace", "question": "How should it feel?", "multi": False, "choices": [
-            {"key": "calm", "label": "Slow and calm", "hint": "Let the shots breathe"},
-            {"key": "balanced", "label": "Balanced", "hint": "A steady rhythm"},
-            {"key": "fast", "label": "Fast and punchy", "hint": "Quick cuts, lots of energy"}]},
+        # No pace question (sarah, 2026-10-07); `shape` still reads an older
+        # project's answer.
         {"id": "opening", "question": "How should it start?", "multi": False, "choices": [
             {"key": "hook", "label": "With the best moment", "hint": "A hook first, then the story"},
             {"key": "start", "label": "From the beginning", "hint": "In the order it happened"}]},
