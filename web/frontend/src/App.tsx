@@ -3,7 +3,6 @@ import { api } from './api'
 import { Chat, type ChatItem } from './components/Chat'
 import { KIND_META, partsOf } from './overlayDraw'
 import { loadProfile } from './profile'
-import { CutReview } from './components/CutReview'
 import { StyleQuestions } from './components/StyleQuestions'
 import { composeBrief, sayPicks, type Picks } from './brief'
 import { Export } from './components/Export'
@@ -32,7 +31,7 @@ import { go } from './router'
 import { deriveStage, reached, STAGES, type Stage } from './stage'
 import { phStore, snapStore, transport, transportStore, useStore } from './transport'
 import { Button, Confirm, cx, Wordmark } from './ui'
-import type { Capabilities, Clip, CutData, Msg, Option, Overlay, OverlayKind, Overlays as OverlayData, Segment, Session, Shot, StyleAnswers, StyleQuestion, TimelineData } from './types'
+import type { Capabilities, Clip, Msg, Option, Overlay, OverlayKind, Overlays as OverlayData, Segment, Session, Shot, StyleAnswers, StyleQuestion, TimelineData } from './types'
 
 const hello: Msg = {
   id: 'hello', role: 'app', at: 0,
@@ -84,7 +83,6 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const [swap, setSwap] = useState<{ key: string; thumb: string; id: string } | null>(null)
   const [undoable, setUndoable] = useState<{ turn: number; text: string } | null>(null)
   // The rough cut and its gate.
-  const [cutData, setCutData] = useState<CutData | null>(null)
   const [approving, setApproving] = useState(false)
   const [segment, setSegment] = useState<Segment | null>(null)
   const [queue, setQueue] = useState<Queue | null>(null)
@@ -158,7 +156,6 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     })
   }, [clips])
   const wfState = session?.workflow?.state
-  useEffect(() => { if (wfState && wfState !== 'intake') api.cut().then(setCutData).catch(() => {}) }, [wfState, clips])
   const atGate = wfState === 'cut-review'
 
   // ---- where we are ----------------------------------------------------------
@@ -187,7 +184,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const showStep = (s: Stage) => { setPeek(s === stage ? null : s); setMenu(null); stopQueue(); setSegment(null); if (s !== 'story') transport.stop() }
 
   const cutOverride = async (target: string, action: string, range?: [number, number]) => {
-    setCutData(await api.override(target, action, range))
+    await api.override(target, action, range)
     await refresh()
   }
   const approveCut = async () => {
@@ -200,6 +197,14 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       if (s.brief && !s.proposals && !s.board) await send(s.brief.message, s.brief.style)
     } catch (e) { note((e as Error).message) } finally { setApproving(false) }
   }
+  // The rough trim has no page any more (sarah, 2026-10-07): once the style
+  // questions are answered it's approved as it stands and the story is built.
+  // Every trim stays changeable in Frames by dragging a shot's ends.
+  const autoApproved = useRef(false)
+  useEffect(() => {
+    if (atGate && brief && !approving && !autoApproved.current) { autoApproved.current = true; approveCut() }
+    if (!atGate) autoApproved.current = false
+  }, [atGate, !!brief]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     transport.attach(videoRef.current, backRef.current, veilRef.current)
     if (level === 'frames') transport.seek(phStore.get())
@@ -782,7 +787,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const remixDone = async () => { await refresh(); setPeek(null); setLevel('frames') }
   const startOver = async () => {
     setRestart(false)
-    try { await api.clear(); await refresh(); setLocal([hello]); setPeek(null); setCutData(null); setLevel('story') }
+    try { await api.clear(); await refresh(); setLocal([hello]); setPeek(null); setLevel('story') }
     catch (e) { note((e as Error).message) }
   }
   const rename = async (name: string) => {
@@ -865,12 +870,8 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                onDecide={(c, a) => { cutOverride(c.id, a).catch((e) => note((e as Error).message)) }}
                canContinue={!!clips.length && !importing && stage !== 'footage'} briefDone={!!brief}
                onNext={() => { showStep(stage === 'story' ? 'story' : brief ? 'cut' : 'brief'); if (!brief) startQuestions() }} />
-    ) : screen === 'cut' && cutData ? (
-      <CutReview data={cutData} clips={clips} approved={!atGate} busy={approving}
-                 onOverride={cutOverride} onApprove={approveCut} onWatch={preview}
-                 onClose={() => showStep('story')} />
     ) : screen === 'cut' ? (
-      <div className="grid flex-1 place-items-center text-[13px] text-muted">Working out the rough trim…</div>
+      <div className="grid flex-1 place-items-center font-serif text-[17px] text-zinc-200">Trimming your clips…</div>
     ) : (
       <Story
         session={session}
@@ -1013,6 +1014,12 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
               <div className="flex w-[44%] min-w-[320px] flex-col">{player(true)}{pauseChat}</div>
             </div>
             <Timeline tl={tl} marks={marks} marksOf={marksOf} selected={selected} flash={flash} alt={alt}
+                      onTrimEdge={(key, edge, to) => {
+                        const it = tl.items.find((x) => x.key === key)
+                        const longer = edge === 'out' ? to > (it?.src_end ?? to) : to < (it?.src_start ?? to)
+                        run([{ op: 'trim', shot: key, edge, to: r3(to) }],
+                          `You made shot ${it?.n ?? ''} ${longer ? 'longer' : 'shorter'} at the ${edge === 'in' ? 'start' : 'end'}`)
+                      }}
                       onSelect={(key, anchor) => {
                         timelineOwns()
                         setSelected(key)
@@ -1080,14 +1087,15 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   )
 }
 
-// Footage · Brief · Rough cut · Story. The current one is lit; passed ones
+// Footage · Style · Story (the rough trim runs on its own, sarah 2026-10-07:
+// "skip it"; Frames drags a shot's ends instead). The current one is lit; passed ones
 // can be looked at again; the ones ahead say what will happen there.
 function Stepper({ current, derived, done, onGo, compact }: {
   current: Stage; derived: Stage; done: Stage[]; onGo: (s: Stage) => void; compact: boolean
 }) {
   return (
     <nav aria-label="Steps" className="flex items-center rounded-lg border border-line bg-panel p-0.5">
-      {STAGES.map((s, i) => {
+      {STAGES.filter((s) => s.id !== 'cut').map((s, i) => {
         const passed = done.includes(s.id) && s.id !== derived
         const can = done.includes(s.id)
         const cur = s.id === current

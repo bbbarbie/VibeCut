@@ -108,6 +108,15 @@ def targets(items: list[dict], clips: dict[str, dict], track: music.Track | None
 
 def build(board: dict | None, clips: dict[str, dict], track: music.Track | None) -> dict:
     items = layout(board)
+    # How far each shot's ends can be dragged: the whole shot as filmed, not
+    # just the rough trim's window (sarah skipped the trim's own page, so
+    # "keep the whole clip" is dragging an end all the way out in Frames).
+    for it in items:
+        if it["kind"] != "shot":
+            continue
+        cid, idx = it["shot_id"].rsplit(":", 1)
+        sh = next((x for x in (clips.get(cid) or {}).get("shots", []) if str(x["index"]) == idx), None)
+        it["src_min"], it["src_max"] = (sh["start"], sh["end"]) if sh else (it["src_start"], it["src_end"])
     total = items[-1]["seq_end"] if items else 0.0
     grid = None
     if track is not None and track.bpm and (track.meta.get("tempo") or {}).get("phase") is not None:
