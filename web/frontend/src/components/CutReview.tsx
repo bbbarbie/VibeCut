@@ -15,7 +15,6 @@ export function CutReview({ data, clips, approved, busy, onOverride, onApprove, 
   onClose?: () => void
 }) {
   const thumb = (cid: string) => clips.find((c) => c.id === cid)?.shots[0]?.thumb ?? ''
-  const thrown = data.clips.filter((c) => c.rejected)
   const kept = data.clips.filter((c) => !c.rejected)
   const s = data.summary
   return (
@@ -32,33 +31,9 @@ export function CutReview({ data, clips, approved, busy, onOverride, onApprove, 
           </div>
         )}
 
-        <h3 className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-muted">Thrown away · {thrown.length}</h3>
-        {thrown.length === 0 && <p className="mt-2 text-[12px] text-muted">Nothing — every clip had something usable.</p>}
-        <div className="mt-2 grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2">
-          {thrown.map((c) => (
-            <div key={c.id} className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2">
-              <div className="relative">
-                <img src={thumb(c.id)} className="aspect-video w-full rounded object-cover" />
-                <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 text-[10px] tabular-nums text-zinc-300">{dur(c.duration)}</span>
-              </div>
-              <div className="mt-1.5 truncate text-[11px] text-zinc-400">{c.name}</div>
-              <div className="text-[13px] leading-snug text-zinc-100">{c.override === 'reject' ? 'You threw this away' : c.en}</div>
-              {c.override !== 'reject' && c.unverified?.length > 0 && (
-                <div className="text-[11px] leading-snug text-amber-200/80" title="Judged from about one frame a second — what happened between them wasn’t seen">
-                  Judged from a few frames — play it to be sure
-                </div>
-              )}
-              <div className="mt-2 flex gap-1.5">
-                <Btn onClick={() => onWatch(c.id, 0, c.duration, c.id)}>Watch</Btn>
-                {c.override === 'reject'
-                  ? <Btn onClick={() => onOverride(c.id, 'auto')}>Undo</Btn>
-                  : <Btn primary onClick={() => onOverride(c.id, 'keep')}>Use it anyway</Btn>}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <h3 className="mt-7 text-[11px] font-semibold uppercase tracking-wider text-muted">Kept, and trimmed to the best part · {kept.length}</h3>
+        {/* No "thrown away" cards (sarah, 2026-10-07): those clips are the
+            Left out stack she already went through on Footage. */}
+        <h3 className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-muted">Kept, and trimmed to the best part · {kept.length}</h3>
         <div className="mt-2 space-y-2">
           {kept.map((c) => <KeptRow key={c.id} c={c} clip={clips.find((x) => x.id === c.id)} thumb={thumb(c.id)} onOverride={onOverride} onWatch={onWatch} />)}
         </div>
