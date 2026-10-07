@@ -202,9 +202,19 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   // Every trim stays changeable in Frames by dragging a shot's ends.
   const autoApproved = useRef(false)
   useEffect(() => {
-    if (atGate && brief && !approving && !autoApproved.current) { autoApproved.current = true; approveCut() }
+    // after the clips load: building the story needs them
+    if (atGate && brief && clips.length && !approving && !autoApproved.current) { autoApproved.current = true; approveCut() }
     if (!atGate) autoApproved.current = false
-  }, [atGate, !!brief]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [atGate, !!brief, clips.length > 0]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Past the gate with the questions answered but no story yet (the build was
+  // interrupted, or the page reloaded mid-way): build it, once.
+  const built = useRef(false)
+  const waiting = !!wfState && !['intake', 'indexing', 'rough-cut', 'cut-review'].includes(wfState)
+    && !!brief && !session?.proposals && !session?.board
+  useEffect(() => {
+    if (waiting && clips.length && !pending && !approving && !built.current) { built.current = true; send(brief!.message, brief!.style) }
+    if (!waiting) built.current = false
+  }, [waiting, clips.length > 0, !!pending, approving]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     transport.attach(videoRef.current, backRef.current, veilRef.current)
     if (level === 'frames') transport.seek(phStore.get())
