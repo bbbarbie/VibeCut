@@ -159,7 +159,7 @@ The promise to a user is therefore *not* "this will be beautiful." It is
 - **Style questions** (`web/backend/brief.py`, `StyleQuestions.tsx`,
   `web/frontend/src/brief.ts`): straight after Footage's "Looks good" (no
   "What's this video about?" box since 2026-10-06, sarah; the description is
-  guessed from the shoot, `pitch.guess`, never the model), a
+  guessed from the shoot, `pitch.guess`, never the model; the step has no page, the popup opens over the stacks), a
   popup asks length / pace / opening / focus, one question at a time, before
   the rough cut is shown. Length, pace and opening travel as `style` on the
   direction and reshape each proposal (`brief.shape`); focus and any

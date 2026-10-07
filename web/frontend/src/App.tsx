@@ -23,7 +23,6 @@ import { Shelf } from './components/Shelf'
 import { SmoothButton, Story, type PlayItem, type Selection } from './components/Story'
 import { Timeline, type Marks } from './components/Timeline'
 import { Footage, type Importing } from './components/Footage'
-import { Brief } from './components/Brief'
 import { fromDataTransfer, fromInput, takeHandoff, type Picked } from './drop'
 import { bytes, uid } from './format'
 import { clock, locate, toSource } from './sequence'
@@ -169,6 +168,10 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   })
   const done = reached({ clips: clips.length, workflow: wfState ?? 'intake', brief: !!brief, proposals: !!session?.proposals, board: !!session?.board })
   const shown: Stage = peek && done.includes(peek) ? peek : stage
+  // The style step has no page of its own (sarah, 2026-10-07: "delete this
+  // entire page"): its questions open over the stacks, and once answered the
+  // rough cut is next. What the video is comes from the clips (pitch.guess).
+  const screen: Stage = shown === 'brief' ? (brief ? 'cut' : 'footage') : shown
   useEffect(() => { if (peek && !done.includes(peek)) setPeek(null) }, [peek, done])
   useEffect(() => { if (shown !== 'story' && level === 'frames') setLevel('story') }, [shown]) // eslint-disable-line react-hooks/exhaustive-deps
   // Once a story is chosen the edit lives in Frames (sarah, 2026-10-04): opening
@@ -276,6 +279,10 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     if (asking) return
     api.guess().then((r) => r.about, () => '').then((about) => askStyle(about || 'My video'))
   }
+  // Opening a project that's waiting on them: the questions are simply there.
+  useEffect(() => {
+    if (shown === 'brief' && !brief && clips.length && !asking) startQuestions()
+  }, [shown, !!brief, clips.length > 0]) // eslint-disable-line react-hooks/exhaustive-deps
   const answered = async (picks: Picks, extra: string) => {
     if (!asking?.questions) return
     const { text, questions } = asking
@@ -852,19 +859,17 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
 
   const centre = talkOpen && caps.speech
     ? <TalkCut onApply={applyTalk} onWatch={preview} onClose={() => setTalkOpen(false)} />
-    : shown === 'footage' ? (
+    : screen === 'footage' ? (
       <Footage clips={clips} importing={importing} errors={session?.import_errors ?? []} vision={caps.vision}
                onPick={(fl) => importPicked(fromInput(fl))} onRetry={retryImport}
                onDecide={(c, a) => { cutOverride(c.id, a).catch((e) => note((e as Error).message)) }}
                canContinue={!!clips.length && !importing && stage !== 'footage'} briefDone={!!brief}
                onNext={() => { showStep(stage === 'story' ? 'story' : brief ? 'cut' : 'brief'); if (!brief) startQuestions() }} />
-    ) : shown === 'brief' ? (
-      <Brief brief={brief} busy={!!pending || !!asking} onStart={startQuestions} onContinue={() => showStep(stage === 'story' ? 'story' : 'cut')} />
-    ) : shown === 'cut' && cutData ? (
+    ) : screen === 'cut' && cutData ? (
       <CutReview data={cutData} clips={clips} approved={!atGate} busy={approving}
                  onOverride={cutOverride} onApprove={approveCut} onWatch={preview}
                  onClose={() => showStep('story')} />
-    ) : shown === 'cut' ? (
+    ) : screen === 'cut' ? (
       <div className="grid flex-1 place-items-center text-[13px] text-muted">Working out the rough cut…</div>
     ) : (
       <Story
@@ -897,7 +902,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const storyStage = shown === 'story' && !talkOpen
   const cols = storyStage && level === 'frames' ? (narrow ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[320px_minmax(0,1fr)]')
     : storyStage ? (narrow ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[320px_minmax(0,1fr)_420px]')
-      : narrow || shown === 'footage' || shown === 'brief' ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)_400px]'
+      : narrow || screen === 'footage' ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)_400px]'
 
   return (
     <>
@@ -1027,11 +1032,11 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
               {undoable && <UndoToast text={undoable.text} onUndo={() => { toggle(undoable.turn); setUndoable(null) }} />}
               {flash && <Flash text={flash} />}
             </main>
-            {/* Footage and the brief have no preview panel (sarah: the stacks use
-                the width, a clip plays in place; the brief is just one line). Hidden, not removed: the player's videos
+            {/* Footage has no preview panel (sarah: the stacks use the width, a
+                clip plays in place). Hidden, not removed: the player's videos
                 stay attached to the transport. */}
             <aside className={cx('flex min-h-0 flex-col gap-3 overflow-y-auto border-line bg-panel p-3',
-              narrow ? 'border-t max-h-[46vh]' : 'border-l', (shown === 'footage' || shown === 'brief') && 'hidden')}>
+              narrow ? 'border-t max-h-[46vh]' : 'border-l', screen === 'footage' && 'hidden')}>
               <div className="flex aspect-[16/10] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-line"
                    onClick={() => { if (tr.playing && !segment) transport.stop() }}>
                 {player(false)}
