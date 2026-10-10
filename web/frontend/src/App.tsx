@@ -14,6 +14,7 @@ import { Keys } from './components/Keys'
 import { Player } from './components/Player'
 import { PauseChat } from './components/PauseChat'
 import { PaceButton } from './components/PaceButton'
+import { SongButton } from './components/SongButton'
 import { LengthButton } from './components/LengthButton'
 import type { OverlayEdit } from './components/OverlayCanvas'
 import { Menu, SwapPicker, type MenuItem } from './components/Menus'
@@ -1015,6 +1016,9 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                       <PaceButton pace={brief?.style?.pace} why={brief?.tempo}
                                   story={session.board?.option === session.proposals?.recommended ? session.proposals?.why : undefined}
                                   onDone={(r) => { setSession(r); offerUndo(r) }} />
+                      <SongButton boardKey={tl.items.map((it) => `${it.key}:${it.src_start}:${it.src_end}`).join('|')}
+                                  onDone={(r) => { setSession(r); offerUndo(r) }}
+                                  onHear={() => { if (!boardPlay) window.setTimeout(() => playSource('board', []), 300) }} />
                       <SmoothButton small rough={(session.seams ?? []).filter((x) => x.verdict !== 'ok').length}
                                     onSmooth={async (order, nudge) => { const r = await api.smooth(order, nudge); setSession(r); offerUndo(r) }} />
                     </div>

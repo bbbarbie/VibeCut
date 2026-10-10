@@ -26,7 +26,7 @@ from pydantic import BaseModel
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, brief, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, brief, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, songs, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import Workflow, WorkflowError
 
@@ -312,7 +312,7 @@ def _track():
     replayed), else whatever the music card last put under it."""
     m = (SESSION.board or {}).get("music")
     if m is not None and "track" in m:
-        return next((t for t in musiclib.STATE["tracks"] if t.id == m["track"]), None)
+        return next((t for t in musiclib.STATE["tracks"] if t.id == m["track"]), None) or songs.find(m["track"])
     return musiclib.current()
 
 
@@ -333,7 +333,7 @@ def _mix_spec(b: dict | None, items: list[dict]) -> dict | None:
     t = _track()
     sp = export.spans(items)
     plan, _ = export.plan_transitions(sp, CLIPS, b.get("style"))
-    music = export.music_spec(t.path if t else None, b.get("music"))
+    music = export.music_spec(t.path if t else None, songs.resolve(b.get("music"), items, CLIPS))
     return audiomix.spec(sp, CLIPS, b.get("joins"), plan, music)
 
 
@@ -875,6 +875,7 @@ def api_pace(req: PaceReq) -> dict:
         _, windows = cut.for_story(PLAN["plan"])
         talk = tempo.talking(list(CLIPS.values()), _pool())
         ops = tempo.pace_ops(SESSION.board, cat, windows, req.pace, talk)
+        ops += _still_on_beat(ops, talk)
         name = tempo.NAMES[req.pace]
         if ops:
             SESSION.add({"kind": "direct", "text": name, "ops": ops,
@@ -885,6 +886,20 @@ def api_pace(req: PaceReq) -> dict:
             pr.brief = {**pr.brief, "style": {**(pr.brief.get("style") or {}), "pace": req.pace},
                         "tempo": f"{name}, as you chose."}
         return _session()
+
+
+def _still_on_beat(ops: list[dict], talk: set[str]) -> list[dict]:
+    """After shots change length under a song with a beat, put the cuts back on it."""
+    t = _track()
+    if not ops or t is None or not t.bpm or (t.meta.get("tempo") or {}).get("phase") is None:
+        return []
+    b = SESSION.board
+    try:
+        for op in ops:
+            b, _ = bd.apply(b, op, CATALOG["cat"], None, new_id=lambda: "")
+    except bd.OpError:
+        return []
+    return songs.beat_ops(b, CATALOG["cat"], float(t.bpm), talk)
 
 
 class CaptionsReq(BaseModel):
@@ -1327,7 +1342,9 @@ def api_export(req: ExportReq) -> dict:
             title = next((o["text"] for o in SESSION.board.get("overlays", []) if o["kind"] == "title"), None)
             job = export.create(tl["items"], dict(CLIPS), title or SESSION.board.get("name", ""),
                                 track.path if track else None, SESSION.board.get("style"),
-                                mix=SESSION.board.get("music"), joins=SESSION.board.get("joins"))
+                                mix=songs.resolve(SESSION.board.get("music"), tl["items"], CLIPS),
+                                joins=SESSION.board.get("joins"))
+            job.credit = songs.credit(track)
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
         return job.public()
@@ -1463,10 +1480,108 @@ def api_music_suggest() -> dict:
 
 @app.get("/api/music/audio/{track_id}")
 def api_music_audio(track_id: str) -> FileResponse:
-    p = musiclib.path_for(track_id)  # only files from the chosen folder
+    p = musiclib.path_for(track_id)  # only files from the chosen folder, or the song list
+    if not p:
+        t = songs.find(track_id)
+        p = t.path if t else None
     if not p:
         raise HTTPException(404)
     return FileResponse(p)
+
+
+# --------------------------------------------------------------------------
+# the song: picked for the edit, three more a tap away, or the creator's own
+# --------------------------------------------------------------------------
+
+def _pace() -> str:
+    pr = PROJECT["p"]
+    return (((pr.brief if pr else None) or {}).get("style") or {}).get("pace") or "balanced"
+
+
+def _songs_public() -> dict:
+    pace = _pace()
+    st = songs.status(pace)
+    b = SESSION.board
+    cur = _track() if b else None
+    chosen = b is not None and "music" in b   # picked, by the app or by hand ("none" counts)
+    voice = any(((c.get("sound") or {}).get("voice")) for c in CLIPS.values())
+    out = {"status": st, "current": songs.public(cur, True) if cur else None, "others": [],
+           "chosen": chosen, "ducks": voice}
+    if b and st != "searching":
+        ranked = [t for t in songs.rank(b, CATALOG["cat"], pace, songs.pool(pace)) if not cur or t.id != cur.id]
+        out["others"] = [songs.public(t) for t in ranked[:3]]
+    return out
+
+
+@app.get("/api/songs")
+def api_songs() -> dict:
+    with LOCK:
+        if not SESSION.board:
+            raise HTTPException(409, "Your edit is still being made.")
+        return _songs_public()
+
+
+class SongUseReq(BaseModel):
+    track_id: str | None = None
+    auto: bool = False      # the app's own first pick: only if no song was ever chosen
+
+
+def _use_song(t, text: str) -> None:
+    talk = tempo.talking(list(CLIPS.values()), _pool())
+    ops = songs.use_ops(SESSION.board, CATALOG["cat"], t, talk)
+    reply = "" if t is None else ("The cuts now land on its beat, and it gets quieter wherever someone talks."
+                                  if t.bpm and (t.meta.get("tempo") or {}).get("phase") is not None
+                                  else "It gets quieter wherever someone talks.")
+    SESSION.add({"kind": "direct", "text": text, "ops": ops, "reply": reply}, CATALOG["cat"], _make_proposals)
+
+
+@app.post("/api/songs/use")
+def api_songs_use(req: SongUseReq) -> dict:
+    """Put a song under the edit (or none) as one undoable turn."""
+    with LOCK:
+        if not SESSION.board:
+            raise HTTPException(409, "Your edit is still being made.")
+        pr = PROJECT["p"]
+        if req.auto:
+            # once per video: an undo or a "no song" is never overruled
+            if "music" in SESSION.board or (pr and (pr.brief or {}).get("song_auto")):
+                return _session()
+            pace = _pace()
+            ranked = songs.rank(SESSION.board, CATALOG["cat"], pace, songs.pool(pace))
+            if not ranked:
+                return _session()
+            if pr is not None and pr.brief:
+                pr.brief = {**pr.brief, "song_auto": True}
+            t = ranked[0]
+            _use_song(t, f"Song picked for you: {songs.public(t)['title']}")
+            return _session()
+        t = songs.find(req.track_id) or next((x for x in musiclib.STATE["tracks"] if x.id == req.track_id), None)
+        if req.track_id and t is None:
+            raise HTTPException(404, "That song isn't in the list any more.")
+        _use_song(t, f"Song: {songs.public(t)['title']}" if t else "No song")
+        return _session()
+
+
+@app.post("/api/songs/upload")
+async def api_songs_upload(request: Request) -> dict:
+    """The creator's own song (raw body, its name in x-name): saved, read, put under the edit."""
+    name = Path(unquote(request.headers.get("x-name", ""))).name
+    tmp = UPLOADS / "songs" / uuid.uuid4().hex[:8]
+    tmp.parent.mkdir(parents=True, exist_ok=True)
+    with open(tmp, "wb") as fh:
+        async for chunk in request.stream():
+            fh.write(chunk)
+    try:
+        with open(tmp, "rb") as fh:
+            t = songs.add_own(name, fh)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    finally:
+        tmp.unlink(missing_ok=True)
+    with LOCK:
+        if SESSION.board:
+            _use_song(t, f"Song: {songs.public(t)['title']}")
+        return _session()
 
 
 # --------------------------------------------------------------------------

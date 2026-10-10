@@ -109,4 +109,13 @@ export const api = {
     j<Session>(post(`/api/references/${rid}/apply`, { traits, strength })),
   refForget: (rid: string) => j<{ references: RefSummary[]; links: boolean }>(fetch(`/api/references/${rid}`, { method: 'DELETE' })),
   useTrack: (trackId: string | null) => j<Session>(post('/api/music/use', { track_id: trackId })),
+  // The song under the edit: picked for you, three others, or your own (songs.py)
+  songs: () => j<Songs>(fetch('/api/songs')),
+  songUse: (trackId: string | null, auto = false) => j<Session>(post('/api/songs/use', { track_id: trackId, auto })),
+  songUpload: (f: File) => j<Session>(fetch('/api/songs/upload', {
+    method: 'POST', headers: { 'x-name': encodeURIComponent(f.name) }, body: f,
+  })),
 }
+
+export type Song = { id: string; title: string; by: string; why: string; own: boolean; seconds: number; current: boolean; audio: string }
+export type Songs = { status: 'searching' | 'ready' | 'offline'; current: Song | null; others: Song[]; chosen: boolean; ducks: boolean }

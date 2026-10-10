@@ -76,12 +76,14 @@ def mark_targets(items: list[dict], clips: dict[str, dict], **_) -> list[dict]:
     return out
 
 
-def beat_targets(items: list[dict], track: music.Track | None = None, **_) -> list[dict]:
+def beat_targets(items: list[dict], track: music.Track | None = None, start: float = 0.0, **_) -> list[dict]:
     """The music's beat grid, if a track is in use and its tempo is reliable."""
     if track is None or not items:
         return []
     out = []
-    for k, t in enumerate(music.beat_grid(track, items[-1]["seq_end"])):
+    for k, t in enumerate(x - start for x in music.beat_grid(track, items[-1]["seq_end"] + start)):
+        if t < 0:
+            continue
         label = f"bar {k // 4 + 1} downbeat" if k % 4 == 0 else f"beat {k % 4 + 1} of 4 · bar {k // 4 + 1}"
         out.append({"t": t, "type": "beat", "label": label})
     return out
@@ -93,8 +95,9 @@ def beat_targets(items: list[dict], track: music.Track | None = None, **_) -> li
 SOURCES: list[Callable[..., list[dict]]] = [shot_targets, mark_targets, beat_targets]
 
 
-def targets(items: list[dict], clips: dict[str, dict], track: music.Track | None) -> list[dict]:
-    raw = [x for src in SOURCES for x in src(items, clips=clips, track=track)]
+def targets(items: list[dict], clips: dict[str, dict], track: music.Track | None,
+            start: float = 0.0) -> list[dict]:
+    raw = [x for src in SOURCES for x in src(items, clips=clips, track=track, start=start)]
     raw.sort(key=lambda x: (x["t"], -PRIORITY[x["type"]]))
     out: list[dict] = []
     for x in raw:  # within a frame of each other: keep the stronger one
@@ -120,6 +123,10 @@ def build(board: dict | None, clips: dict[str, dict], track: music.Track | None)
     total = items[-1]["seq_end"] if items else 0.0
     grid = None
     if track is not None and track.bpm and (track.meta.get("tempo") or {}).get("phase") is not None:
-        grid = {"bpm": track.bpm, "phase": track.meta["tempo"]["phase"]}
+        # the song starts at its in-point, so its beats sit that much earlier in the edit
+        start = float(((board or {}).get("music") or {}).get("in") or 0.0)
+        period = 60.0 / track.bpm
+        grid = {"bpm": track.bpm, "phase": round((track.meta["tempo"]["phase"] - start) % period, 4)}
     return {"fps": FPS, "total": round(total, 4), "items": items,
-            "targets": targets(items, clips, track), "grid": grid}
+            "targets": targets(items, clips, track, float(((board or {}).get("music") or {}).get("in") or 0.0)),
+            "grid": grid}

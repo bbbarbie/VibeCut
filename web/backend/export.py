@@ -134,6 +134,8 @@ class Job:
     mix: dict | None = None
     # How the sound crosses each cut ({entry key: {"sound"}}, board.set_join).
     joins: dict | None = None
+    # The line a free song's licence asks for; written next to the export.
+    credit: str | None = None
 
     @property
     def dir(self) -> Path:
@@ -145,7 +147,7 @@ class Job:
                 "file": Path(self.path).name if self.path else None, "path": self.path,
                 "size": self.size, "total": round(self.total, 2), "overlays": self.overlays,
                 "music": bool(self.music), "elapsed": round(self.elapsed, 1),
-                "style": (self.style or {}).get("name"), "notes": self.notes}
+                "style": (self.style or {}).get("name"), "notes": self.notes, "credit": self.credit}
 
 
 JOBS: dict[str, Job] = {}
@@ -561,6 +563,9 @@ def _run(job: Job) -> None:
                  "-t", f"{job.total:.6f}", "-movflags", "+faststart", str(tmp)]
         _ff(args, job, total_s=job.total, base=0.7, weight=0.3)
         shutil.move(str(tmp), dest)
+        if job.credit:
+            dest.with_suffix(".credits.txt").write_text(
+                "Song (paste this with your post, the licence asks for it):\n" + job.credit + "\n")
         job.path = str(dest)
         job.progress = 1.0
         job.stage = "done"

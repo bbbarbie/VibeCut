@@ -120,7 +120,9 @@ export function Export({ tl, overlays, parts, music, style, history = [], onClos
             {phase.kind === 'error' && <p className="mt-1.5 text-[12px] text-rose-300">{phase.message}</p>}
             {phase.kind === 'done' && (
               <p className="mt-1.5 text-[12px] text-zinc-200">Saved <span className="font-medium">{phase.job.file}</span> in {phase.job.elapsed.toFixed(0)}s.
-                {phase.job.notes?.length ? <span className="block text-muted">{phase.job.notes.join(' ')}</span> : null}</p>
+                {phase.job.notes?.length ? <span className="block text-muted">{phase.job.notes.join(' ')}</span> : null}
+                {phase.job.credit ? <span className="mt-2 block select-all font-serif text-[15px] leading-snug text-zinc-200">
+                  The song's licence asks for this line with your post (it's also saved next to the video): {phase.job.credit}</span> : null}</p>
             )}
           </div>
         )}

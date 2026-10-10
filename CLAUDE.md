@@ -78,6 +78,21 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   the storyboard. Built, synthetic-tested; **not yet judged on a real music
   library** (none on the dev machine). Beat snapping is the next task.
 
+- **Song** (`web/backend/songs.py`, `SongButton.tsx`; sarah, 2026-10-10:
+  "add music choosing"). The app picks a song as soon as the edit is there
+  (once per video; an undo or "No song" is never overruled), one undoable
+  turn: ranked by tempo fit (quick / steady / calm ranges), energy shape
+  (`music.shape_score`) and the song's own tags; started on a beat at the
+  stretch that fits; every shot made a whole number of beats (silent shots
+  move ≤ half a beat, talking shots only grow); ducked wherever a voice is
+  heard (`duck_speech`, worked out at mix time so later edits keep it right).
+  Tapping Song in Frames shows it plus three others (each tap puts it under
+  the edit and plays), Add your own song (kept in `$VIBECUT_CACHE/music/mine`),
+  No song. Songs come from Openverse (CC0/BY/BY-SA, credit line saved next
+  to the export), her music folder and her own; none are bundled. Changing
+  the tempo keeps the cuts on the beat. Weights and gains are priors.
+  `tests/test_songs.py`.
+
 - Timeline precision (`web/backend/timeline.py`, `web/frontend/src/snap.ts`):
   built and tested. Known: scrub-snapping at fit zoom on long edits pulls
   too far (21% of scrubs >1 s); motion targets are ±0.5 s (keyframe index).
