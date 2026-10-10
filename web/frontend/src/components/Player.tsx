@@ -69,9 +69,9 @@ export function Player({ videoRef, backRef, veilRef, bars, segment, label, gap, 
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-black">
+    <div className="flex min-h-0 flex-1 flex-col bg-raised">
       <div ref={box} className="relative min-h-0 flex-1">
-        <div className="absolute overflow-hidden" style={staged
+        <div className="absolute overflow-hidden bg-black" style={staged
           ? { left: stage.left, top: stage.top, width: stage.w, height: stage.h }
           : { inset: 0 }}>
           <video

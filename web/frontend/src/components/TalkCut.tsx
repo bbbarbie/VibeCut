@@ -131,7 +131,7 @@ export function TalkCut({ onApply, onWatch, onClose }: {
       {plan && !showSetup && !running && (
         <div className="flex shrink-0 items-center gap-3 border-t border-line bg-panel px-5 py-3">
           <label className="flex items-center gap-2 text-[12px] text-zinc-200">
-            <input type="checkbox" checked={captions} onChange={(e) => setCaptions(e.target.checked)} className="accent-[#b9d9eb]" />
+            <input type="checkbox" checked={captions} onChange={(e) => setCaptions(e.target.checked)} className="accent-[#1f5f8b]" />
             Add subtitles
           </label>
           <span className="text-[11px] text-muted">{dur(plan.summary.raw)} → {dur(plan.summary.cut)}</span>

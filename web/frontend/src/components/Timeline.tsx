@@ -12,7 +12,7 @@ const GAP = 2
 const PAD = 12
 
 export const TICK: Record<TargetType, string> = {
-  shot: '#e4e4e7', silence: '#6ee7b7', motion: '#fcd34d', beat: '#b9d9eb', word: '#c4b5fd',
+  shot: '#44403c', silence: '#059669', motion: '#d97706', beat: '#1f5f8b', word: '#7c3aed',
 }
 const TICK_H: Record<TargetType, number> = { shot: 14, silence: 9, motion: 7, beat: 6, word: 8 }
 const MARK_CLS = { added: 'bg-emerald-400', moved: 'bg-amber-300', trimmed: 'bg-sky-400' } as const
@@ -217,7 +217,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
         <label className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted">
           Zoom
           <input type="range" min={1} max={40} step={0.5} value={zoom}
-                 onChange={(e) => setZoom(Number(e.target.value))} className="w-20 accent-[#b9d9eb]" />
+                 onChange={(e) => setZoom(Number(e.target.value))} className="w-20 accent-[#1f5f8b]" />
         </label>
         {onExport && (
           <button type="button" onClick={onExport} disabled={!items.length} title="Render the edit, its captions and its music to one video file"
@@ -268,14 +268,14 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
             >
               <svg className="absolute inset-0 h-full" width={geo.end + 2 * PAD}>
                 {inX != null && outX != null && outX > inX && (
-                  <rect x={inX} y={0} width={outX - inX} height={28} fill="#b9d9eb" opacity={0.18} />
+                  <rect x={inX} y={0} width={outX - inX} height={28} fill="#1f5f8b" opacity={0.18} />
                 )}
                 {tl.targets.map((g: Target, i) => (
                   <line key={i} x1={xOf(g.t)} x2={xOf(g.t)} y1={28 - TICK_H[g.type]} y2={28}
                         stroke={TICK[g.type]} strokeWidth={g.type === 'shot' ? 1.5 : 1} opacity={g === hl ? 1 : 0.55} />
                 ))}
-                {inX != null && <path d={`M${inX},2 v24 h5`} stroke="#b9d9eb" fill="none" strokeWidth={2} />}
-                {outX != null && <path d={`M${outX},2 v24 h-5`} stroke="#b9d9eb" fill="none" strokeWidth={2} />}
+                {inX != null && <path d={`M${inX},2 v24 h5`} stroke="#1f5f8b" fill="none" strokeWidth={2} />}
+                {outX != null && <path d={`M${outX},2 v24 h-5`} stroke="#1f5f8b" fill="none" strokeWidth={2} />}
               </svg>
             </div>
 
@@ -382,7 +382,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                     onSelect(it.key, new DOMRect(e.clientX - 1, rect.top, 2, rect.height))
                   }}
                   className={`group absolute bottom-3 cursor-pointer overflow-hidden rounded-md ${it.kind === 'gap'
-                    ? 'bg-[repeating-linear-gradient(45deg,#18181b,#18181b_6px,#27272a_6px,#27272a_12px)]' : 'bg-black'} ${
+                    ? 'bg-[repeating-linear-gradient(45deg,#efebe4,#efebe4_6px,#e2ddd4_6px,#e2ddd4_12px)]' : 'bg-black'} ${
                     selected === it.key ? 'ring-2 ring-accent' : 'ring-1 ring-zinc-800 hover:ring-zinc-600'}`}
                   style={{
                     top: 50 + laneH, left: geo.left[k] + PAD, width: w, zIndex: ed ? 5 : undefined,
