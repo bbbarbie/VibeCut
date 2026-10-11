@@ -100,7 +100,7 @@ export function Export({ tl, overlays, parts, music, style, history = [], onClos
                   label={music ? `Music: ${music}` : 'Music — none chosen under the edit'} />
           {style && (style.look || style.transitions || style.letterbox) && (
             <p className="rounded-lg bg-raised px-2.5 py-1.5 text-[11px] leading-snug text-zinc-300">
-              Borrowed from “{style.name}”: {[style.look && 'its colour', style.transitions && (style.transitions.between !== 'cut' || style.transitions.open || style.transitions.close) && 'its transitions',
+              {style.ref ? `Borrowed from “${style.name}”` : `The ${style.name} look`}: {[style.look && 'its colour', style.transitions && (style.transitions.between !== 'cut' || style.transitions.open || style.transitions.close) && 'its transitions',
                 style.letterbox && 'cinematic bars'].filter(Boolean).join(', ') || 'its timing'} — rendered here, not in the preview.
             </p>
           )}

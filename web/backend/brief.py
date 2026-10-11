@@ -57,8 +57,33 @@ DEFAULT_LOOK = {"describe": "cozy", "transcribe": "clean"}
 LEGACY = {"day": ("describe", "cozy"), "simple": ("describe", "clean"), "bold": ("describe", "bold"),
           "key": ("describe", "quiet")}
 DAY_IN_LIFE = re.compile(r"\bday in (my|the|a) life\b|\bdaily vlog\b|\bdiml\b", re.I)
+# The two picks made up front (plan of 2026-10-10, step 2): the frame the
+# video is for, and the look of the whole thing. Short is a Reel / TikTok:
+# vertical and under SHORT_MAX_S; Tall a vertical vlog of any length; Wide
+# the 16:9 YouTube frame. LOOK_IDS mirrors looks/*.json (test_format pins it).
+FORMATS = {"short": "Short · vertical, under a minute and a half", "tall": "Vlog · vertical", "wide": "Wide · 16:9"}
+SHORT_MAX_S = 90.0                   # [prior] the long end of a short
+LOOK_IDS = ("clean", "cozy", "quiet", "cinematic", "film", "playful", "hype")
 STYLE_KEYS = {"length": tuple(LENGTH_S), "pace": tuple(PACE_CAP_S), "opening": OPENINGS,
-              "captions": CAPTIONS + tuple(LEGACY), "caption_look": tuple(CAPTION_LOOKS)}
+              "captions": CAPTIONS + tuple(LEGACY), "caption_look": tuple(CAPTION_LOOKS),
+              "format": tuple(FORMATS), "look": LOOK_IDS}
+
+
+def suggest_format(portrait_share: float, usable_s: float) -> str:
+    """The frame the footage asks for: what was filmed upright stays upright,
+    and a small shoot is a short. Only a default; the creator picks."""
+    if portrait_share < 0.5:
+        return "wide"
+    return "short" if usable_s <= 2 * SHORT_MAX_S else "tall"
+
+
+def length_for(fmt: str | None, marks: dict) -> float:
+    """The length a format asks for: a short is its Short mark, capped; the
+    others take the suggested mark."""
+    if fmt == "short":
+        short = next((m["seconds"] for m in marks["marks"] if m["key"] == "short"), marks["seconds"])
+        return float(min(short, SHORT_MAX_S))
+    return float(marks["seconds"])
 
 # Focus choices, each a storyboard theme (storyboard.THEMES).
 FOCUS = [("people", "Me and the people I was with"), ("food", "Food and drinks"),
@@ -238,8 +263,12 @@ def caption_ops(board: dict, cat, answer: str | None, title: str | None = None,
         answer, look = LEGACY[answer][0], look or LEGACY[answer][1]
     if answer is None and DAY_IN_LIFE.search(about):
         answer = "describe"     # the genre's own captions, unless they said otherwise
+    # `look` is a caption-question answer (clean / bold / cozy / quiet) or,
+    # since the up-front pick, a look id straight from looks/*.json
+    look_id = look if look in LOOK_IDS else CAPTION_LOOKS.get(look or "")
     if answer not in ("describe", "transcribe"):
-        return [], []
+        # no captions, but the look picked up front still dresses the video
+        return ([{"op": "set_look", "look": look_id}] if look_id else []), []
     ops, notes = [], []
     if answer == "describe":
         more, why = daylog.caption_ops(board, cat, about, places=places)
@@ -248,7 +277,7 @@ def caption_ops(board: dict, cat, answer: str | None, title: str | None = None,
     ops, notes = ops + more, notes + why
     if not more:
         return [], notes
-    return [{"op": "set_look", "look": CAPTION_LOOKS.get(look or "", DEFAULT_LOOK[answer])}, *ops], notes
+    return [{"op": "set_look", "look": look_id or DEFAULT_LOOK[answer]}, *ops], notes
 
 
 def _window(s, cap: float, best: dict[str, float]) -> None:

@@ -72,8 +72,13 @@ def _display(path: str) -> dict:
     return _probe_cache[path]
 
 
-def frame_size(items: list[dict], clips: dict[str, dict]) -> dict:
-    """1080p in the orientation most of the edit was filmed in."""
+def frame_size(items: list[dict], clips: dict[str, dict], want: str | None = None) -> dict:
+    """1080p in the frame asked for (short / tall = vertical, wide = 16:9),
+    else in the orientation most of the edit was filmed in."""
+    if want in ("short", "tall"):
+        return {"w": 1080, "h": 1920}
+    if want == "wide":
+        return {"w": 1920, "h": 1080}
     portrait = landscape = 0.0
     for it in items:
         c = clips.get(it.get("clip_id") or "")
@@ -157,7 +162,8 @@ def _safe_name(s: str) -> str:
 
 
 def create(items: list[dict], clips: dict[str, dict], name: str, music: str | None,
-           style: dict | None = None, mix: dict | None = None, joins: dict | None = None) -> Job:
+           style: dict | None = None, mix: dict | None = None, joins: dict | None = None,
+           want: str | None = None) -> Job:
     sp = spans(items)
     if not sp:
         raise ValueError("the timeline is empty — choose a story first")
@@ -169,7 +175,7 @@ def create(items: list[dict], clips: dict[str, dict], name: str, music: str | No
     look = (style or {}).get("look")
     if look and not os.path.isfile(look.get("lut", "")):
         raise ValueError("the borrowed look's file is gone — apply the style again")
-    job = Job(id=uuid.uuid4().hex[:10], items=sp, clips=clips, size=frame_size(sp, clips),
+    job = Job(id=uuid.uuid4().hex[:10], items=sp, clips=clips, size=frame_size(sp, clips, want),
               total=sum(s["frames"] for s in sp) / FPS, name=_safe_name(name), music=music, style=style,
               mix=mix, joins=joins)
     job.dir.mkdir(parents=True, exist_ok=True)

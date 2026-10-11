@@ -160,6 +160,19 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   judged on one real shoot (42 clips, 3 references). Every weight is a
   guess; the selector has no model behind it (no key on this Mac).
 
+- **Two picks up front** (plan of 2026-10-10, step 2; `Setup.tsx`,
+  `/api/brief/setup`, `/api/brief/auto {format, look}`, `/api/format`):
+  after Footage's "Looks good" one popup asks the **frame** (short ·
+  vertical ≤ `SHORT_MAX_S` 90 s / tall · vertical vlog / wide · 16:9;
+  default from the upright share of the footage, `brief.suggest_format`)
+  and the **look** (the seven of `looks/*.json`, default cozy), then "Make
+  my video". They travel as `style.format` / `style.look`: the frame sets
+  `export.frame_size(..., want)` for the stage and the export (a chip in
+  Frames cycles it; not a board op, so not in the log) and the length
+  (`brief.length_for`); the look is the first op when the story is chosen
+  (`caption_ops` takes a look id, and dresses the video even with no
+  captions). `tests/test_format.py`. `StyleQuestions.tsx` stays only for
+  the chat's first message.
 - **Style questions** (`web/backend/brief.py`, `StyleQuestions.tsx`,
   `web/frontend/src/brief.ts`): straight after Footage's "Looks good" (no
   "What's this video about?" box since 2026-10-06, sarah; the description is
@@ -240,6 +253,24 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   - **Voiceover mode** (`web/backend/voiceover.py`): opt-in fourth proposal
     from the creator's SRT or script. See the amended non-goal below.
 
+- **The bed** (`web/backend/bed.py`, `/api/bed`, the Music switch in
+  Frames; plan of 2026-10-10, step 1): choosing a story puts music under
+  it and moves the cuts onto its beat, one undoable turn that lands when
+  the pick is ready (background job, `session.bed`). Track from the
+  creator's folder, else Openverse by moods the pace suggests
+  (`PACE_BPM`, `MOODS` — priors); scored by `remix.pick_from` (the Remix
+  picker, now source-agnostic); drop at the end of the first shot (`HOOK_S`
+  cap 8 s). Beat snap via `apply_style` traits=["beat"] with the grid in
+  edit time and `keep` = talking shots (`restyle.retime` gained `keep`);
+  `set_music` at `audiomix.MUSIC_GAIN`, original 1.0, ducked to
+  `TALK_DUCK` under talking. Not for remix / talk / voiceover boards.
+  `timeline.grid_of` now subtracts the music in-point (every Remix grid was
+  off before). `VIBECUT_BED=0` keeps tests offline. `tests/test_bed.py`.
+  Measured 2026-10-10 on this Mac: a cold online pick took 195 s (36 tracks
+  fetched + analysed), so `/api/brief/auto` calls `bed.prefetch(pace)` as
+  soon as the pace is read and the chip shows done/total. Openverse's
+  commercial slice is thin: one-word moods only (phrases return 0).
+  Not yet judged on real footage.
 - **Sound as glue** (`web/backend/audiomix.py`; research
   `design/research/08-fluency-and-motion-ux.md`, P0/P1). One numpy mixer builds the
   edit's whole sound; the preview plays it (picture muted, rate-nudged to
@@ -272,8 +303,19 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   penalty inside a part (move_shot), and window nudges ≤2 s onto movement,
   never onto a word (trim). Never runs by default — that would be cutfix.
 - **Looks** (`web/backend/looks.py`, `looks/*.json`, P3-3). The spec's 7
-  vibes as dated records (type + motion only; grade, joins, camera, sounds
-  listed as `not_yet`). `set_look` (chat too) keeps what was set by hand and
+  vibes as dated records: type + motion, and since 2026-10-10 (plan step 1)
+  the picture too — `grade` (relative to the footage: warmth, black floor /
+  ceiling, sat and contrast ratios, split; `grade_target` → `grade.Look` →
+  a .cube under `$VIBECUT_CACHE/looks/`, fitted on the story's thumbnails,
+  export-only), `joins` (a transition policy, honoured by preview and
+  export alike) and, for Hype / Playful, `camera` (Remix's push, export-only).
+  `looks.picture(board, px)` is the one place the board's `style` is read
+  for rendering (`app._style`): a borrowed reference's own look / joins win,
+  the look fills what's empty; with no pixels the grade is `pending` so the
+  Export dialog can say it's coming. Texture, sounds and music stay
+  `not_yet`. All grade / join / camera numbers are priors; the export round
+  trip in `tests/test_bed.py` shows the Cozy file comes out warmer.
+  `set_look` (chat too) keeps what was set by hand and
   shows it; the profile's saved style is a default, not a choice.
   `overlayDraw.ts` reads the look's curve, entrance time, stepping, stagger,
   slam/card entrances, case and tracking; beat lock moves words onto a beat

@@ -186,7 +186,7 @@ def main() -> int:
             check(f"refuses a font that's {why}", True)
     real = TMP / "Mine.otf"
     real.write_bytes(b"OTTO")
-    check("a font file on the creator's disk is accepted", recipe.Recipe(family="Mine", font_file=str(real)).check().font_file == str(real))
+    check("a font file on the creator's disk is accepted", recipe.Recipe(family="Mine", font_file=str(real)).check().font_file == str(real.resolve()))
 
     print("undo")
     s2 = timeline.Session()
