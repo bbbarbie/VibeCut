@@ -109,8 +109,12 @@ def main() -> int:
 
     shaky = reject.judge(sig(40.0, 120.0))
     cap = reject.judge(sig(0.5, 3.0))
-    check("shaking is rejected", shaky.rejected and shaky.code == "shaky", shaky.code)
-    check("…and flagged as unseen motion", shaky.unverified() == [evidence.MOTION], str(shaky.unverified()))
+    # A shake read from stills a second apart only warns (it threw out 17 of 42
+    # handheld clips once); the warning still says what it rests on.
+    flags = [f["code"] for f in shaky.flags]
+    check("shaking only warns, never rejects", not shaky.rejected and flags == ["shaky"], f"{shaky.rejected} {flags}")
+    unseen = evidence.missing(reject.NEEDS["shaky"], reject.INDEX_READS)
+    check("…and the warning is flagged as unseen motion", unseen == [evidence.MOTION], str(unseen))
     check("lens cap is rejected with nothing unseen", cap.rejected and cap.unverified() == [],
           f"{cap.code} {cap.unverified()}")
 
