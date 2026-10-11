@@ -94,7 +94,7 @@ export type Board = { option: string; name: string; structure: string; beats: Bo
 export type TransitionPolicy = { between: string; within: string; dur: number; open: boolean; close: boolean }
 export type BoardStyle = {
   ref: string; name: string; traits: string[]; transitions: TransitionPolicy | null
-  look: { lut: string; strength: number; words: string[] } | null; letterbox: number | null
+  look: { lut: string; strength: number; words: string[]; pending?: boolean } | null; letterbox: number | null
   report: { shots: number; median_before: number | null; median_after: number | null; target_median: number | null
             filmed_too_short: number; on_beat: number; held_by_voice: number } | null
 }

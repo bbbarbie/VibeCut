@@ -212,6 +212,33 @@ def api() -> None:
               and s["turns"][-1]["text"] == "No music")
         s = c.post(f"/api/turns/{s['turns'][-1]['id']}/toggle", json={}).json()
         check("undo brings it back", s["music"] and s["music"]["title"] == "long")
+
+        print("the look grades the file")
+        from cutgrammar import media, style as st
+
+        def export(label: str) -> dict:
+            job = c.post("/api/export", json={"music": False}).json()
+            job = c.post(f"/api/export/{job['id']}/start", json={"schedule": []}).json()
+            for _ in range(600):
+                if job["stage"] in ("done", "error"):
+                    break
+                time.sleep(0.25)
+                job = c.get(f"/api/export/{job['id']}").json()
+            check(f"export {label} done", job["stage"] == "done", job.get("error") or "")
+            return job
+        s = c.post("/api/ops", json={"ops": [{"op": "set_look", "look": None}], "label": "no look"}).json()
+        check("no look: the board's style has no grade to render", not (s["board"]["style"] or {}).get("look"), json.dumps(s["board"]["style"]))
+        plain = export("plain")
+        s = c.post("/api/ops", json={"ops": [{"op": "set_look", "look": "cozy"}], "label": "cozy"}).json()
+        check("Cozy: the board's style promises its grade and its joins",
+              s["board"]["style"]["look"]["pending"] and s["board"]["style"]["transitions"]["between"] == "dissolve",
+              json.dumps(s["board"]["style"]))
+        cozy = export("cozy")
+        check("the export names the look", cozy["style"] == "Cozy", str(cozy["style"]))
+        lp, lc = st.learn(media.load(plain["path"]))["look"], st.learn(media.load(cozy["path"]))["look"]
+        check("and the file is warmer, by about the look's warmth", 4 <= lc["warmth"] - lp["warmth"] <= 16,
+              f"warmth {lp['warmth']} -> {lc['warmth']}")
+        check("same length to the frame", abs(cozy["total"] - plain["total"]) < 0.01)
         backend._close_project()
 
 

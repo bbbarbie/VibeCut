@@ -112,6 +112,72 @@ def main() -> int:
     check("only the loud looks lock to the beat",
           {k for k, r in recs.items() if r["motion"]["beat_lock"]} == {"playful", "hype"})
 
+    print("the picture: a grade fitted to the footage")
+    import tempfile
+    os.environ.setdefault("VIBECUT_CACHE", tempfile.mkdtemp(prefix="vibecut-looks-"))
+    import numpy as np
+    from cutgrammar import grade
+    # A neutral, mid-contrast frame: a grey ramp with a few coloured patches,
+    # so warmth, black level, saturation and contrast all have room to move.
+    rng = np.random.default_rng(3)
+    img = np.zeros((27, 48, 3), np.uint8)
+    img[..., :] = np.linspace(8, 230, 48, dtype=np.uint8)[None, :, None]
+    img[3:13, 3:18] = (200, 80, 60)
+    img[14:24, 24:44] = (50, 110, 190)
+    img[5:10, 30:40] = (90, 170, 80)
+    img = np.clip(img.astype(int) + rng.integers(-6, 7, img.shape), 0, 255).astype(np.uint8)
+    px = grade.pixels(img[None])
+    before = grade.stats(px)
+
+    def after(lid: str) -> dict | None:
+        fit = looks.fit_grade(recs[lid], px)
+        if fit is None:
+            return None
+        lut = grade.Look(px, looks.grade_target(before, recs[lid]["grade"]), 1.0).lut()
+        return grade.stats(grade.pixels(grade.apply_lut(img, lut)[None]))
+    check("Clean has no grade", looks.fit_grade(recs["clean"], px) is None)
+    cozy, hype, quiet, cine = after("cozy"), after("hype"), after("quiet"), after("cinematic")
+    check("Cozy: warmer, lifted blacks, a little less colour",
+          cozy["warmth"] > before["warmth"] + 3 and cozy["black"] > before["black"] + 6 and cozy["sat"] < before["sat"],
+          f"warmth {before['warmth']}->{cozy['warmth']}, black {before['black']}->{cozy['black']}, sat {before['sat']}->{cozy['sat']}")
+    check("Hype: more colour, more contrast, blacks kept deep",
+          hype["sat"] > before["sat"] * 1.05 and hype["contrast"] > before["contrast"] * 1.05 and hype["black"] <= before["black"] + 2,
+          f"sat {before['sat']}->{hype['sat']}, contrast {before['contrast']}->{hype['contrast']}, black {before['black']}->{hype['black']}")
+    check("Quiet: muted and cooler", quiet["sat"] < cozy["sat"] and quiet["warmth"] < before["warmth"],
+          f"sat {quiet['sat']} vs cozy {cozy['sat']}, warmth {before['warmth']}->{quiet['warmth']}")
+    split = np.asarray(cine["high"]) - np.asarray(cine["shadow"])
+    split0 = np.asarray(before["high"]) - np.asarray(before["shadow"])
+    check("Cinematic: warm highlights over cool shadows, more than the footage had",
+          (split[0] - split[2]) > (split0[0] - split0[2]) + 6, f"{split0[0] - split0[2]:.1f} -> {split[0] - split[2]:.1f}")
+    check("the same look on the same pixels fits once (cached .cube)",
+          looks.fit_grade(recs["cozy"], px)["lut"] == looks.fit_grade(recs["cozy"], px)["lut"])
+    check("every shift stays inside grade.py's cap",
+          all(abs(c) <= grade.MAX_SHIFT + 0.5 for st in (cozy, hype, quiet, cine) for c in np.asarray(st["cast"]) - np.asarray(before["cast"])))
+
+    print("the picture: joins, and what wins")
+    check("the soft looks dissolve between parts, the loud ones cut",
+          looks.joins_of(recs["cozy"])["between"] == "dissolve" and looks.joins_of(recs["hype"])["between"] == "cut"
+          and looks.joins_of(recs["cozy"])["within"] == "cut")
+    plain = looks.picture({"look": "cozy"}, None)
+    check("a look alone gives the board its joins and promises the grade",
+          plain["transitions"]["between"] == "dissolve" and plain["look"]["pending"] and plain["name"] == "Cozy", str(plain))
+    borrowed = {"ref": "r", "name": "Ref", "traits": ["look", "transitions"],
+                "transitions": {"between": "flash", "within": "cut", "dur": 0.2, "open": False, "close": False},
+                "look": {"lut": "/x.cube", "strength": 1.0, "words": []}, "letterbox": None, "report": None}
+    kept = looks.picture({"look": "cozy", "style": borrowed}, px)
+    check("a borrowed style's own look and joins win over the look's",
+          kept["transitions"]["between"] == "flash" and kept["look"]["lut"] == "/x.cube")
+    half = looks.picture({"look": "cozy", "style": {**borrowed, "look": None, "traits": ["transitions"]}}, px)
+    check("…and the look fills in only what the borrowed style left empty",
+          half["transitions"]["between"] == "flash" and half["look"] and half["look"]["lut"].endswith(".cube"), str(half.get("look")))
+    check("no look, no style: nothing", looks.picture({}, px) is None)
+    items = [{"kind": "shot", "shot_id": "a:0"}, {"kind": "shot", "shot_id": "a:1"}, {"kind": "gap"}, {"kind": "shot", "shot_id": "b:0"}]
+    board = {"look": "hype", "beats": [{"shots": [{"id": "a:0"}, {"id": "a:1"}]}, {"shots": [{"id": "b:0"}]}]}
+    pushed = looks.camera(items, board)
+    check("Hype pushes into every shot, alternating, harder on a part's first shot",
+          [it.get("punch") for it in pushed] == [0.05, -0.05, None, 0.09], str([it.get("punch") for it in pushed]))
+    check("Cozy leaves the camera alone", looks.camera(items, {**board, "look": "cozy"}) == items)
+
     print()
     if failures:
         print(f"{len(failures)} failed: {', '.join(failures)}")

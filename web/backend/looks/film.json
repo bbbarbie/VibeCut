@@ -33,13 +33,36 @@
   "status": "prior",
   "first_seen": "2026-09-27",
   "review_by": "2027-03-31",
-  "source": "design/specs/redesign-v2.md §4.3–4.4 (values [prior] unless research 07 measured them)",
+  "source": "design/specs/redesign-v2.md §4.3–4.4 (values [prior] unless research 07 measured them); grade and joins added 2026-10-10 as priors (relative to the footage; see looks.py)",
   "not_yet": [
-    "colour grade",
-    "joins",
     "camera moves",
     "texture",
     "sounds",
     "music"
-  ]
+  ],
+  "grade": {
+    "warmth": 6.0,
+    "sat": 0.8,
+    "contrast": 0.8,
+    "split": {
+      "shadow": [
+        0.0,
+        2.0,
+        2.0
+      ],
+      "high": [
+        5.0,
+        3.0,
+        0.0
+      ]
+    },
+    "black_floor": 22.0
+  },
+  "joins": {
+    "between": "dissolve",
+    "within": "cut",
+    "dur": 0.8,
+    "open": true,
+    "close": false
+  }
 }

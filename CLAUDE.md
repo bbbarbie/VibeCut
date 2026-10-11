@@ -286,8 +286,19 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   penalty inside a part (move_shot), and window nudges ≤2 s onto movement,
   never onto a word (trim). Never runs by default — that would be cutfix.
 - **Looks** (`web/backend/looks.py`, `looks/*.json`, P3-3). The spec's 7
-  vibes as dated records (type + motion only; grade, joins, camera, sounds
-  listed as `not_yet`). `set_look` (chat too) keeps what was set by hand and
+  vibes as dated records: type + motion, and since 2026-10-10 (plan step 1)
+  the picture too — `grade` (relative to the footage: warmth, black floor /
+  ceiling, sat and contrast ratios, split; `grade_target` → `grade.Look` →
+  a .cube under `$VIBECUT_CACHE/looks/`, fitted on the story's thumbnails,
+  export-only), `joins` (a transition policy, honoured by preview and
+  export alike) and, for Hype / Playful, `camera` (Remix's push, export-only).
+  `looks.picture(board, px)` is the one place the board's `style` is read
+  for rendering (`app._style`): a borrowed reference's own look / joins win,
+  the look fills what's empty; with no pixels the grade is `pending` so the
+  Export dialog can say it's coming. Texture, sounds and music stay
+  `not_yet`. All grade / join / camera numbers are priors; the export round
+  trip in `tests/test_bed.py` shows the Cozy file comes out warmer.
+  `set_look` (chat too) keeps what was set by hand and
   shows it; the profile's saved style is a default, not a choice.
   `overlayDraw.ts` reads the look's curve, entrance time, stepping, stagger,
   slam/card entrances, case and tracking; beat lock moves words onto a beat

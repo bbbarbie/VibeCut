@@ -19,10 +19,14 @@ from urllib.parse import unquote
 
 from contextlib import asynccontextmanager
 
+import numpy as np
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+from cutgrammar import grade
 
 from . import board as bd
 from . import projects as pj
@@ -232,7 +236,7 @@ def _session() -> dict:
     b = SESSION.board
     board = None if b is None else {
         **{k: b[k] for k in ("option", "name", "structure")},
-        "style": b.get("style"),
+        "style": _style(b),
         "beats": [{**bt, "shots": [shot(x) for x in bt["shots"]]} for bt in b["beats"]],
     }
     tl = timeline.build(b, CLIPS, _track())
@@ -317,6 +321,26 @@ def _track():
     return musiclib.current()
 
 
+def _story_pixels(b: dict | None):
+    """A sample of the story's pixels (its shots' thumbnails at 48×27), for
+    fitting a look's grade. Reads JPEGs only; never the original files."""
+    if not b:
+        return None
+    thumbs = reference._board_thumbs(b, CATALOG["cat"])
+    if not thumbs:
+        return None
+    pick = [thumbs[i] for i in np.unique(np.linspace(0, len(thumbs) - 1, min(looks.GRADE_SHOTS, len(thumbs))).astype(int))]
+    small = [x for x in (reference._read_jpeg(q, 48, 27) for q in pick) if x is not None]
+    return grade.pixels(np.stack(small)) if small else None
+
+
+def _style(b: dict | None, for_export: bool = False) -> dict | None:
+    """The board's rendering style: a borrowed style, with the look filling
+    in the joins and (at export, where pixels are touched) the grade.
+    Preview and export both come through here so they can't disagree."""
+    return looks.picture(b, _story_pixels(b) if for_export else None)
+
+
 def _music_public() -> dict | None:
     t = _track()
     return None if t is None else {"id": t.id, "title": t.title, "duration": round(t.duration, 2),
@@ -333,7 +357,7 @@ def _mix_spec(b: dict | None, items: list[dict]) -> dict | None:
         return None
     t = _track()
     sp = export.spans(items)
-    plan, _ = export.plan_transitions(sp, CLIPS, b.get("style"))
+    plan, _ = export.plan_transitions(sp, CLIPS, _style(b))
     music = export.music_spec(t.path if t else None, b.get("music"))
     return audiomix.spec(sp, CLIPS, b.get("joins"), plan, music)
 
@@ -357,7 +381,7 @@ def _mix_public(b: dict | None, tl: dict) -> dict | None:
              for it, p in zip(sp["items"], sp["transitions"] or [])
              if p["head"] or p["tail"] or p["fade_in"] or p["fade_out"]]
     size = tl.get("frame") or {"w": 1920, "h": 1080}
-    bar = export._bar(size, (b or {}).get("style"))
+    bar = export._bar(size, _style(b))
     return {"key": k, "audio": f"/api/mix/{k}.wav", "transitions": trans,
             "bars": round(bar / size["h"], 4) if bar else 0.0,
             # `fits`: False where a carry was asked for but the shot wasn't
@@ -1402,8 +1426,8 @@ def api_export(req: ExportReq) -> dict:
         try:
             # Named after what the video says it is: its title, else the story.
             title = next((o["text"] for o in SESSION.board.get("overlays", []) if o["kind"] == "title"), None)
-            job = export.create(tl["items"], dict(CLIPS), title or SESSION.board.get("name", ""),
-                                track.path if track else None, SESSION.board.get("style"),
+            job = export.create(looks.camera(tl["items"], SESSION.board), dict(CLIPS), title or SESSION.board.get("name", ""),
+                                track.path if track else None, _style(SESSION.board, for_export=True),
                                 mix=SESSION.board.get("music"), joins=SESSION.board.get("joins"))
         except ValueError as e:
             raise HTTPException(400, str(e)) from e

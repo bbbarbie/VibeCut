@@ -478,7 +478,20 @@ Playful, Hype — font, case, colours, backing, and how words move (Cozy's
 stepped paper card, Hype's slam, Playful's bounce). Playful and Hype put
 words on the music's beat when one is under the edit. Anything you set by
 hand is kept and shown ("Your font differs from the look · Use the
-look's"). Looks don't grade the picture yet.
+look's").
+
+Since 2026-10-10 a look also sets the **picture**: a colour grade and a
+join family, so "Cozy" is warm, lifted and dissolves between parts, not
+only a paper card for the words. The grade is relative to your footage
+("warmer, lifted blacks, a little less colour" on top of what you filmed;
+a black floor or ceiling, never an absolute level, and colour shifts
+capped so a sunset stays a sunset), fitted to the story's own thumbnails
+and rendered in export only — the preview shows the joins (dissolve, dip,
+flash, the opening and closing fades) but not the colour. Hype and
+Playful add a slow push into every shot, also export-only. A borrowed
+reference's own colour and transitions win over the look's; the look
+fills in what the reference left empty. Every number in a look's grade,
+joins and camera is a prior (`backend/looks/*.json`).
 
 ## Seeing the joins while it plays
 
