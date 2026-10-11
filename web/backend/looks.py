@@ -6,8 +6,20 @@ date it must be reviewed by. The values come from the design spec
 (redesign-v2 §4.3–4.4); most are priors, and each record says which were
 measured. This first cut carries what words on screen need -- font, case,
 tracking, palette, backing, and motion (curve, entrance time, stepping,
-stagger, beat lock). The spec's grade, joins, camera, texture, sounds and
-music per look are listed in each record's `not_yet` and aren't applied.
+stagger, beat lock) -- and, since 2026-10-10, the picture: a **grade** and
+a **join** family, so picking "Cozy" grades the shots and softens the
+part boundaries, not only the words. The spec's camera, texture, sounds
+and music per look are still listed in each record's `not_yet`.
+
+The grade is *relative to the footage*, not a reference's absolute colour:
+"warm, lifted blacks, a little less saturated" is applied on top of what
+was filmed (a black floor or ceiling, never an absolute level: footage
+already past it is left alone) (`grade_target` turns the footage's own stats into the target
+stats grade.Look fits a LUT to). Colour shifts stay capped by grade.py's
+MAX_SHIFT, so a sunset isn't un-warmed and a face isn't tinted. The LUT is
+rendered in export only (the only place pixels are re-encoded); joins are
+honoured by preview and export alike through export.plan_transitions.
+Every number in a record's `grade` and `joins` is a prior.
 
 `set_look` sets the look for the whole video. What the creator already set
 by hand (overlay_style after or before) is kept -- the look fills in only
@@ -17,10 +29,18 @@ reset. Changing look never silently throws a choice away.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
+import numpy as np
+
+from cutgrammar import grade
+
+from .indexer import CACHE
+
 DIR = Path(__file__).resolve().parent / "looks"
+GRADE_SHOTS = 24     # how many of the story's shots the grade is fitted on
 STYLE_KEYS = ("font", "color", "accent", "backing")
 BEAT_SNAP_S = 0.25   # a word lands on the beat if it was this close already [prior]
 
@@ -140,4 +160,125 @@ def beat_lock(items: list[dict], grid: dict | None, total: float) -> list[dict]:
             o = {**o, "start": round(beat, 4), "end": round(o["end"] + d, 4),
                  "shown_end": round(o["shown_end"] + d, 4), "on_beat": True}
         out.append(o)
+    return out
+
+
+# --------------------------------------------------------------------------
+# the picture: a grade fitted to the footage, and the join family
+# --------------------------------------------------------------------------
+
+def grade_target(src: dict, g: dict) -> dict:
+    """The footage's own stats, moved the look's way: the target grade.Look
+    fits to. Tone: contrast scaled about the median, then the 1st percentile
+    lifted or sunk to `black` with the top pinned; cast warmed or cooled;
+    shadow / highlight offsets added; saturation scaled."""
+    tone = np.asarray(src["tone"], dtype=np.float64)
+    med = float(np.median(tone))
+    tone = med + (tone - med) * float(g.get("contrast", 1.0))
+    tone = np.maximum.accumulate(np.clip(tone, 0, 255))
+    # tone[1] is the 1st percentile (grade.TONE_Q[1] == 1). A lifted look
+    # sets a floor under it, a deep look a ceiling over it; footage already
+    # past that is left alone -- "lifted" must never pull a dark frame down.
+    lo, top = float(tone[1]), float(tone[-1])
+    black = None
+    if g.get("black_floor") is not None and lo < float(g["black_floor"]):
+        black = float(g["black_floor"])
+    elif g.get("black_ceiling") is not None and lo > float(g["black_ceiling"]):
+        black = float(g["black_ceiling"])
+    if black is not None and top > lo + 1:
+        tone = np.where(tone <= lo, black * tone / max(lo, 1e-3), black + (tone - lo) * (top - black) / (top - lo))
+        tone = np.maximum.accumulate(np.clip(tone, 0, 255))
+    w = float(g.get("warmth", 0.0))
+    cast = np.asarray(src["cast"], dtype=np.float64) + np.array([w / 2, 0.0, -w / 2])
+    split = g.get("split") or {}
+    shadow = np.asarray(src["shadow"], dtype=np.float64) + np.asarray(split.get("shadow") or [0, 0, 0], dtype=np.float64)
+    high = np.asarray(src["high"], dtype=np.float64) + np.asarray(split.get("high") or [0, 0, 0], dtype=np.float64)
+    return {"tone": [round(float(v), 2) for v in tone], "cast": [round(float(v), 2) for v in cast],
+            "mid": [round(float(v), 2) for v in cast], "shadow": [round(float(v), 2) for v in shadow],
+            "high": [round(float(v), 2) for v in high], "sat": round(float(src["sat"]) * float(g.get("sat", 1.0)), 4)}
+
+
+def fit_grade(look: dict, px: np.ndarray, strength: float = 1.0) -> dict | None:
+    """The look's grade on these pixels: a .cube in the cache (keyed on the
+    look and the pixels, so the same story fits once) and what it did.
+    None for a look without a grade (Clean)."""
+    g = look.get("grade")
+    if not g or len(px) == 0:
+        return None
+    src = grade.stats(px)
+    fitted = grade.Look(px, grade_target(src, g), strength)
+    sig = hashlib.sha1((look["id"] + json.dumps(g, sort_keys=True) + px.tobytes()[:4096].hex()
+                        + str(len(px)) + str(strength)).encode()).hexdigest()[:10]
+    d = CACHE / "looks"
+    d.mkdir(parents=True, exist_ok=True)
+    path = d / f"{look['id']}-{sig}.cube"
+    if not path.exists():
+        grade.write_cube(fitted.lut(), str(path), f"VibeCut · {look['name']}")
+    after = grade.stats(fitted(px))
+    return {"lut": str(path), "strength": strength, "words": grade.words(after),
+            "numbers": {"before": {x: src[x] for x in ("warmth", "black", "sat")},
+                        "after": {x: after[x] for x in ("warmth", "black", "sat")}}}
+
+
+def joins_of(look: dict | None) -> dict | None:
+    """The look's transition family as export.plan_transitions wants it."""
+    j = (look or {}).get("joins")
+    if not j:
+        return None
+    return {"between": j["between"], "within": j["within"], "dur": float(j.get("dur") or 0.0),
+            "open": bool(j.get("open")), "close": bool(j.get("close"))}
+
+
+def picture(b: dict | None, px: np.ndarray | None) -> dict | None:
+    """What the look adds to the board's `style` for rendering: a borrowed
+    style's own look and transitions win (they were chosen on purpose);
+    the look fills in whatever that left empty. `px` = the story's pixels
+    (see app._story_pixels); None skips the grade (preview needs joins only)."""
+    b = b or {}
+    look = get(b.get("look"))
+    style = dict(b.get("style") or {})
+    if not look:
+        return style or None
+    if not (style.get("look") or style.get("transitions") or style.get("letterbox")):
+        # nothing of its own to render (a style that only retimed, like the
+        # bed's beat): the picture is the look's, so the export says so
+        style["name"] = look["name"]
+    if not style.get("transitions") and look.get("joins"):
+        style["transitions"] = joins_of(look)
+    if not style.get("look") and look.get("grade"):
+        if px is not None and len(px):
+            fit = fit_grade(look, px)
+            if fit:
+                style["look"] = {"lut": fit["lut"], "strength": fit["strength"], "words": fit["words"]}
+        else:
+            # not fitted here (preview never grades); the UI still says a grade is coming
+            style["look"] = {"lut": "", "strength": 1.0, "words": [], "pending": True}
+    style.setdefault("name", look["name"])
+    style.setdefault("traits", [])
+    style.setdefault("ref", None)
+    return style
+
+
+def camera(items: list[dict], b: dict | None) -> list[dict]:
+    """The look's camera on the timeline's shots, for export: a slow push
+    over every shot, alternating in and out (`punch`), harder on the first
+    shot of a part (`scene`) -- the short-form habit Remix uses. Export-only,
+    like the grade; the preview shows the frame as filmed."""
+    look = get((b or {}).get("look"))
+    cam = (look or {}).get("camera")
+    if not cam:
+        return items
+    out = [dict(it) for it in items]
+    starts: set[str] = set()
+    for bt in (b or {}).get("beats", [])[1:]:
+        if bt["shots"]:
+            starts.add(bt["shots"][0].get("id"))
+    k = 0
+    for it in out:
+        if it["kind"] != "shot" or it.get("punch"):
+            continue
+        z = float(cam["scene"]) if it.get("shot_id") in starts else float(cam["punch"])
+        if z:
+            it["punch"] = z if k % 2 == 0 else -z
+        k += 1
     return out

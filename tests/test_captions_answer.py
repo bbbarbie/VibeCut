@@ -120,7 +120,13 @@ def main() -> int:
         raise speech.SpeechError("Transcribing needs macOS 26 or later with the Xcode command-line tools.")
     ops, notes = subtitles.caption_ops(s.board, cat, clips, "", transcribe=broken)
     check("no recogniser: no subtitles, and it says why", not ops and notes and "macOS" in notes[0], str(notes))
-    full, _ = brief.caption_ops(s.board, cat, "transcribe", "A day in Tokyo", clips=clips)
+    # Through the brief there is no hook: on a Mac that has the recogniser the
+    # fixture clips (no files behind them) must not reach it.
+    real_transcribe, speech.transcribe = speech.transcribe, broken
+    try:
+        full, _ = brief.caption_ops(s.board, cat, "transcribe", "A day in Tokyo", clips=clips)
+    finally:
+        speech.transcribe = real_transcribe
     check("transcribe through the brief: the clean look and a title, or nothing when it can't hear",
           full == [] or full[0] == {"op": "set_look", "look": "clean"})
 

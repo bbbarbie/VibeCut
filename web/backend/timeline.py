@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Callable
 
+import numpy as np
+
 from cutgrammar import music
 
 from . import board as bd
@@ -76,12 +78,26 @@ def mark_targets(items: list[dict], clips: dict[str, dict], **_) -> list[dict]:
     return out
 
 
-def beat_targets(items: list[dict], track: music.Track | None = None, **_) -> list[dict]:
+def grid_of(track: music.Track | None, music_in: float = 0.0) -> dict | None:
+    """The track's beat grid in *edit* time: a track that starts `music_in`
+    seconds in has its beats that much earlier than its own phase says. Was
+    wrong for every Remix (they all start at the drop) until 2026-10-10."""
+    if track is None or not track.bpm or (track.meta.get("tempo") or {}).get("phase") is None:
+        return None
+    period = 60.0 / track.bpm
+    phase = (float(track.meta["tempo"]["phase"]) - float(music_in or 0.0)) % period
+    return {"bpm": track.bpm, "phase": round(phase, 4)}
+
+
+def beat_targets(items: list[dict], track: music.Track | None = None, music_in: float = 0.0, **_) -> list[dict]:
     """The music's beat grid, if a track is in use and its tempo is reliable."""
-    if track is None or not items:
+    g = grid_of(track, music_in)
+    if g is None or not items:
         return []
     out = []
-    for k, t in enumerate(music.beat_grid(track, items[-1]["seq_end"])):
+    period = 60.0 / g["bpm"]
+    beats = [round(float(t), 3) for t in np.arange(g["phase"], items[-1]["seq_end"], period)]
+    for k, t in enumerate(beats):
         label = f"bar {k // 4 + 1} downbeat" if k % 4 == 0 else f"beat {k % 4 + 1} of 4 · bar {k // 4 + 1}"
         out.append({"t": t, "type": "beat", "label": label})
     return out
@@ -93,8 +109,8 @@ def beat_targets(items: list[dict], track: music.Track | None = None, **_) -> li
 SOURCES: list[Callable[..., list[dict]]] = [shot_targets, mark_targets, beat_targets]
 
 
-def targets(items: list[dict], clips: dict[str, dict], track: music.Track | None) -> list[dict]:
-    raw = [x for src in SOURCES for x in src(items, clips=clips, track=track)]
+def targets(items: list[dict], clips: dict[str, dict], track: music.Track | None, music_in: float = 0.0) -> list[dict]:
+    raw = [x for src in SOURCES for x in src(items, clips=clips, track=track, music_in=music_in)]
     raw.sort(key=lambda x: (x["t"], -PRIORITY[x["type"]]))
     out: list[dict] = []
     for x in raw:  # within a frame of each other: keep the stronger one
@@ -118,8 +134,6 @@ def build(board: dict | None, clips: dict[str, dict], track: music.Track | None)
         sh = next((x for x in (clips.get(cid) or {}).get("shots", []) if str(x["index"]) == idx), None)
         it["src_min"], it["src_max"] = (sh["start"], sh["end"]) if sh else (it["src_start"], it["src_end"])
     total = items[-1]["seq_end"] if items else 0.0
-    grid = None
-    if track is not None and track.bpm and (track.meta.get("tempo") or {}).get("phase") is not None:
-        grid = {"bpm": track.bpm, "phase": track.meta["tempo"]["phase"]}
+    music_in = float(((board or {}).get("music") or {}).get("in") or 0.0)
     return {"fps": FPS, "total": round(total, 4), "items": items,
-            "targets": targets(items, clips, track), "grid": grid}
+            "targets": targets(items, clips, track, music_in), "grid": grid_of(track, music_in)}

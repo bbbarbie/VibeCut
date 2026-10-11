@@ -29,6 +29,7 @@ TMP = Path(tempfile.mkdtemp(prefix="vibecut-projects-"))
 # script, and they must see the same cache directory as the server.
 os.environ.setdefault("VIBECUT_CACHE", str(TMP / "cache"))
 os.environ.setdefault("VIBECUT_EXPORTS", str(TMP / "out"))
+os.environ.setdefault("VIBECUT_BED", "0")      # no music hunt online from a test
 
 from fastapi.testclient import TestClient  # noqa: E402
 

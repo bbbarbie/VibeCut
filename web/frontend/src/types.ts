@@ -94,7 +94,7 @@ export type Board = { option: string; name: string; structure: string; beats: Bo
 export type TransitionPolicy = { between: string; within: string; dur: number; open: boolean; close: boolean }
 export type BoardStyle = {
   ref: string; name: string; traits: string[]; transitions: TransitionPolicy | null
-  look: { lut: string; strength: number; words: string[] } | null; letterbox: number | null
+  look: { lut: string; strength: number; words: string[]; pending?: boolean } | null; letterbox: number | null
   report: { shots: number; median_before: number | null; median_after: number | null; target_median: number | null
             filmed_too_short: number; on_beat: number; held_by_voice: number } | null
 }
@@ -170,6 +170,8 @@ export type Session = {
   cut: CutSummary | null
   timeline: TimelineData
   music: MusicTrack | null
+  // Music by default (backend/bed.py): the pick runs in the background and lands as a turn.
+  bed: { stage: 'looking' | 'done' | 'nothing' | 'error'; why: string; source: string; done: number; total: number; elapsed: number } | null
   // The edit's sound as one track (backend/audiomix.py) -- what preview plays and export writes.
   mix: { key: string; audio: string; joins: JoinInfo[]; transitions: Trans[]; bars: number } | null
   board: Board | null
@@ -245,7 +247,8 @@ export type StyleQuestion = { id: string; question: string; multi: boolean; hint
   slider?: LengthSlider
   /** asked only when an earlier answer is one of these: { captions: ['describe', 'transcribe'] } */
   when?: Record<string, string[]> }
-export type StyleAnswers = { length?: string; seconds?: number; pace?: string; opening?: string; captions?: string; caption_look?: string }
+export type StyleAnswers = { length?: string; seconds?: number; pace?: string; opening?: string; captions?: string; caption_look?: string
+  format?: 'short' | 'tall' | 'wide'; look?: string }
 
 // How the sound crosses a cut: carried out (L cut), carried in (J cut), or a clean break.
 export type JoinSound = 'cut' | 'carry_out' | 'carry_in' | 'default'

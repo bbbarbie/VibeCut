@@ -45,7 +45,13 @@ The stages:
    couldn't be read, with *Try again*; the clip grid. Nothing is copied,
    moved or changed (files the locator can't find on disk are copied into
    the cache). The one action: *What's this video? →*.
-2. **Brief** — one line, then the style questions (length, pace, opening,
+2. **Brief** — since 2026-10-10 two picks in one popup: the frame (Short ·
+   vertical under 1½ min, Vlog · vertical, Wide · 16:9; the footage's
+   upright share suggests one) and the look (the seven below; Cozy by
+   default). "Make my video" reads the rest from the clips: what it is,
+   the length the frame asks for, the pace, captions on. The frame can be
+   changed in Frames (a chip; the stage and the export follow); the look
+   under Captions. Before that it was one line, then the style questions (length, pace, opening,
    focus). Opt-in side doors: *Follow my voiceover* (an SRT or script
    becomes a fourth proposal), *Talking to camera* (macOS).
 3. **Rough cut** — the gate: what would be thrown away and trimmed, with
@@ -261,6 +267,30 @@ record with who changed it and when. Every-video rules persist in
 `~/.cache/vibecut/preferences.json`; this-video rules go when the shelf is
 cleared.
 
+## Music by default, cuts on its beat
+
+Choosing a story puts a bed under it (`backend/bed.py`), as one undoable
+turn that lands when the pick is ready — a few seconds from your own
+folder, up to a minute online:
+
+- **The track** comes from your music folder when one is set, else from
+  Openverse (Jamendo / Freesound, CC0 / BY / BY-SA only; the credit line is
+  written next to the export). It's scored like a Remix — tempo in the
+  range the footage's pace asks for, energy shape against the edit's own
+  arc, the catalogue's words, continuity — and starts so its drop lands at
+  the end of the first shot (8 s in at most).
+- **The cuts move onto the beat** (`restyle.retime`, ≤ 0.35 s each). A
+  shot where someone talks keeps its window; the music dips under it.
+- **The mix**: music at the export's 0.35 under your own sound, faded out
+  over the last 2 s. Preview and export play the same bed.
+- **Music off** in Frames takes the bed away (one turn; the cuts stay where
+  the beat put them); pressing it again finds a track again. A Remix, a
+  talking-head cut and a voiceover story don't get one — they bring their
+  own, or the voice sets time.
+
+Tempo ranges, moods, the duck and the hook cap are priors. The pick has no
+model behind it. `tests/test_bed.py` (storyboard, then through the API).
+
 ## Music that fits the storyboard's shape
 
 Under the working storyboard: the top 5 tracks from the creator's own music
@@ -286,7 +316,9 @@ it can tell a build from a fade, not pick the best of many builds.
 The timeline is the storyboard laid out in time (`backend/timeline.py`),
 with a sorted list of snap targets: shot boundaries (strongest), silence
 edges from `features.speech_mask` (10 ms), motion onsets/offsets (only as
-precise as the index's keyframes, ±0.5 s — labelled so), and the beat grid
+precise as the index's keyframes, ±0.5 s — labelled so), and the beat grid (in edit time: a track that starts
+at its drop has its beats shifted by that in-point, wrong for every Remix
+until 2026-10-10)
 of a music track put under the edit with "Use". Word boundaries have a seam
 and no source until there's a transcript.
 
@@ -452,7 +484,20 @@ Playful, Hype — font, case, colours, backing, and how words move (Cozy's
 stepped paper card, Hype's slam, Playful's bounce). Playful and Hype put
 words on the music's beat when one is under the edit. Anything you set by
 hand is kept and shown ("Your font differs from the look · Use the
-look's"). Looks don't grade the picture yet.
+look's").
+
+Since 2026-10-10 a look also sets the **picture**: a colour grade and a
+join family, so "Cozy" is warm, lifted and dissolves between parts, not
+only a paper card for the words. The grade is relative to your footage
+("warmer, lifted blacks, a little less colour" on top of what you filmed;
+a black floor or ceiling, never an absolute level, and colour shifts
+capped so a sunset stays a sunset), fitted to the story's own thumbnails
+and rendered in export only — the preview shows the joins (dissolve, dip,
+flash, the opening and closing fades) but not the colour. Hype and
+Playful add a slow push into every shot, also export-only. A borrowed
+reference's own colour and transitions win over the look's; the look
+fills in what the reference left empty. Every number in a look's grade,
+joins and camera is a prior (`backend/looks/*.json`).
 
 ## Seeing the joins while it plays
 
