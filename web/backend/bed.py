@@ -14,7 +14,10 @@ What happens, once a story is chosen (one undoable turn, like any edit):
    hook.
 2. **A track**: the creator's own folder when one is set and read; else
    Openverse (Jamendo / Freesound, commercial licences only -- see
-   cutgrammar/openverse.py), by moods the pace suggests. Scored like a
+   cutgrammar/openverse.py), by moods the pace suggests. Only when that
+   search hands back nothing that fits (offline, blocked, no certificates)
+   does VibeCut's own pack step in (cutgrammar/songpack.py): never
+   preferred, only so the edit is never left silent. Scored like a
    Remix (tempo, energy shape, the catalogue's own words, continuity); the
    track starts so its drop lands at the end of the hook.
 3. **Cuts on the beat** (restyle.retime with the grid): each cut moves to
@@ -39,6 +42,7 @@ import numpy as np
 
 from cutgrammar import music as mu
 from cutgrammar import openverse as ov
+from cutgrammar import songpack
 
 from . import audiomix, musiclib, remix, restyle, timeline
 
@@ -89,12 +93,28 @@ def fingerprint(board: dict, cat, pace: str | None) -> dict:
     }
 
 
+ONLINE = "Openverse (free, credited)"
+PACK = "VibeCut's own songs"
+
+
 def candidates(pace: str, own: list[mu.Track] | None, progress=None) -> tuple[list[mu.Track], str]:
-    """Where the track comes from: the creator's folder first, else Openverse."""
+    """Where the track comes from: the creator's folder first, else Openverse.
+    An empty Openverse answer (offline, blocked) hands over the pack instead."""
     if own:
         return list(own), "your music folder"
     moods = MOODS.get(pace if pace in MOODS else "balanced")
-    return ov.OpenverseSource(moods, per_query=PER_MOOD, progress=progress).list(), "Openverse (free, credited)"
+    try:
+        pool = ov.OpenverseSource(moods, per_query=PER_MOOD, progress=progress).list()
+    except Exception:  # noqa: BLE001 -- a failed search is what the pack is for
+        pool = []
+    if pool:
+        return pool, ONLINE
+    return fallback(pace, progress), PACK
+
+
+def fallback(pace: str | None, progress=None) -> list[mu.Track]:
+    """The built-in songs for this pace (rendered once, a few seconds each)."""
+    return songpack.PackSource(pace, progress=progress).list()
 
 
 _warming: set[str] = set()
@@ -174,6 +194,8 @@ def say(mx: dict, report: dict, source: str, talking: int) -> str:
     """The turn's reply: what was done and what it rests on."""
     t: mu.Track = mx["track"]
     parts = [f"Music: {t.title} ({mx['bpm']:.0f} BPM, from {source}), starting so its drop lands at the end of the first shot."]
+    if source == PACK:
+        parts.append("The free music library couldn't be reached, so this is one of VibeCut's own songs.")
     if report.get("shots"):
         parts.append(f"{report['on_beat']} of {report['shots']} cuts moved onto the beat.")
     if talking:
@@ -216,9 +238,13 @@ def start(board: dict, cat, pace: str | None, own: list[mu.Track] | None, need_s
             pool, job.source = candidates(fp["pace"], own, progress)
             if not pool:
                 job.stage, job.why = "nothing", ("No tracks could be read from your music folder." if own
-                                                 else "Couldn't reach Openverse for a free track — no music this time.")
+                                                 else "No free track could be found — no music this time.")
                 return
             mx = pick(fp, pool, need_s)
+            if mx is None and job.source == ONLINE:
+                # online answered, but nothing it had fits this edit: the pack, not silence
+                pool, job.source = fallback(fp["pace"], progress), PACK
+                mx = pick(fp, pool, need_s)
             if mx is None:
                 job.stage, job.why = "nothing", (f"None of the {len(pool)} tracks is long enough for this edit "
                                                  f"({need_s:.0f} s) with a steady beat — no music this time.")

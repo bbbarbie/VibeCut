@@ -264,6 +264,13 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   edit time and `keep` = talking shots (`restyle.retime` gained `keep`);
   `set_music` at `audiomix.MUSIC_GAIN`, original 1.0, ducked to
   `TALK_DUCK` under talking. Not for remix / talk / voiceover boards.
+  **Backup songs** (`cutgrammar/songpack.py`; sarah, 2026-10-11: "only
+  used if users link fail"): 24 songs VibeCut composes itself (8 per pace,
+  CC0, no audio in the repo; rendered once into `$VIBECUT_CACHE/music/
+  pack/`, ~20 s each, then measured like any track). Used only when
+  Openverse hands back nothing or nothing that fits; never preferred. A
+  failed Openverse search is no longer cached as "no songs".
+  `tests/test_songpack.py`.
   `timeline.grid_of` now subtracts the music in-point (every Remix grid was
   off before). `VIBECUT_BED=0` keeps tests offline. `tests/test_bed.py`.
   Measured 2026-10-10 on this Mac: a cold online pick took 195 s (36 tracks
