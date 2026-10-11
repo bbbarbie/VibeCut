@@ -253,6 +253,10 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   `TALK_DUCK` under talking. Not for remix / talk / voiceover boards.
   `timeline.grid_of` now subtracts the music in-point (every Remix grid was
   off before). `VIBECUT_BED=0` keeps tests offline. `tests/test_bed.py`.
+  Measured 2026-10-10 on this Mac: a cold online pick took 195 s (36 tracks
+  fetched + analysed), so `/api/brief/auto` calls `bed.prefetch(pace)` as
+  soon as the pace is read and the chip shows done/total. Openverse's
+  commercial slice is thin: one-word moods only (phrases return 0).
   Not yet judged on real footage.
 - **Sound as glue** (`web/backend/audiomix.py`; research
   `design/research/08-fluency-and-motion-ux.md`, P0/P1). One numpy mixer builds the

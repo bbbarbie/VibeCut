@@ -1042,7 +1042,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                                 catch (e) { note((e as Error).message) }
                               }}
                               className="max-w-[16rem] truncate whitespace-nowrap rounded-md border border-line px-2 py-1 text-[11px] text-zinc-300 hover:bg-raised disabled:opacity-60">
-                        {session.bed?.stage === 'looking' ? 'Finding music…' : session.music ? `Music · ${session.music.title}` : 'Music off'}
+                        {session.bed?.stage === 'looking' ? `Finding music…${session.bed.total ? ` ${session.bed.done}/${session.bed.total}` : ''}` : session.music ? `Music · ${session.music.title}` : 'Music off'}
                       </button>
                       <PaceButton pace={brief?.style?.pace} why={brief?.tempo}
                                   story={session.board?.option === session.proposals?.recommended ? session.proposals?.why : undefined}

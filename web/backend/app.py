@@ -879,6 +879,10 @@ def api_brief_auto() -> dict:
         pr.brief = {"message": about, "style": brief.clean_style(style) or {}, "tempo": feel["why"],
                     "said": f"about {brief.say_length(marks['seconds'])} · {tempo.NAMES[feel['pace']].lower()} · captions",
                     "at": time.time()}
+        # the pace is known now: start fetching the free tracks for it, so the
+        # bed under the story lands in seconds rather than minutes (bed.py)
+        if musiclib.STATE["status"] != "ready" and os.environ.get("VIBECUT_BED", "1") != "0":
+            bed.prefetch(feel["pace"])
         return _session()
 
 

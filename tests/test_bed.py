@@ -24,6 +24,7 @@ import numpy as np
 
 # setdefault: the index pool's workers re-import this script and must share the cache
 os.environ.setdefault("VIBECUT_CACHE", tempfile.mkdtemp(prefix="vibecut-bed-"))
+os.environ.setdefault("VIBECUT_EXPORTS", os.path.join(os.environ["VIBECUT_CACHE"], "out"))   # a temp dir, not ~/Movies
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from cutgrammar import music as mu  # noqa: E402

@@ -45,15 +45,17 @@ from . import audiomix, musiclib, remix, restyle, timeline
 # The tempo a cutting pace asks for [prior]. Fast is the Remix range; calm is
 # a walking tempo; balanced sits between.
 PACE_BPM = {"fast": (110.0, 140.0), "balanced": (85.0, 120.0), "calm": (60.0, 100.0)}
-# What to ask Openverse for, by pace [prior]. Words the people who tagged
-# the tracks would use; the waveform can't tell a ballad from a pop bed.
+# What to ask Openverse for, by pace [prior]. One word each: the commercial-
+# licence slice of the catalogue is thin, and on 2026-10-10 phrases like
+# "feel good indie pop" or "chillhop" returned nothing while "happy",
+# "ukulele", "calm" each returned a full page. These are tags the people who
+# uploaded the tracks used; the waveform can't tell a ballad from a pop bed.
 MOODS = {
-    "fast": remix.MOODS,
-    "balanced": ["feel good indie pop", "acoustic pop upbeat", "indie folk happy", "chill pop",
-                 "lofi hip hop beats", "sunny ukulele", "indie pop instrumental"],
-    "calm": ["acoustic guitar calm", "lofi chill", "ambient piano", "soft indie folk", "chillhop",
-             "warm acoustic instrumental", "gentle piano"],
+    "fast": ["upbeat", "pop", "funk", "electronic", "happy", "summer"],
+    "balanced": ["happy", "ukulele", "indie", "folk", "travel", "uplifting"],
+    "calm": ["calm", "acoustic", "piano", "ambient", "relax", "folk"],
 }
+PER_MOOD = 6          # tracks fetched per mood: a first pick, not a catalogue crawl
 HOOK_S = (1.0, 8.0)   # the drop lands at the end of the first shot, or this far in at most [prior]
 TALK_DUCK = 0.35      # music under talking drops to this share of its gain [prior]
 MIN_TALK_S = 0.8      # a duck shorter than this would be heard as a wobble, not a duck [prior]
@@ -92,7 +94,34 @@ def candidates(pace: str, own: list[mu.Track] | None, progress=None) -> tuple[li
     if own:
         return list(own), "your music folder"
     moods = MOODS.get(pace if pace in MOODS else "balanced")
-    return ov.OpenverseSource(moods, progress=progress).list(), "Openverse (free, credited)"
+    return ov.OpenverseSource(moods, per_query=PER_MOOD, progress=progress).list(), "Openverse (free, credited)"
+
+
+_warming: set[str] = set()
+_warm_lock = threading.Lock()
+
+
+def prefetch(pace: str | None) -> None:
+    """Warm the online catalogue for this pace while the creator is still
+    looking at their footage: a cold fetch of ~36 tracks took 195 s on
+    2026-10-10, a warm one is seconds. Fire and forget; one at a time per
+    pace; nothing is chosen here."""
+    pace = pace if pace in MOODS else "balanced"
+    with _warm_lock:
+        if pace in _warming:
+            return
+        _warming.add(pace)
+
+    def run() -> None:
+        try:
+            candidates(pace, None)
+        except Exception:  # noqa: BLE001 -- offline is fine; the pick will say so
+            pass
+        finally:
+            with _warm_lock:
+                _warming.discard(pace)
+
+    threading.Thread(target=run, daemon=True).start()
 
 
 def pick(fp: dict, pool: list[mu.Track], need_s: float) -> dict | None:
@@ -162,11 +191,13 @@ class Job:
         self.stage = "looking"     # looking | done | nothing | error
         self.why = ""
         self.source = ""
+        self.done, self.total = 0, 0   # tracks read so far (online: fetched + analysed)
         self.started = time.time()
         self.result: dict | None = None
 
     def public(self) -> dict:
         return {"stage": self.stage, "why": self.why, "source": self.source,
+                "done": self.done, "total": self.total,
                 "elapsed": round(time.time() - self.started, 1)}
 
 
@@ -177,9 +208,12 @@ def start(board: dict, cat, pace: str | None, own: list[mu.Track] | None, need_s
     job = Job()
     fp = fingerprint(board, cat, pace)
 
+    def progress(done: int, total: int) -> None:
+        job.done, job.total = done, total
+
     def run() -> None:
         try:
-            pool, job.source = candidates(fp["pace"], own)
+            pool, job.source = candidates(fp["pace"], own, progress)
             if not pool:
                 job.stage, job.why = "nothing", ("No tracks could be read from your music folder." if own
                                                  else "Couldn't reach Openverse for a free track — no music this time.")
