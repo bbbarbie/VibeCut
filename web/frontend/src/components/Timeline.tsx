@@ -317,8 +317,8 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                        if (d.mode === 'move') onOverlayEdit?.(o.id, { start: Math.round(d.start * 1000) / 1000 })
                        else onOverlayEdit?.(o.id, { dur: Math.round((d.end - o.start) * 1000) / 1000 })
                      }}
-                     className={`absolute flex cursor-grab items-center gap-1 overflow-hidden rounded px-1 text-[10px] leading-none text-zinc-900 active:cursor-grabbing ${
-                       selectedOverlay === o.id ? 'ring-2 ring-white' : ''} ${d?.moved ? 'opacity-80' : ''}`}
+                     className={`absolute flex cursor-grab items-center gap-1 overflow-hidden rounded px-1 text-[10px] leading-none text-stone-900 active:cursor-grabbing ${
+                       selectedOverlay === o.id ? 'ring-2 ring-accent' : ''} ${d?.moved ? 'opacity-80' : ''}`}
                      style={{ left: x, width: w, top: 31 + (lanes.row.get(o.id) ?? 0) * LANE_ROW, height: LANE_ROW - 3, background: meta.color }}>
                   <span className="shrink-0 font-semibold">{meta.icon}</span>
                   <span className="truncate">{o.kind === 'chapters' ? 'Chapter bar' : o.text}</span>
