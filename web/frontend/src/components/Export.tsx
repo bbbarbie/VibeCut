@@ -162,7 +162,7 @@ export function Export({ tl, overlays, parts, music, style, history = [], onClos
 function Toggle({ on, disabled, onChange, label }: { on: boolean; disabled?: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
     <label className={`flex items-center gap-2 ${disabled ? 'text-zinc-600' : 'text-zinc-200'}`}>
-      <input type="checkbox" checked={on && !disabled} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="accent-[#b9d9eb]" />
+      <input type="checkbox" checked={on && !disabled} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="accent-[#1f5f8b]" />
       <span className="truncate">{label}</span>
     </label>
   )

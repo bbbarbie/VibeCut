@@ -215,7 +215,7 @@ function Trait({ t, on, onToggle, children }: { t: RefTrait; on: boolean; onTogg
   return (
     <li className={cx('rounded-xl border border-line px-3 py-2', !can && 'opacity-60')}>
       <label className="flex items-center gap-2">
-        {t.how || t.why_not ? <input type="checkbox" checked={can && on} disabled={!can} onChange={(e) => onToggle(e.target.checked)} className="accent-[#b9d9eb]" />
+        {t.how || t.why_not ? <input type="checkbox" checked={can && on} disabled={!can} onChange={(e) => onToggle(e.target.checked)} className="accent-[#1f5f8b]" />
           : <span className="size-2 rounded-full bg-zinc-600" />}
         <span className="text-[13px] text-zinc-100">{t.title}</span>
         <span className="flex flex-wrap gap-1">{t.words.map((w) => <span key={w} className="rounded-full border border-line px-1.5 text-[10px] text-zinc-300">{w}</span>)}</span>

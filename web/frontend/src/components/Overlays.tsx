@@ -207,7 +207,7 @@ function Item({ o, where, open, findings, level, onToggle, onRun, onWatch }: {
                      onChange={(v) => edit({ dur: Math.max(0.5, r2(v)) }, 'length')} />
             {(o.anchor.to === 'beat' || o.anchor.to === 'shot') && (
               <label className="flex items-center gap-1 text-[10px] text-muted">
-                <input type="checkbox" checked={fills} onChange={() => edit({ dur: fills ? length : null }, 'length')} className="accent-[#b9d9eb]" />
+                <input type="checkbox" checked={fills} onChange={() => edit({ dur: fills ? length : null }, 'length')} className="accent-[#1f5f8b]" />
                 whole {o.anchor.to === 'beat' ? 'part' : 'shot'}
               </label>
             )}
