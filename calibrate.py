@@ -13,6 +13,7 @@ writes design/research/calibration/<date>.{json,md}. Changes nothing.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import subprocess
 import sys
@@ -32,8 +33,9 @@ def _files(paths: list[str], d: str | None) -> list[str]:
 
 
 def _fetch(links_file: str, label: str) -> list[str]:
-    """Links to files, the first 90 s at ≤480p -- enough to measure, as the
-    app's own reference reader does. Cached by link."""
+    """Links to files at ≤480p, whole (a sectioned download goes through
+    ffmpeg straight to the CDN and gets a 403 on this yt-dlp); the harness
+    cuts the first 90 s locally. Cached by link."""
     d = CACHE / "links" / label
     d.mkdir(parents=True, exist_ok=True)
     out = []
@@ -41,12 +43,13 @@ def _fetch(links_file: str, label: str) -> list[str]:
         url = line.strip()
         if not url or url.startswith("#"):
             continue
-        target = d / (str(abs(hash(url))) + ".mp4")
+        target = d / (hashlib.sha1(url.encode()).hexdigest()[:12] + ".mp4")   # stable across runs
         if not target.exists():
             print(f"  fetching {url}")
-            p = subprocess.run(["yt-dlp", "--no-playlist", "--quiet", "--no-warnings", "--no-part",
-                                "-f", "bv*[height<=480]+ba/b[height<=480]/bv*+ba/b", "--merge-output-format", "mp4",
-                                "--download-sections", f"*0-{int(cal.LIMIT_S)}", "-o", str(target), "--", url],
+            p = subprocess.run(["yt-dlp", "--no-update", "--no-playlist", "--quiet", "--no-warnings", "--no-part",
+                                "-f", "b[height<=480][ext=mp4]/b[height<=480]/bv*[height<=480]+ba/b",
+                                "--merge-output-format", "mp4", "--write-info-json",
+                                "-o", str(target), "--", url],
                                capture_output=True, text=True)
             if p.returncode != 0 or not target.exists():
                 print(f"  skipped {url}: {p.stderr.strip()[-160:]}", file=sys.stderr)

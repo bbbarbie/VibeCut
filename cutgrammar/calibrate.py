@@ -26,6 +26,7 @@ and the record names the sets so that meaning travels with the numbers.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -93,7 +94,9 @@ def head(path: str, cache: Path, limit_s: float = LIMIT_S) -> str:
     (one decode of 90 s instead of 7 min). Returns the path to load."""
     cache.mkdir(parents=True, exist_ok=True)
     st = os.stat(path)
-    out = cache / f"{abs(hash((path, st.st_size, int(st.st_mtime))))}-{int(limit_s)}s.mp4"
+    # sha1, not hash(): Python salts hash() per process, which re-cut every head each run
+    key = hashlib.sha1(f"{path}|{st.st_size}|{int(st.st_mtime)}".encode()).hexdigest()[:12]
+    out = cache / f"{key}-{int(limit_s)}s.mp4"
     if not out.exists():
         p = subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", path, "-t", str(limit_s), "-c", "copy",
                             "-movflags", "+faststart", str(out)], capture_output=True, text=True)
@@ -102,8 +105,24 @@ def head(path: str, cache: Path, limit_s: float = LIMIT_S) -> str:
     return str(out)
 
 
-def measure(path: str, label: str, cache: Path | None = None, limit_s: float | None = LIMIT_S) -> Measured:
-    name = Path(path).name
+def display_name(path: str) -> str:
+    """A reference's title rather than 'source.mp4'; a fetched link's title
+    from its info json; else the file name."""
+    p = Path(path)
+    for side in (p.parent / "meta.json", p.with_suffix(".info.json")):
+        try:
+            d = json.loads(side.read_text())
+            t = d.get("title")
+            if t:
+                return str(t)[:70]
+        except (OSError, ValueError):
+            pass
+    return p.name
+
+
+def measure(path: str, label: str, cache: Path | None = None, limit_s: float | None = LIMIT_S,
+            name: str | None = None) -> Measured:
+    name = name or display_name(path)
     try:
         src = head(path, cache or Path(".vibecut-calib"), limit_s) if limit_s else path
         m = media.load(src)
