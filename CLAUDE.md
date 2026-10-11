@@ -369,6 +369,15 @@ will be hard to tell that it has.
 Calibration means: run the analyser over ~20 videos known to be well cut
 and ~20 that aren't, and derive each threshold from that distribution.
 
+The harness for that exists since 2026-10-11: `python calibrate.py --good …
+--bad …` (files, folders, path lists, or links through yt-dlp;
+`cutgrammar/calibrate.py`). It measures the first 90 s of each with
+`grammar.analyze`, lays the two distributions side by side per finding,
+proposes the cut point with the best balanced accuracy, shows the current
+guess beside it, and writes `design/research/calibration/<date>.{json,md}`.
+It changes nothing: a person moves the constant in `grammar.py` and cites
+the record. Under 8 videos a side it says *thin*. `tests/test_calibrate.py`.
+
 ## Architecture
 
 Pixels are touched exactly once. `media.load()` decodes to 48×27 RGB at
