@@ -240,7 +240,7 @@ def _session() -> dict:
         "beats": [{**bt, "shots": [shot(x) for x in bt["shots"]]} for bt in b["beats"]],
     }
     tl = timeline.build(b, CLIPS, _track())
-    tl["frame"] = export.frame_size(tl["items"], CLIPS)
+    tl["frame"] = export.frame_size(tl["items"], CLIPS, _want())
     last = SESSION.last_active()
     ghosts = []
     cuts = seams.check(tl["items"], CLIPS) if b else []
@@ -862,27 +862,95 @@ def api_moment_chat(req: MomentReq) -> dict:
 SUGGESTED: dict = {}     # clip ids -> suggestions, so a revisit doesn't ask again
 
 
+def _portrait_share() -> float:
+    """How much of the usable footage was filmed upright, by seconds."""
+    up = total = 0.0
+    for sh in _pool():
+        c = CLIPS.get(sh.clip_id) or {}
+        d = sh.end - sh.start
+        total += d
+        if c.get("height", 0) > c.get("width", 0):
+            up += d
+    return up / total if total else 0.0
+
+
+def _want() -> str | None:
+    """The frame the creator picked up front (brief.FORMATS), if any."""
+    pr = PROJECT["p"]
+    return ((pr.brief or {}).get("style") or {}).get("format") if pr else None
+
+
+@app.get("/api/brief/setup")
+def api_brief_setup() -> dict:
+    """What the up-front popup shows: the frame the footage suggests, the
+    looks, and the lengths the slider knows -- defaults only, nothing chosen."""
+    with LOCK:
+        if not CLIPS:
+            raise HTTPException(409, "Add clips first.")
+        about = pitch.guess(list(CLIPS.values())) or "My video"
+        marks = brief.length_marks(_usable_s(), about)
+        share = _portrait_share()
+        return {"format": brief.suggest_format(share, marks["max"]), "portrait_share": round(share, 2),
+                "formats": [{"key": k, "label": v, "seconds": round(brief.length_for(k, marks))} for k, v in brief.FORMATS.items()],
+                "look": (_direction() or {}).get("style", {}).get("look") or "cozy",
+                "looks": looks.public(), "about": about}
+
+
+class BriefAutoReq(BaseModel):
+    format: str | None = None
+    look: str | None = None
+
+
 @app.post("/api/brief/auto")
-def api_brief_auto() -> dict:
-    """No questions (sarah, 2026-10-07: "build" -- skip the popup): what the
-    video is comes from the clips, its length is the suggested one, and it
-    has captions. All changeable in Frames (Length, Captions). No model."""
+def api_brief_auto(req: BriefAutoReq | None = None) -> dict:
+    """Two picks and no more (the format and the look, plan step 2; the rest
+    was dropped by sarah on 2026-10-07): what the video is comes from the
+    clips, its length from the format, captions on, the pace read from the
+    footage. All changeable in Frames. No model."""
     pr = PROJECT["p"]
     if pr is None:
         raise HTTPException(409, "Open a project first.")
+    req = req or BriefAutoReq()
+    if req.format is not None and req.format not in brief.FORMATS:
+        raise HTTPException(422, "format is short, tall or wide")
+    if req.look is not None and req.look not in brief.LOOK_IDS:
+        raise HTTPException(422, "no such look")
     with LOCK:
         about = pitch.guess(list(CLIPS.values())) or "My video"
         marks = brief.length_marks(_usable_s(), about)
         # the tempo the footage asks for (sarah, 2026-10-07), not a question
         feel = tempo.read(list(CLIPS.values()), cut.for_story(PLAN["plan"]))
-        style = {"seconds": marks["seconds"], "captions": "describe", "pace": feel["pace"]}
+        fmt = req.format or brief.suggest_format(_portrait_share(), marks["max"])
+        style = {"seconds": brief.length_for(fmt, marks), "captions": "describe", "pace": feel["pace"],
+                 "format": fmt, "look": req.look or "cozy"}
         pr.brief = {"message": about, "style": brief.clean_style(style) or {}, "tempo": feel["why"],
-                    "said": f"about {brief.say_length(marks['seconds'])} · {tempo.NAMES[feel['pace']].lower()} · captions",
+                    "said": f"{brief.FORMATS[fmt].split(' ·')[0]} · about {brief.say_length(style['seconds'])} · "
+                            f"{tempo.NAMES[feel['pace']].lower()} · {looks.get(style['look'])['name']} · captions",
                     "at": time.time()}
         # the pace is known now: start fetching the free tracks for it, so the
         # bed under the story lands in seconds rather than minutes (bed.py)
         if musiclib.STATE["status"] != "ready" and os.environ.get("VIBECUT_BED", "1") != "0":
             bed.prefetch(feel["pace"])
+        return _session()
+
+
+class FormatReq(BaseModel):
+    format: str
+
+
+@app.post("/api/format")
+def api_format(req: FormatReq) -> dict:
+    """The frame, changed in Frames: short / tall (vertical) or wide. Not a
+    board op (nothing in the cut moves), so not in the log; the preview's
+    stage and the export follow it at once."""
+    if req.format not in brief.FORMATS:
+        raise HTTPException(422, "format is short, tall or wide")
+    pr = PROJECT["p"]
+    if pr is None:
+        raise HTTPException(409, "Open a project first.")
+    with LOCK:
+        pr.brief = {**(pr.brief or {"message": "", "said": "", "at": time.time()}),
+                    "style": {**((pr.brief or {}).get("style") or {}), "format": req.format}}
         return _session()
 
 
@@ -1240,17 +1308,18 @@ def _words_as_asked(force: bool = False) -> None:
     answer = style.get("captions")
     if force and answer not in ("describe", "transcribe"):
         answer = "describe"
-    if not b or b.get("overlays") or not (d or force):
+    if not b or b.get("overlays") or (b.get("look") and not force) or not (d or force):
         return
     said = (d.get("text") or "").split("\n")[0].strip()
     found = places.lookup([c.get("gps") for c in CLIPS.values()]) if answer in ("describe", None, "day") else {}
     ops, notes = brief.caption_ops(b, CATALOG["cat"], answer, said if len(said) <= 48 else None, said,
-                                   look=style.get("caption_look"), clips=CLIPS, places=found)
+                                   look=style.get("look") or style.get("caption_look"), clips=CLIPS, places=found)
     if not ops:
         return
     n = sum(o["op"] == "add_overlay" for o in ops)
     what = {"transcribe": "subtitles of what's said", "none": "words"}.get(answer or "", "captions: the time, the place and what's happening")
-    reply = f"Added {n} caption{'s' * (n != 1)} — {what}. Click one to retype it."
+    reply = (f"Added {n} caption{'s' * (n != 1)} — {what}. Click one to retype it." if n
+             else f"The {looks.get(ops[0]['look'])['name']} look, as you picked.")
     if notes:
         reply += " " + " ".join(notes)
     SESSION.add({"kind": "direct", "text": "Captions, as you asked", "ops": ops, "reply": reply},
@@ -1432,7 +1501,7 @@ def api_export(req: ExportReq) -> dict:
             title = next((o["text"] for o in SESSION.board.get("overlays", []) if o["kind"] == "title"), None)
             job = export.create(looks.camera(tl["items"], SESSION.board), dict(CLIPS), title or SESSION.board.get("name", ""),
                                 track.path if track else None, _style(SESSION.board, for_export=True),
-                                mix=SESSION.board.get("music"), joins=SESSION.board.get("joins"))
+                                mix=SESSION.board.get("music"), joins=SESSION.board.get("joins"), want=_want())
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
         return job.public()
@@ -1683,7 +1752,7 @@ def api_ref_card(rid: str) -> dict:
         b = SESSION.board
         landscape = None
         if b:
-            fr = export.frame_size(timeline.layout(b), CLIPS)
+            fr = export.frame_size(timeline.layout(b), CLIPS, _want())
             landscape = fr["w"] > fr["h"]
         try:
             out = reference.card(rid, _grid(), landscape)

@@ -14,6 +14,7 @@ import { Keys } from './components/Keys'
 import { Player } from './components/Player'
 import { PauseChat } from './components/PauseChat'
 import { PaceButton } from './components/PaceButton'
+import { Setup, type SetupData } from './components/Setup'
 import { LengthButton } from './components/LengthButton'
 import type { OverlayEdit } from './components/OverlayCanvas'
 import { Menu, SwapPicker, type MenuItem } from './components/Menus'
@@ -311,11 +312,21 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   // say it (day / trip, what's in them), and the questions open straight away.
   // No questions either (sarah, 2026-10-07): the suggested length, captions
   // on, straight to the stories. Length and Captions are in Frames.
+  // Two picks remain (2026-10-10): the frame and the look, in one popup
+  // with the footage's own defaults; "Make my video" builds the rest.
   const autoBrief = useRef(false)
+  const [setup, setSetup] = useState<{ data: SetupData | null; busy: boolean } | null>(null)
   const startQuestions = () => {
-    if (asking || autoBrief.current) return
+    if (asking || autoBrief.current || setup) return
+    setSetup({ data: null, busy: false })
+    api.setup().then((d) => setSetup((x) => x && { ...x, data: d }), (e) => { note((e as Error).message); setSetup(null) })
+  }
+  const makeIt = (format: string, look: string) => {
+    if (autoBrief.current) return
     autoBrief.current = true
-    api.autoBrief().then(setSession, (e) => note((e as Error).message)).finally(() => { autoBrief.current = false })
+    setSetup((x) => x && { ...x, busy: true })
+    api.autoBrief({ format, look }).then((s) => { setSession(s); setSetup(null) }, (e) => { note((e as Error).message); setSetup((x) => x && { ...x, busy: false }) })
+      .finally(() => { autoBrief.current = false })
   }
   // Opening a project that's waiting on them: the questions are simply there.
   useEffect(() => {
@@ -950,6 +961,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
 
   return (
     <>
+    {setup && <Setup data={setup.data} busy={setup.busy} onDone={makeIt} onCancel={() => { if (!setup.busy) setSetup(null) }} />}
     {asking && <StyleQuestions questions={asking.questions} tailored={asking.tailored}
                                onDone={answered} onCancel={() => setAsking(null)} />}
     <div className="grid h-full grid-rows-[48px_1fr]">
@@ -1043,6 +1055,16 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                               }}
                               className="max-w-[16rem] truncate whitespace-nowrap rounded-md border border-line px-2 py-1 text-[11px] text-zinc-300 hover:bg-raised disabled:opacity-60">
                         {session.bed?.stage === 'looking' ? `Finding music…${session.bed.total ? ` ${session.bed.done}/${session.bed.total}` : ''}` : session.music ? `Music · ${session.music.title}` : 'Music off'}
+                      </button>
+                      <button type="button" title="The frame the video is for: vertical (short or vlog) or wide 16:9. The export follows it."
+                              onClick={async () => {
+                                const order = ['short', 'tall', 'wide'] as const
+                                const cur = brief?.style?.format ?? (tl.frame && tl.frame.w > tl.frame.h ? 'wide' : 'tall')
+                                const next = order[(order.indexOf(cur as typeof order[number]) + 1) % order.length]
+                                try { setSession(await api.format(next)) } catch (e) { note((e as Error).message) }
+                              }}
+                              className="whitespace-nowrap rounded-md border border-line px-2 py-1 text-[11px] text-zinc-300 hover:bg-raised">
+                        {({ short: 'Short · vertical', tall: 'Vlog · vertical', wide: 'Wide · 16:9' } as Record<string, string>)[brief?.style?.format ?? (tl.frame && tl.frame.w > tl.frame.h ? 'wide' : 'tall')]}
                       </button>
                       <PaceButton pace={brief?.style?.pace} why={brief?.tempo}
                                   story={session.board?.option === session.proposals?.recommended ? session.proposals?.why : undefined}

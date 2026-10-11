@@ -45,7 +45,13 @@ The stages:
    couldn't be read, with *Try again*; the clip grid. Nothing is copied,
    moved or changed (files the locator can't find on disk are copied into
    the cache). The one action: *What's this video? →*.
-2. **Brief** — one line, then the style questions (length, pace, opening,
+2. **Brief** — since 2026-10-10 two picks in one popup: the frame (Short ·
+   vertical under 1½ min, Vlog · vertical, Wide · 16:9; the footage's
+   upright share suggests one) and the look (the seven below; Cozy by
+   default). "Make my video" reads the rest from the clips: what it is,
+   the length the frame asks for, the pace, captions on. The frame can be
+   changed in Frames (a chip; the stage and the export follow); the look
+   under Captions. Before that it was one line, then the style questions (length, pace, opening,
    focus). Opt-in side doors: *Follow my voiceover* (an SRT or script
    becomes a fourth proposal), *Talking to camera* (macOS).
 3. **Rough cut** — the gate: what would be thrown away and trimmed, with

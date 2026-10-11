@@ -160,6 +160,19 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   judged on one real shoot (42 clips, 3 references). Every weight is a
   guess; the selector has no model behind it (no key on this Mac).
 
+- **Two picks up front** (plan of 2026-10-10, step 2; `Setup.tsx`,
+  `/api/brief/setup`, `/api/brief/auto {format, look}`, `/api/format`):
+  after Footage's "Looks good" one popup asks the **frame** (short ·
+  vertical ≤ `SHORT_MAX_S` 90 s / tall · vertical vlog / wide · 16:9;
+  default from the upright share of the footage, `brief.suggest_format`)
+  and the **look** (the seven of `looks/*.json`, default cozy), then "Make
+  my video". They travel as `style.format` / `style.look`: the frame sets
+  `export.frame_size(..., want)` for the stage and the export (a chip in
+  Frames cycles it; not a board op, so not in the log) and the length
+  (`brief.length_for`); the look is the first op when the story is chosen
+  (`caption_ops` takes a look id, and dresses the video even with no
+  captions). `tests/test_format.py`. `StyleQuestions.tsx` stays only for
+  the chat's first message.
 - **Style questions** (`web/backend/brief.py`, `StyleQuestions.tsx`,
   `web/frontend/src/brief.ts`): straight after Footage's "Looks good" (no
   "What's this video about?" box since 2026-10-06, sarah; the description is

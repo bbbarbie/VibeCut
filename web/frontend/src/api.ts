@@ -1,3 +1,4 @@
+import type { SetupData } from './components/Setup'
 import type { Capabilities, CutData, ExportJob, Job, LengthSlider, LookFit, PrefClass, Project, ProjectMeta, RefCard, RefJob, RefSummary, Session, StyleAnswers, StyleQuestion, TalkState } from './types'
 
 export type MomentInfo = { header: string; key: string; llm: boolean; estimate: { tokens_in: number; usd: [number, number] } }
@@ -62,7 +63,9 @@ export const api = {
     j<CutData>(post('/api/cut/override', { target, action, start: range?.[0] ?? null, end: range?.[1] ?? null })),
   approve: () => j<Session>(post('/api/cut/approve', {})),
   chat: (message: string, style?: StyleAnswers) => j<Session>(post('/api/chat', { message, style: style ?? null })),
-  autoBrief: () => j<Session>(post('/api/brief/auto', {})),
+  autoBrief: (picks?: { format: string; look: string }) => j<Session>(post('/api/brief/auto', picks ?? {})),
+  setup: () => j<SetupData>(fetch('/api/brief/setup')),
+  format: (format: string) => j<Session>(post('/api/format', { format })),
   captions: (on: boolean) => j<Session>(post('/api/captions', { on })),
   bed: (on: boolean) => j<Session>(post('/api/bed', { on })),
   pace: (pace: string) => j<Session>(post('/api/pace', { pace })),
