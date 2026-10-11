@@ -247,7 +247,14 @@ def pick_music(fp: dict, need_s: float, hook_s: float, moods: list[str] | None =
                progress=None) -> dict | None:
     """The best commercially usable track for this edit, with its in-point and beat grid."""
     src = ov.OpenverseSource(moods or MOODS, progress=progress)
-    tracks = [t for t in src.list() if t.duration >= need_s + 8]
+    return pick_from(src.list(), fp, need_s, hook_s)
+
+
+def pick_from(pool: list[mu.Track], fp: dict, need_s: float, hook_s: float) -> dict | None:
+    """The best of `pool` for this edit (any source: Openverse, the creator's
+    own folder), with its in-point and beat grid. None when nothing is long
+    enough or has a steady tempo."""
+    tracks = [t for t in pool if t.duration >= need_s + 8]
     if not tracks:
         return None
     lo, hi = fp["bpm"]

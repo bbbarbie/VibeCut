@@ -113,9 +113,13 @@ def beat_times(grid: dict, until: float) -> np.ndarray:
     return np.arange(grid["phase"], until + period, period)
 
 
-def retime(b: dict, cat, pace: dict | None, grid: dict | None) -> dict:
-    """Retime every shot of the board in place. Returns what happened."""
-    entries = [(bt, e) for bt in b["beats"] if not bt.get("line") for e in bt["shots"] if not e.get("gap")]
+def retime(b: dict, cat, pace: dict | None, grid: dict | None, keep: set[str] | None = None) -> dict:
+    """Retime every shot of the board in place. Returns what happened.
+    Shots in `keep` (someone talking: a beat must not cut a sentence) hold
+    their window; what follows them still moves onto the beat."""
+    keep = keep or set()
+    entries = [(bt, e) for bt in b["beats"] if not bt.get("line")
+               for e in bt["shots"] if not e.get("gap") and e["id"] not in keep]
     held = sum(1 for bt in b["beats"] if bt.get("line"))
     before = [e["end"] - e["start"] for _, e in entries]
     want = targets(len(entries), pace) if pace else before
@@ -136,7 +140,7 @@ def retime(b: dict, cat, pace: dict | None, grid: dict | None) -> dict:
         for bt in b["beats"]:
             for e in bt["shots"]:
                 d = e["end"] - e["start"]
-                if e.get("gap") or bt.get("line"):
+                if e.get("gap") or bt.get("line") or e["id"] in keep:
                     t += d
                     continue
                 s = cat.get(e["id"])
@@ -149,7 +153,7 @@ def retime(b: dict, cat, pace: dict | None, grid: dict | None) -> dict:
                         snapped += 1
                 t += e["end"] - e["start"]
     after = [e["end"] - e["start"] for _, e in entries]
-    return {"shots": len(entries), "held_by_voice": held, "filmed_too_short": short, "on_beat": snapped,
+    return {"shots": len(entries), "held_by_voice": held, "kept_talking": len(keep), "filmed_too_short": short, "on_beat": snapped,
             "median_before": round(float(np.median(before)), 2) if before else None,
             "median_after": round(float(np.median(after)), 2) if after else None,
             "target_median": pace["median_s"] if pace else None}
@@ -176,7 +180,7 @@ def apply(b: dict, op: dict, cat) -> None:
     report = None
     if "pace" in traits or "beat" in traits:
         report = retime(b, cat, snap.get("pace") if "pace" in traits else None,
-                        op.get("grid") if "beat" in traits else None)
+                        op.get("grid") if "beat" in traits else None, set(op.get("keep") or []))
     look = None
     if "look" in traits:
         if not op.get("lut"):

@@ -146,6 +146,27 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     return () => { live = false; transport.stop() }
   }, [id])
   useEffect(() => { transport.setItems(tl.items, tl.total) }, [tl])
+  // Music by default is picked in the background (online it can take a
+  // minute); poll until it lands as a turn, then offer Undo for it.
+  const bedStage = session?.bed?.stage
+  useEffect(() => {
+    if (bedStage !== 'looking') return
+    let stop = false
+    const timer = window.setInterval(async () => {
+      try {
+        const s = await api.session()
+        if (stop) return
+        setSession(s)
+        if (s.bed?.stage !== 'looking') {
+          window.clearInterval(timer)
+          if (s.bed?.stage === 'done') offerUndo(s)
+          else if (s.bed?.why) note(s.bed.why)
+        }
+      } catch { /* the next tick tries again */ }
+    }, 1500)
+    return () => { stop = true; window.clearInterval(timer) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bedStage])
   useEffect(() => {
     const byId = new Map(clips.map((c) => [c.id, c.samples]))
     transport.setSamples((id, t) => {
@@ -1011,6 +1032,17 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                               }}
                               className="whitespace-nowrap rounded-md border border-line px-2 py-1 text-[11px] text-zinc-300 hover:bg-raised">
                         Captions {ovData.items.length ? 'on' : 'off'}
+                      </button>
+                      <button type="button" aria-pressed={!!session.music} disabled={session.bed?.stage === 'looking'}
+                              title={session.music ? `${session.music.title} — click to take the music out`
+                                : session.bed?.stage === 'looking' ? `Finding a track${session.bed.source ? ` from ${session.bed.source}` : ''}…`
+                                : session.bed?.why || 'Find a free track that fits this edit and put the cuts on its beat'}
+                              onClick={async () => {
+                                try { const r = await api.bed(!session.music); setSession(r); if (session.music) offerUndo(r) }
+                                catch (e) { note((e as Error).message) }
+                              }}
+                              className="max-w-[16rem] truncate whitespace-nowrap rounded-md border border-line px-2 py-1 text-[11px] text-zinc-300 hover:bg-raised disabled:opacity-60">
+                        {session.bed?.stage === 'looking' ? 'Finding music…' : session.music ? `Music · ${session.music.title}` : 'Music off'}
                       </button>
                       <PaceButton pace={brief?.style?.pace} why={brief?.tempo}
                                   story={session.board?.option === session.proposals?.recommended ? session.proposals?.why : undefined}

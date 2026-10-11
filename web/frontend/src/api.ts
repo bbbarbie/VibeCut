@@ -64,6 +64,7 @@ export const api = {
   chat: (message: string, style?: StyleAnswers) => j<Session>(post('/api/chat', { message, style: style ?? null })),
   autoBrief: () => j<Session>(post('/api/brief/auto', {})),
   captions: (on: boolean) => j<Session>(post('/api/captions', { on })),
+  bed: (on: boolean) => j<Session>(post('/api/bed', { on })),
   pace: (pace: string) => j<Session>(post('/api/pace', { pace })),
   guess: () => j<{ about: string }>(fetch('/api/brief/guess')),
   suggestions: () => j<{ suggestions: string[]; source: string }>(fetch('/api/brief/suggestions')),

@@ -26,7 +26,7 @@ from pydantic import BaseModel
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, brief, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, bed, brief, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import Workflow, WorkflowError
 
@@ -270,6 +270,7 @@ def _session() -> dict:
         "workflow": WORKFLOW.public(),
         "cut": cut.summary(PLAN["plan"]) if PLAN["plan"] else None,
         "music": _music_public(),
+        "bed": BED["job"].public() if BED["job"] else None,
         "mix": _mix_public(b, tl),
         "preferences": PREFS.public(SESSION),
         "voiceover": _voiceover_public(),
@@ -1122,6 +1123,82 @@ def api_ops(req: OpsReq) -> dict:
         if [o.get("op") for o in req.ops] == ["choose_option"]:
             _drop_repeats()
             _words_as_asked()
+            _bed_start()
+        return _session()
+
+
+# --------------------------------------------------------------------------
+# the bed: music by default, cuts on its beat (bed.py)
+# --------------------------------------------------------------------------
+
+BED: dict = {"job": None}
+BED_TEXT = "Music and the beat"
+
+
+def _bed_start(force: bool = False) -> None:
+    """A story was just chosen: find a track and put the cuts on its beat, as
+    one undoable turn that lands when the pick is ready (online it can take
+    a minute). Not for a Remix (has its own), a talking-head cut or a
+    voiceover story (the voice sets time), nor when music is already under
+    the edit -- unless the Music switch asks (`force`)."""
+    b = SESSION.board
+    if not b or os.environ.get("VIBECUT_BED", "1") == "0":   # VIBECUT_BED=0: tests that must not go online
+        return
+    if not force:
+        if b.get("option") in ("remix", "talk") or b.get("music") is not None:
+            return
+        if any(bt.get("line") for bt in b["beats"]):
+            return
+    job = BED["job"]
+    if job and job.stage == "looking":
+        return
+    pr = PROJECT["p"]
+    pace = ((pr.brief or {}).get("style") or {}).get("pace") if pr else None
+    own = musiclib.STATE["tracks"] if musiclib.STATE["status"] == "ready" else None
+    need_s = timeline.build(b, CLIPS, None)["total"]
+    talking = tempo.talking(list(CLIPS.values()), _pool())
+    board = copy.deepcopy(b)
+
+    def on_done(job: bed.Job) -> None:
+        if job.stage != "done" or not job.result:
+            return
+        with LOCK:
+            if BED["job"] is not job or SESSION.board is None:
+                return
+            if SESSION.board.get("music") is not None and not force:
+                job.stage, job.why = "nothing", "Music was put under the edit meanwhile; kept yours."
+                return
+            mx = job.result["music"]
+            t = mx["track"]
+            if not any(x.id == t.id for x in musiclib.STATE["tracks"]):
+                musiclib.STATE["tracks"].append(t)
+            musiclib.use(t.id)
+            SESSION.add({"kind": "direct", "text": BED_TEXT, "ops": job.result["ops"],
+                         "reply": job.result["reply"]}, CATALOG["cat"], _make_proposals)
+        _save()
+
+    BED["job"] = bed.start(board, CATALOG["cat"], pace, own, need_s, talking, on_done)
+
+
+class BedReq(BaseModel):
+    on: bool
+
+
+@app.post("/api/bed")
+def api_bed(req: BedReq) -> dict:
+    """The Music switch in Frames. Off: one undoable turn that takes the bed
+    away (the cuts stay where the beat put them). On: find a track again."""
+    with LOCK:
+        if not SESSION.board:
+            raise HTTPException(409, "Choose a story first.")
+        if req.on:
+            _bed_start(force=True)
+        else:
+            musiclib.use(None)
+            SESSION.add({"kind": "direct", "text": "No music",
+                         "ops": [{"op": "set_music", "track": None}],
+                         "reply": "Music off — the edit plays with its own sound. Undo puts the track back."},
+                        CATALOG["cat"], _make_proposals)
         return _session()
 
 

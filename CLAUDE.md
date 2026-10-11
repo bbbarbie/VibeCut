@@ -240,6 +240,20 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   - **Voiceover mode** (`web/backend/voiceover.py`): opt-in fourth proposal
     from the creator's SRT or script. See the amended non-goal below.
 
+- **The bed** (`web/backend/bed.py`, `/api/bed`, the Music switch in
+  Frames; plan of 2026-10-10, step 1): choosing a story puts music under
+  it and moves the cuts onto its beat, one undoable turn that lands when
+  the pick is ready (background job, `session.bed`). Track from the
+  creator's folder, else Openverse by moods the pace suggests
+  (`PACE_BPM`, `MOODS` — priors); scored by `remix.pick_from` (the Remix
+  picker, now source-agnostic); drop at the end of the first shot (`HOOK_S`
+  cap 8 s). Beat snap via `apply_style` traits=["beat"] with the grid in
+  edit time and `keep` = talking shots (`restyle.retime` gained `keep`);
+  `set_music` at `audiomix.MUSIC_GAIN`, original 1.0, ducked to
+  `TALK_DUCK` under talking. Not for remix / talk / voiceover boards.
+  `timeline.grid_of` now subtracts the music in-point (every Remix grid was
+  off before). `VIBECUT_BED=0` keeps tests offline. `tests/test_bed.py`.
+  Not yet judged on real footage.
 - **Sound as glue** (`web/backend/audiomix.py`; research
   `design/research/08-fluency-and-motion-ux.md`, P0/P1). One numpy mixer builds the
   edit's whole sound; the preview plays it (picture muted, rate-nudged to
