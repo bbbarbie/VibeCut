@@ -47,9 +47,9 @@ LIMIT_S = 90.0            # the first stretch of each video is enough for the pe
 # guess next to the proposal. (lo, hi) = the OK band; outside it is WARN/BAD.
 # `good_is` says which side a well-cut edit is expected on when one-sided.
 CURRENT = {
-    "rhythm_cv": {"ok": (0.35, 1.4), "good_is": "inside"},
-    "cut_on_motion": {"ok": (0.55, None), "good_is": "above"},
-    "jl_cuts": {"ok": (None, 0.45), "good_is": "below"},
+    "rhythm_cv": {"ok": (0.6, 1.4), "good_is": "inside"},          # 2026-10-11 record
+    "cut_on_motion": {"ok": (0.45, None), "good_is": "above"},      # 2026-10-11 record
+    "jl_cuts": {"ok": (None, 0.6), "good_is": "below"},             # 2026-10-11 record
     "continuity": {"ok": (None, 0.0), "good_is": "below"},
     "duplicates": {"ok": (None, 0.0), "good_is": "below"},
     "first_cut": {"ok": (None, 5.0), "good_is": "below"},

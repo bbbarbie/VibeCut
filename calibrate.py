@@ -32,6 +32,16 @@ def _files(paths: list[str], d: str | None) -> list[str]:
     return [p for p in out if os.path.isfile(p)]
 
 
+def _ytdlp() -> list[str]:
+    """The venv's yt_dlp when it has one (kept current: YouTube answers an old
+    yt-dlp with 403s), else whatever yt-dlp is on the path."""
+    try:
+        import yt_dlp  # noqa: F401
+        return [sys.executable, "-m", "yt_dlp"]
+    except ImportError:
+        return ["yt-dlp", "--no-update"]
+
+
 def _fetch(links_file: str, label: str) -> list[str]:
     """Links to files at ≤480p, whole (a sectioned download goes through
     ffmpeg straight to the CDN and gets a 403 on this yt-dlp); the harness
@@ -46,7 +56,7 @@ def _fetch(links_file: str, label: str) -> list[str]:
         target = d / (hashlib.sha1(url.encode()).hexdigest()[:12] + ".mp4")   # stable across runs
         if not target.exists():
             print(f"  fetching {url}")
-            p = subprocess.run(["yt-dlp", "--no-update", "--no-playlist", "--quiet", "--no-warnings", "--no-part",
+            p = subprocess.run([*_ytdlp(), "--no-playlist", "--quiet", "--no-warnings", "--no-part",
                                 "-f", "b[height<=480][ext=mp4]/b[height<=480]/bv*[height<=480]+ba/b",
                                 "--merge-output-format", "mp4", "--write-info-json",
                                 "-o", str(target), "--", url],

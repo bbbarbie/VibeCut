@@ -22,3 +22,6 @@ design/mockups/assets/
 
 # look records are source, not generated data
 !web/backend/looks/*.json
+
+# calibration records are the numbers behind the thresholds
+!design/research/calibration/*.json

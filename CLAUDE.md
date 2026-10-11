@@ -451,7 +451,11 @@ Every new rule ships with a discrimination test or it does not ship.
 
 ## Known limits (upgrade path, in order)
 
-1. Thresholds are guesses — calibrate first.
+1. Thresholds are guesses — calibrate first. First record 2026-10-11
+   (`design/research/calibration/2026-10-11.md`, 18 vs 18): rhythm_cv,
+   cut_on_motion and jl_cuts moved; the bad side was one shoot's exports,
+   so it counts as "better than a guess", not done. Everything else
+   (joins, trim, reject, looks, bed, tempo) is still a prior.
 2. Motion is frame-differencing, not optical flow: no direction, so the
    180° rule can't be checked.
 3. No face detection: shot size and subtitle-over-face unmeasured.
