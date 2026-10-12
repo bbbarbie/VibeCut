@@ -95,18 +95,26 @@ def credit(rec: dict) -> str:
     """The line a CC BY / BY-SA licence asks for. CC0 needs none; it is listed anyway."""
     lic = rec["license"].upper().replace("BY", "CC BY").replace("CC0", "CC0")
     ver = f" {rec['license_version']}" if rec.get("license_version") else ""
-    return f"“{rec['title']}” by {rec['creator']} ({lic}{ver}) — {rec['page']}"
+    page = f" — {rec['page']}" if rec.get("page") else ""
+    return f"“{rec['title']}” by {rec['creator']} ({lic}{ver}){page}"
 
 
 def search(query: str, kind: str = "music", pages: int = 1, source: str | None = None) -> list[dict]:
-    """Search once per query (cached on disk), keeping only usable licences."""
+    """Search once per query (cached on disk), keeping only usable licences.
+
+    Only an answer is cached. A search that failed (offline, a certificate
+    the machine can't check) is not "no results": caching it as one kept
+    music off for a week after the network came back."""
     d = cache_dir() / "search"
     d.mkdir(parents=True, exist_ok=True)
     key = re.sub(r"[^a-z0-9]+", "_", f"{kind}_{source or ''}_{query}".lower())[:80]
     f = d / f"{key}.json"
     if f.exists() and time.time() - f.stat().st_mtime < SEARCH_TTL_S:
-        return json.loads(f.read_text())
+        cached = json.loads(f.read_text())
+        if cached:
+            return cached
     rows: list[dict] = []
+    failed = False
     for page in range(1, pages + 1):
         params = {"q": query, "license": ",".join(USABLE), "page_size": PAGE, "page": page}
         if kind == "music":
@@ -118,8 +126,14 @@ def search(query: str, kind: str = "music", pages: int = 1, source: str | None =
         try:
             rows += _get(params).get("results", [])
         except Exception:  # noqa: BLE001 -- offline or rate-limited: return what the cache has
+            failed = True
             break
     out = parse(rows, kind)
+    if failed and not out:
+        try:   # an older answer beats none, however stale
+            return json.loads(f.read_text())
+        except (OSError, ValueError):
+            return []
     f.write_text(json.dumps(out))
     return out
 
