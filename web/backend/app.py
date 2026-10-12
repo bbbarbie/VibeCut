@@ -32,7 +32,7 @@ from . import board as bd
 from . import projects as pj
 from . import audiomix, bed, brief, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
-from .workflow import Workflow, WorkflowError
+from .workflow import GATE, Workflow, WorkflowError
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -1705,15 +1705,32 @@ def api_remix_start(req: RemixReq) -> dict:
         # and its track joins the music list so the timeline knows the beat
         with LOCK:
             r = job.result or {}
+            if not r:
+                return
             mx = r.get("music")
             if mx and not any(t.id == mx["track"].id for t in musiclib.STATE["tracks"]):
                 musiclib.STATE["tracks"].append(mx["track"])
             if mx:
                 musiclib.use(mx["track"].id)
+            # From the home page (the front door, plan step 4) the remix *is*
+            # the edit: "Make it" was the creator's decision on the footage, so
+            # the gate is passed in their name, and the brief is the reels'
+            # own frame and length so the stage reads "story" and the export
+            # matches the file they just watched.
+            if WORKFLOW.state == GATE:
+                WORKFLOW.approve("user", f"remix made from {len(job.refs)} reference(s)")
+            pr = PROJECT["p"]
+            fp = r.get("fingerprint") or {}
+            if pr is not None and not pr.brief:
+                pr.brief = {"message": f"A short in the style of {len(job.refs)} reel{'s' * (len(job.refs) != 1)}",
+                            "style": {"format": "short" if fp.get("vertical", True) else "wide",
+                                      "seconds": float(fp.get("duration") or 30.0), "captions": "none"},
+                            "said": f"Remix · {remix.describe(fp)}" if fp else "Remix", "at": time.time()}
             SESSION.add({"kind": "direct", "text": f"Remix in the style of {len(job.refs)} reference(s)",
                          "ops": remix.session_ops(r),
                          "reply": f"{r['plan'].duration:.0f} s, {len(r['plan'].picks)} shots" if r.get("plan") else ""},
                         CATALOG["cat"], _make_proposals)
+        _save()
 
     job = remix.start(refs, clips, cut_now, req.model_dump(), on_done)
     return job.public()

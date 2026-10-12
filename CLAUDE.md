@@ -142,8 +142,21 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   Everything else is a guess. The reference's frames and audio never reach an export.
 
 - **Remix** (`web/backend/remix.py`, `select.py`; `cutgrammar/openverse.py`;
-  CLI only so far: `python -m web.backend.remix --ref <link|file>… --footage
-  <folder>`). Reference reels + the shoot → one finished short, server-side,
+  CLI: `python -m web.backend.remix --ref <link|file>… --footage <folder>`;
+  since 2026-10-11 (plan step 4) also the **front door**: the home page's
+  start box has "Make it like a reel you love" under the picked clips —
+  links ride with the clips (`drop.handOffRefs`), the project starts a
+  Remix the moment the clips are read (`Remix.tsx` `autoStart`), and when
+  it lands `api_remix_start.on_done` passes the gate in the creator's name
+  and writes a brief from the fingerprint (frame, length), so the stage
+  reads story and the two-pick popup stays shut. **Judged picks**
+  (`select.judge`, `llm.rank_shots`): with a key, Claude sees one index
+  frame per candidate — the rules' picks plus `RUNNERS_UP` per session —
+  and names which to keep; the rules still set the pool, quota and
+  windows; no key / error → the rules' picks, and the plan's notes say
+  when it was judged. `VIBECUT_REMIX_JUDGE=0` turns it off. Not tried
+  against the live model. `select.time_windows` no longer indexes an
+  empty target list (tiny shoots). `tests/test_frontdoor.py`.) Reference reels + the shoot → one finished short, server-side,
   no browser. The references' styles (Borrow a feeling) are merged into a
   fingerprint (median shot length + arc, hook hold, tempo range, energy arc,
   length); `select.py` picks that many moments — distinctive labels (IDF

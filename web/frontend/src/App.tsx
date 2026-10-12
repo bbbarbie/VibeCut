@@ -24,7 +24,7 @@ import { Shelf } from './components/Shelf'
 import { SmoothButton, Story, type PlayItem, type Selection } from './components/Story'
 import { Timeline, type Marks } from './components/Timeline'
 import { Footage, type Importing } from './components/Footage'
-import { fromDataTransfer, fromInput, takeHandoff, type Picked } from './drop'
+import { fromDataTransfer, fromInput, takeHandoff, takeRefs, type Picked } from './drop'
 import { bytes, uid } from './format'
 import { clock, locate, toSource } from './sequence'
 import { cutWhilePlaying, step } from './snap'
@@ -317,7 +317,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const autoBrief = useRef(false)
   const [setup, setSetup] = useState<{ data: SetupData | null; busy: boolean } | null>(null)
   const startQuestions = () => {
-    if (asking || autoBrief.current || setup) return
+    if (asking || autoBrief.current || setup || frontDoor.current || remixing) return
     setSetup({ data: null, busy: false })
     api.setup().then((d) => setSetup((x) => x && { ...x, data: d }), (e) => { note((e as Error).message); setSetup(null) })
   }
@@ -427,11 +427,24 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   }, [importing, runImport, say, stage, shown, session?.board])
 
   // Clips picked on the home page before this video existed: read them now.
+  // Reels pasted beside them (the front door, plan step 4) wait until the
+  // clips are read, then a Remix starts with them and lands as the story.
+  const frontDoor = useRef<string[] | null>(null)
+  const [frontLinks, setFrontLinks] = useState<string | null>(null)
   useEffect(() => {
     if (opened !== 'ok') return
+    frontDoor.current = takeRefs()
     const p = takeHandoff()
     if (p?.length) importPicked(p)
   }, [opened]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!frontDoor.current || importing || !clips.length || stage === 'footage') return
+    const links = frontDoor.current.join('\n')
+    frontDoor.current = null
+    transport.stop(); videoRef.current?.pause(); stopQueue(); setMenu(null)
+    setFrontLinks(links)
+    setRemixing(true)
+  }, [importing, clips.length, stage]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const retryImport = async (paths: string[]) => {
     if (importing) return
@@ -1141,7 +1154,8 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       {help && <Keys onClose={() => setHelp(false)} />}
       {exporting && <Export tl={tl} overlays={ovData} parts={parts} music={session?.music?.title ?? null} style={session?.board?.style}
                             history={session?.exports ?? []} onClose={() => { setExporting(false); api.session().then(setSession).catch(() => {}) }} />}
-      {remixing && <Remix onClose={() => setRemixing(false)} onDone={remixDone} canLinks={caps.links} />}
+      {remixing && <Remix onClose={() => { setRemixing(false); setFrontLinks(null) }} onDone={remixDone} canLinks={caps.links}
+                          initialLinks={frontLinks ?? ''} autoStart={!!frontLinks} />}
       {referencing && <BorrowStyle onClose={() => setReferencing(false)} onRemix={openRemix}
                                    onApplied={(s) => { setSession(s); offerUndo(s); setReferencing(false); setPeek(null); setLevel('frames') }} />}
       {restart && <Confirm title="Start this video over?" action="Start over" danger onNo={() => setRestart(false)} onYes={startOver}

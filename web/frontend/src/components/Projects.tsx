@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
-import { fromDataTransfer, fromInput, handOff, mergePicked, type Picked } from '../drop'
+import { fromDataTransfer, fromInput, handOff, handOffRefs, mergePicked, type Picked } from '../drop'
 import { bytes, dur } from '../format'
 import { loadProfile } from '../profile'
 import { go } from '../router'
@@ -40,12 +40,17 @@ export function Projects() {
     catch (e) { setError((e as Error).message) }
   }
   const [picked, setPicked] = useState<Picked[]>([])
+  const [links, setLinks] = useState('')
   const [creating, setCreating] = useState(false)
   const create = async () => {
     if (!picked.length || creating) return
     setCreating(true)
-    try { const r = await api.createProject(''); handOff(picked); go({ kind: 'project', id: r.project.id, view: 'story' }) }
-    catch (e) { setError((e as Error).message); setCreating(false) }
+    try {
+      const r = await api.createProject('')
+      handOff(picked)
+      handOffRefs(links.split(/\s+/).map((x) => x.trim()).filter(Boolean))
+      go({ kind: 'project', id: r.project.id, view: 'story' })
+    } catch (e) { setError((e as Error).message); setCreating(false) }
   }
 
   // The whole page takes a drop, not just the box.
@@ -91,6 +96,7 @@ export function Projects() {
           {error && <Notice tone="bad" className="mt-4">{error} <button type="button" className="underline" onClick={load}>Try again</button></Notice>}
 
           <Start picked={picked} dragging={dragging} creating={creating} compact={!!list?.length}
+                 links={links} onLinks={setLinks}
                  onAdd={(more) => setPicked((p) => mergePicked(p, more))}
                  onRemove={(i) => setPicked((p) => p.filter((_, k) => k !== i))}
                  onCreate={create} />
@@ -150,10 +156,12 @@ function Card({ p, onOpen, onRename, onDelete }: { p: ProjectMeta; onOpen: () =>
 
 // The way in: drop clips or a folder anywhere on the page, or choose them.
 // What's picked shows as a row (remove one with ×); Create makes the video.
-function Start({ picked, dragging, creating, compact, onAdd, onRemove, onCreate }: {
+function Start({ picked, dragging, creating, compact, links, onLinks, onAdd, onRemove, onCreate }: {
   picked: Picked[]; dragging: boolean; creating: boolean; compact: boolean
+  links: string; onLinks: (s: string) => void
   onAdd: (p: Picked[]) => void; onRemove: (i: number) => void; onCreate: () => void
 }) {
+  const hasLinks = links.trim().length > 0
   const files = useRef<HTMLInputElement>(null)
   const folder = useRef<HTMLInputElement>(null)
   const size = picked.reduce((n, p) => n + p.file.size, 0)
@@ -182,7 +190,19 @@ function Start({ picked, dragging, creating, compact, onAdd, onRemove, onCreate 
           <p className="mt-1 font-serif text-[17px] text-zinc-200">{bytes(size)} · drop more, or{' '}
             <button type="button" className="text-accent hover:underline" onClick={() => files.current?.click()}>add more</button></p>
           <Thumbs picked={picked} onRemove={onRemove} />
-          <Button variant="primary" size="lg" className="mt-5" disabled={creating} onClick={onCreate}>{creating ? 'Creating…' : 'Create'}</Button>
+          {/* The front door for a short (plan step 4): paste the reels it should
+              feel like, and the video is made in their style as soon as the
+              clips are read -- their pace, length and music feel, never their frames. */}
+          <div className="mx-auto mt-5 max-w-[520px] text-left">
+            <label className="font-serif text-[15px] text-zinc-200">Make it like a reel you love <span className="text-muted">(optional)</span></label>
+            <textarea value={links} onChange={(e) => onLinks(e.target.value)} rows={hasLinks ? 3 : 1} spellCheck={false}
+                      placeholder="Paste one to three links — TikTok, Reels, Shorts — or files on this Mac"
+                      className="mt-1 w-full resize-none rounded-lg border border-line bg-ink px-3 py-2 font-mono text-[12px] text-zinc-200 outline-none placeholder:font-sans placeholder:text-zinc-500 focus:border-accent/60" />
+            {hasLinks && <p className="mt-1 text-[11px] text-muted">Their pace, length and the feel of their music; nothing of their footage. Free music with a credit line.</p>}
+          </div>
+          <Button variant="primary" size="lg" className="mt-4" disabled={creating} onClick={onCreate}>
+            {creating ? 'Creating…' : hasLinks ? 'Make a short like it' : 'Create'}
+          </Button>
         </>
       )}
     </div>

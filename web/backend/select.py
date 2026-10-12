@@ -321,5 +321,75 @@ def time_windows(plan: Plan, clips: dict[str, dict], targets: list[float], hook_
     for p in plan.hook:
         p.start, p.end, p.short = window(clips, p.shot, hook_s)
     seq = [p for s in plan.sessions for p in s]
-    for p, want in zip(seq, targets + [targets[-1]] * max(0, len(seq) - len(targets))):
+    # a tiny shoot can leave more picks than targets (or none at all): pad
+    # with the last target, else the hook's own length -- never index into nothing
+    pad = targets[-1] if targets else hook_s
+    for p, want in zip(seq, targets + [pad] * max(0, len(seq) - len(targets))):
         p.start, p.end, p.short = window(clips, p.shot, want)
+
+
+# --------------------------------------------------------------------------
+# judged (plan step 4): with a key, Claude sees one frame per candidate --
+# the rules' picks plus the next few runners-up in that session -- and says
+# which to keep. The rules still set the pool, the quota and the windows;
+# the model only chooses among what the rules already found good enough.
+# No key, an error or an odd answer: the rules' picks stand, and the plan
+# says so in its notes.
+# --------------------------------------------------------------------------
+
+RUNNERS_UP = 2       # extra candidates a session offers the judge, beyond its quota [prior]
+JUDGE_MIN = 3        # fewer candidates than this: nothing to judge
+
+
+def _frame(clips: dict[str, dict], s: sb.Shot) -> bytes | None:
+    from . import indexer
+    c = clips.get(s.clip_id) or {}
+    name = (s.thumb or "").rsplit("/", 1)[-1]
+    p = indexer.clip_dir(c.get("id", s.clip_id)) / name if name else None
+    try:
+        return p.read_bytes() if p and p.exists() else None
+    except OSError:
+        return None
+
+
+def judge(plan: Plan, shots: list[sb.Shot], clips: dict[str, dict], ask=None) -> Plan:
+    """Re-pick each session with `ask(options, keep) -> (indices, why)`;
+    the default is llm.rank_shots when a key is set, else nothing happens."""
+    if ask is None:
+        from . import llm
+        if not llm.available():
+            return plan
+        ask = llm.rank_shots
+    weights = idf(shots)
+    scored = {s.id: hero_score(s, clips, weights) for s in shots}
+    by_id = {s.id: s for s in shots}
+    groups = sessions_of([s for s in shots if not s.utility and s.duration >= MIN_SHOT_S])
+    judged = 0
+    for i, sess in enumerate(plan.sessions):
+        if not sess or i >= len(groups):
+            continue
+        taken = [p.shot.id for p in sess]
+        extra = [s.id for s in sorted(groups[i], key=lambda x: -scored[x.id][0]) if s.id not in taken][:RUNNERS_UP]
+        cand = [by_id[k] for k in taken + extra if k in by_id]
+        if len(cand) < JUDGE_MIN or len(cand) <= len(taken):
+            continue
+        options = []
+        for s in cand:
+            fr = _frame(clips, s)
+            if fr is None:
+                break
+            options.append({"label": f"{s.clip_name} {s.start:.0f}s, rules {scored[s.id][0]:.2f}", "frame": fr})
+        if len(options) != len(cand):
+            continue
+        try:
+            keep, why = ask(options, len(taken))
+        except Exception:  # noqa: BLE001 -- the rules' picks stand
+            continue
+        chosen = [cand[k] for k in keep]
+        plan.sessions[i] = [Pick(s, "hero" if scored[s.id][0] >= _median(scored) else "filler", s.start, s.end,
+                                 scored[s.id][0], f"judged: {why}" if why else "judged", i)
+                            for s in sorted(chosen, key=lambda x: x.order)]
+        judged += 1
+    if judged:
+        plan.notes.append(f"Claude judged the moments in {judged} session{'s' * (judged != 1)} from one frame each.")
+    return plan

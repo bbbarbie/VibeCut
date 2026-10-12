@@ -92,6 +92,20 @@ name, handle, font, colour and caption placement (words on screen, name
 tags, end cards). Taste and bookmarks are kept for you and not yet read by
 the editor — the page says so.
 
+## The front door: a short like a reel you love
+
+On the home page, under the clips you picked, there is one more line:
+*Make it like a reel you love*. Paste one to three links (TikTok, Reels,
+Shorts, or files on this Mac) and the button becomes *Make a short like
+it*. The video is created, the clips are read, and a Remix starts by
+itself with those reels: their pace, length, how they hold the first shot
+and the feel of their music — never their frames. When it lands it *is* the
+story: the gate is passed in your name, the brief carries the reels' frame
+and length, and the edit opens in Frames with music under it, editable like
+any other cut. With an API key, Claude judges the picked moments from one
+frame each (the rules' picks plus two runners-up a session) and the plan
+says so; without one, the rules choose.
+
 ## Reference: make it feel like a video you love
 
 **Reference** in the header (or *Fine-tune* after a style is on): paste a
