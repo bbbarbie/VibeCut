@@ -2,7 +2,7 @@
 
 ## 1. Eval: 20 real cases
 
-**System tested:** VibeCut, branch `claude/finish-the-video` at commit `eff6c5b` (main `86fd934` + 10 commits from 2026-10-10/11: music by default, beat cuts, graded looks, the two-pick setup, the calibration harness and first record). Python 3.14 venv on the creator's M5 MacBook, macOS 26. No API key configured, so every path ran on rules alone; nothing a model does was exercised.
+**System tested:** VibeCut, branch `claude/finish-the-video` at commit `eff6c5b` (main `86fd934` + 10 commits from 2026-10-10/11: music by default, beat cuts, graded looks, the two-pick setup, the calibration harness and first record). Python 3.14 venv on the creator's M5 MacBook, macOS 26. No API key configured, so every path ran on rules alone. With a key, Claude also picks the best moment in each shot from three index frames (`moments.py`), chat-on-pause sends the paused frame, and typed edits become ops; none of that was exercised here.
 
 **Pass rate: 20 / 20** (plus one reserve case, also passing). Script: `design/eval/eval_2026_10_11.py`; raw results: `design/eval/2026-10-11-eval.json`. Each case names its criterion before its result. One measurement bug in the eval itself was found and fixed (case 10's clock check mis-parsed single-digit hours, so the first run read it as FAIL; the criterion did not change, and the raw captions are listed below).
 

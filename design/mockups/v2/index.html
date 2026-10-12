@@ -5,7 +5,7 @@
 <title>VibeCut — redesign v2 mockup</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Round-2 mockup, one file, no build step, no network. Open via file://.
-     Every screen: ?s=clips|format|vibe|love|making|watch|export|edit|frames|gallery (&state=…&fmt=…&kind=…&look=…&tab=…&history=open)
+     Every screen: ?s=clips|format|vibe|love|making|watch|export|edit|frames (&state=…&fmt=…&kind=…&look=…&tab=…&history=open)
      Imagery is the creator's own stills in ../assets. Motion is our own library, in the spirit of Overlay Studio: behaviour only. -->
 <style>
 /* ================================================================== fonts */
@@ -201,8 +201,11 @@ body[data-s="frames"] .toast { bottom: auto; top: 72px; }
 .vid .clickword { position: absolute; cursor: text; border-radius: 6px; }
 .vid .clickword:hover { box-shadow: 0 0 0 1px #ffffff55; }
 .vid .again { position: absolute; inset: 0; display: grid; place-items: center; background: #0006; animation: screenIn var(--dur-2); }
-.vid .pill { position: absolute; left: 12px; top: 12px; background: #13110ed9; border: 1px solid #ffffff1a; border-radius: 999px; padding: 6px 12px 7px; font-size: 12px; display: flex; flex-direction: column; gap: 5px; min-width: 220px; z-index: 3; backdrop-filter: blur(6px); }
-.vid .pill .bar { height: 2px; }
+/* status pills sit bottom-left, 12 px above the bottom edge: on 9:16 that is the platform's caption zone
+   (below y 1248), on 16:9 below 85% — the two places VibeCut never draws words, so they never cover the video's own */
+.vid .pill, .vid .w-banner { position: absolute; left: 12px; bottom: 12px; max-width: calc(100% - 24px); z-index: 3; height: 30px; padding: 0 12px 0 10px; border-radius: 999px; background: #13110ee0; border: 1px solid #ffffff1a;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vid .pill .spin, .vid .w-banner .spin { width: 12px; height: 12px; }
 .vid .overcard { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: #13110ee6; border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; text-align: center; font-size: 13.5px; width: 78%; z-index: 3; }
 .vid .muted-ic { position: absolute; right: 10px; bottom: 10px; width: 28px; height: 28px; border-radius: 50%; background: #0007; display: grid; place-items: center; z-index: 3; }
 .transport { display: flex; align-items: center; gap: 14px; }
@@ -246,7 +249,7 @@ body[data-s="frames"] .toast { bottom: auto; top: 72px; }
 .fmt { position: relative; width: 330px; height: 380px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); display: flex; flex-direction: column; align-items: center; padding: 26px 22px 22px; text-align: center; transition: border-color var(--dur-1), background var(--dur-1), transform var(--dur-2) var(--ease); }
 .fmt:hover { border-color: #4a4238; }
 .fmt.sugg { border-color: var(--accent-deep); box-shadow: 0 0 0 4px var(--accent-glow); }
-.fmt .sil { flex: 1; display: grid; place-items: center; width: 100%; }
+.fmt .sil { flex: none; height: 235px; display: grid; place-items: center; width: 100%; } /* every silhouette slot is 235 px so titles and estimates line up */
 .fmt .sil img { object-fit: cover; border-radius: 8px; box-shadow: 0 16px 40px #0008; }
 .fmt .sil .v { width: 132px; height: 235px; }
 .fmt .sil .h { width: 290px; height: 163px; }
@@ -262,7 +265,7 @@ body[data-s="frames"] .toast { bottom: auto; top: 72px; }
 
 /* ================================================================== S3 vibe */
 .vibe-page { flex: 1; overflow: auto; display: flex; flex-direction: column; }
-.vibe-col { width: 100%; max-width: 1160px; margin: 0 auto; padding: 40px 24px 24px; flex: 1; }
+.vibe-col { width: 100%; max-width: 1160px; margin: 0 auto; padding: 32px 24px 24px; flex: 1; }
 .sentence { font-family: var(--serif); font-size: 30px; line-height: 1.2; font-weight: 400; }
 .sentence b { font-weight: 500; font-style: italic; color: var(--accent); }
 .evidence { font-size: 13px; color: var(--muted); margin-top: 6px; }
@@ -274,20 +277,23 @@ body[data-s="frames"] .toast { bottom: auto; top: 72px; }
 .inline-row { display: flex; gap: 18px; align-items: center; margin-top: 14px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
 .script-box { margin-top: 10px; width: 100%; max-width: 620px; height: 88px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); padding: 10px 14px; font-size: 13.5px; resize: vertical; outline: none; color: var(--text); }
 .script-box:focus { border-color: var(--accent-deep); }
-.vibe-head { margin-top: 32px; display: flex; align-items: baseline; gap: 16px; }
+.vibe-head { margin-top: 26px; display: flex; align-items: baseline; gap: 16px; }
 .vibe-head .sentence { font-size: 30px; }
 .cards { display: flex; gap: 20px; margin-top: 18px; align-items: stretch; transition: opacity var(--dur-2); }
 .cards.fading { opacity: 0; }
 .vcard { display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; width: 240px; flex: 0 1 240px; min-width: 0; background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-lg); padding: 20px 20px 16px; text-align: left; transition: border-color var(--dur-1), box-shadow var(--dur-2), transform var(--dur-2) var(--ease); position: relative; }
 .vcard:hover { border-color: #4a4238; }
 .vcard.on { border-color: var(--accent-deep); box-shadow: 0 0 0 4px var(--accent-glow); }
-.vcard .vid { width: 100%; aspect-ratio: 9/16; border-radius: 12px; box-shadow: 0 16px 40px #0008; }
+.vcard .vid { width: auto; height: clamp(250px, calc(100vh - 584px), 356px); aspect-ratio: 9/16; align-self: center; border-radius: 12px; box-shadow: 0 16px 40px #0008; }
 .vcard.wide { width: 340px; flex-basis: 340px; }
-.vcard.wide .vid { aspect-ratio: 16/9; }
+.vcard.wide .vid { width: 100%; height: auto; aspect-ratio: 16/9; }
 .vcard h4 { font-family: var(--serif); font-weight: 500; font-size: 22px; margin-top: 14px; display: flex; align-items: center; gap: 8px; line-height: 1.15; }
 .vcard h4 .star { color: var(--accent-deep); font-size: 13px; font-family: var(--sans); }
 .vcard p { color: var(--muted); font-size: 13px; line-height: 1.4; margin-top: 3px; }
-.vcard .ml { color: var(--faint); font-size: 12px; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* every card's line takes two lines' room, so the ♪ music lines share one baseline across the row */
+.vcard .line { min-height: calc(2 * 1.4em); }
+.vcard .ml { color: var(--faint); font-size: 12px; line-height: 1.35; margin-top: 6px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cards.more .vcard .ml { display: block; white-space: nowrap; text-overflow: ellipsis; }
 .vcard .blank { position: absolute; inset: 0; display: grid; place-items: center; background: #15130f; color: var(--faint); font-size: 12.5px; text-align: center; padding: 20px; border-radius: 12px; }
 .vcard .ontag { position: absolute; top: 28px; left: 28px; z-index: 5; }
 .vcard .cardacts { display: flex; gap: 10px; margin-top: 8px; font-size: 12px; }
@@ -302,7 +308,8 @@ body[data-s="frames"] .toast { bottom: auto; top: 72px; }
 .cards.more .vcard { width: 192px; flex-basis: 192px; padding: 14px 14px 12px; }
 .cards.more .vcard.wide { width: 272px; flex-basis: 272px; }
 .cards.more .vcard h4 { font-size: 18px; }
-.vtag { display: inline-block; margin-top: 6px; font-size: 11px; color: var(--warn); background: #e9c78f18; padding: 2px 8px; border-radius: 999px; }
+.cards.more .vcard .vid { width: 100%; height: auto; }
+.vtag { display: inline-block; align-self: flex-start; margin-top: 6px; font-size: 11px; color: var(--warn); background: #e9c78f18; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
 .bottom-bar { position: sticky; bottom: 0; height: 72px; flex-shrink: 0; border-top: 1px solid var(--line-soft); background: #13110ef2; backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 5; }
 .bottom-bar .in { width: 100%; max-width: 1160px; padding: 0 24px; display: flex; align-items: center; gap: 16px; }
 .bottom-bar .sum { font-size: 14px; color: var(--muted); }
@@ -315,10 +322,14 @@ body[data-s="frames"] .toast { bottom: auto; top: 72px; }
 .mk-left { display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .mk-frame { width: 315px; height: 560px; border-radius: 14px; }
 .mk-frame.wide { width: 720px; height: 405px; }
-.mk-strip { height: 56px; display: flex; gap: 3px; width: 100%; overflow: hidden; }
-.mk-strip img { height: 56px; width: 31.5px; object-fit: cover; border-radius: 4px; flex-shrink: 0; opacity: 0; transform: translateX(60px); transition: opacity .35s var(--ease), transform .5s var(--ease); }
-.mk-strip.wide img { width: 42px; }
-.mk-strip img.in { opacity: 1; transform: none; }
+/* exactly the frame's width; the newest shot arrives at the right and pushes older ones out to the left,
+   under an 18 px fade — never clipped on the right */
+.mk-strip { height: 56px; display: flex; justify-content: flex-end; width: 315px; overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 18px); mask-image: linear-gradient(to right, transparent, #000 18px); }
+.mk-strip.wide { width: 720px; }
+.mk-strip img { height: 56px; width: 0; margin-left: 0; object-fit: cover; border-radius: 4px; flex-shrink: 0; opacity: 0; transition: opacity .35s var(--ease), width .45s var(--ease), margin .45s var(--ease); }
+.mk-strip img.in { opacity: 1; width: 31.5px; margin-left: 3px; }
+.mk-strip.wide img.in { width: 42px; }
 .mk-col { width: 380px; padding-top: 6px; }
 .mk-col .hd { display: flex; align-items: baseline; justify-content: space-between; }
 .mk-col h2 { font-family: var(--serif); font-weight: 400; font-size: 34px; line-height: 1.1; }
@@ -338,10 +349,9 @@ body[data-s="frames"] .toast { bottom: auto; top: 72px; }
 /* ================================================================== S5 watch */
 .watch { flex: 1; background: var(--stage); overflow: auto; display: flex; flex-direction: column; align-items: stretch; }
 .w-grid { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; padding: 24px 24px 28px; flex: 1; }
-.w-center { display: flex; flex-direction: column; align-items: center; min-width: 0; }
-.w-banner { height: 36px; border-radius: 10px; background: #1f1b17; border: 1px solid var(--line-soft); display: flex; align-items: center; gap: 10px; padding: 0 14px; font-size: 13px; color: var(--muted); margin-bottom: 12px; }
-.w-vid { height: min(600px, calc(100vh - 340px)); aspect-ratio: 9/16; min-height: 360px; }
-.w-vid.wide { height: auto; width: min(880px, calc(100vw - 560px)); aspect-ratio: 16/9; min-height: 0; }
+.w-center { display: flex; flex-direction: column; align-items: center; min-width: 0; position: relative; }
+.w-vid { height: min(560px, calc(100vh - 360px)); aspect-ratio: 9/16; min-height: 360px; }
+.w-vid.wide { height: auto; width: min(880px, calc(100vw - 560px), calc((100vh - 360px) * 16 / 9)); aspect-ratio: 16/9; min-height: 0; }
 .w-transport { margin-top: 14px; min-width: 520px; }
 .w-info { margin-top: 18px; text-align: center; max-width: 640px; }
 .w-title { font-family: var(--serif); font-size: 30px; line-height: 1.15; outline: none; border-radius: 8px; padding: 0 6px; cursor: text; display: inline-block; }
@@ -352,29 +362,36 @@ body[data-s="frames"] .toast { bottom: auto; top: 72px; }
 .w-chips .chip { height: 30px; padding: 0 13px; font-size: 12.5px; cursor: pointer; border: 1px solid transparent; }
 .w-chips .chip.on { border-color: var(--line); color: var(--text); }
 .w-btns { display: flex; gap: 10px; justify-content: center; margin-top: 18px; }
-.did { margin: 16px auto 0; max-width: 560px; text-align: left; background: var(--surface); border: 1px solid var(--line-soft); border-radius: 14px; padding: 14px 18px; animation: screenIn var(--dur-2); }
+/* "What I did": the mirror of the Another-vibe column, 32 px left of the video, vertically centred on it */
+.w-did { position: absolute; top: 0; width: 280px; z-index: 2; }
+.did { text-align: left; background: var(--surface); border: 1px solid var(--line-soft); border-radius: 14px; padding: 12px 16px 12px; animation: screenIn var(--dur-2); max-height: calc(100vh - 110px); overflow: auto; }
+.did .caps { display: block; margin-bottom: 4px; }
 .did li { list-style: none; font-size: 13px; color: var(--muted); padding: 5px 0 5px 18px; position: relative; line-height: 1.45; }
 .did li::before { content: "✓"; position: absolute; left: 0; color: var(--ok); font-size: 11px; top: 7px; }
 .did li.nc::before { content: "○"; color: var(--faint); }
 .did li.src::before { content: "i"; font-style: italic; font-family: var(--serif); color: var(--faint); }
-.w-side { padding-left: 32px; align-self: center; }
+/* a known problem never gets a tick: it gets the warning mark and a way to look at it */
+.did li.wl { color: var(--warn); }
+.did li.wl::before { content: "▲"; color: var(--warn); font-size: 9px; top: 8px; }
+.did li.wl .link { color: var(--warn); text-decoration-color: #e9c78f66; }
+.w-side { position: absolute; top: 0; left: 100%; width: 200px; }
 .w-side .col200 { width: 200px; display: flex; flex-direction: column; gap: 14px; }
 .w-side .alt { display: flex; gap: 12px; align-items: center; text-align: left; border-radius: 12px; padding: 6px; margin: -6px; transition: background var(--dur-1); }
 .w-side .alt:hover { background: #ffffff08; }
-.w-side .alt img { width: 96px; height: 170px; object-fit: cover; border-radius: 10px; box-shadow: 0 10px 30px #0008; }
-.w-side .alt.wide img { width: 170px; height: 96px; }
+.w-side .alt .th { width: 96px; height: 170px; border-radius: 10px; box-shadow: 0 10px 30px #0008; flex-shrink: 0; pointer-events: none; }
+.w-side .alt.wide .th { width: 170px; height: 96px; }
 .w-side .alt b { font-family: var(--serif); font-weight: 500; font-size: 20px; display: block; }
 .w-side .alt small { color: var(--faint); font-size: 12px; line-height: 1.35; display: block; margin-top: 2px; }
 .w-side .alt.wide { flex-direction: column; align-items: flex-start; gap: 6px; }
-.lo-pop { width: 420px; padding: 16px; }
-.lo-pop h4 { font-family: var(--serif); font-weight: 500; font-size: 22px; }
-.lo-grid { display: grid; grid-template-columns: repeat(3, 96px); gap: 14px 18px; margin-top: 14px; justify-content: center; }
-.lo { font-size: 11.5px; color: var(--muted); line-height: 1.3; }
-.lo .th { position: relative; width: 96px; height: 170px; border-radius: 8px; overflow: hidden; }
+.lo-pop { width: 420px; padding: 16px; --tw: 96px; }
+.lo-pop h4 { font-family: var(--serif); font-weight: 500; font-size: 22px; line-height: 1.15; }
+.lo-grid { display: grid; grid-template-columns: repeat(3, 96px); gap: 12px; margin-top: 12px; justify-content: center; }
+.lo { font-size: 11px; color: var(--muted); line-height: 1.3; min-width: 0; }
+.lo .th { position: relative; width: var(--tw); height: calc(var(--tw) * 16 / 9); border-radius: 8px; overflow: hidden; }
 .lo .th img { width: 100%; height: 100%; object-fit: cover; filter: saturate(.55) brightness(.72); transition: filter var(--dur-2); }
 .lo.used .th img { filter: none; }
-.lo .th .btn { position: absolute; left: 6px; right: 6px; bottom: 6px; }
-.lo p { margin-top: 6px; min-height: 30px; }
+.lo .th .btn { position: absolute; left: 5px; right: 5px; bottom: 5px; padding: 0 6px; }
+.lo p { margin-top: 5px; height: 2.6em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .check-card { position: absolute; z-index: 4; background: #13110ef0; border: 1px solid var(--warn); border-radius: 12px; padding: 12px 14px; width: 290px; max-width: 92%; font-size: 13px; box-shadow: 0 20px 50px #000a; }
 .check-card b { color: var(--warn); font-weight: 550; }
 .check-card .acts { display: flex; gap: 6px; margin-top: 10px; }
@@ -405,7 +422,7 @@ body[data-s="frames"] .toast { bottom: auto; top: 72px; }
 .addpart { margin-top: 10px; width: 100%; justify-content: flex-start; }
 .center { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) var(--strip) var(--hist) var(--ask); padding-bottom: 8px; min-height: 0; min-width: 0; position: relative; }
 .center.frames-mode { grid-template-rows: minmax(0, 1fr) 240px; padding-bottom: 0; }
-.stage { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px 20px 10px; min-height: 0; }
+.stage { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 52px 20px 10px; min-height: 0; }
 .stage .e-vid { height: min(calc(100% - 64px), 600px); aspect-ratio: 9/16; }
 .stage .e-vid.wide { height: auto; width: min(calc(100% - 8px), 900px); aspect-ratio: 16/9; max-height: calc(100% - 64px); }
 .stage .e-transport { width: min(100%, 520px); }
@@ -480,6 +497,9 @@ body[data-s="frames"] .toast { bottom: auto; top: 72px; }
 .shotgrid .sh:hover img { transform: scale(1.04); }
 .shotgrid .sh .dur { position: absolute; left: 4px; bottom: 4px; font-size: 10px; background: #000a; padding: 0 5px; border-radius: 4px; font-variant-numeric: tabular-nums; }
 .shotgrid .sh.sel { box-shadow: 0 0 0 2px var(--accent); }
+.shotgrid.wide { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; max-height: 300px; overflow: auto; border-radius: 8px; }
+.shotgrid.wide.fadeb { -webkit-mask-image: linear-gradient(#000 calc(100% - 28px), transparent); mask-image: linear-gradient(#000 calc(100% - 28px), transparent); }
+.shotgrid.wide .sh { aspect-ratio: 16 / 9; border-radius: 5px; }
 .shotgrid .sh .hook { position: absolute; left: 4px; top: 4px; font-size: 9.5px; background: var(--accent); color: var(--accent-ink); padding: 0 5px; border-radius: 4px; font-weight: 650; }
 .stops { display: flex; justify-content: space-between; font-size: 11px; color: var(--faint); margin-top: 8px; }
 .moment { margin-top: 18px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line-soft); font-size: 13px; }
@@ -527,29 +547,32 @@ body[data-s="frames"] .toast { bottom: auto; top: 72px; }
 /* music */
 .np { margin-top: 16px; background: var(--raised); border-radius: 12px; padding: 14px; border: 1px solid #3a332b; }
 .np .row { display: flex; gap: 12px; align-items: center; }
-.cover { width: 48px; height: 48px; border-radius: 8px; flex-shrink: 0; position: relative; overflow: hidden; }
+.np .cover { width: 48px; height: 48px; border-radius: 8px; flex-shrink: 0; position: relative; overflow: hidden; }
 .np .why { font-size: 13px; color: var(--muted); margin-top: 10px; line-height: 1.45; }
 .np .wave { margin-top: 12px; position: relative; }
 .np canvas { width: 100%; height: 40px; }
 .np .pblocks { display: flex; gap: 1px; height: 5px; margin-top: 3px; border-radius: 3px; overflow: hidden; }
 .np .meta { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--faint); margin-top: 8px; }
-.trk { display: grid; grid-template-columns: 28px minmax(0, 1fr) 56px auto; gap: 10px; align-items: center; min-height: 64px; padding: 6px 6px; border-radius: 10px; }
+/* 64 px rows: line 1 is the title with its badge right after it; line 2 is "artist · reason" on one line */
+.trk { display: grid; grid-template-columns: 28px minmax(0, 1fr) 48px auto; gap: 6px; align-items: center; height: 64px; padding: 0 4px 0 6px; border-radius: 10px; }
+.trk > .btn-sm { padding: 0 11px; }
 .trk:hover { background: var(--surface); }
 .trk .pl { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; font-size: 10px; color: var(--muted); position: relative; }
 .trk .pl:hover { color: var(--text); border-color: var(--muted); }
 .trk .pl svg.ring { position: absolute; inset: -3px; width: 34px; height: 34px; transform: rotate(-90deg); }
 .trk .nm { min-width: 0; }
-.trk .nm b { font-size: 13px; font-weight: 600; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.trk .nm .a { font-size: 11.5px; color: var(--faint); display: flex; gap: 6px; align-items: center; white-space: nowrap; overflow: hidden; min-width: 0; }
-.trk .nm .a .badge { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.trk .nm .rs { font-size: 11.5px; color: var(--muted); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.trk .nm .rs.out { color: var(--warn); }
-.trk canvas { width: 56px; height: 20px; }
+.trk .nm .l1 { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.trk .nm b { font-size: 13px; font-weight: 600; line-height: 1.45; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trk .nm .l1 .badge { flex: none; }
+.trk .nm .rs { font-size: 12px; color: var(--faint); line-height: 1.45; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trk .nm .rs i { font-style: normal; color: var(--muted); }
+.trk .nm .rs i.out { color: var(--warn); }
+.trk canvas { width: 48px; height: 20px; }
 .trk.previewing { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
-.badge { font-size: 10px; padding: 0 6px; border-radius: 999px; height: 16px; line-height: 16px; background: var(--raised); color: var(--muted); }
+.badge { font-size: 10px; padding: 0 6px; border-radius: 999px; height: 16px; line-height: 16px; background: var(--raised); color: var(--muted); flex-shrink: 0; white-space: nowrap; }
 .badge.yours { background: #93b08826; color: var(--accent); }
 .badge.free { background: #e9c78f1c; color: var(--warn); }
-.inline-ask { margin: 4px 6px 8px 44px; font-size: 12.5px; color: var(--warn); background: #e9c78f10; border: 1px solid #e9c78f33; border-radius: 10px; padding: 10px 12px; }
+.inline-ask { margin: 0 6px 8px 44px; font-size: 12.5px; color: var(--warn); background: #e9c78f10; border: 1px solid #e9c78f33; border-radius: 10px; padding: 10px 12px; }
 .inline-ask .acts { display: flex; gap: 6px; margin-top: 8px; }
 .mfoot { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }
 .state-line { font-size: 12.5px; color: var(--muted); background: var(--surface); border: 1px solid var(--line-soft); border-radius: 10px; padding: 10px 12px; margin-top: 12px; }
@@ -558,6 +581,16 @@ body[data-s="frames"] .toast { bottom: auto; top: 72px; }
 /* ================================================================== S7 frames */
 .tline { border-top: 1px solid var(--line-soft); padding: 8px 20px 10px; position: relative; user-select: none; background: #110f0d; }
 .tline .lab { position: absolute; left: 4px; font-size: 10px; color: var(--faint); text-transform: uppercase; letter-spacing: .1em; writing-mode: vertical-rl; transform: rotate(180deg); }
+/* long edits open zoomed (about a minute on screen) and scroll sideways; the zoom chips sit at the ruler's right */
+.tl-scroll { overflow-x: auto; overflow-y: hidden; }
+.tl-scroll::-webkit-scrollbar { height: 8px; }
+.tl-scroll::-webkit-scrollbar-thumb { background: #3a332b; border-radius: 8px; }
+.tl-scroll::-webkit-scrollbar-track { background: transparent; }
+.tl-inner { position: relative; min-width: 100%; }
+.tl-zoom { position: absolute; right: 20px; top: 8px; z-index: 7; display: flex; align-items: center; gap: 2px; padding-left: 24px; background: linear-gradient(to right, #110f0d00, #110f0d 22px); }
+.tl-zoom button { height: 20px; padding: 0 8px; border-radius: 999px; font-size: 11px; color: var(--muted); }
+.tl-zoom button.on { background: var(--raised); color: var(--text); }
+.tl-zoom button:hover:not(.on) { color: var(--text); }
 .tline .ruler { height: 24px; position: relative; border-bottom: 1px solid var(--line-soft); }
 .tline .ruler span { position: absolute; top: 4px; font-size: 10.5px; color: var(--faint); transform: translateX(-50%); font-variant-numeric: tabular-nums; }
 .tline .ruler i { position: absolute; bottom: 0; width: 1px; height: 6px; background: var(--line); }
@@ -567,9 +600,14 @@ body[data-s="frames"] .toast { bottom: auto; top: 72px; }
 .tl-shot { position: absolute; top: 0; bottom: 0; border-radius: 6px; overflow: hidden; cursor: pointer; background-size: auto 100%; background-repeat: repeat-x; border: 1px solid #0006; }
 .tl-shot span { position: absolute; left: 4px; bottom: 3px; font-size: 10px; background: #000b; padding: 0 4px; border-radius: 3px; white-space: nowrap; max-width: calc(100% - 8px); overflow: hidden; text-overflow: ellipsis; }
 .tl-shot.sel { box-shadow: inset 0 0 0 2px var(--accent); }
+/* shots under 72 px show their name only on hover or when selected */
+.tl-shot.narrow span { display: none; }
+.tl-shot.narrow:hover, .tl-shot.narrow.sel { overflow: visible; z-index: 4; }
+.tl-shot.narrow:hover span, .tl-shot.narrow.sel span { display: block; max-width: none; box-shadow: 0 4px 12px #000a; }
 .tl-join { position: absolute; top: -9px; transform: translateX(-50%); font-size: 9.5px; color: var(--muted); background: var(--raised); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; line-height: 13px; white-space: nowrap; z-index: 2; }
 .tl-join.sp { color: var(--warn); border-color: #e9c78f55; }
 .tl-word { position: absolute; top: 4px; bottom: 4px; border-radius: 5px; background: #93b08833; border: 1px solid #93b08866; font-size: 10.5px; color: var(--accent); padding: 0 6px; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tl-word.glyph { padding: 0 2px; text-align: center; text-overflow: clip; font-size: 11.5px; letter-spacing: .04em; }
 .tl-ph { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text); z-index: 5; cursor: ew-resize; }
 .tl-ph::before { content: ""; position: absolute; top: 0; left: -6px; width: 14px; height: 12px; background: var(--text); border-radius: 3px 3px 7px 7px; }
 .tl-ph.snapped::before { background: var(--accent); }
@@ -577,49 +615,73 @@ body[data-s="frames"] .toast { bottom: auto; top: 72px; }
 .tl-ticks i.cut { background: #efe8dd1c; }
 .tl-ticks i.beat { top: auto; height: 48px; background: #93b0882e; }
 .tl-ticks i.mov { top: 24px; height: 8px; background: var(--warn); opacity: .6; }
-.frame-panel .fp-h { font-family: var(--serif); font-size: 22px; }
+.frame-panel .fp-h { font-family: var(--serif); font-size: 22px; line-height: 1.15; }
+.frame-panel .fp-sub { font-size: 13px; color: var(--muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
 .frame-panel .acts { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
 .frame-panel .acts .btn { justify-content: flex-start; }
 .frame-panel kbd { font-family: var(--sans); font-size: 11px; color: var(--faint); margin-left: auto; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
 
 /* ================================================================== S8 export */
 .exp { width: 800px; height: 560px; display: grid; grid-template-columns: 260px 1fr; }
-.exp .post { background: #000; position: relative; }
-.exp .post img { width: 100%; height: 100%; object-fit: cover; }
-.exp .post.wide img { object-position: center 35%; }
+.exp .post { background: #000; position: relative; overflow: hidden; }
+/* the poster is a frame of the real edit: shot 1 with the vibe's own hook line (drawn, not a burned-in still) */
+.exp .post .vid { position: absolute; top: 0; left: calc(50% - 157.5px); width: 315px; height: 560px; border-radius: 0; box-shadow: none; }
+/* YouTube: a 16:9 frame, vertically centred in the column, frozen on part title 1 (YouTube has no hook line) */
+.exp .post .vid.wide { top: calc(50% - 73px); left: 0; width: 260px; height: 146px; }
+.exp .post .facebox span { top: auto; bottom: -22px; }
+/* while Look is open, the poster column becomes the left-out panel, so the checklist never scrolls */
+.exp .post.lp { background: #171411; border-right: 1px solid var(--line-soft); padding: 22px 24px; overflow: auto; }
+.lp-h { display: flex; align-items: baseline; gap: 5px; white-space: nowrap; font-size: 12px; color: var(--faint); }
+.lp-h b { font-weight: 600; color: var(--text); }
+.lp-h .link { font-size: 12px; }
+.lp-grid { display: grid; grid-template-columns: repeat(3, 64px); gap: 12px 10px; margin-top: 12px; }
+.lp-th { position: relative; width: 64px; height: 114px; border-radius: 6px; overflow: hidden; background: #000; }
+.lp-th img { width: 100%; height: 100%; object-fit: cover; filter: saturate(.6) brightness(.8); transition: filter var(--dur-2); }
+.lp.use .lp-th img { filter: none; }
+.lp-b { position: absolute; left: 0; right: 0; bottom: 5px; display: flex; justify-content: center; gap: 6px; }
+.lp-btn { width: 22px; height: 22px; border-radius: 50%; background: #13110ee6; border: 1px solid #ffffff33; color: var(--text); font-size: 12px; line-height: 1; display: grid; place-items: center; transition: background var(--dur-1), color var(--dur-1); }
+.lp-btn:hover { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.lp-ans { position: absolute; left: 4px; right: 4px; bottom: 5px; height: 20px; line-height: 20px; border-radius: 999px; background: #13110ee6; text-align: center; font-size: 10.5px; color: var(--ok); white-space: nowrap; }
+.lp.keep .lp-ans { color: var(--muted); }
+.lp-why { font-size: 11px; line-height: 1.25; color: var(--muted); margin-top: 5px; height: 2.5em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .exp .body { padding: 28px; display: flex; flex-direction: column; min-height: 0; }
-.exp .scrollb { overflow: auto; margin: 0 -28px; padding: 0 28px; flex: 1; min-height: 0; }
+.exp .scrollb { overflow: auto; margin: 0 -28px; padding: 0 28px 4px; flex: 1; min-height: 0; }
+/* a cue that the list goes on: the last 28 px fade while there is more below */
+.exp .scrollb.fadeb { -webkit-mask-image: linear-gradient(#000 calc(100% - 28px), transparent); mask-image: linear-gradient(#000 calc(100% - 28px), transparent); }
+.exp .seg.full { display: flex; width: 100%; }
+.exp .seg.full button { flex: 1; height: 30px; font-size: 13px; }
 .exp h2 { font-family: var(--serif); font-weight: 400; font-size: 34px; line-height: 1.1; margin-top: 6px; }
 .exp .fl { color: var(--muted); font-size: 13px; margin-top: 4px; }
 .exp .sec { margin-top: 18px; }
 .exp .sec > .caps { margin-bottom: 8px; display: block; }
-.exp .radio { display: flex; flex-direction: column; gap: 2px; }
-.exp .radio button { display: flex; align-items: center; gap: 10px; text-align: left; padding: 6px 8px; border-radius: 8px; font-size: 13.5px; margin: 0 -8px; }
-.exp .radio button:hover { background: #ffffff06; }
-.exp .radio button i { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--faint); flex-shrink: 0; position: relative; }
-.exp .radio button.on i { border-color: var(--accent-deep); }
-.exp .radio button.on i::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--accent); }
 .exp .note { font-size: 12.5px; color: var(--muted); background: var(--raised); border-radius: 10px; padding: 9px 12px; margin-top: 8px; line-height: 1.45; }
 .gate { display: flex; flex-direction: column; }
-.gi { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-bottom: 1px solid var(--line-soft); font-size: 13px; line-height: 1.45; }
+.gi { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--line-soft); font-size: 13px; line-height: 1.45; }
 .gi:last-child { border-bottom: 0; }
 .gi .dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex-shrink: 0; background: var(--faint); }
 .gi .dot.dw { background: var(--warn); } .gi .dot.dk { background: var(--ok); }
 .gi .grow { flex: 1; min-width: 0; }
 .gi .tick { color: var(--ok); font-size: 12px; }
-.golist { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 10px 0 4px; }
-.go { display: flex; gap: 8px; font-size: 11.5px; color: var(--muted); line-height: 1.3; align-items: flex-start; }
-.go img { width: 64px; height: 114px; object-fit: cover; border-radius: 6px; flex-shrink: 0; filter: saturate(.6) brightness(.8); }
+.golist { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 12px; margin: 10px 0 4px; }
+/* tile, its two buttons beside it, then a 2-line reason under the tile */
+.go { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 6px 8px; font-size: 11.5px; color: var(--muted); line-height: 1.3; }
+.go img { width: 64px; height: 114px; object-fit: cover; border-radius: 6px; filter: saturate(.6) brightness(.8); }
 .go.ans img { filter: none; }
-.go .gb { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.go .gb { display: flex; flex-direction: column; gap: 4px; justify-content: flex-end; }
 .go .gb .btn { height: 24px; padding: 0 9px; font-size: 11.5px; }
-.go .ansl { color: var(--ok); margin-top: 6px; }
+.go .why { grid-column: 1 / -1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 30px; }
+.go .ansl { color: var(--ok); align-self: end; }
 .exp .foot { padding-top: 14px; }
 .exp .helper { font-size: 12.5px; color: var(--warn); margin-bottom: 8px; text-align: right; }
 .exp .btnrow { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
-.files { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
-.files div { display: flex; gap: 10px; align-items: center; font-size: 13.5px; }
-.files div::before { content: ""; width: 26px; height: 32px; border-radius: 4px; background: var(--raised); border: 1px solid var(--line); flex-shrink: 0; }
+.files { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.files > div { display: flex; gap: 12px; align-items: center; font-size: 13.5px; }
+.files .fth { position: relative; width: 28px; height: 50px; border-radius: 4px; overflow: hidden; flex-shrink: 0; box-shadow: 0 0 0 1px #ffffff14, 0 4px 10px #0006; background: #000; }
+.files .fth img { width: 100%; height: 100%; object-fit: cover; }
+.files .fth.wide { width: 50px; height: 28px; }
+.files .fth i { position: absolute; left: 0; right: 0; bottom: 0; font-style: normal; font-size: 8.5px; line-height: 12px; text-align: center; background: #000c; color: var(--warn); letter-spacing: .02em; }
+.files .fic { width: 28px; height: 34px; border-radius: 4px; background: var(--raised); border: 1px solid var(--line); display: grid; place-items: center; font-size: 9.5px; color: var(--muted); letter-spacing: .04em; flex-shrink: 0; margin: 0 0 0 0; }
+.files small { color: var(--faint); font-size: 12px; margin-left: 2px; }
 .errbox { margin-top: 18px; display: flex; flex-direction: column; gap: 10px; }
 .errbox .e { border: 1px solid #e59c8f44; background: #e59c8f0d; border-radius: 12px; padding: 12px 14px; font-size: 13.5px; display: flex; align-items: center; gap: 12px; }
 .errbox .e.dim { opacity: .5; }
@@ -650,51 +712,6 @@ body[data-s="frames"] .toast { bottom: auto; top: 72px; }
 .trait.guard { grid-template-columns: 30px minmax(0, 1fr) auto; background: #e9c78f0d; border: 1px solid #e9c78f33; border-radius: 10px; padding: 10px 12px; margin: 8px 0; color: var(--warn); }
 .banner { margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: var(--raised); border: 1px solid var(--line); font-size: 13.5px; }
 .banner.w { border-color: #e9c78f44; color: var(--warn); background: #e9c78f0d; }
-
-/* ================================================================== S11 gallery */
-.gal { flex: 1; overflow: auto; padding: 22px 24px 60px; }
-.gal-top { display: flex; align-items: center; gap: 18px; padding: 0 20px; height: 100%; }
-.gal-top .gt { font-family: var(--serif); font-size: 21px; white-space: nowrap; }
-.gal-top .ctrls { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-wrap: nowrap; }
-.gal-top .vchips { display: flex; gap: 4px; }
-.gal-top .vchips button { height: 28px; padding: 0 10px; border-radius: 999px; font-size: 12px; color: var(--muted); border: 1px solid var(--line); }
-.gal-top .vchips button.on { background: var(--raised); color: var(--text); border-color: var(--accent-deep); }
-.beatdot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); display: inline-block; transition: transform 80ms, background 80ms; }
-.beatdot.hit { background: var(--accent); transform: scale(1.6); }
-.ggrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 30px 24px; max-width: 1400px; margin: 0 auto; }
-.tile { cursor: pointer; }
-.tile .tf { position: relative; width: 216px; height: 384px; border-radius: 12px; overflow: hidden; background: #000; box-shadow: 0 16px 40px #0008; margin: 0 auto; }
-.ggrid.h .tile .tf { width: 100%; height: auto; aspect-ratio: 16/9; }
-.tile .tf canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-.tile .tf canvas.pic { filter: var(--look-filter); }
-.tile .tf .na { position: absolute; inset: 0; display: grid; place-items: center; background: #0d0c0ae6; color: var(--faint); font-size: 12.5px; text-align: center; padding: 20px; }
-.tile .tf .bd { position: absolute; right: 8px; top: 8px; z-index: 3; }
-.tile .meta { width: 216px; margin: 12px auto 0; }
-.ggrid.h .tile .meta { width: 100%; }
-.tile .meta h5 { font-family: var(--serif); font-weight: 500; font-size: 16px; display: flex; align-items: baseline; gap: 8px; }
-.tile .meta h5 small { font-family: var(--sans); font-size: 11px; color: var(--faint); font-weight: 400; }
-.tile .meta .fam { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); margin-top: 2px; display: flex; align-items: center; gap: 8px; }
-.tile .meta p { font-size: 12px; color: var(--muted); line-height: 1.4; margin-top: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.st { font-size: 10px; letter-spacing: .04em; text-transform: none; padding: 1px 7px; border-radius: 999px; }
-.st.exists { background: #93b08826; color: var(--accent); }
-.st.extend { background: #b9c7d922; color: #b9c7d9; }
-.st.new { background: #e8c39e22; color: var(--part-2); }
-.st.engine { background: #e59c8f1c; color: var(--danger); }
-.tile .under { font-size: 11px; color: var(--faint); margin-top: 6px; }
-.tile .jl { margin-top: 6px; }
-.big { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 28px; }
-.big .tf { width: 315px; height: 560px; position: relative; border-radius: 14px; overflow: hidden; background: #000; box-shadow: var(--shadow-video); }
-.big .tf.h { width: 860px; height: 484px; }
-.big .tf canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-.big .tf canvas.pic { filter: var(--look-filter); }
-.kfr { width: 760px; position: relative; height: 64px; }
-.kfr .base { position: absolute; left: 0; right: 0; top: 22px; height: 1px; background: var(--line); }
-.kfr .tk { position: absolute; top: 16px; width: 1px; height: 13px; background: var(--faint); }
-.kfr .tk.kf { background: var(--accent); height: 17px; top: 14px; width: 2px; }
-.kfr .tl { position: absolute; top: 0; font-size: 10px; color: var(--faint); transform: translateX(-50%); }
-.kfr .kl { position: absolute; top: 34px; font-size: 10.5px; color: var(--accent); transform: translateX(-50%); white-space: nowrap; }
-.kfr .kl.alt { top: 48px; }
-.kfr .ph { position: absolute; top: 10px; width: 2px; height: 24px; background: var(--text); }
 
 /* ================================================================== mockup chrome (not product UI) */
 .dev { position: fixed; left: 0; bottom: 0; z-index: 95; font-size: 12px; }
@@ -860,31 +877,79 @@ const FMTS = {
 }
 
 /* ------------------------------------------------------------ music — §6 */
+// bpm: the tempo read from the file (music.py); sung: has singing. Each vibe's own track is the first pick for it.
 const TRACKS = {
-  slow_sunday: { t: 'Slow Sunday', a: 'Mira Vale', src: 'yours', why: 'Builds as your day gets busy and eases off at dinner. Its lift lands on the fountain.',
+  slow_sunday: { t: 'Slow Sunday', a: 'Mira Vale', src: 'yours', bpm: 96, why: 'Builds as your day gets busy and eases off at dinner. Its lift lands on the fountain.',
     short: 'Builds with your day; its lift lands on the fountain', start: 'Starts 0:12 into the song', e: [0.28, 0.34, 0.46, 0.58, 0.72, 0.86, 0.82, 0.7, 0.52, 0.38], cov: ['#3b4a36', '#8a7450'] },
-  paper_boats: { t: 'Paper Boats', a: 'Juniper Hall', src: 'starter', why: 'Gentle start, lifts right as you reach the park', start: 'Starts 0:04 into the song',
+  paper_boats: { t: 'Paper Boats', a: 'Juniper Hall', src: 'starter', bpm: 84, why: 'Gentle start, lifts right as you reach the park', start: 'Starts 0:04 into the song',
     e: [0.2, 0.24, 0.3, 0.36, 0.44, 0.72, 0.86, 0.8, 0.6, 0.48], cov: ['#5a4a3a', '#c9a27a'], credit: '“Paper Boats” — Juniper Hall · CC BY 4.0 · via VibeCut' },
-  harbour_lights: { t: 'Harbour Lights', a: 'Ode Tanaka', src: 'free', why: 'Steady and warm; its peak falls on dinner', start: 'Starts 0:20 into the song',
+  harbour_lights: { t: 'Harbour Lights', a: 'Ode Tanaka', src: 'free', bpm: 88, why: 'Steady and warm; its peak falls on dinner', start: 'Starts 0:20 into the song',
     e: [0.42, 0.46, 0.5, 0.52, 0.54, 0.56, 0.6, 0.66, 0.84, 0.6], cov: ['#2d3b4a', '#8fa3b8'], credit: '“Harbour Lights” — Ode Tanaka · CC BY 4.0 · Jamendo' },
-  city_walk: { t: 'City Walk', a: 'The Linen Room', src: 'yours', why: 'Even all the way — good if you want it calm', start: 'Starts at the top of the song',
+  city_walk: { t: 'City Walk', a: 'The Linen Room', src: 'yours', bpm: 82, why: 'Even all the way — good if you want it calm', start: 'Starts at the top of the song',
     e: [0.5, 0.52, 0.5, 0.51, 0.5, 0.52, 0.5, 0.51, 0.5, 0.49], cov: ['#44403a', '#9c9282'] },
-  early_tram: { t: 'Early Tram', a: 'Sol & Ash', src: 'starter', why: 'Quick start that matches your busy morning', start: 'Starts at the top of the song',
-    e: [0.78, 0.74, 0.62, 0.55, 0.5, 0.52, 0.56, 0.5, 0.42, 0.36], cov: ['#4a3a2a', '#e0b060'], credit: '“Early Tram” — Sol & Ash · CC0 · via VibeCut' },
-  window_seat: { t: 'Window Seat', a: 'Petra Lune', src: 'yours', why: 'Builds late, peaks on your last shot', start: 'Starts 0:08 into the song',
+  early_tram: { t: 'Early Tram', a: 'Sol & Ash', src: 'starter', bpm: 124, why: 'Quick start that matches your busy morning', start: 'Starts at the top of the song',
+    e: [0.82, 0.8, 0.72, 0.66, 0.62, 0.64, 0.66, 0.6, 0.52, 0.46], cov: ['#4a3a2a', '#e0b060'], credit: '“Early Tram” — Sol & Ash · CC0 · via VibeCut' },
+  window_seat: { t: 'Window Seat', a: 'Petra Lune', src: 'yours', bpm: 92, why: 'Builds late, peaks on your last shot', start: 'Starts 0:08 into the song',
     e: [0.2, 0.22, 0.26, 0.3, 0.36, 0.42, 0.5, 0.62, 0.78, 0.9], cov: ['#3a2d3a', '#b88fa3'] },
-  long_light: { t: 'Long Light', a: 'Aster Field', src: 'starter', why: 'A slow build to a late peak at the park', start: 'Starts 0:16 into the song',
+  long_light: { t: 'Long Light', a: 'Aster Field', src: 'starter', bpm: 86, why: 'A slow build to a late peak at the park', start: 'Starts 0:16 into the song',
     e: [0.2, 0.24, 0.3, 0.38, 0.46, 0.56, 0.72, 0.88, 0.7, 0.5], cov: ['#20262c', '#6d7f8c'], credit: '“Long Light” — Aster Field · CC BY 4.0 · via VibeCut' },
-  neon_run: { t: 'Neon Run', a: 'Kilo Fern', src: 'yours', why: 'Builds, then drops on the fountain', out: 'quick', start: 'Starts 0:31 into the song',
+  neon_run: { t: 'Neon Run', a: 'Kilo Fern', src: 'yours', bpm: 136, why: 'Builds, then drops on the fountain', start: 'Starts 0:31 into the song',
     e: [0.5, 0.62, 0.9, 0.7, 0.75, 0.92, 0.8, 0.85, 0.95, 0.7], cov: ['#2a1a2a', '#ff6a3d'] },
-  say_it_twice: { t: 'Say It Twice', a: 'The Hollows', src: 'yours', why: 'A sung chorus lands on the park', out: 'sung', start: 'Starts at the top of the song',
+  say_it_twice: { t: 'Say It Twice', a: 'The Hollows', src: 'yours', bpm: 100, sung: true, why: 'A sung chorus lands on the park', start: 'Starts at the top of the song',
     e: [0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.75, 0.7, 0.6, 0.5], cov: ['#3a3226', '#d9b8c4'] },
+  low_tide: { t: 'Low Tide', a: 'Wren Adair', src: 'starter', bpm: 86, why: 'Soft and even; lets your own sounds through', start: 'Starts at the top of the song',
+    e: [0.36, 0.38, 0.4, 0.42, 0.44, 0.46, 0.46, 0.44, 0.42, 0.4], cov: ['#2f3a36', '#9fb3a6'], credit: '“Low Tide” — Wren Adair · CC0 · via VibeCut' },
+  morning_glass: { t: 'Morning Glass', a: 'Tomo Reyes', src: 'starter', bpm: 104, why: 'Brightens with your morning and settles by dinner', start: 'Starts 0:06 into the song',
+    e: [0.3, 0.36, 0.44, 0.52, 0.6, 0.66, 0.7, 0.66, 0.56, 0.44], cov: ['#3a4148', '#c4d2dc'], credit: '“Morning Glass” — Tomo Reyes · CC BY 4.0 · via VibeCut' },
+  open_plan: { t: 'Open Plan', a: 'Hanne Soto', src: 'free', bpm: 108, why: 'Light and steady, with a small lift at the park', start: 'Starts 0:10 into the song',
+    e: [0.4, 0.44, 0.48, 0.54, 0.58, 0.62, 0.6, 0.56, 0.5, 0.46], cov: ['#33302b', '#d8cbb6'], credit: '“Open Plan” — Hanne Soto · CC BY 4.0 · Jamendo' },
+  bright_hours: { t: 'Bright Hours', a: 'Ada Lindqvist', src: 'yours', bpm: 102, why: 'Follows your day closely, with a lift on the fountain', start: 'Starts 0:05 into the song',
+    e: [0.34, 0.44, 0.54, 0.52, 0.5, 0.6, 0.72, 0.68, 0.5, 0.4], cov: ['#3d3526', '#f2c14e'] },
+  pale_blue: { t: 'Pale Blue', a: 'Ines Moreau', src: 'yours', bpm: 98, why: 'Rises through the afternoon and peaks at the park', start: 'Starts 0:14 into the song',
+    e: [0.3, 0.32, 0.38, 0.46, 0.58, 0.7, 0.76, 0.7, 0.58, 0.46], cov: ['#26303d', '#9db4cf'] },
+  wool_coat: { t: 'Wool Coat', a: 'Moss & Maple', src: 'yours', bpm: 81, why: 'Warm and slow; swells a little toward dinner', start: 'Starts at the top of the song',
+    e: [0.3, 0.32, 0.34, 0.36, 0.4, 0.44, 0.5, 0.56, 0.6, 0.5], cov: ['#4a3626', '#d6a878'] },
+  sidewalk_chalk: { t: 'Sidewalk Chalk', a: 'Pip & the Lanterns', src: 'starter', bpm: 128, why: 'Bouncy the whole way through', start: 'Starts at the top of the song',
+    e: [0.7, 0.74, 0.7, 0.76, 0.72, 0.78, 0.74, 0.8, 0.72, 0.66], cov: ['#3a2440', '#ff9ec8'], credit: '“Sidewalk Chalk” — Pip & the Lanterns · CC0 · via VibeCut' },
+  signal_fire: { t: 'Signal Fire', a: 'Vex Orchard', src: 'starter', bpm: 132, why: 'Two big drops: the fountain and the park', start: 'Starts 0:22 into the song',
+    e: [0.5, 0.58, 0.66, 0.74, 0.9, 0.7, 0.8, 0.92, 0.84, 0.7], cov: ['#301818', '#ff7a3d'], credit: '“Signal Fire” — Vex Orchard · CC BY 4.0 · via VibeCut' },
+  tin_roof: { t: 'Tin Roof', a: 'Maple Static', src: 'free', bpm: 138, why: 'Busy and bright, claps on the off-beat', start: 'Starts 0:09 into the song',
+    e: [0.6, 0.66, 0.7, 0.72, 0.8, 0.84, 0.8, 0.78, 0.74, 0.62], cov: ['#2c3320', '#e8ff5a'], credit: '“Tin Roof” — Maple Static · CC BY 4.0 · Jamendo' },
+  pulse_street: { t: 'Pulse Street', a: 'Rue Kato', src: 'free', bpm: 144, why: 'Builds twice and drops on the park', start: 'Starts 0:18 into the song',
+    e: [0.46, 0.56, 0.7, 0.62, 0.66, 0.88, 0.72, 0.8, 0.9, 0.68], cov: ['#1c2233', '#7bd3f7'], credit: '“Pulse Street” — Rue Kato · CC BY 4.0 · ccMixter' },
+  night_bus: { t: 'Night Bus', a: 'Oda Kline', src: 'yours', bpm: 150, why: 'A long build that drops right on the fountain', start: 'Starts 0:27 into the song',
+    e: [0.4, 0.5, 0.62, 0.74, 0.86, 0.94, 0.7, 0.76, 0.88, 0.72], cov: ['#16161f', '#9d7bff'] },
+  red_line: { t: 'Red Line', a: 'Taro Vance', src: 'yours', bpm: 156, why: 'Hits hard from the start; drops again at dinner', start: 'Starts 0:04 into the song',
+    e: [0.62, 0.7, 0.8, 0.92, 0.78, 0.86, 0.94, 0.82, 0.9, 0.74], cov: ['#2a1010', '#ff4b4b'] },
 }
-const ALSO_FITS = ['slow_sunday', 'paper_boats', 'harbour_lights', 'city_walk', 'early_tram', 'window_seat']
-const OUTSIDE = ['neon_run', 'say_it_twice']
 const BADGE = { yours: ['Yours', 'yours'], starter: ['Comes with VibeCut', ''], free: ['Free · needs a credit', 'free'] }
+const BADGE_SHORT = { yours: 'Yours', starter: 'VibeCut', free: 'Free · credit' } // in a 64 px row, so the title keeps its room
 const fromLine = (id) => (TRACKS[id].src === 'yours' ? 'from your music' : TRACKS[id].src === 'starter' ? 'comes with VibeCut' : 'free music')
 const VIDEO_BUSY = [0.32, 0.5, 0.62, 0.56, 0.5, 0.66, 0.8, 0.74, 0.52, 0.36]
+// §4.4 music column: each vibe's internal tempo band (half and double time count) and the energy shape it ranks by
+const BAND = { clean: [90, 110], cozy: [70, 90], quiet: [60, 90], cinematic: [70, 100], film: [80, 100], playful: [120, 150], hype: [130, 160] }
+const ARC = {
+  clean: VIDEO_BUSY, film: VIDEO_BUSY,                                   // follow the day
+  cozy: [0.4, 0.42, 0.44, 0.46, 0.48, 0.5, 0.52, 0.52, 0.5, 0.46],       // warm and even
+  quiet: [0.38, 0.38, 0.4, 0.4, 0.42, 0.42, 0.42, 0.4, 0.4, 0.38],       // still, lots of air
+  cinematic: [0.2, 0.24, 0.3, 0.38, 0.46, 0.56, 0.72, 0.88, 0.8, 0.6],   // builds to a late peak
+  playful: [0.72, 0.74, 0.72, 0.76, 0.74, 0.78, 0.76, 0.78, 0.74, 0.7],  // bouncy all through
+  hype: [0.5, 0.6, 0.72, 0.84, 0.92, 0.78, 0.86, 0.92, 0.88, 0.72],      // builds, then drops
+}
+// Gate by the vibe's band, rank by its energy shape, the vibe's own track first. Tracks outside say why in plain words.
+function musicFor(look) {
+  const L = LOOKS[look] || LOOKS.clean, id = vid(L), [lo, hi] = BAND[id], name = look === 'learned' ? 'this vibe' : L.name
+  const fits = [], out = {}
+  for (const k in TRACKS) {
+    const T = TRACKS[k]
+    if (T.sung) { out[k] = 'Has singing — may fight your voice'; continue }
+    if (![T.bpm, T.bpm / 2, T.bpm * 2].some((b) => b >= lo && b <= hi)) { out[k] = T.bpm > hi ? `Quicker than ${name} usually goes` : `Slower than ${name} usually goes`; continue }
+    fits.push(k)
+  }
+  const score = (k) => -sum(TRACKS[k].e.map((e, i) => (e - ARC[id][i]) ** 2))
+  fits.sort((a, c) => (c === L.track) - (a === L.track) || score(c) - score(a))
+  return { fits, out }
+}
 
 /* ------------------------------------------------------------ the shoot: Sarah's day in New York */
 const LABEL = {
@@ -929,15 +994,27 @@ const PARTS_TALK = [
   { id: 'thepark', name: 'The park', time: '0:15–0:21', shots: [[27, 2.2], [31, 1.9], [29, 1.9]] },
   { id: 'wrap', name: 'Wrap-up', time: '0:22–0:26', shots: [[15, 2.6], [6, 2.4]] },
 ]
+// why: the reason in full; short: the same reason in two lines of a 64 px tile (Export's left-out panel)
 const LEFT_OUT = [
-  { n: 2, why: 'Blurry the whole way through' }, { n: 25, why: 'Blurry the whole way through' }, { n: 38, why: 'Blurry the whole way through' },
-  { n: 3, why: 'Same view as a sharper clip' }, { n: 26, why: 'Same view as a sharper clip' }, { n: 39, why: 'Same view as a sharper clip' },
-  { n: 10, why: 'Shaking throughout · judged from a few frames' }, { n: 23, why: 'Shaking throughout · judged from a few frames' },
-  { n: 9, why: 'Under a second long' },
+  { n: 2, why: 'Blurry the whole way through', short: 'Blurry all the way' }, { n: 25, why: 'Blurry the whole way through', short: 'Blurry all the way' }, { n: 38, why: 'Blurry the whole way through', short: 'Blurry all the way' },
+  { n: 3, why: 'Same view as a sharper clip', short: 'A sharper one is in' }, { n: 26, why: 'Same view as a sharper clip', short: 'A sharper one is in' }, { n: 39, why: 'Same view as a sharper clip', short: 'A sharper one is in' },
+  { n: 10, why: 'Shaking throughout · judged from a few frames', short: 'Seems shaky' }, { n: 23, why: 'Shaking throughout · judged from a few frames', short: 'Seems shaky' },
+  { n: 9, why: 'Under a second long', short: 'Under a second' },
 ]
 const LEFT_OUT_PART = { 2: 'campus', 25: 'campus', 38: 'dinner', 3: 'campus', 26: 'library', 39: 'dinner', 10: 'morning', 23: 'library', 9: 'library' }
-// the face box on the hook shot (t14), in image-normalised units
-const FACE14 = { x0: 0.29, y0: 0.4, x1: 0.55, y1: 0.57 }
+// Face boxes [x, y, w, h] in 1080×1920 units of the upright frame, marked by hand on the creator's stills
+// (every still that opens a part, every still with a face, and the three exported hero frames).
+// "Nothing goes over a face box" (§5): words that would sit mid-frame move to the band that misses it.
+const FACE = {
+  0: [[454, 307, 410, 538]], 1: [[475, 307, 389, 576]], 5: [[378, 96, 486, 576]], 6: [[497, 365, 367, 461]], 10: [[389, 422, 151, 211]],
+  11: [[324, 576, 346, 461]], 12: [[734, 192, 346, 576], [410, 749, 270, 288]], 13: [[497, 518, 367, 538], [86, 806, 302, 384]],
+  14: [[356, 710, 248, 403], [605, 806, 194, 288]], 15: [[572, 672, 324, 461], [205, 576, 346, 346]], 16: [[572, 557, 400, 518], [130, 557, 324, 442]],
+  17: [[648, 768, 281, 384], [22, 998, 302, 346]], 24: [[626, 192, 454, 614]], 27: [[302, 384, 497, 576]], 28: [[216, 384, 497, 614]],
+  29: [[464, 595, 616, 480]], 34: [[205, 326, 248, 384]],
+  'hero.png': [[432, 192, 410, 538]], 'hero2.png': [[389, 653, 432, 422]], 'hero3.png': [[778, 192, 302, 614]],
+}
+// Sarah's face on the hook shot (t14), in image-normalised units — the one designed finding
+const FACE14 = { x0: 356 / 1080, y0: 710 / 1920, x1: 604 / 1080, y1: 1113 / 1920 }
 
 /* ------------------------------------------------------------ talking to camera — the round-1 transcript */
 const TX = [
@@ -1001,16 +1078,32 @@ function partsFor(kind, fmt, order = 'time') {
     const part = { id: p.id, name: p.name, time: p.time, pace: 2, opens: 'best', shots: [] }
     if (fmt === 'short' || kind === 'talking') part.shots = p.shots.map(([n, d]) => mkShot(n, d))
     else {
-      const len = F0.lens[i] || 24, pool = [...p.shots.map((s) => s[0]), ...(POOL[p.id] || [])]
+      const len = F0.lens[i] || 24
+      let pool = [...p.shots.map((s) => s[0]), ...(POOL[p.id] || [])]
+      if (!F0.v) {
+        // 16:9: the close car selfies (t00/t01, hero.png) can't be cropped to 16:9 without cutting through her face, so
+        // they are left out (§4.7); the day opens on hero2 (the steps), the sharpest wide source; other parts open on
+        // their own hero frame if they have one. (Real 1280×720 stills would replace these crops.)
+        pool = pool.filter((n) => !WIDE_SKIP.has(n) && (i === 0 || n !== 5))
+        if (i === 0) pool.unshift(5)
+        else { const h = pool.findIndex((n) => HERO[n]); if (h > 0) pool.unshift(pool.splice(h, 1)[0]) }
+      }
       const cnt = Math.max(3, Math.round(len / F0.shot))
-      for (let k = 0; k < cnt; k++) part.shots.push(mkShot(pool[k % pool.length], len / cnt))
+      // real shots differ in length: vary around the average and keep the part's total exact
+      const wt = Array.from({ length: cnt }, (_, k) => 1 + 0.42 * Math.sin(k * 2.39 + i * 1.3) + 0.18 * Math.cos(k * 1.07 + i))
+      const wsum = sum(wt); let acc = 0
+      for (let k = 0; k < cnt; k++) {
+        const d = k === cnt - 1 ? Math.round((len - acc) * 10) / 10 : Math.round(((len * wt[k]) / wsum) * 10) / 10
+        acc += d; part.shots.push(mkShot(pool[k % pool.length], d))
+      }
     }
     return part
   })
 }
+const WIDE_SKIP = new Set([0, 1])
 function wordsFor(kind, fmt, parts) {
   const W = []
-  const add = (o) => W.push(Object.assign({ id: uid('w'), pos: 'mid' }, o))
+  const add = (o) => W.push(Object.assign({ id: uid('w'), pos: 'auto' }, o)) // 'auto': the band that misses the face (flatten)
   const P = (id) => parts.find((p) => p.id === id) ? id : parts[0].id
   if (kind === 'talking') {
     TALK_GROUPS.forEach(([t, text], i) => add({ g: '¶', kind: 'group', text, abs: t, d: (TALK_GROUPS[i + 1]?.[0] ?? t + 1.2) - t, label: 'What you said' }))
@@ -1019,7 +1112,8 @@ function wordsFor(kind, fmt, parts) {
   const long = fmt !== 'short'
   const s = long ? (fmt === 'long' ? 3 : 8) : 1 // stretch offsets for long formats
   if (kind === 'fast_day') {
-    if (!long) add({ key: 'title', g: 'T', kind: 'hook', text: 'A day out with Sarah', part: P('morning'), at: 0, d: 2, label: 'Title', warn: 'Covers a face for 1.2 s' })
+    // the one designed finding: this hook stays mid-frame, over Sarah's face, until "1 thing to check" moves it
+    if (!long) add({ key: 'title', g: 'T', kind: 'hook', text: 'A day out with Sarah', part: P('morning'), at: 0, d: 2, label: 'Title', pos: 'mid', warn: 'Covers a face for 1.2 s' })
     add({ g: '◷', kind: 'clock', text: '8:35 am', part: P('morning'), at: long ? 0.6 : 2, d: 2, label: 'Clock' })
     add({ key: 'campus', g: '⌖', kind: 'place', text: 'Campus', sub: 'New York', part: P('campus'), at: 0.3, d: 2.2, label: 'Place' })
     add({ key: 'library', g: '⌖', kind: 'place', text: 'Library', sub: 'New York', part: P('library'), at: 0.3, d: 2.2, label: 'Place' })
@@ -1038,6 +1132,8 @@ function wordsFor(kind, fmt, parts) {
     parts.forEach((p, i) => add({ g: '№', kind: 'list', text: `${i + 1} · ${p.name}`, n: i + 1, part: p.id, at: i === 0 ? 2.2 : 0.3, d: 2.2, label: 'Numbered place' }))
   }
   if (long) {
+    // one card at a time: a part's other words wait until its title has gone (2.4 s + 0.3 s)
+    W.forEach((w) => { if (w.part && w.at < 2.7) w.at = 2.7 })
     parts.forEach((p, i) => add({ g: '§', kind: 'part', text: p.name, kicker: `Part ${i + 1}`, part: p.id, at: 0, d: 2.4, label: 'Part title' }))
     if (fmt === 'long') add({ g: '■', kind: 'close', text: titleFor(), part: parts[parts.length - 1].id, at: 21.6, d: 2.2, label: 'Closing title' })
   }
@@ -1046,8 +1142,10 @@ function wordsFor(kind, fmt, parts) {
 function makeBoard({ kind, fmt, look, order = 'time', music } = {}) {
   kind = kind || curKind(); fmt = fmt || APP.fmt; look = look || curLook(kind)
   const parts = partsFor(kind, fmt, order)
+  // the music follows the vibe: its own track, unless the creator picked one (musicPicked survives a vibe switch)
   const b = { kind, fmt, look, order, title: kind === 'talking' ? 'A day in New York' : 'A day out with Sarah',
-    music: music || (kind === 'talking' ? 'none' : APP.music || 'slow_sunday'), titlePos: 'mid', parts, words: [], moments: [], captions: KINDS[kind].caption, extraUsed: [] }
+    music: music || (kind === 'talking' ? 'none' : APP.music || LOOKS[look].track), musicPicked: !!(music || APP.music),
+    titlePos: 'mid', parts, words: [], moments: [], captions: KINDS[kind].caption, extraUsed: [] }
   if (APP.state === 'no-music' && APP.s === 'making') b.music = 'none'
   b.words = wordsFor(kind, fmt, parts)
   if (kind === 'talking') b.said = { ov: {}, kinds: { pause: true, retake: true, stumble: true, filler: false }, ums: 'stumbles' }
@@ -1062,17 +1160,38 @@ function flatten(b) {
     p.shots.forEach((s, si) => { shots.push(Object.assign({}, s, { t0: t, t1: t + s.d, pi, si, part: p.id })); t += s.d })
     parts.push({ id: p.id, name: p.name, t0, t1: t, pi })
   })
-  const total = t
+  const total = t, G = geo(FMTS[b.fmt].v)
   for (const w of b.words) {
     let t0
     if (w.abs != null) t0 = w.abs
     else { const p = parts.find((x) => x.id === w.part); if (!p) continue; t0 = p.t0 + Math.min(w.at, Math.max(0, p.t1 - p.t0 - 0.6)) }
-    words.push(Object.assign({}, w, { t0, t1: Math.min(total, t0 + w.d) }))
+    let t1 = Math.min(total, t0 + w.d), pos = w.pos
+    // a hook never carries over the cut: it has faded out before the next shot (and the next face) arrives
+    if (w.kind === 'hook') { const s = shots.find((x) => t0 >= x.t0 - 1e-6 && t0 < x.t1); if (s) t1 = Math.min(t1, Math.max(t0 + 0.6, s.t1 - 0.15)) }
+    if ((pos === 'auto' || pos == null) && BANDED.has(w.kind)) pos = bandFor(G, shots.filter((x) => x.t1 > t0 && x.t0 < t1 + 0.15).map((x) => x.n), w.kind === 'diary' ? 'low' : 'top')
+    words.push(Object.assign({}, w, { t0, t1, pos }))
   }
   words.sort((a, c) => a.t0 - c.t0)
   return { shots, parts, words, total }
 }
 const lbl = (s) => (s ? s.label : 'nothing')
+// the two text bands: above and below the middle of the frame, where faces are (§4.7 text box, split)
+const BANDED = new Set(['hook', 'part', 'diary', 'close'])
+const BANDS = (G) => (G.v ? { top: [288, 560], low: [1000, 1248] } : { top: [54, 250], low: [600, 790] })
+const bandMid = (G, pos) => { const B = BANDS(G)[pos]; return (B[0] + B[1]) / 2 }
+function facesIn(n, G) { // face boxes of shot n in frame units, after the same crop the player draws
+  const h = !G.v && HERO[n], src = FACE[h ? h[0] : n]
+  if (!src) return []
+  if (G.v) return src.map(([x, y, w, hh]) => ({ x, y, w, h: hh }))
+  const k = 1920 / 1080, dy = h ? -h[1] * 1920 * k : (1080 - 1920 * k) * 0.42
+  return src.map(([x, y, w, hh]) => ({ x: x * k, y: y * k + dy, w: w * k, h: hh * k }))
+}
+function bandFor(G, ns, prefer) { // the preferred band if it misses every face on screen, else the one that covers less
+  const B = BANDS(G), x0 = G.W * 0.25, x1 = G.W * 0.75, faces = ns.flatMap((n) => facesIn(n, G))
+  const hitArea = (band) => sum(faces.map((f) => Math.max(0, Math.min(x1, f.x + f.w) - Math.max(x0, f.x)) * Math.max(0, Math.min(band[1], f.y + f.h) - Math.max(band[0], f.y))))
+  const order = prefer === 'low' ? ['low', 'top'] : ['top', 'low']
+  return hitArea(B[order[0]]) <= hitArea(B[order[1]]) ? order[0] : order[1]
+}
 
 /* computed diff (board.diff / describe): never written by the model */
 const PACE = ['Let it breathe', 'Slower', 'As made', 'Quicker', 'Punchier']
@@ -1146,8 +1265,9 @@ function seedTurns() {
   T({ icon: '✦', typed: true, req: 'end on the sunset shot', line: 'You asked: ‘end on the sunset shot’', short: 'Ended on the sunset',
     op: (x) => { const hasSunset = x.parts.some((p) => p.shots.some((s) => s.id === 'seed-sunset')); if (!hasSunset) return SKIP; const d = x.parts[x.parts.length - 1]; d.shots[d.shots.length - 1] = Object.assign(mkShot(37, 2.4), { id: 'seed-end', label: 'the sunset, later' }); return x },
     diff: ['Ends on: the sunset in Park'] })
-  T({ icon: '●', req: 'switch the music', line: 'Music: Slow Sunday → Paper Boats', short: 'Music: Paper Boats', undone: true,
-    op: (x) => { x.music = 'paper_boats'; return x }, diff: ['Its lift lands on the fountain · ends on its own ending'] })
+  const m0 = b.music, m1 = musicFor(b.look).fits.find((id) => id !== m0) || m0
+  T({ icon: '●', req: 'switch the music', line: `Music: ${trackName(m0)} → ${trackName(m1)}`, short: `Music: ${trackName(m1)}`, undone: true, music: true,
+    op: (x) => { x.music = m1; x.musicPicked = true; return x }, diff: musicDiff(m0, m1, b.kind) })
   T({ icon: '✦', typed: true, req: 'less text', line: 'You asked: ‘less text’', short: 'Less text',
     op: (x) => { const before = x.words.length; x.words = x.words.filter((w) => w.key !== 'campus' && w.key !== 'library'); return x.words.length === before ? SKIP : x },
     diff: ['Removed 2 of 7 words on screen: ‘campus’, ‘library’'] })
@@ -1223,6 +1343,16 @@ function cover(ctx, im, x, y, w, h, z = 1, ox = 0.5, oy = 0.42, tx = 0, ty = 0) 
   const dw = im.naturalWidth * s, dh = im.naturalHeight * s
   ctx.drawImage(im, x + (w - dw) * ox + tx, y + (h - dh) * oy + ty, dw, dh)
 }
+// Sharp 16:9 crops of three exported frames, taken above their burned-in words (the crops motion.html uses).
+// On a wide frame they stand in for t00, t05 and t24, so the 880 px player isn't a 4x upscale of a 216 px still.
+const HERO = { 0: ['hero.png', 40 / 960], 5: ['hero2.png', 250 / 960], 24: ['hero3.png', 100 / 960] }
+function heroCrop(n) { const h = HERO[n]; if (!h) return null; const im = pic(h[0]); if (!ok(im)) return null; const W = im.naturalWidth; return { im, sy: h[1] * im.naturalHeight, sw: W, sh: (W * 9) / 16 } }
+function shotPic(ctx, n, G, x, y, w, h, z = 1, ox = 0.5, oy = 0.42, tx = 0, ty = 0) {
+  const hc = !G.v && heroCrop(n)
+  if (!hc) return cover(ctx, pic(n), x, y, w, h, z, ox, oy, tx, ty)
+  const s = Math.max(w / hc.sw, h / hc.sh) * z, dw = hc.sw * s, dh = hc.sh * s
+  ctx.drawImage(hc.im, 0, hc.sy, hc.sw, hc.sh, x + (w - dw) * ox + tx, y + (h - dh) * oy + ty, dw, dh)
+}
 const BL = document.createElement('canvas')
 function blurDraw(ctx, im, G, z = 1, oy = 0.42, tx = 0) {
   const bw = 72, bh = Math.round(72 * G.H / G.W)
@@ -1267,6 +1397,43 @@ function leak(ctx, G, color, a, drift) {
 /* ------------------------------------------------------------ type helpers */
 const font = (c, w, s, fam, it) => { c.font = `${it ? 'italic ' : ''}${w} ${s}px ${fam}` }
 function sh(c, blur = 16, col = 'rgba(0,0,0,.5)', oy = 3) { const k = c.getTransform().a; c.shadowColor = col; c.shadowBlur = blur * k; c.shadowOffsetY = oy * k; c.shadowOffsetX = 0 }
+/* ---- the text floor, copied verbatim from motion.html so the Vibe card, Watch and the library draw the same
+   pixels (spec P6: preview equals export). Box drop shadows keep using sh. ---- */
+function shadow(g, c, blur, col, oy = 0) { c.shadowColor = col; c.shadowBlur = blur * g.k; c.shadowOffsetX = 0; c.shadowOffsetY = oy * g.k }
+/** The readability floor for any word drawn without a box: a tight dark shadow. A soft, faint glow
+ *  looks nicer on a dark test frame and vanishes over sky, leaves and white walls — which is where
+ *  a vlogger actually films. */
+function legible(g, c) { shadow(g, c, 8, 'rgba(0,0,0,.55)', 2) }
+/** The floor's second half. A blurred shadow of a hairline face (light caps, handwriting, a typewriter)
+ *  is nearly invisible — the blur spreads too little ink — so a word drawn while the floor is set first
+ *  gets a 6 px soft dark edge for the shadow to hold on to. Wired once into each words layer. */
+const FLOOR_COLOR = 'rgba(0, 0, 0, 0.55)' // the floor's shadow colour, as the canvas reports it back
+function floorEdges(c) {
+  if (c.floorEdges) return c
+  const fill = c.fillText
+  c.fillText = function (s, x, y) {
+    if (this.shadowColor === FLOOR_COLOR) { this.save(); this.lineWidth = 6; this.lineJoin = 'round'; this.strokeStyle = 'rgba(0,0,0,.35)'; this.strokeText(s, x, y); this.restore() }
+    return fill.call(this, s, x, y)
+  }
+  c.floorEdges = true
+  return c
+}
+/** Film's typewriter words. Courier New Bold stands in for Courier Prime, which runs heavier; a 2 px
+ *  stroke in the same ink makes up the weight so the line doesn't read as a hairline over a busy frame. */
+function typed(c, s, x, y) { c.fillText(s, x, y); c.save(); c.lineWidth = 2; c.lineJoin = 'round'; c.strokeStyle = c.fillStyle; c.strokeText(s, x, y); c.restore() }
+// index.html draws in frame units under a scale transform, so the floor's scale (motion.html's g.k) is read from it
+const gOf = (c) => ({ k: c.getTransform().a })
+function tsh(c) { legible(gOf(c), c) } // every unboxed word: the same floor as motion.html, whatever the old per-call values were
+// Clean's bright-background test (motion.html): on a bright corner the clock and place stamps sit on a 60% box.
+// Measured mean luminance (0–1) of that corner on each still, upright and in the 16:9 crop.
+const LUMA_V = [0.65, 0.62, 0.88, 0.71, 0.88, 0.86, 0.84, 0.64, 0.56, 0.75, 0.71, 0.86, 0.41, 0.77, 0.71, 0.77, 0.55, 0.69, 0.57, 0.65, 0.58,
+  0.7, 0.55, 0.72, 0.69, 0.76, 0.83, 0.69, 0.86, 0.75, 0.63, 0.56, 0.41, 0.58, 0.59, 0.55, 0.59, 0.35, 0.61, 0.62, 0.22, 0.17]
+const LUMA_W = [0.74, 0.74, 0.7, 0.68, 0.46, 0.61, 0.62, 0.59, 0.36, 0.74, 0.53, 0.87, 0.31, 0.68, 0.65, 0.7, 0.76, 0.68, 0.28, 0.45, 0.52,
+  0.54, 0.85, 0.45, 0.67, 0.49, 0.83, 0.62, 0.61, 0.78, 0.59, 0.59, 0.27, 0.42, 0.42, 0.63, 0.46, 0.2, 0.77, 0.8, 0.04, 0.14]
+const LUMA_HERO = { 'hero.png': 0.73, 'hero2.png': 0.95, 'hero3.png': 0.62 }
+function isBright(n, G) { const h = !G.v && HERO[n]; return (h ? LUMA_HERO[h[0]] : (G.v ? LUMA_V : LUMA_W)[((n % 42) + 42) % 42]) >= 0.5 }
+// Film's date shows on every shot; on 9:16 it sits low at the right edge of the text box, so the bottom-band words step up 64 px
+const dateLift = (L, G) => (L.date && G.v ? 64 : 0)
 function nosh(c) { c.shadowColor = 'transparent'; c.shadowBlur = 0; c.shadowOffsetY = 0 }
 function spacedW(c, text, tr) { const ch = [...text]; return sum(ch.map((x) => c.measureText(x).width)) + tr * Math.max(0, ch.length - 1) }
 function spaced(c, text, x, y, tr, align = 'left') {
@@ -1342,7 +1509,7 @@ E.hook = (c, L, ms, hold, w, G, R) => { // 1 · hook line: no slow entrance (120
   const out = ms > hold ? clamp((ms - hold) / 150) : 0
   let a = id === 'film' || id === 'cinematic' ? 1 : clamp(ms / 120)
   a *= 1 - out
-  const cx = G.W / 2, cy = w.pos === 'top' ? (G.v ? 350 : 150) : G.v ? 860 : G.H * 0.46
+  const cx = G.W / 2, cy = w.pos === 'top' || w.pos === 'low' ? bandMid(G, w.pos) : G.v ? 860 : G.H * 0.46
   const maxW = G.v ? 700 : 1200
   c.save(); c.globalAlpha = a; c.textAlign = 'center'; c.textBaseline = 'middle'
   let lines, lh, bw = 0
@@ -1354,10 +1521,10 @@ E.hook = (c, L, ms, hold, w, G, R) => { // 1 · hook line: no slow entrance (120
       c.fillStyle = 'rgba(0,0,0,.6)'; rr(c, cx - bw / 2, cy - bh / 2, bw, bh, 12); c.fill()
       c.fillStyle = '#fff'; linesAt(c, lines, cx, cy + 3, lh); hit(R, w, cx - bw / 2, cy - bh / 2, bw, bh); break
     }
-    case 'cozy': font(c, 600, 104, F.caveat); lines = wrap(c, w.text.toLowerCase(), maxW); lh = 100; sh(c, 18, 'rgba(50,30,15,.55)'); c.fillStyle = L.pal[0]; linesAt(c, lines, cx, cy, lh); break
-    case 'quiet': font(c, 400, 62, F.serif, true); lines = wrap(c, w.text, maxW - 80); lh = 74; sh(c, 14, 'rgba(0,0,0,.35)'); c.fillStyle = L.pal[0]; linesAt(c, lines, cx, cy, lh); break
-    case 'cinematic': font(c, 400, 60, F.serif); lines = wrap(c, w.text, maxW - 80); lh = 72; sh(c, 14, 'rgba(0,0,0,.4)'); c.fillStyle = '#fff'; linesAt(c, lines, cx, cy, lh); break
-    case 'film': font(c, 700, 58, F.courier); lines = wrap(c, w.text.toLowerCase(), maxW - 40); lh = 68; sh(c, 12, 'rgba(0,0,0,.8)', 2); c.fillStyle = L.pal[0]; linesAt(c, lines, cx, cy, lh); break
+    case 'cozy': font(c, 600, 104, F.caveat); lines = wrap(c, w.text.toLowerCase(), maxW); lh = 100; tsh(c, 18, 'rgba(50,30,15,.55)'); c.fillStyle = L.pal[0]; linesAt(c, lines, cx, cy, lh); break
+    case 'quiet': font(c, 400, 62, F.serif, true); lines = wrap(c, w.text, maxW - 80); lh = 74; tsh(c, 14); c.fillStyle = L.pal[0]; linesAt(c, lines, cx, cy, lh); break
+    case 'cinematic': font(c, 400, 60, F.serif); lines = wrap(c, w.text, maxW - 80); lh = 72; tsh(c, 14); c.fillStyle = '#fff'; linesAt(c, lines, cx, cy, lh); break
+    case 'film': font(c, 700, 60, F.courier); lines = wrap(c, w.text.toLowerCase(), maxW - 40); lh = 74; tsh(c); c.fillStyle = L.pal[0]; lines.forEach((l, i) => typed(c, l, cx, cy - ((lines.length - 1) * lh) / 2 + i * lh)); break
     case 'playful': {
       font(c, 800, 72, F.round); lines = wrap(c, w.text, maxW - 80); lh = 84
       bw = Math.max(...lines.map((l) => c.measureText(l).width)) + 56; const bh = lines.length * lh + 34
@@ -1375,7 +1542,7 @@ E.hook = (c, L, ms, hold, w, G, R) => { // 1 · hook line: no slow entrance (120
           const t0 = wi * 70, k = ms - t0, ww = c.measureText(wd).width
           if (k >= 0) {
             const s = lerp(1.5, 1, EASE.expo(clamp(k / 150)))
-            c.save(); c.translate(x + ww / 2, y); c.scale(s, s); sh(c, 18, 'rgba(0,0,0,.45)'); c.fillStyle = '#fff'; c.fillText(wd, 0, 0); c.restore()
+            c.save(); c.translate(x + ww / 2, y); c.scale(s, s); tsh(c, 18); c.fillStyle = '#fff'; c.fillText(wd, 0, 0); c.restore()
           }
           x += ww + sp; wi++
         })
@@ -1394,10 +1561,12 @@ E.clock = (c, L, ms, hold, w, G, R) => { // 2 · clock stamp (Film uses the came
   c.save(); c.textBaseline = 'alphabetic'; c.textAlign = 'left'
   let tw = 200
   switch (id) {
-    case 'clean': enter(c, L, m, x, y); font(c, 500, 56, F.inter); sh(c, 14, 'rgba(0,0,0,.5)'); c.fillStyle = 'rgba(255,255,255,.6)'; c.fillText(w.text, x, y); tw = c.measureText(w.text).width; break
-    case 'cozy': enter(c, L, m, x + 90, y - 20); font(c, 600, 80, F.caveat); sh(c, 12, 'rgba(50,30,15,.5)'); c.fillStyle = L.pal[0]; c.fillText(w.text.toLowerCase(), x, y); tw = c.measureText(w.text).width; break
-    case 'quiet': enter(c, L, m, x, y); font(c, 300, 40, F.inter); sh(c, 10, 'rgba(0,0,0,.3)'); c.fillStyle = L.pal[0]; tw = spaced(c, w.text.toUpperCase(), x, y, 8); break
-    case 'cinematic': { enter(c, L, m, x, y); font(c, 300, 38, F.inter); sh(c, 10, 'rgba(0,0,0,.35)'); c.fillStyle = '#fff'; tw = spaced(c, w.text.toUpperCase(), x, y, 11.4); nosh(c); c.fillStyle = 'rgba(255,255,255,.7)'; c.fillRect(x, y + 20, tw * m.p, 2); break }
+    case 'clean': enter(c, L, m, x, y); font(c, 500, 56, F.inter); tw = c.measureText(w.text).width
+      if (G.bright) { nosh(c); rr(c, x - 18, y - 56, tw + 36, 78, 14); c.fillStyle = 'rgba(0,0,0,.6)'; c.fill() } else tsh(c)
+      c.fillStyle = 'rgba(255,255,255,.72)'; c.fillText(w.text, x, y); break
+    case 'cozy': enter(c, L, m, x + 90, y - 20); font(c, 600, 80, F.caveat); tsh(c, 12, 'rgba(50,30,15,.55)'); c.fillStyle = L.pal[0]; c.fillText(w.text.toLowerCase(), x, y); tw = c.measureText(w.text).width; break
+    case 'quiet': enter(c, L, m, x, y); font(c, 300, 40, F.inter); tsh(c, 10); c.fillStyle = L.pal[0]; tw = spaced(c, w.text.toUpperCase(), x, y, 8); break
+    case 'cinematic': { enter(c, L, m, x, y); font(c, 300, 38, F.inter); tsh(c, 10); c.fillStyle = '#fff'; tw = spaced(c, w.text.toUpperCase(), x, y, 11.4); nosh(c); c.fillStyle = 'rgba(255,255,255,.7)'; c.fillRect(x, y + 20, tw * m.p, 2); break }
     case 'playful': {
       const a = 1 - m.eo, sw = EASE.expo(clamp(ms / 300))
       font(c, 800, 54, F.round); tw = c.measureText(w.text).width
@@ -1409,11 +1578,14 @@ E.clock = (c, L, ms, hold, w, G, R) => { // 2 · clock stamp (Film uses the came
   hit(R, w, x - 10, y - 70, tw + 30, 90)
   c.restore()
 }
-function filmDate(c, G, now, alpha = 1) { // Film: a camera-back date on every shot (DSEG7 amber; kept left of the button rail)
+function filmDate(c, G, now, alpha = 1) { // Film: a camera-back date on every shot (DSEG7 amber)
+  // 9:16: right-aligned with its right edge at x 780, baseline 1240 — the corner feel of a camera-back stamp, while
+  // keeping clear of the app's button rail (§4.7: nothing at x > 780 below y 840). 16:9: the bottom-right corner.
+  const x = G.v ? 780 : 1760, y = G.v ? 1240 : 792, d = "9 25 '26"
   c.save(); font(c, 400, G.v ? 46 : 40, F.dseg); c.textAlign = 'right'; c.textBaseline = 'alphabetic'
   c.globalAlpha = alpha * (Math.floor(now / 83) % 2 ? 1 : 0.97)
-  c.fillStyle = '#FF9A3C'; sh(c, 5, 'rgba(255,130,40,.95)', 0)
-  c.fillText("9 25 '26", G.v ? 770 : 1760, G.v ? 1232 : 792); c.restore()
+  c.fillStyle = '#FF9A3C'; tsh(c); c.fillText(d, x, y) // a dark floor under the glow, for bright frames
+  sh(c, 5, 'rgba(255,130,40,.95)', 0); c.fillText(d, x, y); c.restore()
 }
 E.place = (c, L, ms, hold, w, G, R) => { // 3 · place stamp
   if (!w.text) return
@@ -1424,8 +1596,10 @@ E.place = (c, L, ms, hold, w, G, R) => { // 3 · place stamp
   switch (id) {
     case 'clean': {
       c.globalAlpha *= 1 - m.eo
-      sh(c, 12, 'rgba(0,0,0,.45)'); pinGlyph(c, x + 20, y - 22 - 40 * (1 - m.p), 46, '#fff')
-      font(c, 600, 58, F.inter); c.fillStyle = '#fff'; tw = c.measureText(w.text).width
+      font(c, 600, 58, F.inter); tw = c.measureText(w.text).width
+      if (G.bright) { font(c, 500, 34, F.inter); const bw = Math.max(tw, c.measureText(w.sub || '').width) + 72, u = L.ease(clamp(ms / 400)); nosh(c); rr(c, x - 18, y - 76, (bw + 20) * u, 150, 16); c.fillStyle = 'rgba(0,0,0,.6)'; c.fill() }
+      tsh(c, 12); pinGlyph(c, x + 20, y - 22 - 40 * (1 - m.p), 46, '#fff')
+      font(c, 600, 58, F.inter); c.fillStyle = '#fff'
       const wp = L.ease(clamp((ms - 150) / 400))
       c.save(); c.beginPath(); c.rect(x + 50, y - 80, (tw + 20) * wp, 110); c.clip(); c.fillText(w.text, x + 56, y); c.restore()
       c.globalAlpha *= clamp((ms - 230) / 250); font(c, 500, 34, F.inter); c.fillStyle = 'rgba(255,255,255,.82)'; c.fillText(w.sub || '', x + 56, y + 50)
@@ -1437,17 +1611,19 @@ E.place = (c, L, ms, hold, w, G, R) => { // 3 · place stamp
       c.fillStyle = '#C0694A'; c.beginPath(); c.arc(x + 44, y - 18, 15, 0, Math.PI * 2); c.fill(); c.fillStyle = '#F3E6CF'; c.beginPath(); c.arc(x + 44, y - 18, 5, 0, Math.PI * 2); c.fill()
       c.fillStyle = '#3A2E22'; c.fillText(w.text.toLowerCase(), x + 76, y); break
     }
-    case 'quiet': enter(c, L, m, x, y); font(c, 300, 38, F.inter); sh(c, 10, 'rgba(0,0,0,.3)'); c.fillStyle = L.pal[0]; tw = spaced(c, w.text.toUpperCase(), x, y, 7.6); break
+    case 'quiet': enter(c, L, m, x, y); font(c, 300, 38, F.inter); tsh(c, 10); c.fillStyle = L.pal[0]; tw = spaced(c, w.text.toUpperCase(), x, y, 7.6); break
     case 'cinematic': {
-      c.globalAlpha *= EASE.inout(clamp(ms / 800)) * (1 - m.eo); font(c, 300, 40, F.inter); sh(c, 10, 'rgba(0,0,0,.35)'); c.fillStyle = '#fff'
+      c.globalAlpha *= EASE.inout(clamp(ms / 800)) * (1 - m.eo); font(c, 300, 40, F.inter); tsh(c, 10); c.fillStyle = '#fff'
       tw = spaced(c, w.text.toUpperCase(), x, y, 12); nosh(c); c.fillStyle = 'rgba(255,255,255,.65)'; c.fillRect(x, y + 20, Math.min(tw, 360), 2)
-      font(c, 400, 24, F.courier); c.fillStyle = 'rgba(255,255,255,.75)'; c.fillText('40.8075° N · 73.9626° W', x, y + 58); break
+      font(c, 700, 26, F.courier); tsh(c); c.fillStyle = 'rgba(255,255,255,.85)'; c.fillText('40.8075° N · 73.9626° W', x, y + 60); break
     }
     case 'film': {
       const step = Math.min(3, Math.floor(ms / 125)), s = 1.15 - 0.05 * step, j = ((Math.floor(ms / 83) * 7) % 3) - 1
       c.globalAlpha *= ms > hold ? 0 : 0.92; c.translate(x + 180 + j, y - 20 + j); c.rotate((-3 * Math.PI) / 180); c.scale(s, s); c.translate(-(x + 180), -(y - 20))
       font(c, 700, 50, F.courier); tw = c.measureText(w.text.toUpperCase()).width
-      c.strokeStyle = '#FF9A3C'; c.lineWidth = 4; rr(c, x - 6, y - 58, tw + 40, 80, 6); c.stroke(); c.fillStyle = '#FF9A3C'; c.fillText(w.text.toUpperCase(), x + 14, y); break
+      // an ink stamp that holds over trees: 7 px amber rule on a 20% dark ground
+      rr(c, x - 6, y - 58, tw + 40, 80, 6); c.fillStyle = 'rgba(0,0,0,.2)'; c.fill(); c.strokeStyle = '#FF9A3C'; c.lineWidth = 7; c.stroke()
+      tsh(c); c.fillStyle = '#FF9A3C'; c.fillText(w.text.toUpperCase(), x + 14, y); break
     }
     case 'playful': {
       enter(c, L, m, x + 160, y - 20, { rot: -4 }); font(c, 800, 54, F.round); tw = c.measureText(w.text).width
@@ -1459,7 +1635,10 @@ E.place = (c, L, ms, hold, w, G, R) => { // 3 · place stamp
       c.globalAlpha *= 1 - m.out; const s = lerp(1.5, 1, EASE.expo(clamp(ms / 150))), e = ms / 1000
       const tx = ms < 200 ? 4 * 3 * Math.exp(-ms / 60) * Math.sin(2 * Math.PI * 14 * e) : 0
       font(c, 400, 104, F.anton); tw = c.measureText(w.text.toUpperCase()).width
-      c.translate(x + tw / 2 + tx, y - 36); c.scale(s, s); c.translate(-(x + tw / 2), -(y - 36)); sh(c, 16, 'rgba(0,0,0,.45)'); c.fillStyle = '#fff'; c.fillText(w.text.toUpperCase(), x, y); break
+      c.translate(x + tw / 2 + tx, y - 36); c.scale(s, s); c.translate(-(x + tw / 2), -(y - 36)); tsh(c, 16); c.fillStyle = '#fff'; c.fillText(w.text.toUpperCase(), x, y)
+      // the second line is white; orange is only a 6 px underline (orange type sank into the trees)
+      if (w.sub) { font(c, 800, 40, F.inter); const sw = spaced(c, w.sub.toUpperCase(), x + 4, y + 62, 6); nosh(c); c.fillStyle = '#FF6A3D'; c.fillRect(x + 4, y + 76, sw, 6) }
+      break
     }
   }
   hit(R, w, x - 10, y - 80, tw + 120, 140)
@@ -1467,7 +1646,8 @@ E.place = (c, L, ms, hold, w, G, R) => { // 3 · place stamp
 }
 E.part = (c, L, ms, hold, w, G, R) => { // 4 · part title
   const id = vid(L), m = mot(L, ms, hold); if (!m && !(id === 'film' && ms >= 0 && ms < 1500)) return
-  const cx = G.W / 2, cy = G.H * (G.v ? 0.44 : 0.46)
+  // kicker, title and rule span about cy − 100 … cy + 75, so +12 centres the group in its band
+  const cx = G.W / 2, cy = w.pos === 'top' || w.pos === 'low' ? bandMid(G, w.pos) + 12 : G.H * (G.v ? 0.44 : 0.46)
   c.save(); c.textAlign = 'center'; c.textBaseline = 'middle'
   const dim = { clean: 0, cozy: 0.2, quiet: 0.2, cinematic: 0.4, film: 0, playful: 0, hype: 0 }[id]
   const din = clamp(ms / 400), dout = ms > hold ? clamp((ms - hold) / 400) : 0
@@ -1479,6 +1659,7 @@ E.part = (c, L, ms, hold, w, G, R) => { // 4 · part title
   }
   const a = (1 - (m ? m.eo : 1))
   c.globalAlpha = a * clamp(ms / 250)
+  tsh(c)
   switch (id) {
     case 'clean': font(c, 600, 30, F.inter); c.fillStyle = '#F2C14E'; spaced(c, k.toUpperCase(), cx, cy - 74, 6, 'center'); break
     case 'cozy': font(c, 600, 44, F.caveat); c.fillStyle = L.pal[1]; c.fillText(k.toLowerCase(), cx, cy - 78); break
@@ -1490,15 +1671,15 @@ E.part = (c, L, ms, hold, w, G, R) => { // 4 · part title
   c.globalAlpha = a
   const tp = m ? m.p : 1
   switch (id) {
-    case 'clean': { c.globalAlpha *= clamp((ms - 150) / 300); font(c, 600, 88, F.inter); sh(c, 16); c.fillStyle = '#fff'; spaced(c, w.text, cx, cy + 16 * (1 - tp), lerp(7, 0, tp), 'center'); nosh(c); const hl = 120 * EASE.quint(clamp((ms - 300) / 500)); c.fillStyle = 'rgba(255,255,255,.7)'; c.fillRect(cx - hl / 2, cy + 64, hl, 2); break }
-    case 'cozy': { enter(c, L, m, cx, cy); font(c, 600, 110, F.caveat); sh(c, 14, 'rgba(40,25,10,.45)'); c.fillStyle = L.pal[0]; c.fillText(w.text.toLowerCase(), cx, cy); nosh(c)
+    case 'clean': { c.globalAlpha *= clamp((ms - 150) / 300); font(c, 600, 88, F.inter); tsh(c, 16); c.fillStyle = '#fff'; spaced(c, w.text, cx, cy + 16 * (1 - tp), lerp(7, 0, tp), 'center'); nosh(c); const hl = 120 * EASE.quint(clamp((ms - 300) / 500)); c.fillStyle = 'rgba(255,255,255,.7)'; c.fillRect(cx - hl / 2, cy + 64, hl, 2); break }
+    case 'cozy': { enter(c, L, m, cx, cy); font(c, 600, 110, F.caveat); tsh(c, 14, 'rgba(40,25,10,.55)'); c.fillStyle = L.pal[0]; c.fillText(w.text.toLowerCase(), cx, cy); nosh(c)
       const up = clamp((ms - 300) / 400), tw = c.measureText(w.text.toLowerCase()).width; c.strokeStyle = L.pal[1]; c.lineWidth = 6; c.lineCap = 'round'; c.beginPath()
       for (let i = 0; i <= 24 * up; i++) { const u = i / 24, px = cx - tw / 2 + u * tw, py = cy + 58 + Math.sin(u * 9) * 5; i ? c.lineTo(px, py) : c.moveTo(px, py) } c.stroke(); break }
     case 'quiet': enter(c, L, m, cx, cy); font(c, 400, 84, F.serif, true); c.fillStyle = L.pal[0]; c.fillText(w.text, cx, cy); break
     case 'cinematic': { enter(c, L, m, cx, cy); font(c, 300, 56, F.inter); c.fillStyle = '#fff'; const tw = spaced(c, w.text.toUpperCase(), cx, cy, 17, 'center'); c.fillStyle = 'rgba(255,255,255,.6)'; c.fillRect(cx - tw / 2, cy + 50, tw * tp, 2); break }
     case 'playful': {
       font(c, 800, 96, F.round); const chars = [...w.text], tot = c.measureText(w.text).width; let x = cx - tot / 2
-      chars.forEach((ch, i) => { const cw = c.measureText(ch).width, k2 = clamp((ms - i * 40) / 500), s = lerp(0.3, 1, EASE.back(k2)); if (k2 > 0) { c.save(); c.translate(x + cw / 2, cy); c.scale(s, s); c.fillStyle = L.pal[i % 3]; sh(c, 10, 'rgba(0,0,0,.3)'); c.fillText(ch, 0, 0); c.restore() } x += cw })
+      chars.forEach((ch, i) => { const cw = c.measureText(ch).width, k2 = clamp((ms - i * 40) / 500), s = lerp(0.3, 1, EASE.back(k2)); if (k2 > 0) { c.save(); c.translate(x + cw / 2, cy); c.scale(s, s); c.fillStyle = L.pal[i % 3]; tsh(c, 10); c.fillText(ch, 0, 0); c.restore() } x += cw })
       break
     }
     case 'hype': { const s = lerp(1.5, 1, EASE.expo(clamp(ms / 150))); c.translate(cx, cy); c.scale(s, s); c.translate(-cx, -cy); font(c, 400, 150, F.anton); c.fillStyle = '#fff'; c.fillText(w.text.toUpperCase(), cx, cy); if (ms < 100) { c.globalAlpha = 1 - ms / 100; c.fillStyle = '#fff'; c.fillRect(-G.W, -G.H, G.W * 3, G.H * 3) } break }
@@ -1506,25 +1687,27 @@ E.part = (c, L, ms, hold, w, G, R) => { // 4 · part title
   c.restore()
 }
 E.kicker = (c, L, ms, hold, w, G) => { // 4 on Short: a 1 s corner kicker
-  if (ms < 0 || ms > 1200) return
-  const a = ms < 200 ? ms / 200 : ms > 1000 ? 1 - (ms - 1000) / 200 : 1
-  c.save(); c.globalAlpha = clamp(a); font(c, 600, 30, vid(L) === 'film' ? F.courier : F.inter); c.fillStyle = L.pal[0]; sh(c, 10)
-  c.textAlign = 'left'; c.fillText(`${(w.kicker || '').toUpperCase()} · ${w.text.toUpperCase()}`, G.x0, G.v ? 330 : 110); c.restore()
+  if (ms < 0 || ms > 1000) return
+  const a = ms < 200 ? ms / 200 : ms > 800 ? (1000 - ms) / 200 : 1
+  c.save(); c.globalAlpha = clamp(a); if (vid(L) === 'film') font(c, 700, 44, F.courier); else font(c, 600, 30, F.inter); c.fillStyle = L.pal[0]; tsh(c, 10)
+  c.textAlign = 'left'; const kt = `${(w.kicker || '').toUpperCase()} · ${w.text.toUpperCase()}`
+  if (vid(L) === 'film') typed(c, kt, G.x0, G.v ? 330 : 110); else c.fillText(kt, G.x0, G.v ? 330 : 110)
+  c.restore()
 }
 E.diary = (c, L, ms, hold, w, G, R) => { // 5 · diary line, bottom band
   const id = vid(L); if (id === 'hype') return
   const m = mot(L, ms, hold); if (!m) return
-  const cx = G.W / 2, y = G.v ? 1180 : 740
+  const cx = G.W / 2, y = w.pos === 'top' ? bandMid(G, 'top') : (G.v ? 1180 : 740) - dateLift(L, G)
   c.save(); c.textAlign = 'center'; c.textBaseline = 'middle'
   let lines = [], lh = 60
   switch (id) {
-    case 'clean': enter(c, L, m, cx, y); font(c, 500, 46, F.inter); sh(c, 14); c.fillStyle = '#fff'; lines = wrap(c, w.text, 700); lh = 58; linesAt(c, lines, cx, y, lh); break
-    case 'cozy': enter(c, L, m, cx, y); font(c, 400, 60, F.serif, true); sh(c, 14, 'rgba(40,25,10,.5)'); c.fillStyle = L.pal[0]; lines = wrap(c, w.text.toLowerCase(), 720); lh = 66; linesAt(c, lines, cx, y, lh); break
-    case 'quiet': enter(c, L, m, cx, y); c.globalAlpha *= 0.9; font(c, 400, 50, F.serif, true); sh(c, 10, 'rgba(0,0,0,.3)'); c.fillStyle = L.pal[0]; lines = wrap(c, w.text, 700); lh = 58; linesAt(c, lines, cx, y, lh); break
-    case 'cinematic': enter(c, L, m, cx, y); font(c, 300, 44, F.inter); sh(c, 10, 'rgba(0,0,0,.35)'); c.fillStyle = '#fff'; lines = wrap(c, w.text, 720); lh = 56; linesAt(c, lines, cx, y, lh); break
-    case 'film': { if (ms > hold) break; const n = Math.floor(ms / 40); font(c, 700, 46, F.courier); sh(c, 10, 'rgba(0,0,0,.8)', 2); c.fillStyle = L.pal[0]; lines = wrap(c, w.text.toLowerCase(), 740); lh = 58
+    case 'clean': enter(c, L, m, cx, y); font(c, 500, 46, F.inter); tsh(c, 14); c.fillStyle = '#fff'; lines = wrap(c, w.text, 700); lh = 58; linesAt(c, lines, cx, y, lh); break
+    case 'cozy': enter(c, L, m, cx, y); font(c, 400, 60, F.serif, true); tsh(c, 14, 'rgba(40,25,10,.55)'); c.fillStyle = L.pal[0]; lines = wrap(c, w.text.toLowerCase(), 720); lh = 66; linesAt(c, lines, cx, y, lh); break
+    case 'quiet': enter(c, L, m, cx, y); c.globalAlpha *= 0.9; font(c, 400, 50, F.serif, true); tsh(c, 10); c.fillStyle = L.pal[0]; lines = wrap(c, w.text, 700); lh = 58; linesAt(c, lines, cx, y, lh); break
+    case 'cinematic': enter(c, L, m, cx, y); font(c, 300, 44, F.inter); tsh(c, 10); c.fillStyle = '#fff'; lines = wrap(c, w.text, 720); lh = 56; linesAt(c, lines, cx, y, lh); break
+    case 'film': { if (ms > hold) break; const n = Math.floor(ms / 40); font(c, 700, 46, F.courier); tsh(c, 10, 'rgba(0,0,0,.8)', 2); c.fillStyle = L.pal[0]; lines = wrap(c, w.text.toLowerCase(), 740); lh = 58
       let left = n; const shown = lines.map((l) => { const s = l.slice(0, Math.max(0, left)); left -= l.length + 1; return s })
-      c.textAlign = 'left'; const lw = Math.max(...lines.map((l) => c.measureText(l).width)); shown.forEach((s, i) => c.fillText(s, cx - lw / 2, y - ((lines.length - 1) * lh) / 2 + i * lh)); break }
+      c.textAlign = 'left'; const lw = Math.max(...lines.map((l) => c.measureText(l).width)); shown.forEach((s, i) => typed(c, s, cx - lw / 2, y - ((lines.length - 1) * lh) / 2 + i * lh)); break }
     case 'playful': { enter(c, L, m, cx, y, { rot: -1 }); font(c, 700, 46, F.round); lines = wrap(c, w.text, 680); lh = 58; const bw = Math.max(...lines.map((l) => c.measureText(l).width)) + 50, bh = lines.length * lh + 26
       c.fillStyle = 'rgba(255,255,255,.93)'; rr(c, cx - bw / 2, y - bh / 2, bw, bh, 30); c.fill(); c.fillStyle = '#2a2320'; linesAt(c, lines, cx, y + 2, lh); break }
   }
@@ -1534,7 +1717,7 @@ E.diary = (c, L, ms, hold, w, G, R) => { // 5 · diary line, bottom band
 E.group = (c, L, ms, hold, w, G, R) => { // 6 · word-group captions, chest height, one fixed band
   if (ms < 0 || ms > hold) return
   const id = vid(L), words = w.text.split(' '), cur = Math.min(words.length - 1, Math.floor((ms / Math.max(1, hold)) * words.length))
-  const cx = G.W / 2, cy = G.H * 0.6
+  const cx = G.W / 2, cy = G.H * 0.6 - dateLift(L, G)
   c.save(); c.textBaseline = 'middle'; c.textAlign = 'left'
   const draw = (fnt, size, fam, it, gap, style) => {
     font(c, fnt, size, fam, it)
@@ -1546,7 +1729,7 @@ E.group = (c, L, ms, hold, w, G, R) => { // 6 · word-group captions, chest heig
       c.save()
       if (style.pill && i === cur) { const s = 1 + 0.12 * Math.sin(Math.PI * clamp(((ms / hold) * words.length - cur) * 2.2)); c.translate(x + ww / 2, cy); c.scale(s, s); c.translate(-(x + ww / 2), -cy); c.fillStyle = L.pal[1]; rr(c, x - 14, cy - size * 0.62, ww + 28, size * 1.24, size * 0.4); c.fill() }
       if (style.big && i === cur) { c.translate(x + ww / 2, cy); c.scale(1.1, 1.1); c.translate(-(x + ww / 2), -cy) }
-      sh(c, 14, 'rgba(0,0,0,.5)'); c.fillStyle = style.pill && i === cur ? '#fff' : style.col || '#fff'
+      tsh(c, 14); c.fillStyle = style.pill && i === cur ? '#fff' : style.col || '#fff'
       c.globalAlpha *= style.dim && i !== cur ? 0.7 : 1
       c.fillText(wd, x, cy); c.restore(); x += ww + sp
     })
@@ -1567,41 +1750,41 @@ E.big = (c, L, ms, hold, w, G) => { // 7 · big word
   c.save(); c.textAlign = 'center'; c.textBaseline = 'middle'; c.globalAlpha = 1 - out
   const so = 1 + 0.05 * out
   switch (id) {
-    case 'clean': { const s = lerp(1.1, 1, EASE.quint(clamp(ms / 200))) * so; c.translate(cx, cy); c.scale(s, s); c.translate(-cx, -cy); font(c, 800, 150, F.inter); sh(c, 20); c.fillStyle = '#fff'; c.fillText(w.text, cx, cy); break }
-    case 'cozy': c.globalAlpha *= clamp(ms / 600); font(c, 600, 170, F.caveat); sh(c, 16, 'rgba(40,25,10,.5)'); c.fillStyle = L.pal[0]; c.fillText(w.text.toLowerCase(), cx, cy); break
-    case 'cinematic': c.globalAlpha *= EASE.inout(clamp(ms / 600)); font(c, 200, 86, F.inter); c.fillStyle = '#fff'; spaced(c, w.text.toUpperCase(), cx, cy, 26, 'center'); break
-    case 'film': { const j = ((Math.floor(ms / 83) * 5) % 3) - 1; c.translate(j * 2, j); font(c, 700, 120, F.courier); c.fillStyle = '#FF9A3C'; c.fillText(w.text.toLowerCase(), cx, cy); break }
+    case 'clean': { const s = lerp(1.1, 1, EASE.quint(clamp(ms / 200))) * so; c.translate(cx, cy); c.scale(s, s); c.translate(-cx, -cy); font(c, 800, 150, F.inter); tsh(c, 20); c.fillStyle = '#fff'; c.fillText(w.text, cx, cy); break }
+    case 'cozy': c.globalAlpha *= clamp(ms / 600); font(c, 600, 170, F.caveat); tsh(c, 16, 'rgba(40,25,10,.55)'); c.fillStyle = L.pal[0]; c.fillText(w.text.toLowerCase(), cx, cy); break
+    case 'cinematic': c.globalAlpha *= EASE.inout(clamp(ms / 600)); font(c, 200, 86, F.inter); tsh(c, 12); c.fillStyle = '#fff'; spaced(c, w.text.toUpperCase(), cx, cy, 26, 'center'); break
+    case 'film': { const j = ((Math.floor(ms / 83) * 5) % 3) - 1; c.translate(j * 2, j); font(c, 700, 120, F.courier); tsh(c, 12); c.fillStyle = '#FF9A3C'; c.fillText(w.text.toLowerCase(), cx, cy); break }
     case 'playful': { const s = lerp(0.4, 1, EASE.back(clamp(ms / 500))) * so; c.translate(cx, cy); c.rotate(-0.05); c.scale(s, s); c.translate(-cx, -cy); font(c, 800, 150, F.round); c.fillStyle = L.pal[1]; sh(c, 0, 'transparent'); c.lineWidth = 16; c.strokeStyle = '#fff'; c.lineJoin = 'round'; c.strokeText(w.text, cx, cy); c.fillText(w.text, cx, cy); break }
-    case 'hype': { const s = lerp(1.5, 1, EASE.expo(clamp(ms / 150))) * so; c.translate(cx, cy); c.scale(s, s); c.translate(-cx, -cy); font(c, 400, 210, F.anton); sh(c, 20); c.fillStyle = '#fff'; c.fillText(w.text.toUpperCase(), cx, cy); break }
+    case 'hype': { const s = lerp(1.5, 1, EASE.expo(clamp(ms / 150))) * so; c.translate(cx, cy); c.scale(s, s); c.translate(-cx, -cy); font(c, 400, 210, F.anton); tsh(c, 20); c.fillStyle = '#fff'; c.fillText(w.text.toUpperCase(), cx, cy); break }
   }
   c.restore()
 }
 E.name = (c, L, ms, hold, w, G, R) => { // 8 · name tag
   const id = vid(L), m = mot(L, ms, hold); if (!m) return
-  const x = G.x0, y = G.v ? 1150 : 720, name = w.text || 'Sarah', role = w.sub || '@sarahvlogs'
+  const x = G.x0, y = (G.v ? 1150 : 720) - dateLift(L, G), name = w.text || 'Sarah', role = w.sub || '@sarahvlogs'
   c.save(); c.textAlign = 'left'; c.textBaseline = 'alphabetic'
   switch (id) {
     case 'clean': {
       c.globalAlpha *= 1 - m.eo; const s = lerp(0.95, 1, m.p), dx = -24 * (1 - m.p)
       c.translate(x, y); c.scale(s, s); c.translate(-x + dx, -y)
       font(c, 700, 54, F.inter); const nw = c.measureText(name).width
-      c.save(); c.beginPath(); c.rect(x - 10, y - 70, (nw + 30) * m.p, 90); c.clip(); sh(c, 12); c.fillStyle = '#fff'; c.fillText(name, x, y); c.restore()
-      const m2 = mot(L, ms - 100, hold - 100); if (m2) { c.globalAlpha *= clamp(m2.raw * 2.5); font(c, 500, 34, F.inter); sh(c, 10); c.fillStyle = 'rgba(255,255,255,.8)'; c.fillText(role, x, y + 48) }
+      c.save(); c.beginPath(); c.rect(x - 10, y - 70, (nw + 30) * m.p, 90); c.clip(); tsh(c, 12); c.fillStyle = '#fff'; c.fillText(name, x, y); c.restore()
+      const m2 = mot(L, ms - 100, hold - 100); if (m2) { c.globalAlpha *= clamp(m2.raw * 2.5); font(c, 500, 34, F.inter); tsh(c, 10); c.fillStyle = 'rgba(255,255,255,.85)'; c.fillText(role, x, y + 48) }
       break
     }
-    case 'cozy': { enter(c, L, m, x + 120, y); font(c, 600, 84, F.caveat); sh(c, 12, 'rgba(40,25,10,.5)'); c.fillStyle = L.pal[0]; c.fillText(name.toLowerCase(), x, y); nosh(c)
+    case 'cozy': { enter(c, L, m, x + 120, y); font(c, 600, 84, F.caveat); tsh(c, 12, 'rgba(40,25,10,.55)'); c.fillStyle = L.pal[0]; c.fillText(name.toLowerCase(), x, y); nosh(c)
       const nw = c.measureText(name.toLowerCase()).width, up = clamp((ms - 300) / 400); c.strokeStyle = L.pal[1]; c.lineWidth = 5; c.lineCap = 'round'; c.beginPath()
       for (let i = 0; i <= 20 * up; i++) { const u = i / 20; const px = x + u * nw, py = y + 18 + Math.sin(u * 10) * 5; i ? c.lineTo(px, py) : c.moveTo(px, py) } c.stroke()
-      font(c, 400, 46, F.caveat); c.fillStyle = L.pal[0]; c.fillText(role, x, y + 72); break }
-    case 'quiet': enter(c, L, m, x, y); font(c, 300, 42, F.inter); c.fillStyle = L.pal[0]; spaced(c, name.toUpperCase(), x, y, 9); font(c, 300, 28, F.inter); c.fillStyle = L.pal[1]; spaced(c, role.toUpperCase(), x, y + 44, 5); break
-    case 'cinematic': enter(c, L, m, x, y); font(c, 300, 44, F.inter); sh(c, 10); c.fillStyle = '#fff'; spaced(c, name.toUpperCase(), x, y, 13); font(c, 300, 28, F.inter); c.fillStyle = '#E9D8B8'; spaced(c, role.toUpperCase(), x, y + 46, 7); break
+      font(c, 400, 46, F.caveat); tsh(c, 12, 'rgba(40,25,10,.55)'); c.fillStyle = L.pal[0]; c.fillText(role, x, y + 72); break }
+    case 'quiet': enter(c, L, m, x, y); font(c, 300, 42, F.inter); tsh(c); c.fillStyle = L.pal[0]; spaced(c, name.toUpperCase(), x, y, 9); font(c, 300, 28, F.inter); c.fillStyle = L.pal[1]; spaced(c, role.toUpperCase(), x, y + 44, 5); break
+    case 'cinematic': enter(c, L, m, x, y); font(c, 300, 44, F.inter); tsh(c, 10); c.fillStyle = '#fff'; spaced(c, name.toUpperCase(), x, y, 13); font(c, 300, 28, F.inter); c.fillStyle = '#E9D8B8'; spaced(c, role.toUpperCase(), x, y + 46, 7); break
     case 'film': { if (ms > hold) break; c.translate(x, y); c.rotate((-1 * Math.PI) / 180); c.translate(-x, -y); const n = Math.floor(ms / 40); font(c, 400, 48, F.courier)
       const full = `${name.toLowerCase()} · ${role}`, tw = c.measureText(full).width; c.fillStyle = '#EDE3CC'; c.fillRect(x - 16, y - 50, tw + 32, 72); c.fillStyle = '#2b2620'; c.fillText(full.slice(0, n), x, y); break }
     case 'playful': { enter(c, L, m, x + 150, y - 20, { rot: -3 }); font(c, 800, 54, F.round); const nw = c.measureText(name).width; font(c, 700, 32, F.round); const rw = c.measureText(role).width; const bw = Math.max(nw, rw) + 60
       sh(c, 14, 'rgba(0,0,0,.3)', 6); c.fillStyle = '#fff'; rr(c, x - 24, y - 70, bw, 140, 28); c.fill(); nosh(c); c.strokeStyle = L.pal[1]; c.lineWidth = 6; rr(c, x - 14, y - 60, bw - 20, 120, 22); c.stroke()
       font(c, 800, 54, F.round); c.fillStyle = '#1b1712'; c.fillText(name, x + 6, y - 4); font(c, 700, 32, F.round); c.fillStyle = L.pal[1]; c.fillText(role, x + 6, y + 40); break }
     case 'hype': { c.globalAlpha *= 1 - m.out; const sl = EASE.expo(clamp(ms / 220)); font(c, 400, 76, F.anton); const nw = c.measureText(name.toUpperCase()).width
-      c.fillStyle = '#FF6A3D'; c.fillRect(x - 30 - (1 - sl) * 400, y - 78, nw + 60, 96); c.fillStyle = '#fff'; c.fillText(name.toUpperCase(), x, y); font(c, 700, 32, F.inter); c.fillText(role.toUpperCase(), x, y + 50)
+      c.fillStyle = '#FF6A3D'; c.fillRect(x - 30 - (1 - sl) * 400, y - 78, nw + 60, 96); c.fillStyle = '#fff'; c.fillText(name.toUpperCase(), x, y); font(c, 700, 32, F.inter); tsh(c); c.fillText(role.toUpperCase(), x, y + 50); nosh(c)
       if (ms < 100) { c.globalAlpha = 1 - ms / 100; c.fillRect(0, 0, G.W, G.H) } break }
   }
   hit(R, w, x - 20, y - 80, 560, 150)
@@ -1618,26 +1801,58 @@ E.list = (c, L, ms, hold, w, G, R) => { // 9 · numbered place (one card per pla
   font(c, id === 'cozy' ? 600 : 700, id === 'cozy' ? 62 : 50, fam); const tw = c.measureText(name).width
   if (id === 'clean' || id === 'cozy' || id === 'film') { sh(c, 16, 'rgba(0,0,0,.3)', 6); c.fillStyle = id === 'clean' ? 'rgba(255,255,255,.95)' : id === 'cozy' ? '#F3E6CF' : '#F7F1E3'; rr(c, x, y - 58, tw + 150, 116, id === 'film' ? 4 : 18); c.fill(); nosh(c) }
   if (id === 'playful') { c.fillStyle = L.pal[w.n % 3 || 0]; c.beginPath(); c.arc(x + 50, y, 44, 0, Math.PI * 2); c.fill() }
+  if (id === 'cinematic') tsh(c)
   c.fillStyle = id === 'cinematic' ? '#fff' : id === 'playful' ? '#1b1712' : id === 'film' ? '#C0392B' : '#1b1712'
   font(c, 700, 56, id === 'clean' ? F.inter : fam); c.textAlign = 'center'; c.fillText(num, x + 50, y + 2); c.textAlign = 'left'
-  c.fillStyle = id === 'cinematic' || id === 'playful' ? '#fff' : '#1b1712'; if (id === 'playful') sh(c, 10)
-  font(c, id === 'cozy' ? 600 : 700, id === 'cozy' ? 62 : 50, fam); c.fillText(name, x + 110, y + 4)
+  font(c, id === 'cozy' ? 600 : 700, id === 'cozy' ? 62 : 50, fam)
+  if (id === 'playful') { rr(c, x + 94, y - 40, tw + 40, 80, 20); c.fillStyle = '#0009'; c.fill() } // white words need a ground over leaves
+  c.fillStyle = id === 'cinematic' || id === 'playful' ? '#fff' : '#1b1712'; if (id === 'cinematic') tsh(c)
+  c.fillText(name, x + 110, y + 4)
   hit(R, w, x, y - 60, tw + 150, 120)
   c.restore()
 }
 E.close = (c, L, ms, hold, w, G) => { // 10 · closing title
   const id = vid(L), m = mot(L, ms, hold); if (!m) return
-  const cx = G.W / 2, cy = G.H * 0.47
+  const cx = G.W / 2, cy = w.pos === 'top' || w.pos === 'low' ? bandMid(G, w.pos) : G.H * 0.47
   c.save(); c.fillStyle = `rgba(0,0,0,${0.2 * clamp(ms / 400)})`; c.fillRect(0, 0, G.W, G.H)
   c.textAlign = 'center'; c.textBaseline = 'middle'
   const fl = id === 'film' ? (Math.floor(ms / 60) % 3 ? 1 : 0.82) : 1
   c.globalAlpha *= fl
   if (id === 'cinematic') c.globalAlpha *= EASE.inout(clamp(ms / 1400))
   else enter(c, L, m, cx, cy)
-  const f = { clean: [600, 76, F.inter], cozy: [600, 100, F.caveat], quiet: [400, 72, F.serif, true], cinematic: [400, 72, F.serif], film: [400, 60, F.courier], playful: [800, 76, F.round], hype: [400, 120, F.anton] }[id]
-  font(c, f[0], f[1], f[2], f[3]); sh(c, 16); c.fillStyle = id === 'playful' ? L.pal[0] : id === 'cozy' || id === 'quiet' || id === 'film' ? L.pal[0] : '#fff'
+  const f = { clean: [600, 76, F.inter], cozy: [600, 100, F.caveat], quiet: [400, 72, F.serif, true], cinematic: [400, 72, F.serif], film: [700, 60, F.courier], playful: [800, 76, F.round], hype: [400, 120, F.anton] }[id]
+  font(c, f[0], f[1], f[2], f[3]); tsh(c, 16); c.fillStyle = id === 'playful' ? L.pal[0] : id === 'cozy' || id === 'quiet' || id === 'film' ? L.pal[0] : '#fff'
   const text = id === 'hype' ? w.text.toUpperCase() : id === 'cozy' || id === 'film' ? w.text.toLowerCase() : w.text
   linesAt(c, wrap(c, text, G.v ? 760 : 1300), cx, cy, f[1] * 1.15)
+  c.restore()
+}
+
+/* ------------------------------------------------------------ a vibe's one signature element, sized for a thumbnail */
+// "Another vibe" thumbnails are 96 px wide, where a hook line shrinks to 5 px dust. Each one is frozen on the single
+// element that tells its vibe apart, drawn at ≥ 11 px on screen (≥ 124 frame units): Film's amber date, Cozy's cream
+// place pill, Playful's sticker, Clean's boxed clock, Quiet's serif line, Cinematic's tracked caps, Hype's slam caps.
+function signature(c, L, G, place = 'Park') {
+  const id = vid(L), x = G.v ? 96 : 110, y = G.v ? 1660 : 960
+  c.save(); c.textBaseline = 'alphabetic'; c.textAlign = 'left'
+  switch (id) {
+    case 'film': { const d = "9 25 '26"; font(c, 400, 150, F.dseg); c.textAlign = 'right'; c.fillStyle = '#FF9A3C'; tsh(c); c.fillText(d, G.W - x, y); sh(c, 12, 'rgba(255,130,40,.95)', 0); c.fillText(d, G.W - x, y); break }
+    case 'cozy': {
+      const t = place.toLowerCase(); font(c, 600, 150, F.caveat); const tw = c.measureText(t).width
+      sh(c, 24, 'rgba(40,25,10,.35)', 8); c.fillStyle = '#F3E6CF'; rr(c, x, y - 150, tw + 210, 200, 100); c.fill(); nosh(c)
+      c.fillStyle = '#C0694A'; c.beginPath(); c.arc(x + 88, y - 50, 34, 0, Math.PI * 2); c.fill(); c.fillStyle = '#F3E6CF'; c.beginPath(); c.arc(x + 88, y - 50, 12, 0, Math.PI * 2); c.fill()
+      c.fillStyle = '#3A2E22'; c.fillText(t, x + 150, y); break
+    }
+    case 'playful': {
+      font(c, 800, 140, F.round); const tw = c.measureText(place).width
+      c.translate(x + 300, y - 50); c.rotate((-4 * Math.PI) / 180); c.translate(-(x + 300), -(y - 50))
+      sh(c, 24, 'rgba(0,0,0,.3)', 10); c.fillStyle = '#fff'; rr(c, x, y - 150, tw + 230, 200, 100); c.fill(); nosh(c)
+      pinGlyph(c, x + 95, y - 40, 120, '#FF4B4B', '#fff'); c.fillStyle = '#1b1712'; c.fillText(place, x + 170, y); break
+    }
+    case 'clean': { const t = '8:35 am'; font(c, 600, 140, F.inter); const tw = c.measureText(t).width; c.fillStyle = 'rgba(0,0,0,.6)'; rr(c, x - 10, y - 140, tw + 70, 184, 24); c.fill(); c.fillStyle = '#fff'; c.fillText(t, x + 25, y); break }
+    case 'quiet': font(c, 400, 150, F.serif, true); tsh(c); c.fillStyle = L.pal[0]; c.fillText(place.toLowerCase(), x + 10, y); break
+    case 'cinematic': { font(c, 300, 130, F.inter); tsh(c); c.fillStyle = '#fff'; const tw = spaced(c, place.toUpperCase(), x + 10, y, 36); nosh(c); c.fillStyle = 'rgba(255,255,255,.7)'; c.fillRect(x + 10, y + 36, tw, 6); break }
+    case 'hype': { const t = place.toUpperCase(); font(c, 400, 250, F.anton); tsh(c); c.fillStyle = '#fff'; const tw = c.measureText(t).width; c.fillText(t, x, y); nosh(c); c.fillStyle = '#FF6A3D'; c.fillRect(x + 4, y + 26, tw, 16); break }
+  }
   c.restore()
 }
 
@@ -1702,6 +1917,7 @@ class Player {
     el.classList.add('vid')
     el.insertAdjacentHTML('afterbegin', '<canvas class="pic"></canvas><canvas class="fx" style="mix-blend-mode:screen"></canvas><canvas class="ovl"></canvas>')
     this.pic = el.children[0]; this.fx = el.children[1]; this.ovl = el.children[2]
+    floorEdges(this.ovl.getContext('2d')) // the words layer, wired once, as in motion.html
     el.style.isolation = 'isolate'
     this.t = o.t || 0; this.playing = !!o.autoplay; this.hits = []
     this.setBoard(board)
@@ -1758,14 +1974,14 @@ class Player {
     for (const c of [pc, fc, oc]) { c.setTransform(k[0], 0, 0, k[1], 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; nosh(c) }
     fc.clearRect(0, 0, G.W, G.H); oc.clearRect(0, 0, G.W, G.H)
     const fl = this.fl, L = this.L, t = clamp(this.t, 0, fl.total - 0.0001), s = this.shotAt(t), b = this.board
-    const shot = (ctx, sh0, alpha = 1, dx = 0) => { const cam = camFor(this.plan, sh0, t - sh0.t0, L, b); ctx.globalAlpha = alpha; cover(ctx, pic(sh0.n), 0, 0, G.W, G.H, cam.z, 0.5, cam.oy, cam.tx + dx, 0); ctx.globalAlpha = 1; return cam }
+    const shot = (ctx, sh0, alpha = 1, dx = 0) => { const cam = camFor(this.plan, sh0, t - sh0.t0, L, b); ctx.globalAlpha = alpha; shotPic(ctx, sh0.n, G, 0, 0, G.W, G.H, cam.z, 0.5, cam.oy, cam.tx + dx, 0); ctx.globalAlpha = 1; return cam }
     const j = this.joinAt(t)
     let cam
     if (j && j.type === 'fade') { shot(pc, j.a); cam = shot(pc, j.b, j.p) }
     else if (j && j.type === 'whip') {
       const u = EASE.smooth(j.p), bl = Math.sin(Math.PI * j.p)
       pc.fillStyle = '#000'; pc.fillRect(0, 0, G.W, G.H)
-      for (let q = -2; q <= 2; q++) { const off = q * bl * 46; pc.globalAlpha = q === 0 ? 1 : 0.28 * bl; cover(pc, pic(j.a.n), -u * G.W + off, 0, G.W, G.H); cover(pc, pic(j.b.n), (1 - u) * G.W + off, 0, G.W, G.H) }
+      for (let q = -2; q <= 2; q++) { const off = q * bl * 46; pc.globalAlpha = q === 0 ? 1 : 0.28 * bl; shotPic(pc, j.a.n, G, -u * G.W + off, 0, G.W, G.H); shotPic(pc, j.b.n, G, (1 - u) * G.W + off, 0, G.W, G.H) }
       pc.globalAlpha = 1; cam = { z: 1, oy: 0.42, tx: 0 }
     } else cam = shot(pc, s)
     // moments: a freeze with her name (proposal the creator added)
@@ -1779,13 +1995,15 @@ class Player {
     if (L.grain && !G.v) grain(oc, G, now)
     // words on screen
     this.hits = []
-    for (const w of fl.words) {
+    G.bright = isBright(s.n, G)
+    if (this.o.thumb) { if (!this.o.thumb.noSig) signature(oc, L, G, this.o.thumb.place) }
+    else for (const w of fl.words) {
       if (t < w.t0 - 0.01 || t > w.t1 + 1.3) continue
       const fn = E[w.kind]; if (!fn) continue
       if (b.fmt === 'short' && w.kind === 'part') { E.kicker(oc, L, (t - w.t0) * 1000, 1000, w, G); continue }
       fn(oc, L, (t - w.t0) * 1000, (w.t1 - w.t0) * 1000, w, G, this.hits)
     }
-    if (L.date) filmDate(oc, G, now)
+    if (L.date && !this.o.thumb) filmDate(oc, G, now)
     if (j && j.type === 'dip') { const a = j.dt < 0 ? clamp(1 + j.dt / j.h) : j.dt < 2 / 30 ? 1 : clamp(1 - (j.dt - 2 / 30) / j.h); oc.fillStyle = L.dipColor || '#000'; oc.globalAlpha = a; oc.fillRect(0, 0, G.W, G.H); oc.globalAlpha = 1 }
     if (j && j.type === 'flash') { const a = j.dt < 1 / 30 ? j.dt * 30 : clamp(1 - (j.dt - 1 / 30) / ((j.F0 - 1) / 30)); oc.fillStyle = L.flashColor || '#fff'; oc.globalAlpha = a; oc.fillRect(0, 0, G.W, G.H); oc.globalAlpha = 1 }
     if (this.o.post) this.o.post(oc, G, t, now)
@@ -1825,7 +2043,7 @@ function teardown() { TEAR.forEach((f) => f()); TEAR = []; PLAYERS.clear(); FRAM
 const SCREENS = {}
 const ACT = {}
 const STEPS = [['clips', 'Clips'], ['format', 'Format'], ['vibe', 'Vibe'], ['watch', 'Watch'], ['edit', 'Edit']]
-const STEP_OF = { clips: 0, format: 1, vibe: 2, love: 2, making: 2.5, watch: 3, export: 3, edit: 4, frames: 4, gallery: -1 }
+const STEP_OF = { clips: 0, format: 1, vibe: 2, love: 2, making: 2.5, watch: 3, export: 3, edit: 4, frames: 4 }
 
 function go(s, patch = {}) {
   teardown()
@@ -1854,7 +2072,6 @@ function render() {
 /* ------------------------------------------------------------ top bar + stepper */
 function renderTop() {
   const top = $('#top')
-  if (APP.s === 'gallery') { top.innerHTML = galleryTop(); return }
   const cur = STEP_OF[APP.s] ?? 0
   const title = APP.made ? (SES.board ? SES.board.title : titleFor()) : 'New video'
   const proj = SES.versions.length && APP.made
@@ -2093,9 +2310,10 @@ function renderWhat() {
   }
 }
 function previewBoard(kind, look, fmt) {
-  const stills = kind === 'talking' ? [11, 24, 15] : kind === 'trip' ? [14, 17, 37] : [14, 5, 31]
+  // 16:9 cards open on the sharp hero crops (hero2, hero3), never on a 4× upscale of a selfie
+  const stills = kind === 'talking' ? [11, 24, 15] : !FMTS[fmt].v ? (kind === 'trip' ? [5, 17, 37] : [5, 24, 31]) : kind === 'trip' ? [14, 17, 37] : [14, 5, 31]
   const parts = stills.map((n, i) => ({ id: 'p' + i, name: 'Part ' + (i + 1), shots: [mkShot(n, 2)], pace: 2, opens: 'best' }))
-  const W = (o) => Object.assign({ id: uid('w'), pos: 'mid' }, o)
+  const W = (o) => Object.assign({ id: uid('w'), pos: 'auto' }, o)
   let words
   if (kind === 'talking') words = [[0.1, 'today I want'], [1.1, 'to share'], [2.1, 'a day'], [2.9, 'in New York'], [4.1, 'with you'], [5.0, 'let’s go']].map(([t, x], i, a) => W({ kind: 'group', text: x, abs: t, d: (a[i + 1]?.[0] ?? 6) - t - 0.05 }))
   else if (kind === 'quiet_day' || kind === 'story_day') words = [W({ kind: 'diary', text: kind === 'quiet_day' ? '8:35 am, at home' : 'Today I want to share a day.', part: 'p0', at: 0.15, d: 1.6 }), W({ kind: 'clock', text: '9:20 am', part: 'p1', at: 0.2, d: 1.5 }), W({ kind: 'diary', text: kind === 'quiet_day' ? '4:05 pm, the park' : 'Then we went to the park.', part: 'p2', at: 0.15, d: 1.6 })]
@@ -2117,7 +2335,7 @@ function renderCards(fade) {
     box.innerHTML = cardsFor(k).map((id) => vibeCard(id, sel === id, wide)).join('') + (APP.learned ? learnedCard(sel === 'learned', wide) : dashedTile(wide))
     const mo = moreFor(k)
     $('#moreBlock').innerHTML = mo.length ? `<div class="more-link"><button class="link" data-act="more-vibes">${VB.more ? 'Fewer vibes' : `More vibes (${mo.length})`}</button></div>
-      ${VB.more ? `<div class="cards more">${mo.map((id) => vibeCard(id, sel === id, wide, `Toned down for ${KINDS[k].sent}`)).join('')}</div>` : ''}` : ''
+      ${VB.more ? `<div class="cards more">${mo.map((id) => vibeCard(id, sel === id, wide, ['Toned down', `Toned down for ${KINDS[k].sent}`])).join('')}</div>` : ''}` : ''
     $$('.vcard [data-prev]').forEach((el) => new Player(el, previewBoard(k, el.dataset.prev, APP.fmt), { autoplay: true, loop: true }))
   }
   if (fade) { box.classList.add('fading'); later(() => { draw(); box.classList.remove('fading') }, 250) } else draw()
@@ -2127,12 +2345,12 @@ function vibeCard(id, on, wide, tag) {
   const ml = VB.noMusic ? '♪ Your own sound — add music any time' : curKind() === 'talking' ? '♪ No music — your voice leads' : `♪ ${TRACKS[tr].t} · ${fromLine(tr)}`
   return `<button class="vcard ${on ? 'on' : ''} ${wide ? 'wide' : ''}" data-act="pick-look" data-look="${id}">
     <div data-prev="${id}"></div>
-    <h4>${L.name}</h4><p>${L.line}</p><div class="ml">${ml}</div>${tag ? `<span class="vtag">${tag}</span>` : ''}</button>`
+    <h4>${L.name}</h4><p class="line">${L.line}</p><div class="ml" title="${esc(ml.replace(/^♪ /, ''))}">${ml}</div>${tag ? `<span class="vtag" title="${esc(tag[1])}">${tag[0]}</span>` : ''}</button>`
 }
 function learnedCard(on, wide) {
   return `<div class="vcard ${on ? 'on' : ''} ${wide ? 'wide' : ''}" data-act="pick-look" data-look="learned" role="button" tabindex="0">
     <span class="tag acc ontag">learned</span><div data-prev="learned"></div>
-    <h4 style="font-size:19px">Like beach_day.mp4</h4><p>Pace and colour from a video you love. Fonts and movement from Cozy.</p>
+    <h4 style="font-size:19px">Like beach_day.mp4</h4><p class="line">Pace and colour from a video you love. Fonts and movement from Cozy.</p>
     <div class="cardacts">${APP.learned.uses ? '<button class="link" data-act="save-style">Save as my style</button>' : ''}<button class="qlink" data-act="forget">Forget it</button></div></div>`
 }
 function dashedTile(wide) { return `<button class="dashed ${wide ? 'wide' : ''}" data-act="love"><span class="plus">+</span><b>Like a video I love…</b><small>Drop a file — I’ll learn its pace and colour</small></button>` }
@@ -2269,7 +2487,7 @@ ACT['love-make'] = () => {
   $('#layer').innerHTML = ''
   if (APP.s === 'watch' || APP.s === 'edit') {
     turn({ icon: '●', line: 'You borrowed pace and colour from beach_day.mp4', short: 'Borrowed from beach_day.mp4', req: 'borrow from a video you love',
-      op: (x) => { x.look = 'learned'; x.parts.forEach((p) => p.shots.forEach((s) => { s.d = Math.round(Math.max(s.d, 2.8) * 100) / 100 })); return x } })
+      op: (x) => { x.look = 'learned'; if (x.music !== 'none' && !x.musicPicked) x.music = LOOKS.learned.track; x.parts.forEach((p) => p.shots.forEach((s) => { s.d = Math.round(Math.max(s.d, 2.8) * 100) / 100 })); return x } })
     const t = lastActive(); toast('Borrowed pace and colour from beach_day.mp4. The file is deleted.', { label: 'Undo', fn: () => undoTurn(t.id) })
     if (APP.s === 'watch') WT.player && WT.player.crossTo(SES.board)
     return
@@ -2302,16 +2520,18 @@ function makingLines() {
     ]
   }
   const order = { trip: 'Put them place by place: home, campus, library, park, dinner', places_guide: 'Numbered your 5 places: home, campus, library, park, dinner' }[k] || 'Put them in order: morning, campus, library, park, dinner'
-  const hook = { quiet_day: 'Opening on the clock: 8:35 am, at home', places_guide: 'Opening on “5 places in New York” — from your clips’ places', story_day: 'Opening on the fountain, then your first line' }[k] || 'Opening on the fountain — your clearest moving moment'
+  const fl0 = SES.board ? flatten(SES.board) : null, first = fl0 ? fl0.shots[0].n : 14, fname = HOOK_NAME[first] || LABEL[first]
+  const hook = { quiet_day: 'Opening on the clock: 8:35 am, at home', places_guide: 'Opening on “5 places in New York” — from your clips’ places', story_day: `Opening on ${fname}, then your first line` }[k]
+    || (first === 14 ? 'Opening on the fountain — your clearest moving moment' : `Opening on ${fname} — where the day starts`)
   const words = { quiet_day: 'Added diary lines: times and places from your clips', trip: 'Added place names from your clips', places_guide: 'Added numbered places and a recap', story_day: 'Added what you said, as sentences' }[k] || 'Added words: times and places from your clips'
-  const picked = APP.fmt === 'short' ? 16 : APP.fmt === 'long' ? 48 : 96
+  const picked = fl0 ? fl0.shots.length : 16 // the same count Watch shows
   const L = [
     { id: 'read', t: 'Read 42 clips, found 412 moments' },
     { id: 'left', t: 'Left out 9 blurry or shaky clips — you’ll see them before anything leaves' },
     { id: 'picked', t: `Picked the best ${picked}` },
     { id: 'order', t: order },
     { id: 'hook', t: hook },
-    { id: 'music', t: st === 'no-music' ? 'No music on this Mac yet, so I used your own sound. Add music any time.' : 'Found music that builds with your day', warn: st === 'no-music' },
+    { id: 'music', t: st === 'no-music' || !SES.board || !TRACKS[SES.board.music] ? 'No music on this Mac yet, so I used your own sound. Add music any time.' : `Picked ‘${TRACKS[SES.board.music].t}’ for ${LOOKS[SES.board.look].name} — ${fromLine(SES.board.music)}`, warn: st === 'no-music' },
     { id: 'timed', t: 'Timed the cuts' },
     { id: 'words', t: words },
     { id: 'finish', t: long ? (n) => `Colour, joins and finishing touches · part 1 · ${n} of 10 shots` : (n) => `Colour, joins and finishing touches · ${n} of 16 shots`, count: long ? 10 : 16, dur: 2200 },
@@ -2390,6 +2610,7 @@ SCREENS.making = (v) => {
   }
   // the frame: the creator's own moments arriving, then being finished
   const pc = frame.children[0], oc = frame.children[1], wipe = $('#mkWipe')
+  floorEdges(oc.getContext('2d'))
   onFrame((now) => {
     if (!fit(pc)) return
     fit(oc)
@@ -2406,13 +2627,13 @@ SCREENS.making = (v) => {
     else if (id === 'words') { n = shots[0].n; words = true }
     else if (id === 'finish') { const i = Math.min(shots.length - 1, MK.count); n = shots[i].n; split = clamp((since % 300) / 300) ; graded = true }
     else { n = shots[0].n; graded = true; words = true }
-    cover(p, pic(n), 0, 0, G.W, G.H)
+    shotPic(p, n, G, 0, 0, G.W, G.H)
     // ungraded = drawn on the unfiltered layer; graded shows the vibe's colour on the canvas below
-    if (!graded) { cover(o, pic(n), 0, 0, G.W, G.H); if (id === 'read' || id === 'left' || id === 'model' || id === 'listen' || id === 'failed') { o.fillStyle = 'rgba(12,11,9,.35)'; o.fillRect(0, 0, G.W, G.H) } }
-    else if (split >= 0) { o.save(); o.beginPath(); o.rect(G.W * split, 0, G.W * (1 - split), G.H); o.clip(); cover(o, pic(n), 0, 0, G.W, G.H); o.restore() }
+    if (!graded) { shotPic(o, n, G, 0, 0, G.W, G.H); if (id === 'read' || id === 'left' || id === 'model' || id === 'listen' || id === 'failed') { o.fillStyle = 'rgba(12,11,9,.35)'; o.fillRect(0, 0, G.W, G.H) } }
+    else if (split >= 0) { o.save(); o.beginPath(); o.rect(G.W * split, 0, G.W * (1 - split), G.H); o.clip(); shotPic(o, n, G, 0, 0, G.W, G.H); o.restore() }
     wipe.classList.toggle('hide', split < 0); if (split >= 0) wipe.style.left = split * 100 + '%'
     if ((graded && split < 0) || MK.done) { vignette(o, G, L.vignette); if (L.date) filmDate(o, G, now) }
-    if (words) { const w = fl.words[0]; if (w && E[w.kind]) E[w.kind](o, L, 600, 99999, w, G) }
+    if (words) { const w = fl.words[0]; G.bright = isBright(n, G); if (w && E[w.kind]) E[w.kind](o, L, 600, 99999, w, G) }
   })
 }
 /* =====================================================================
@@ -2423,7 +2644,7 @@ const ICON = {
   pause: '<svg viewBox="0 0 14 14"><rect x="2.5" y="1.5" width="3.2" height="11" rx="1" fill="currentColor"/><rect x="8.3" y="1.5" width="3.2" height="11" rx="1" fill="currentColor"/></svg>',
 }
 const LO = () => (SES.board && SES.board.kind === 'talking' ? [] : LEFT_OUT)
-const HOOK_NAME = { 14: 'the fountain', 4: 'the tram', 11: 'your first sentence' }
+const HOOK_NAME = { 14: 'the fountain', 4: 'the tram', 11: 'your first sentence', 0: 'the car ride', 5: 'the selfie by the bricks', 24: 'the reading room' }
 function transportHTML(id) { return `<button class="pp" data-act="pp" data-p="${id}" aria-label="Play or pause" id="${id}PP">${ICON.play}</button><div class="scrub" id="${id}Scrub" role="slider" aria-label="Scrub"></div><span class="time" id="${id}Time">0:00</span>` }
 function renderScrub(id, fl, notReady) {
   const el = $(`#${id}Scrub`); if (!el) return
@@ -2461,21 +2682,22 @@ SCREENS.watch = (v, under) => {
   v.innerHTML = `<section class="screen"><div class="watch"><div class="w-grid">
     <div></div>
     <div class="w-center" id="wCenter">
-      ${WT.notReady ? '<div class="w-banner" id="wBanner"><span class="spin"></span><span id="wBannerText">Still finishing parts 3–5 · about 4 min. What’s ready plays now.</span></div>' : ''}
       <div class="w-vid ${wide ? 'wide' : ''}" id="wVid"></div>
       <div class="transport w-transport" id="wTr">${transportHTML('w')}</div>
       <div class="w-info">
         <div><span class="w-title" contenteditable="true" spellcheck="false" id="wTitle">${esc(b.title)}</span></div>
         <div class="w-quiet" id="wQuiet"></div>
         <div class="w-chips" id="wChips"></div>
-        <div id="wDid"></div>
         <div class="w-btns"><button class="btn btn-primary" data-act="export">Export</button><button class="btn btn-quiet" data-act="go" data-to="edit">Change something</button></div>
       </div>
+      <div class="w-side" id="wSideWrap"><div class="col200" id="wSide"></div></div>
+      <div class="w-did" id="wDid"></div>
     </div>
-    <div class="w-side" id="wSideWrap"><div class="col200" id="wSide"></div></div>
+    <div></div>
   </div></div></section>`
   const autoplay = !under && !['left-out-open', 'what-i-did'].includes(st)
   WT.player = new Player($('#wVid'), b, { autoplay, onEnd: showAgain, onTime: watchTick })
+  if (WT.notReady) $('#wVid').insertAdjacentHTML('beforeend', '<div class="w-banner" id="wBanner" title="What’s ready plays now."><span class="spin"></span><span id="wBannerText">Finishing parts 3–5 · about 4 min</span></div>')
   renderScrub('w', WT.player.fl, WT.notReady)
   wireScrub('w', () => WT.player, () => hideAgain())
   requestAnimationFrame(() => { const tr = $('#wTr'), vr = $('#wVid').getBoundingClientRect(); tr.style.width = Math.max(520, vr.width) + 'px'; placeSide() })
@@ -2490,7 +2712,7 @@ SCREENS.watch = (v, under) => {
   if (WT.lo) later(openLeftOut, 50)
   if (st === 'restyling') later(() => restyle(altLooks()[1] || 'film'), 400)
   if (WT.notReady) {
-    const steps = [[12000, 2, 'Still finishing parts 4–5 · about 3 min. What’s ready plays now.'], [22000, 3, 'Still finishing part 5 · about 1 min. What’s ready plays now.'], [32000, 4, '']]
+    const steps = [[12000, 2, 'Finishing parts 4–5 · about 3 min'], [22000, 3, 'Finishing part 5 · about 1 min'], [32000, 4, '']]
     steps.forEach(([ms, i, txt]) => later(() => {
       WT.notReady.delete(i); renderScrub('w', WT.player.fl, WT.notReady)
       const card = $('#wVid .overcard'); if (card) { card.remove(); WT.player.play() }
@@ -2498,13 +2720,19 @@ SCREENS.watch = (v, under) => {
       else { const bn = $('#wBanner'); if (bn) bn.remove(); toast('All 5 parts are ready.') }
     }, ms))
   }
-  window.addEventListener('resize', placeSide); TEAR.push(() => window.removeEventListener('resize', placeSide))
+  const onResize = () => { placeSide(); if ($('#loPop')) openLeftOut() }
+  window.addEventListener('resize', onResize); TEAR.push(() => window.removeEventListener('resize', onResize))
 }
-function placeSide() {
+function placeSide() { // 200 px column, 32 px right of the video, vertically centred on it
   const side = $('#wSideWrap'), vEl = $('#wVid'); if (!side || !vEl) return
-  const sr = side.getBoundingClientRect(), vr = vEl.getBoundingClientRect(), col = $('#wSide').getBoundingClientRect()
-  side.style.paddingTop = Math.max(0, vr.top - sr.top + vr.height / 2 - col.height / 2) + 'px'
-  side.style.alignSelf = 'start'
+  side.style.left = (vEl.offsetLeft + vEl.offsetWidth + 32) + 'px'
+  side.style.top = Math.max(0, vEl.offsetTop + vEl.offsetHeight / 2 - side.offsetHeight / 2) + 'px'
+  // "What I did" mirrors it on the left: up to 280 px wide, 32 px left of the video, centred on it
+  const did = $('#wDid'), wc = $('#wCenter'); if (!did || !wc) return
+  const room = wc.getBoundingClientRect().left + vEl.offsetLeft - 32 - 16, w = Math.round(Math.max(200, Math.min(280, room)))
+  did.style.width = w + 'px'
+  did.style.left = (vEl.offsetLeft - 32 - w) + 'px'
+  did.style.top = Math.max(0, vEl.offsetTop + vEl.offsetHeight / 2 - did.offsetHeight / 2) + 'px'
 }
 function watchTick(P) {
   updateTransport('w', P)
@@ -2534,15 +2762,24 @@ function watchRefresh(first) {
     ${showCheck ? '<button class="chip warnc" data-act="check">1 thing to check · <b>Show me</b></button>' : ''}
     <button class="chip ${WT.did ? 'on' : ''}" data-act="did">What I did</button>`
   const did = $('#wDid')
-  if (did) did.innerHTML = WT.did ? `<ul class="did">${didLines(b).map(([t, c]) => `<li class="${c || ''}">${esc(t)}</li>`).join('')}</ul>` : ''
+  if (did) did.innerHTML = WT.did ? `<div class="did" role="region" aria-label="What I did"><span class="caps">What I did</span><ul>${didLines(b).map(([t, c, act]) => `<li class="${c || ''}">${esc(t)}${act ? ` · <button class="link" data-act="${act}">Show me</button>` : ''}</li>`).join('')}</ul></div>` : ''
   const side = $('#wSide')
+  if (side) side.style.visibility = WT.lo ? 'hidden' : ''
   if (side) {
-    const wide = !FMTS[b.fmt].v, alts = altLooks(), still = fl.shots[0].n
-    side.innerHTML = `<div class="caps">Another vibe</div>${alts.map((id) => `<button class="alt ${wide ? 'wide' : ''}" data-act="alt-vibe" data-look="${id}"><img class="${lookClass(id)} graded" src="${IMG(still)}" alt=""><span><b>${LOOKS[id].name}</b><small>${LOOKS[id].line}</small></span></button>`).join('')}
+    const wide = !FMTS[b.fmt].v, alts = altLooks(), picks = altStills(fl)
+    side.innerHTML = `<div class="caps">Another vibe</div>${alts.map((id, i) => `<button class="alt ${wide ? 'wide' : ''}" data-act="alt-vibe" data-look="${id}"><div class="th" data-alt="${i}"></div><span><b>${LOOKS[id].name}</b><small>${LOOKS[id].line}</small></span></button>`).join('')}
       <button class="link" style="text-align:left;font-size:13px" data-act="love">Like a video I love…</button>`
+    // each one is frozen on a different shot of the edit, showing only its vibe's signature element (no hook)
+    alts.forEach((id, i) => { const el = side.querySelector(`[data-alt="${i}"]`), sh0 = fl.shots.find((x) => x.n === picks[i]); if (el) new Player(el, altBoard(b, id, picks[i]), { t: 1.3, thumb: { place: sh0 ? fl.parts[sh0.pi].name : 'Park' } }) })
   }
-  requestAnimationFrame(placeSide)
+  placeSide(); requestAnimationFrame(placeSide)
 }
+function altStills(fl) { // two shots from later in the edit, not the one it opens on, people first
+  const seen = new Set([fl.shots[0].n]), out = [], order = fl.shots.slice(Math.floor(fl.shots.length / 3)).concat(fl.shots)
+  for (const pass of [(n) => FACES.has(n), () => true]) for (const s of order) { if (out.length < 2 && !seen.has(s.n) && pass(s.n)) { out.push(s.n); seen.add(s.n) } }
+  return out
+}
+function altBoard(b, look, n) { const pb = previewBoard(b.kind, look, b.fmt); if (n != null) pb.parts[0].shots[0] = mkShot(n, 2); return pb }
 function didLines(b) {
   const fl = flatten(b), L = LOOKS[b.look], K = KINDS[b.kind], joins = resolveJoins(b, fl), plan = camPlan(b, fl)
   if (b.kind === 'talking') return [
@@ -2558,49 +2795,67 @@ function didLines(b) {
   const first = fl.shots[0], titleWarn = b.words.some((w) => w.kind === 'hook' && w.pos !== 'top' && w.warn)
   const sfx = Math.min(L.sfx || 0, K.sfxMax)
   const out = [
-    [`Opened on ${HOOK_NAME[first.n] || first.label} — your clearest moment, held ${first.d.toFixed(1)} s`],
+    [`Opened on ${HOOK_NAME[first.n] || first.label} — ${first.n === 14 || first.n === 4 ? 'your clearest moment' : 'where the day starts'}, held ${first.d.toFixed(1)}\u00a0s`],
     [`Cut on movement at ${Math.max(0, cuts - 1)} of ${cuts} cuts`],
     ['One colour across 3 cameras'],
-    [titleWarn ? 'Words kept clear of the app’s buttons · the title covers a face — see “1 thing to check”' : 'Words kept clear of faces and the app’s buttons'],
+    ...(titleWarn ? [['Words kept clear of the app’s buttons'], ['The title covers Sarah’s face for 1.2 s', 'wl', 'check']] : [['Words kept clear of faces and the app’s buttons']]),
     [`Used ${plan.zc} of ${K.zooms} zoom-ins · ${sp.length} special join${sp.length === 1 ? '' : 's'}${sp.length ? ` (${joinName(sp[0].type, L)})` : ''} and ${sfx} sound effect${sfx === 1 ? '' : 's'} — ${vid(L) === 'clean' ? 'Clean keeps it plain' : `capped for ${K.rules}`}`],
   ]
   if (fell.length) out.push([`${fell.length} of ${joins.length} soft fades became a ${joinName('dip', L)} — no spare footage on both sides`])
   if (vid(L) === 'film') out.push(['Film’s flash is kept for real flash or night clips — none of those here'])
   out.push([b.music === 'none' ? 'Not checked: whether voices carry across cuts — needs a speech reading' : 'Not checked: whether voices carry across cuts — music covers them', 'nc'])
   out.push([b.look === 'learned' ? 'Pace and colour come from beach_day.mp4, a video you love · fonts and movement from Cozy' : `Pace and colour come from VibeCut’s starting rules for ${K.rules} — not yet tuned on real videos`, 'src'])
-  // at most 7 lines: drop the least specific fact first, never where the choices came from
-  while (out.length > 7) out.splice(out.findIndex((l) => l[0] === 'One colour across 3 cameras') >= 0 ? out.findIndex((l) => l[0] === 'One colour across 3 cameras') : out.length - 3, 1)
+  // at most 7 lines (8 with a warning): drop the least specific fact first — never a warning, a "not checked" or where the choices came from
+  const cap = out.some((l) => l[1] === 'wl') ? 8 : 7
+  while (out.length > cap) { const i = out.findIndex((l) => l[0] === 'One colour across 3 cameras'), j = i >= 0 ? i : out.findLastIndex((l) => !l[1]); if (j < 0) break; out.splice(j, 1) }
   return out
 }
-ACT.did = () => { WT.did = !WT.did; watchRefresh(); if (WT.did) APP.state = 'what-i-did'; else APP.state = ''; syncURL() }
+ACT.did = () => { WT.did = !WT.did; if (WT.did && WT.lo) { $('#layer').innerHTML = ''; WT.lo = false } watchRefresh(); if (WT.did) APP.state = 'what-i-did'; else APP.state = ''; syncURL() }
 ACT['said-check'] = () => { ED.tabWant = 'words'; go('edit', { tab: 'words' }) }
 ACT['alt-vibe'] = (el) => restyle(el.dataset.look)
+// One vibe, one sound: switching the vibe brings its own track, unless the creator picked a track in an earlier turn.
+function vibeTurn(to) {
+  const b = SES.board, m = b.music !== 'none' && !b.musicPicked && TRACKS[LOOKS[to].track] ? LOOKS[to].track : b.music
+  const mus = m !== b.music ? ` · music: ${TRACKS[m].t}` : ''
+  const t = turn({ icon: '●', line: `You switched the vibe to ${LOOKS[to].name}${mus}`, short: `Now ${LOOKS[to].name}${mus}`, req: `switch to ${LOOKS[to].name}`,
+    op: (x) => { x.look = to; if (x.music !== 'none' && !x.musicPicked && TRACKS[LOOKS[to].track]) x.music = LOOKS[to].track; return x } })
+  return { t, mus }
+}
 function restyle(to) {
   if (WT.restyling || !WT.player) return
   WT.restyling = true
   const vEl = $('#wVid')
-  vEl.insertAdjacentHTML('beforeend', '<div class="pill" id="rsPill"><span>Updating colour and words · about 10 s</span><div class="bar"><i id="rsBar"></i></div></div>')
-  requestAnimationFrame(() => { const b = $('#rsBar'); if (b) { b.style.transition = 'width 2s linear'; b.style.width = '100%' } })
+  vEl.insertAdjacentHTML('beforeend', '<div class="pill" id="rsPill"><span class="spin"></span><span>Updating the vibe · about 10 s</span></div>')
+  const bn = $('#wBanner'); if (bn) $('#rsPill').style.bottom = (vEl.offsetHeight - bn.offsetTop + 8) + 'px'
   if (!WT.player.playing) WT.player.play()
   later(() => {
     const p = $('#rsPill'); if (p) p.remove()
     WT.restyling = false
-    const t = turn({ icon: '●', line: `You switched the vibe to ${LOOKS[to].name}`, short: `Now ${LOOKS[to].name}`, req: `switch to ${LOOKS[to].name}`, op: (x) => { x.look = to; return x } })
+    const { t, mus } = vibeTurn(to)
     APP.look = to; syncURL()
-    toast(`Now ${LOOKS[to].name}. Your cuts are kept.`, { label: 'Undo', fn: () => { undoTurn(t.id, true); APP.look = SES.board.look; toast(`Back to ${LOOKS[SES.board.look].name}.`) } })
+    toast(`Now ${LOOKS[to].name}${mus}. Your cuts are kept.`, { label: 'Undo', fn: () => { undoTurn(t.id, true); APP.look = SES.board.look; toast(`Back to ${LOOKS[SES.board.look].name}.`) } })
   }, 2000)
 }
 function openLeftOut() {
-  WT.lo = true; watchRefresh()
-  const layer = $('#layer')
-  const html = `<div class="pop lo-pop" style="position:fixed;right:24px;top:76px;max-height:calc(100vh - 96px);overflow:auto" id="loPop">
+  // it takes the "Another vibe" column's slot (32 px right of the video, level with its top) and hides that column,
+  // so nothing half-covered peeks out; "What I did" closes, so only one side panel is ever open
+  WT.lo = true; WT.did = false; if (APP.state === 'what-i-did') { APP.state = 'left-out-open'; syncURL() }
+  watchRefresh()
+  // it stays within the video's height (clear of the transport and chips): pick the column count that fits all 9 tiles largest
+  const layer = $('#layer'), vr = $('#wVid').getBoundingClientRect(), left = Math.round(vr.right + 32)
+  const W = Math.min(560, innerWidth - left - 16), H = Math.round(vr.height), PAD = 34, HEAD = 72, GAP = 12, TXT = 34, n = LEFT_OUT.length
+  let cols = 3, tw = 0
+  for (let c = 3; c <= n; c++) { const r = Math.ceil(n / c), t = Math.floor(Math.min(96, (W - PAD - (c - 1) * GAP) / c, (((H - PAD - HEAD - (r - 1) * GAP) / r - TXT) * 9) / 16)); if (t > tw) { tw = t; cols = c } }
+  if (tw < 56) { cols = W >= 360 ? 3 : 2; tw = Math.floor(Math.min(96, (W - PAD - (cols - 1) * GAP) / cols)) } // too tight (16:9): scroll inside instead
+  const w = cols * tw + (cols - 1) * GAP + PAD
+  const html = `<div class="pop lo-pop" style="position:fixed;left:${left}px;top:${Math.round(vr.top)}px;width:${w}px;max-height:${H}px;overflow:auto;--tw:${tw}px" id="loPop">
     <div style="display:flex;justify-content:space-between;align-items:baseline"><h4>Left out 9 clips</h4><button class="btn btn-ghost btn-sm" data-act="lo-close">Close</button></div>
     <div class="muted" style="font-size:13px">Nothing is deleted. Put any back with one tap.</div>
-    <div class="lo-grid">${LEFT_OUT.map((o) => `<div class="lo ${APP.gate[o.n] === 'use' ? 'used' : ''}"><div class="th"><img src="${IMG(o.n)}" alt="">${APP.gate[o.n] === 'use' ? '<span class="btn btn-quiet btn-sm" style="pointer-events:none">✓ Back in</span>' : `<button class="btn btn-quiet btn-sm" data-act="use-it" data-n="${o.n}">Use it</button>`}</div><p>${esc(o.why)}</p></div>`).join('')}</div></div>`
+    <div class="lo-grid" style="grid-template-columns:repeat(${cols}, var(--tw))">${LEFT_OUT.map((o) => `<div class="lo ${APP.gate[o.n] === 'use' ? 'used' : ''}"><div class="th"><img src="${IMG(o.n)}" alt="">${APP.gate[o.n] === 'use' ? '<span class="btn btn-quiet btn-sm" style="pointer-events:none">✓ Back in</span>' : `<button class="btn btn-quiet btn-sm" data-act="use-it" data-n="${o.n}">Use it</button>`}</div><p title="${esc(o.why)}">${esc(o.why)}</p></div>`).join('')}</div></div>`
   layer.innerHTML = html
 }
 ACT['left-out'] = () => { if ($('#loPop')) ACT['lo-close'](); else openLeftOut() }
-ACT['lo-close'] = () => { $('#layer').innerHTML = ''; WT.lo = false; watchRefresh() }
+ACT['lo-close'] = () => { $('#layer').innerHTML = ''; WT.lo = false; if (APP.state === 'left-out-open') { APP.state = ''; syncURL() } watchRefresh() }
 function useLeftOut(n) {
   const pid = LEFT_OUT_PART[n] || 'library'
   const t = turn({ icon: '●', line: `You put ${clipName(n)} back`, short: `Put ${clipName(n)} back`, req: `put ${clipName(n)} back`,
@@ -2662,13 +2917,25 @@ function openExport(state) {
 }
 const gateLeft = () => LO().filter((o) => !APP.gate[o.n]).length
 const saidLeft = () => (SES.board.kind === 'talking' ? ['c1', 'c2'].filter((c) => !APP.saidGate[c]).length : 0)
-function exportFiles() {
+function exportFiles() { // [file name, kind]: mp4 · nm (the no-music copy) · txt · srt
   const b = SES.board, T = b.title, f = []
-  if (EX.sound !== 'none') f.push(`${T}.mp4`)
-  if (EX.sound !== 'music') f.push(`${T} (no music).mp4`, 'cut times.txt')
-  if (b.fmt === 'youtube' && EX.words === 'srt') f.push(`${T}.srt`)
-  if (EX.sound !== 'none' && TRACKS[b.music] && TRACKS[b.music].credit) f.push('credits.txt')
+  if (EX.sound !== 'none') f.push([`${T}.mp4`, 'mp4'])
+  if (EX.sound !== 'music') f.push([`${T} (no music).mp4`, 'nm'], ['cut times.txt', 'txt'])
+  if (b.fmt === 'youtube' && EX.words === 'srt') f.push([`${T}.srt`, 'srt'])
+  if (EX.sound !== 'none' && TRACKS[b.music] && TRACKS[b.music].credit) f.push(['credits.txt', 'txt'])
   return f
+}
+function posterBoard(b) { // the export poster: a frozen frame of the edit, drawn by the same player
+  const n = flatten(b).shots[0].n, p0 = { id: 'p0', name: b.parts[0].name, time: '', pace: 2, opens: 'best', shots: [mkShot(n, 3)] }
+  // YouTube: a 16:9 frame on part title 1 — a wide video has no hook line
+  if (!FMTS[b.fmt].v) return { kind: b.kind, fmt: b.fmt, look: b.look, order: 'time', parts: [p0],
+    words: [{ id: 'poster-part', kind: 'part', text: b.parts[0].name, kicker: 'Part 1', part: 'p0', at: 0, d: 2.6, pos: 'auto' }],
+    moments: [], music: 'none', titlePos: 'mid', preview: true, title: b.title }
+  // upright: shot 1 with the vibe's own hook line; only the designed finding stays over her face
+  const designed = b.words.some((w) => w.kind === 'hook' && w.pos === 'mid' && w.warn)
+  return { kind: b.kind, fmt: 'short', look: b.look, order: 'time', parts: [p0],
+    words: [{ id: 'poster-hook', kind: 'hook', text: b.title, part: 'p0', at: 0, d: 2.6, pos: designed ? 'mid' : b.titlePos === 'top' ? 'top' : 'auto' }],
+    moments: [], music: 'none', titlePos: b.titlePos, preview: true, title: b.title }
 }
 function cutTimes() {
   const b = SES.board, fl = flatten(b)
@@ -2681,16 +2948,19 @@ function renderExport() {
   const tr = TRACKS[b.music], credit = tr && tr.credit && EX.sound !== 'none'
   const blocked = gateLeft() > 0 || saidLeft() > 0
   const titleWarn = b.words.some((w) => w.kind === 'hook' && w.pos !== 'top' && w.warn)
-  const radio = (key, val, label) => `<button class="${EX[key] === val ? 'on' : ''}" data-act="ex-set" data-k="${key}" data-v="${val}" ${val !== 'none' && b.music === 'none' && key === 'sound' ? 'disabled style="opacity:.4"' : ''}><i></i>${label}</button>`
-  const poster = APP.checkDone || !titleWarn || talk ? `<img src="${IMG(fl.shots[0].n)}" class="${lookClass(b.look)} graded" alt="">` : `<img src="${IMG('hero.png')}" alt="">`
+  const seg = (key, opts) => `<div class="seg full" role="radiogroup">${opts.map(([val, label]) => `<button class="${EX[key] === val ? 'on' : ''}" role="radio" aria-checked="${EX[key] === val}" data-act="ex-set" data-k="${key}" data-v="${val}" ${val !== 'none' && b.music === 'none' && key === 'sound' ? 'disabled style="opacity:.4"' : ''}>${label}</button>`).join('')}</div>`
+  const prevScroll = ($('#layer .scrollb') || {}).scrollTop || 0
+  const lpOpen = EX.gateOpen && LO().length > 0 && !['exporting', 'done', 'error'].includes(EX.st)
   let body
   if (EX.st === 'exporting') {
     body = `<div class="sec"><div class="bar" style="height:6px"><i id="exBar" style="width:0%"></i></div><p class="muted" style="font-size:13px;margin-top:10px" id="exText">Exporting… about 40 s left · keep this window open — the words are drawn here</p></div>`
   } else if (EX.st === 'done') {
     const nm = EX.sound !== 'music'
+    const th = (noMusic) => `<span class="fth ${yt ? 'wide' : ''}"><img src="${IMG(fl.shots[0].n)}" class="${lookClass(b.look)} graded" alt="">${noMusic ? '<i>no ♪</i>' : ''}</span>`
     body = `<div class="sec"><div style="font-size:15px"><span class="okc">✓</span> Saved to Movies › VibeCut</div>
-      <div class="files">${exportFiles().map((f) => `<div>${esc(f)}</div>`).join('')}</div>
-      ${nm ? `<p class="note">In TikTok: tap Add sound, then turn your original sound down to taste.</p><details style="margin-top:10px"><summary class="qlink" style="font-size:12.5px">What’s in cut times.txt</summary><pre style="font:11.5px/1.5 Menlo,monospace;color:var(--muted);white-space:pre-wrap;margin-top:6px">${esc(cutTimes())}</pre></details>` : ''}
+      <div class="files">${exportFiles().map(([f, k]) => `<div>${k === 'mp4' || k === 'nm' ? th(k === 'nm') : `<span class="fic">${k}</span>`}<span>${esc(f)}</span></div>`).join('')}</div>
+      ${nm ? `<p class="note">In TikTok: tap Add sound, then turn your original sound down to taste.</p><details open style="margin-top:10px"><summary class="qlink" style="font-size:12.5px">What’s in cut times.txt</summary><pre style="font:11.5px/1.5 Menlo,monospace;color:var(--muted);white-space:pre-wrap;margin-top:6px">${esc(cutTimes())}</pre></details>` : ''}
+      ${yt && EX.chapters ? `<details open style="margin-top:12px"><summary class="qlink" style="font-size:12.5px">Chapters for your description</summary><pre style="font:11.5px/1.6 Menlo,monospace;color:var(--muted);white-space:pre-wrap;margin-top:6px">${esc(fl.parts.map((p) => `${clockT(p.t0)} ${p.name}`).join('\n'))}</pre></details>` : ''}
     </div>`
   } else if (EX.st === 'error') {
     const E0 = { space: ['Not enough space on this Mac — needs 1.2 GB.', 'Show in Finder'], stopped: ['Export stopped at 0:21.', 'Try again'], effect: ['One effect failed on shot 7.', 'Export without it'] }
@@ -2698,11 +2968,11 @@ function renderExport() {
       <p class="faint" style="font-size:12px">Nothing was saved half-way. Your edit is untouched.</p></div>`
   } else {
     body = `
-      <div class="sec"><span class="caps">Sound</span><div class="radio">
-        ${radio('sound', 'music', 'With music')}${radio('sound', 'none', 'Without music — I’ll add a sound in the app')}${radio('sound', 'both', 'Both')}</div>
+      <div class="sec"><span class="caps">Sound</span>
+        ${seg('sound', [['music', 'With music'], ['none', 'Without music'], ['both', 'Both']])}
         ${EX.sound !== 'music' ? '<p class="note">Trending sounds can only be added inside TikTok and Instagram. I’ll save the cut times next to the video so you can line one up.</p>' : ''}
       </div>
-      ${yt ? `<div class="sec"><span class="caps">Words</span><div class="radio">${radio('words', 'video', 'On the video')}${radio('words', 'srt', 'As a subtitle file')}</div>
+      ${yt ? `<div class="sec"><span class="caps">Words</span>${seg('words', [['video', 'On the video'], ['srt', 'As a subtitle file']])}
         <div class="gi" style="border:0;padding-top:6px"><span class="check ${EX.chapters ? 'on' : ''}" data-act="ex-chap">${EX.chapters ? '✓' : ''}</span><span class="grow">Chapters: I’ll copy them for your description</span></div></div>` : ''}
       <div class="sec"><span class="caps">Before you export</span><div class="gate">
         ${LO().length ? gateRow() : ''}
@@ -2721,19 +2991,37 @@ function renderExport() {
   else foot = `${blocked ? `<div class="helper">${gateLeft() ? 'Look at the left-out clips first — nothing leaves without a look.' : 'Look at the cuts in what you said first — nothing leaves without a look.'}</div>` : ''}
     <div class="btnrow"><button class="btn btn-ghost" data-act="ex-close">Not yet</button><button class="btn btn-primary btn-lg" data-act="ex-go" ${blocked ? 'disabled' : ''}>${EX.sound === 'both' ? 'Export 2 videos' : 'Export video'}</button></div>`
   $('#layer').innerHTML = `<div class="scrim" data-act="scrim-ex"><div class="sheet exp" role="dialog" aria-label="Export">
-    <div class="post ${yt ? 'wide' : ''}">${poster}</div>
+    ${lpOpen ? `<div class="post lp" id="exPost" role="region" aria-label="Left-out clips">${loPanel()}</div>` : '<div class="post" id="exPost"><div id="exPoster"></div></div>'}
     <div class="body"><div class="eyebrow">Export</div><h2>${esc(b.title)}</h2>
       <div class="fl">${yt ? `Wide 1920 × 1080 · ${fmtLen(fl.total)} · for YouTube` : `Upright 1080 × 1920 · ${fmtLen(fl.total)} · ${F0.dest}`}</div>
       <div class="scrollb">${body}</div><div class="foot">${foot}</div></div></div></div>`
+  // the poster: a frozen frame of the edit; if the title covers her face, the face is marked on it
+  const pv = $('#exPoster'); if (pv && yt) pv.classList.add('wide')
+  const PP = pv ? new Player(pv, posterBoard(b), { t: 1.2 }) : null
+  if (PP && titleWarn && !talk && !APP.checkDone) {
+    const n0 = flatten(b).shots[0].n, mark = () => { const f = faceRect(PP.G, n0, FACE14); if (f && pv.isConnected && !pv.querySelector('.facebox')) pv.insertAdjacentHTML('beforeend', `<div class="facebox" style="left:${(f.x * 100).toFixed(2)}%;top:${(f.y * 100).toFixed(2)}%;width:${(f.w * 100).toFixed(2)}%;height:${(f.h * 100).toFixed(2)}%"><span>Sarah’s face</span></div>`) }
+    if (ok(pic(n0))) mark(); else pic(n0).addEventListener('load', mark, { once: true })
+  }
+  // the list scrolls: keep its place across re-renders, and fade the last 28 px while there is more below
+  const sb = $('#layer .scrollb')
+  if (sb) { sb.scrollTop = prevScroll; const upd = () => sb.classList.toggle('fadeb', sb.scrollHeight - sb.scrollTop - sb.clientHeight > 4); upd(); sb.addEventListener('scroll', upd, { passive: true }) }
 }
 function gateRow() {
   const left = gateLeft(), n = LEFT_OUT.length
   const used = LEFT_OUT.filter((o) => APP.gate[o.n] === 'use').length
   if (!left && !EX.gateOpen) return `<div class="gi"><span class="dot dk"></span><span class="grow"><span class="okc">✓</span> You looked at all ${n} left-out clips${used ? ` · ${used} put back` : ''}. <button class="link" data-act="ex-look">See them</button></span></div>`
   const head = left === n ? `${n} clips were left out and nobody has looked at them yet.` : `${left} of ${n} left-out clips haven’t been looked at yet.`
-  return `<div class="gi" style="flex-wrap:wrap"><span class="dot ${left ? 'dw' : 'dk'}"></span><span class="grow">${left ? head : `<span class="okc">✓</span> You looked at all ${n} left-out clips.`} <button class="link" data-act="ex-look">${EX.gateOpen ? 'Hide' : 'Look'}</button></span>
-    ${EX.gateOpen ? `<div style="width:100%"><div class="golist">${LEFT_OUT.map((o) => { const a = APP.gate[o.n]; return `<div class="go ${a ? 'ans' : ''}"><img src="${IMG(o.n)}" alt=""><div>${esc(o.why)}${a ? `<div class="ansl">✓ ${a === 'use' ? 'Back in' : 'Kept out'}</div>` : `<div class="gb"><button class="btn btn-quiet" data-act="gate" data-n="${o.n}" data-a="use">Use it</button><button class="btn btn-quiet" data-act="gate" data-n="${o.n}" data-a="keep">Keep out</button></div>`}</div></div>` }).join('')}</div>
-      ${left ? '<button class="btn btn-quiet btn-sm" data-act="gate-all" style="margin:4px 0 6px">They’re fine left out</button>' : ''}</div>` : ''}</div>`
+  // while Look is open the clips themselves sit in the poster column (loPanel), so this row stays one row
+  const open = left ? `${left} left-out clip${left === 1 ? '' : 's'} to look at, on the left.` : `<span class="okc">✓</span> You looked at all ${n} left-out clips.`
+  return `<div class="gi"><span class="dot ${left ? 'dw' : 'dk'}"></span><span class="grow">${EX.gateOpen ? open : left ? head : `<span class="okc">✓</span> You looked at all ${n} left-out clips.`} <button class="link" data-act="ex-look">${EX.gateOpen ? 'Hide' : 'Look'}</button></span></div>`
+}
+function loPanel() { // the left-out clips, in the poster column: 3 × 3 tiles, ✓ Use it · × Keep out on each tile's bottom edge
+  const left = gateLeft()
+  return `<div class="lp-h"><b>Left out ${LEFT_OUT.length}</b>${left ? ' · <button class="link" data-act="gate-all">They’re fine left out</button>' : ' · <span class="okc">all looked at</span>'}</div>
+    <div class="lp-grid">${LEFT_OUT.map((o) => { const a = APP.gate[o.n]; return `<div class="lp ${a || ''}"><div class="lp-th"><img src="${IMG(o.n)}" alt="${esc(clipName(o.n))}">${a
+      ? `<span class="lp-ans">${a === 'use' ? '✓ Back in' : 'Kept out'}</span>`
+      : `<span class="lp-b"><button class="lp-btn" data-act="gate" data-n="${o.n}" data-a="use" title="Use it" aria-label="Use ${clipName(o.n)}">✓</button><button class="lp-btn" data-act="gate" data-n="${o.n}" data-a="keep" title="Keep out" aria-label="Keep ${clipName(o.n)} out">×</button></span>`}</div>
+      <div class="lp-why" title="${esc(o.why)}">${esc(o.short || o.why)}</div></div>` }).join('')}</div>`
 }
 function saidRow() {
   const left = saidLeft()
@@ -2776,7 +3064,9 @@ function startExport() {
 const ED = { player: null, part: null, word: null, tab: 'part', drawer: false, thinking: false, noKey: false, preview: null, showAll: false,
   pendingOut: null, style: false, more: false, swapFor: null, shotSel: null, scope: 'part', rem: null, expand: {}, railOverlay: false, freeSearch: '' }
 const SAID_KIND = { pause: 'pauses', retake: 'retakes', stumble: 'stumbles', filler: 'fillers' }
-const LANDS = { slow_sunday: 'the fountain', paper_boats: 'the park', harbour_lights: 'dinner', early_tram: 'your morning', window_seat: 'your last shot', long_light: 'the park', neon_run: 'the fountain', say_it_twice: 'the park' }
+const LANDS = { slow_sunday: 'the fountain', paper_boats: 'the park', harbour_lights: 'dinner', early_tram: 'your morning', window_seat: 'your last shot', long_light: 'the park', neon_run: 'the fountain', say_it_twice: 'the park',
+  morning_glass: 'your morning', open_plan: 'the park', pale_blue: 'the park', bright_hours: 'the fountain', wool_coat: 'dinner', sidewalk_chalk: 'the park', signal_fire: 'the fountain',
+  tin_roof: 'the park', pulse_street: 'the park', night_bus: 'the fountain', red_line: 'dinner' }
 
 SCREENS.edit = (v) => {
   const st = APP.state
@@ -2789,7 +3079,7 @@ SCREENS.edit = (v) => {
   editorShell(v, false)
   if (st === 'undo-dependent') { const t = SES.turns.find((x) => x.req === 'add a shot to Park'); if (t && !t.undone) later(() => undoTurn(t.id), 350) }
   if (st === 'couldnt' && !SES.turns.some((t) => t.fail)) { failTurn({ icon: '✦', typed: true, line: 'You asked: ‘make it pop more’', said: 'I couldn’t turn that into a change. Nothing changed.', sugg: ['Make the opening shorter', 'Remove the words in Park'] }) }
-  if (st === 'preview-track') later(() => startPreview('paper_boats'), 300)
+  if (st === 'preview-track') later(() => startPreview(musicFor(SES.board.look).fits.find((id) => id !== SES.board.music)), 300)
   if (st === 'script-lines') later(() => toast('3 lines from your script weren’t said.', { label: 'Show', fn: () => { ED.tab = 'words'; renderPanel() } }), 400)
 }
 function editorShell(v, frames) {
@@ -2866,9 +3156,9 @@ ACT['vibe-sub'] = (el) => {
 ACT['edit-vibe'] = (el) => {
   closePop()
   const to = el.dataset.look; if (to === SES.board.look) return
-  const t = turn({ icon: '●', line: `You switched the vibe to ${LOOKS[to].name}`, short: `Now ${LOOKS[to].name}`, req: `switch to ${LOOKS[to].name}`, op: (x) => { x.look = to; return x } })
+  const { t, mus } = vibeTurn(to)
   APP.look = to; syncURL()
-  toast(`Now ${LOOKS[to].name}. Your cuts are kept.`, { label: 'Undo', fn: () => undoTurn(t.id) })
+  toast(`Now ${LOOKS[to].name}${mus}. Your cuts are kept.`, { label: 'Undo', fn: () => undoTurn(t.id) })
 }
 ACT['change-kind'] = (el) => {
   openPop($('#vpill'), `<div class="pad" style="max-width:300px"><div style="font-size:13.5px;line-height:1.45">Changing what it is makes a new version. This one stays in Versions.</div>
@@ -2960,7 +3250,7 @@ function partTab() {
   return `
     <h4 class="editable" contenteditable="true" spellcheck="false" id="partName">${esc(p.name)}</h4>
     <div class="sub">${plural(p.shots.length, 'shot')} · ${fmtLen(fp.t1 - fp.t0)} · ${esc(p.time)}</div>
-    <div class="shotgrid">${p.shots.map((s, k) => `<div class="sh ${ED.shotSel === s.id ? 'sel' : ''}" data-act="shot" data-id="${s.id}" title="${esc(s.label)}"><img src="${IMG(s.n)}" alt="">${i === 0 && k === 0 && !talk ? '<span class="hook">Opens</span>' : ''}<span class="dur">${s.d.toFixed(1)} s</span></div>`).join('')}</div>
+    <div class="shotgrid ${FMTS[b.fmt].v ? '' : 'wide'}" id="shotGrid">${p.shots.map((s, k) => `<div class="sh ${ED.shotSel === s.id ? 'sel' : ''}" data-act="shot" data-id="${s.id}" title="${esc(s.label)}"><img src="${IMG(s.n)}" alt="">${i === 0 && k === 0 && !talk ? '<span class="hook">Opens</span>' : ''}<span class="dur">${s.d.toFixed(1)} s</span></div>`).join('')}</div>
     ${ED.swapFor ? swapList(p) : ''}
     <div class="kv">
       <span>Pace</span><div><input type="range" class="range" min="0" max="4" step="1" value="${p.pace}" id="paceR" aria-label="Pace"><div class="stops"><span>Let it breathe</span><span>Punchier</span></div></div>
@@ -2973,6 +3263,8 @@ function partTab() {
     <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-quiet btn-sm" data-act="watch-part">▶ Watch this part</button><span style="flex:1"></span><button class="btn btn-ghost btn-sm btn-danger" data-act="remove-part">Remove part</button></div>`
 }
 function wirePartTab() {
+  const g = $('#shotGrid')
+  if (g && g.classList.contains('wide')) { const upd = () => g.classList.toggle('fadeb', g.scrollHeight - g.scrollTop - g.clientHeight > 4); upd(); g.addEventListener('scroll', upd, { passive: true }) }
   const n = $('#partName')
   if (n) {
     n.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); n.blur() } })
@@ -3137,7 +3429,7 @@ ACT['del-word'] = (el) => {
 ACT['add-words'] = () => {
   const p = curPart(), fp = flatten(SES.board).parts.find((q) => q.id === p.id), at = clamp((ED.player ? ED.player.t : fp.t0) - fp.t0, 0, Math.max(0, fp.t1 - fp.t0 - 2))
   const t = turn({ icon: '●', line: `You added words to ${p.name}`, short: `Added words to ${p.name}`, req: 'add words',
-    op: (x) => { x.words.push({ id: uid('w'), g: '¶', kind: 'diary', text: 'Your words here', part: p.id, at, d: 2.4, label: 'Line', pos: 'mid' }); return x } })
+    op: (x) => { x.words.push({ id: uid('w'), g: '¶', kind: 'diary', text: 'Your words here', part: p.id, at, d: 2.4, label: 'Line', pos: 'auto' }); return x } })
   if (t) { ED.scope = 'part'; renderPanel(); const w = SES.board.words[SES.board.words.length - 1]; later(() => { const row = $(`.wrow[data-id="${w.id}"]`); if (row) ACT.word(row, { target: row }) }, 30) }
 }
 ACT.suggest = () => {
@@ -3145,7 +3437,7 @@ ACT.suggest = () => {
   if (b.words.some((w) => w.text === '4:05 pm')) { toast('Nothing new to suggest — every place and time already has words.'); return }
   const park = b.parts.find((p) => p.id === 'park') || b.parts[Math.min(3, b.parts.length - 1)]
   const t = turn({ icon: '●', line: 'You tapped Suggest words', short: 'Suggested a clock time', req: 'suggest words',
-    op: (x) => { x.words.push({ id: uid('w'), g: '◷', kind: 'clock', text: '4:05 pm', part: park.id, at: 3, d: 2, label: 'Clock', pos: 'mid' }); return x } })
+    op: (x) => { x.words.push({ id: uid('w'), g: '◷', kind: 'clock', text: '4:05 pm', part: park.id, at: 3, d: 2, label: 'Clock', pos: 'auto' }); return x } })
   if (t) toast('Added ‘4:05 pm’ in Park — the clock time on that clip.', { label: 'Undo', fn: () => undoTurn(t.id) })
 }
 ACT.mark = (el) => { const id = el.dataset.id, w = flatten(SES.board).words.find((x) => x.id === id); if (!w) return; ED.word = id; ED.tab = 'words'; ED.scope = 'all'; ED.part = w.part || ED.part; ED.player.pause(); ED.player.seek(w.t0 + 0.5); renderPanel(); renderStrip(); renderRail(); focusWordRow(id) }
@@ -3201,20 +3493,22 @@ ACT['script-show'] = () => toast('“We had lunch on the steps.” · “The lib
 /* ------------------------------------------------------------ music tab (§6) */
 function musicTab() {
   const b = SES.board, cur = b.music, L = LOOKS[b.look], ms = APP.mstate
-  const nofolder = ms === 'offline-nofolder'
-  let list = (nofolder ? ['paper_boats', 'early_tram', 'long_light'] : ALSO_FITS).filter((id) => id !== cur).slice(0, 5)
-  if (ED.showAll) list = list.concat(OUTSIDE)
-  const outWhy = (id) => (TRACKS[id].out === 'quick' ? `Quicker than ${L.name} usually goes` : 'Has singing — may fight your voice')
+  const nofolder = ms === 'offline-nofolder', M = musicFor(b.look)
+  // "Also fits" is the vibe's own list: gated by its tempo band, its own track first (§4.4, §6)
+  const fits = M.fits.filter((id) => id !== cur && (!nofolder || TRACKS[id].src === 'starter'))
+  let list = fits.slice(0, 5)
+  if (ED.showAll) list = fits.concat(Object.keys(M.out).filter((id) => id !== cur))
   const row = (id) => {
-    const T = TRACKS[id], [bn, bc] = BADGE[T.src], out = OUTSIDE.includes(id)
+    const T = TRACKS[id], [bn, bc] = BADGE[T.src], out = M.out[id], why = out || T.why
     return `<div class="trk ${ED.preview === id ? 'previewing' : ''}"><button class="pl" data-act="${ED.preview === id ? 'stop-preview' : 'preview'}" data-id="${id}" aria-label="Preview ${esc(T.t)}">${ED.preview === id ? `<svg class="ring" viewBox="0 0 34 34"><circle cx="17" cy="17" r="15" fill="none" stroke="#93b08833" stroke-width="2"/><circle id="ring-${id}" cx="17" cy="17" r="15" fill="none" stroke="#c9dcc1" stroke-width="2" stroke-dasharray="94.2" stroke-dashoffset="94.2"/></svg>■` : '▶'}</button>
-      <div class="nm"><b>${esc(T.t)}</b><div class="a">${esc(T.a)} <span class="badge ${bc}">${bn}</span></div><div class="rs ${out ? 'out' : ''}">${out ? outWhy(id) : esc(T.why)}</div></div>
-      <canvas data-curve="${id}" width="112" height="40"></canvas>
+      <div class="nm"><div class="l1"><b title="${esc(T.t)}">${esc(T.t)}</b><span class="badge ${bc}" title="${bn}">${BADGE_SHORT[T.src]}</span></div><div class="rs" title="${esc(T.a)} · ${esc(why)}">${esc(T.a)} · <i class="${out ? 'out' : ''}">${esc(why)}</i></div></div>
+      <canvas data-curve="${id}" width="96" height="40"></canvas>
       <button class="btn btn-quiet btn-sm" data-act="use-track" data-id="${id}">Use</button></div>
-      ${ED.pendingOut === id ? `<div class="inline-ask">This one is ${TRACKS[id].out === 'quick' ? `quicker than ${L.name} usually goes` : 'sung, and may fight your voice'}. Use it anyway?<div class="acts"><button class="btn btn-quiet btn-sm" data-act="use-out" data-id="${id}">Use it</button><button class="btn btn-ghost btn-sm" data-act="cancel-out">Cancel</button></div></div>` : ''}`
+      ${ED.pendingOut === id ? `<div class="inline-ask">This one ${T.sung ? 'is sung, and may fight your voice' : out.replace(/^Quicker/, 'is quicker').replace(/^Slower/, 'is slower')}. Use it anyway?<div class="acts"><button class="btn btn-quiet btn-sm" data-act="use-out" data-id="${id}">Use it</button><button class="btn btn-ghost btn-sm" data-act="cancel-out">Cancel</button></div></div>` : ''}`
   }
   const T = TRACKS[cur]
-  const np = ms === 'missing' ? `<div class="np"><div class="row"><div class="cover" style="background:#2a251f"></div><div style="flex:1"><b style="font-weight:600">Slow Sunday</b><div class="faint" style="font-size:12px">Mira Vale · Yours</div></div></div><div class="why warn">Can’t find Slow Sunday. It may have moved.</div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-quiet btn-sm" data-act="mtoast" data-m="Finder would open so you can point to it.">Locate</button><button class="btn btn-ghost btn-sm" data-act="mtoast" data-m="Pick any track below.">Pick another</button></div></div>`
+  const lost = TRACKS[cur] || TRACKS[L.track]
+  const np = ms === 'missing' ? `<div class="np"><div class="row"><div class="cover" style="background:#2a251f"></div><div style="flex:1"><b style="font-weight:600">${esc(lost.t)}</b><div class="faint" style="font-size:12px">${esc(lost.a)} · ${BADGE[lost.src][0]}</div></div></div><div class="why warn">Can’t find ${esc(lost.t)}. It may have moved.</div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-quiet btn-sm" data-act="mtoast" data-m="Finder would open so you can point to it.">Locate</button><button class="btn btn-ghost btn-sm" data-act="mtoast" data-m="Pick any track below.">Pick another</button></div></div>`
     : cur === 'none' ? `<div class="np"><div class="row"><div class="cover" style="background:linear-gradient(135deg,#2a251f,#3a332b)"></div><div style="flex:1"><b style="font-weight:600">Your own sound</b><div class="faint" style="font-size:12px">No music · everyday sounds at full level</div></div></div><div class="why">Pick a track below any time — it’s one change, with Undo.</div></div>`
     : `<div class="np"><div class="row"><div class="cover" style="background:linear-gradient(135deg,${T.cov[0]},${T.cov[1]})"></div><div style="flex:1;min-width:0"><b style="font-weight:600">${esc(T.t)}</b><div class="faint" style="font-size:12px">${esc(T.a)} · ${BADGE[T.src][0]}</div></div><span class="tag acc">Playing</span></div>
       <div class="why">${esc(T.why)}</div>
@@ -3227,7 +3521,7 @@ function musicTab() {
     ${ms === 'nothing-fits' ? '<div class="state-line w">None of these follow your video closely. Here’s the nearest.</div>' : ''}
     <div class="caps" style="margin:18px 0 4px">Also fits</div>
     ${list.map(row).join('')}
-    <div class="trk"><span class="pl" style="border-style:dashed">∅</span><div class="nm"><b>No music — just your own sound</b><div class="rs">Everyday sounds at full level, nothing ducked</div></div><span></span><button class="btn btn-quiet btn-sm" data-act="use-track" data-id="none" ${cur === 'none' ? 'disabled' : ''}>Use</button></div>
+    <div class="trk"><span class="pl" style="border-style:dashed">∅</span><div class="nm" style="grid-column:2 / 4"><div class="l1"><b>No music — just your own sound</b></div><div class="rs">Everyday sounds at full level, nothing ducked</div></div><button class="btn btn-quiet btn-sm" data-act="use-track" data-id="none" ${cur === 'none' ? 'disabled' : ''}>Use</button></div>
     <div class="mfoot">
       ${nofolder ? '<button class="btn btn-primary btn-sm" data-act="mtoast" data-m="A folder picker would open here." style="align-self:flex-start">Choose my music folder</button>' : '<span class="muted">From ~/Music/Vlog · 212 tracks · <button class="link" data-act="mtoast" data-m="A folder picker would open here.">Change</button></span>'}
       <span><button class="link" data-act="free-search">Find free music (online)</button> <span class="faint">· sends mood words only</span></span>
@@ -3258,8 +3552,8 @@ function drawMusic() {
     c.strokeStyle = '#e8dccb'; c.setLineDash([4, 4]); c.lineWidth = 1.5; c.beginPath(); VIDEO_BUSY.forEach((e, i) => { const x = (i / 9) * W, y = H - 4 - e * (H - 8); i ? c.lineTo(x, y) : c.moveTo(x, y) }); c.stroke(); c.setLineDash([])
   })
 }
-function musicDiff(from, to) {
-  const b = SES.board, beat = { trip: 'parts', places_guide: 'parts', story_day: 'parts' }[b.kind] || 'free'
+function musicDiff(from, to, kind = SES.board.kind) {
+  const beat = { trip: 'parts', places_guide: 'parts', story_day: 'parts' }[kind] || 'free'
   if (to === 'none') return ['Your own sound at full level · nothing ducked']
   if (beat === 'parts') return ['4 part changes moved onto its bars, all under 0.3 s']
   return [LANDS[to] ? `Its lift lands on ${LANDS[to]} · ends on its own ending` : 'Even all the way · fades over the last 2 s, ending on a bar']
@@ -3268,10 +3562,10 @@ function setMusic(id) {
   const from = SES.board.music
   if (from === id) return
   stopPreview(true)
-  const t = turn({ icon: '●', line: `Music: ${trackName(from)} → ${trackName(id)}`, short: `Music: ${trackName(id)}`, req: `switch the music to ${trackName(id)}`, op: (x) => { x.music = id; return x }, diff: musicDiff(from, id) })
+  const t = turn({ icon: '●', line: `Music: ${trackName(from)} → ${trackName(id)}`, short: `Music: ${trackName(id)}`, req: `switch the music to ${trackName(id)}`, music: true, op: (x) => { x.music = id; x.musicPicked = true; return x }, diff: musicDiff(from, id) })
   if (t) toast(`Music: ${trackName(id)}. ${t.diff[0]}.`, { label: 'Undo', fn: () => undoTurn(t.id) })
 }
-ACT['use-track'] = (el) => { const id = el.dataset.id; if (OUTSIDE.includes(id)) { ED.pendingOut = id; renderPanel(); return } setMusic(id) }
+ACT['use-track'] = (el) => { const id = el.dataset.id; if (musicFor(SES.board.look).out[id]) { ED.pendingOut = id; renderPanel(); return } setMusic(id) }
 ACT['use-out'] = (el) => { ED.pendingOut = null; setMusic(el.dataset.id) }
 ACT['cancel-out'] = () => { ED.pendingOut = null; renderPanel() }
 ACT['show-all'] = () => { ED.showAll = !ED.showAll; renderPanel() }
@@ -3381,7 +3675,7 @@ function interpret(q) {
   if (/sunset/.test(s) && /open|start|begin/.test(s)) return { short: 'Opened on the sunset', op: (x) => { x.parts[0].shots[0] = Object.assign(mkShot(37, 1.4), { label: 'the sunset' }); return x } }
   if (/sunset/.test(s) && /end|finish|close/.test(s)) return { short: 'Ended on the sunset', op: (x) => { const d = x.parts[x.parts.length - 1]; d.shots[d.shots.length - 1] = mkShot(37, 2.4); return x } }
   if (/calm|slower|breathe|slow down/.test(s)) return { short: `${curPart().name}: slower`, op: (x) => { const p = x.parts.find((q) => q.id === ED.part) || x.parts[0]; p.shots.forEach((sh) => { sh.d = Math.round(sh.d * 1.15 * 100) / 100 }); p.pace = 1; return x } }
-  if (/music|song|track/.test(s)) { const nx = ALSO_FITS.find((id) => id !== b.music); return { short: `Music: ${TRACKS[nx].t}`, op: (x) => { x.music = nx; return x }, diff: [`Music: ${trackName(b.music)} → ${trackName(nx)}`].concat(musicDiff(b.music, nx)) } }
+  if (/music|song|track/.test(s)) { const nx = musicFor(b.look).fits.find((id) => id !== b.music); return { short: `Music: ${TRACKS[nx].t}`, music: true, op: (x) => { x.music = nx; x.musicPicked = true; return x }, diff: [`Music: ${trackName(b.music)} → ${trackName(nx)}`].concat(musicDiff(b.music, nx)) } }
   const m = s.match(/remove .*?(morning|campus|library|park|dinner)/)
   if (m) { const p = b.parts.find((q) => q.id === m[1]); if (p && p.shots.length <= 2) return { refuse: `${p.name} has only 2 shots.` }; if (p) return { short: `Removed a shot from ${p.name}`, op: (x) => { const q = x.parts.find((y) => y.id === p.id); q.shots.pop(); return x } } }
   return null
@@ -3406,12 +3700,13 @@ function ask(q) {
 }
 
 /* ------------------------------------------------------------ S7 · Fine-tune frames */
-const FR = { sel: null, snapped: false }
+const FR = { sel: null, snapped: false, zoom: 'fit', zoomFmt: '', recenter: true }
 const MOVES = [3.1, 9.4, 12.2, 19.6, 27.3, 33.8]
 SCREENS.frames = (v) => {
   if (!SES.ready) newSession({ seeded: true })
   const fl = flatten(SES.board)
   if (!fl.shots.find((s) => s.id === FR.sel)) FR.sel = (fl.shots.find((s) => s.n === 35) || fl.shots[1] || fl.shots[0]).id
+  FR.recenter = true
   editorShell(v, true)
   const s = fl.shots.find((x) => x.id === FR.sel); if (s) ED.player.seek(s.t0 + s.d * 0.55)
 }
@@ -3422,7 +3717,8 @@ function framePanel() {
   if (!s) return '<h4>Pick a shot</h4><div class="sub">Tap a shot on the timeline.</div>'
   const cur = s.join || 'cut'
   const opts = [['cut', 'Straight cut']].concat(L.joins.slice(1).map((n) => [/fade|dip|grey/i.test(n) ? (/dip/i.test(n) ? 'dip' : /grey/i.test(n) ? 'dip' : 'fade') : /leak/i.test(n) ? 'leak' : /flash/i.test(n) ? 'flash' : /whip/i.test(n) ? 'whip' : 'cut', n]))
-  return `<div class="frame-panel"><div class="caps">Shot</div><div class="fp-h" style="margin-top:6px">${s.clip} · ${s.d.toFixed(1)} s · from 0:${s.n === 35 ? '12.3' : pad2(Math.floor(+s.from)) + '.' + String(s.from).split('.')[1]} in the clip</div>
+  return `<div class="frame-panel"><div class="caps">Shot</div><div class="fp-h" style="margin-top:6px">${s.clip}</div>
+    <div class="fp-sub">${s.d.toFixed(1)} s · from 0:${s.n === 35 ? '12.3' : pad2(Math.floor(+s.from)) + '.' + String(s.from).split('.')[1]} in the clip</div>
     <div class="sub">${esc(s.label)} · in ${esc(SES.board.parts[s.pi].name)}</div>
     <div class="acts">
       <button class="btn btn-quiet" data-act="fr-split">Split here <kbd>S</kbd></button>
@@ -3436,32 +3732,59 @@ function framePanel() {
 function renderTimeline() {
   const el = $('#tline'); if (!el || !ED.player) return
   const b = SES.board, fl = flatten(b), T = fl.total, L = LOOKS[b.look], joins = resolveJoins(b, fl)
-  const pct = (t) => ((t / T) * 100).toFixed(3) + '%'
+  // long edits open zoomed to about a minute around the selected shot, and scroll sideways; Short opens fitted
+  if (FR.zoomFmt !== b.fmt) { FR.zoom = b.fmt === 'short' ? 'fit' : 60; FR.zoomFmt = b.fmt; FR.recenter = true }
+  const prev = $('#tlScroll'), keep = prev && !FR.recenter ? prev.scrollLeft : null
+  const avail = Math.max(200, el.clientWidth - 40), span = FR.zoom === 'fit' ? T : Math.min(T, FR.zoom), px = Math.round((avail * T) / span)
+  const pct = (t) => ((t / T) * 100).toFixed(4) + '%'
   const beat = 60 / 92, beats = []; for (let t = 0.2; t < T; t += beat) beats.push(t)
   const cuts = fl.shots.slice(1).map((s) => s.t0)
   const jAt = (s) => { if (s.join) return s.join; if (s.si === 0 && s.pi > 0) { const j = joins[s.pi - 1]; return j ? j.type : 'cut' } return 'cut' }
+  const lab = [1, 2, 5, 10, 15, 30, 60, 120].find((st) => (st / T) * px >= 46) || 120, tick = lab >= 30 ? lab / 5 : lab >= 5 ? 1 : lab / 2
+  // word chips: a chip too narrow for its words shows its glyph; glyphs closer than 14 px merge into one chip ("§¶")
+  const chips = []
+  for (const w of fl.words) {
+    const d = Math.max(0.6, w.t1 - w.t0), x = (w.t0 / T) * px, wpx = (d / T) * px, g = wpx < 60, last = chips[chips.length - 1]
+    if (g && last && last.g && x - last.x < 14) { last.items.push(w); last.end = Math.max(last.end, x + wpx); continue }
+    chips.push({ g, x, end: x + wpx, items: [w] })
+  }
+  const chipHTML = (c) => {
+    const w0 = c.items[0], tip = c.items.map((w) => `${w.label || 'Words'}: ${w.text || 'Name this place'}`).join(' · ')
+    if (!c.g) return `<div class="tl-word" title="${esc(tip)}" style="left:${c.x.toFixed(1)}px;width:${(c.end - c.x).toFixed(1)}px">${esc(w0.text || 'Name this place')}</div>`
+    const gl = [...new Set(c.items.map((w) => w.g || 'T'))].join('')
+    return `<div class="tl-word glyph" title="${esc(tip)}" style="left:${c.x.toFixed(1)}px;width:${Math.max(c.end - c.x, 8 + 9 * gl.length).toFixed(1)}px">${esc(gl)}</div>`
+  }
+  const Z = [['fit', 'Fit'], [60, '1 min'], [10, '10 s']]
   el.innerHTML = `
-    <div class="ruler">${Array.from({ length: Math.floor(T) + 1 }, (_, i) => `<i style="left:${pct(i)};height:${i % 5 ? 5 : 9}px"></i>${i % 5 === 0 ? `<span style="left:${pct(i)}">${clockT(i)}</span>` : ''}`).join('')}</div>
+    <div class="tl-zoom" role="radiogroup" aria-label="Zoom">${Z.map(([z, n]) => `<button class="${FR.zoom === z ? 'on' : ''}" role="radio" aria-checked="${FR.zoom === z}" data-act="fr-zoom" data-z="${z}" ${z !== 'fit' && z >= T ? 'disabled style="opacity:.4"' : ''}>${n}</button>`).join('')}</div>
+    <div class="tl-scroll" id="tlScroll"><div class="tl-inner" id="tlInner" style="width:${px}px">
+    <div class="ruler">${Array.from({ length: Math.floor(T / tick) + 1 }, (_, k) => { const i = Math.round(k * tick * 100) / 100, on = Math.abs(i / lab - Math.round(i / lab)) < 1e-6; return `<i style="left:${pct(i)};height:${on ? 9 : 5}px"></i>${on ? `<span style="left:${pct(i)}${i === 0 ? ';transform:none' : ''}">${clockT(i)}</span>` : ''}` }).join('')}</div>
     <div class="tl-ticks">${cuts.map((t) => `<i class="cut" style="left:${pct(t)}"></i>`).join('')}${MOVES.filter((t) => t < T).map((t) => `<i class="mov" style="left:${pct(t)}"></i>`).join('')}</div>
-    <div class="trk-pic">${fl.shots.map((s) => `<div class="tl-shot ${s.id === FR.sel ? 'sel' : ''}" data-act="fr-shot" data-id="${s.id}" style="left:calc(${pct(s.t0)} + 1px);width:calc(${pct(s.d)} - 2px);background-image:url('${IMG(s.n)}')"><span>${esc(s.label)}</span></div>`).join('')}
-      ${fl.shots.slice(1).map((s) => { const j = jAt(s); return `<span class="tl-join ${j !== 'cut' ? 'sp' : ''}" style="left:${pct(s.t0)}">${joinName(j, L)}</span>` }).join('')}</div>
-    <div class="trk-words">${fl.words.map((w) => `<div class="tl-word" style="left:${pct(w.t0)};width:${pct(Math.max(0.6, w.t1 - w.t0))}">${esc(w.text || 'Name this place')}</div>`).join('')}</div>
+    <div class="trk-pic">${fl.shots.map((s) => `<div class="tl-shot ${s.id === FR.sel ? 'sel' : ''} ${(s.d / T) * px < 72 ? 'narrow' : ''}" data-act="fr-shot" data-id="${s.id}" title="${esc(s.label)} · ${s.d.toFixed(1)} s" style="left:calc(${pct(s.t0)} + 1px);width:calc(${pct(s.d)} - 2px);background-image:url('${IMG(s.n)}')"><span>${esc(s.label)}</span></div>`).join('')}
+      ${fl.shots.slice(1).map((s) => { const j = jAt(s); if (j === 'cut' && (s.d / T) * px < 34) return ''; return `<span class="tl-join ${j !== 'cut' ? 'sp' : ''}" style="left:${pct(s.t0)}">${joinName(j, L)}</span>` }).join('')}</div>
+    <div class="trk-words">${chips.map(chipHTML).join('')}</div>
     <div class="trk-mus"><canvas id="tlWave" style="position:absolute;inset:0;width:100%;height:100%"></canvas>${beats.map((t) => `<i style="position:absolute;left:${pct(t)};bottom:0;width:1px;height:10px;background:#93b08866"></i>`).join('')}</div>
-    <div class="tl-ph" id="tlPH"></div>`
-  const cv = $('#tlWave'); if (cv && fit(cv)) {
+    <div class="tl-ph" id="tlPH"></div></div></div>`
+  const cv = $('#tlWave'); if (cv) {
+    // at most 16k px wide however far it's zoomed (a canvas has a size limit); the bars stretch with it
+    const d = Math.min(2, window.devicePixelRatio || 1); cv.width = Math.min(16000, Math.round(px * d)); cv.height = Math.round(48 * d)
     const c = cv.getContext('2d'), W = cv.width, H = cv.height, Tr = TRACKS[b.music], n = Math.floor(W / 4)
     c.clearRect(0, 0, W, H)
     fl.parts.forEach((p, i) => { c.fillStyle = getComputedStyle(document.documentElement).getPropertyValue(`--part-${(i % 6) + 1}`).trim() + '22'; c.fillRect((p.t0 / T) * W, 0, ((p.t1 - p.t0) / T) * W, H) })
     for (let i = 0; i < n; i++) { const u = i / n, e = Tr ? Tr.e[Math.min(9, Math.floor(u * 10))] : 0.15, h = (0.2 + e * 0.8) * (0.4 + 0.6 * Math.abs(Math.sin(i * 1.3) * Math.cos(i * 0.21))) * H * 0.8; c.fillStyle = Tr ? '#93b088aa' : '#72695d88'; c.fillRect(i * 4, (H - h) / 2, 2.5, h) }
   }
+  const sc = $('#tlScroll'), sel = fl.shots.find((x) => x.id === FR.sel)
+  if (keep != null) sc.scrollLeft = keep
+  else if (sel) sc.scrollLeft = Math.max(0, ((sel.t0 + sel.d / 2) / T) * px - sc.clientWidth / 2)
+  FR.recenter = false
   movePH(ED.player.t, false)
-  const ph = $('#tlPH'), area = el
+  const ph = $('#tlPH')
   let down = false
   const at = (e) => {
     const r = $('.trk-pic', el).getBoundingClientRect()
-    let t = ((e.clientX - r.left) / r.width) * T
+    let t = clamp(((e.clientX - r.left) / r.width) * T, 0, T)
     FR.snapped = false
-    if (!e.altKey) { const ticks = cuts.concat(beats, MOVES), px = r.width / T; let best = null; for (const k of ticks) { const d = Math.abs(k - t) * px; if (d <= 8 && (!best || d < best.d)) best = { k, d } } if (best) { t = best.k; FR.snapped = true } }
+    if (!e.altKey) { const ticks = cuts.concat(beats, MOVES), pps = r.width / T; let best = null; for (const k of ticks) { const d = Math.abs(k - t) * pps; if (d <= 8 && (!best || d < best.d)) best = { k, d } } if (best) { t = best.k; FR.snapped = true } }
     ED.player.pause(); ED.player.seek(t); movePH(t, FR.snapped)
   }
   ph.addEventListener('pointerdown', (e) => { down = true; ph.setPointerCapture(e.pointerId); e.stopPropagation() })
@@ -3471,11 +3794,15 @@ function renderTimeline() {
   const js = $('#joinSel'); if (js) js.addEventListener('change', () => setJoin(js.value))
 }
 function movePH(t, snapped) {
-  const ph = $('#tlPH'), pic0 = $('.trk-pic'); if (!ph || !pic0 || !ED.player) return
-  const el = $('#tline'), r = pic0.getBoundingClientRect(), er = el.getBoundingClientRect()
-  ph.style.left = (r.left - er.left + (t / ED.player.total) * r.width - 1) + 'px'
+  const ph = $('#tlPH'); if (!ph || !ED.player) return
+  ph.style.left = `calc(${((t / ED.player.total) * 100).toFixed(4)}% - 1px)`
   ph.classList.toggle('snapped', !!snapped)
+  // while playing, keep the playhead in view when zoomed in
+  const sc = $('#tlScroll'); if (!sc || !ED.player.playing || sc.scrollWidth <= sc.clientWidth + 1) return
+  const x = (t / ED.player.total) * sc.scrollWidth - sc.scrollLeft
+  if (x < 0 || x > sc.clientWidth - 24) sc.scrollLeft = (t / ED.player.total) * sc.scrollWidth - sc.clientWidth * 0.2
 }
+ACT['fr-zoom'] = (el) => { const z = el.dataset.z; FR.zoom = z === 'fit' ? 'fit' : +z; FR.recenter = true; renderTimeline() }
 ACT['fr-shot'] = (el) => { FR.sel = el.dataset.id; const s = selShot(); if (s) { ED.player.pause(); ED.player.seek(s.t0 + s.d / 2) } ED.part = SES.board.parts[s.pi].id; renderTimeline(); renderPanel(); renderRail() }
 function shotOp(line, short, fn) {
   const s = selShot(); if (!s) return
@@ -3508,189 +3835,9 @@ function setJoin(v) {
   if (t) { toast(t.diff[0], { label: 'Undo', fn: () => undoTurn(t.id) }); ED.player.seek(Math.max(0, s.t0 - 0.8)); ED.player.o.stopAt = s.t0 + 0.8; ED.player.play() }
 }
 /* =====================================================================
-   Part 6: S11 motion library (design review), review menu, keys, boot.
+   Part 6: review menu, keys, boot. The motion library lives in motion.html
+   (one library, one place to sign off); ?s=gallery forwards there.
    ===================================================================== */
-const GL = { look: 'clean', h: false, beat: false, t0: 0, big: null, jl: 'J' }
-const ST_LABEL = { exists: 'exists', extend: 'extend', new: 'new', engine: 'engine work' }
-const GAL = [
-  [1, 'Hook line', 'text', 'extend', 'Short only, 0–2.5 s, kinds with a clock or premise hook; ≤ 7 words', [[0, 'on · 120 ms'], [2500, 'hold ends'], [2650, 'off']]],
-  [2, 'Clock / date stamp', 'text', 'extend', 'Time spine: at each new session, ≤ 1 per 8 s. Film: a camera-back date on every shot', [[400, 'In'], [2400, 'hold ends'], [2400, 'Out']]],
-  [3, 'Place stamp', 'location', 'new', 'Once per place, after the hook. Names from GPS, looked up offline', [[400, 'pin drops'], [550, 'name wipes'], [630, 'second line'], [3200, 'fade out']]],
-  [4, 'Part title', 'chapter', 'extend', 'Each part on long formats; a 1 s corner kicker on Short', [[400, 'dim + kicker'], [550, 'title In'], [700, 'hairline'], [3000, 'all out']]],
-  [5, 'Diary line', 'caption', 'exists', 'Quiet day, story over your day; ≤ 8 words, ≤ 1 per 10–15 s', [[400, 'In'], [2733, 'hold ends'], [3033, 'out']]],
-  [6, 'Word-group captions', 'caption', 'extend', 'Talking: 1–4 words on Short, sentences on long formats, in one fixed band', [[400, 'we finally'], [1300, 'made it'], [2200, 'to the'], [3100, 'top']]],
-  [7, 'Big word', 'emphasis', 'new', 'Talking: one key word per idea, ≤ 1 per 30 s', [[800, 'In'], [1600, 'hold ends'], [1750, 'out']]],
-  [8, 'Name tag', 'lower third', 'exists', '0.5 s after a person first speaks or appears', [[900, 'name In'], [1000, 'role In'], [3900, 'Out']]],
-  [9, 'Numbered place + recap', 'list', 'new', 'Places worth saving: one card per place; a 1.5–2.5 s recap at the end, in pages of 3', [[400, 'item 1'], [1000, 'item 2'], [1600, 'item 3'], [3400, 'all leave']]],
-  [10, 'Closing title', 'close', 'extend', 'Long vertical: the last 2 s. Never on Short or in YouTube’s last 20 s', [[2000, 'dim + title In'], [3600, 'to black'], [4000, 'end']]],
-  [11, 'Slow push', 'camera', 'engine', 'Held shots ≥ 2.5 s; one direction for the whole video', [[0, 'scale 1.00'], [4000, 'scale 1.06']]],
-  [12, 'Zoom-in', 'camera', 'engine', 'Talking at idea changes; Hype and Playful on beats. Anchored on the face', [[1200, 'jump (beat)'], [3200, 'cut to B']]],
-  [13, 'Freeze + label', 'peak', 'new', 'Only as a proposal the creator adds (Part tab, “Moments”)', [[1000, 'freeze'], [1150, 'label In'], [2600, 'snap back + cut']]],
-  [14, 'Soft fade', 'join', 'extend', 'Part changes (Cozy); long fade only between matching compositions', [[1867, 'fade starts'], [2000, 'cut point'], [2133, 'B full']]],
-  [15, 'Dip', 'join', 'extend', 'Day or chapter changes; the fallback when there’s no spare footage', [[1800, 'A down'], [2000, 'hold'], [2067, 'B up'], [2267, 'done']]],
-  [16, 'Flash', 'join / peak', 'exists', 'Playful and Hype on downbeats; Film only on real flash or night clips; ≤ 3 per s', [[2000, 'white 1 f'], [2033, 'decay'], [2133, 'clear']]],
-  [17, 'Light leak', 'join / texture', 'engine', 'Film and Cozy over a cut at part changes; needs no spare footage', [[1700, 'leak enters'], [2000, 'peak · cut'], [2350, 'gone']]],
-  [18, 'Whip', 'join', 'engine', 'Trip (Hype, Cinematic) at a change of place, when both shots move the same way', [[1867, 'whip starts'], [2000, 'blur peak'], [2133, 'B lands']]],
-  [19, 'The sound carries across the cut', 'join (sound)', 'engine', 'Where speech or place sound continues across a cut (possible at about half the cuts)', [[1667, 'B sound leads'], [2000, 'picture cut'], [2500, 'L: A sound ends']]],
-  [20, 'Atmosphere', 'texture', 'new', 'The whole video, per vibe and format', [[0, 'static vignette'], [4700, 'leak breathes'], [13000, 'drift loop']]],
-]
-const NA = { 2: ['hype'], 5: ['hype'], 6: ['cinematic', 'film'], 7: ['quiet'], 9: ['quiet', 'hype'], 11: ['quiet', 'film'], 12: ['cozy', 'quiet', 'cinematic', 'film'], 13: ['quiet'],
-  14: ['clean', 'playful', 'hype'], 15: ['playful', 'hype'], 16: ['clean', 'cozy', 'quiet', 'cinematic'], 17: ['clean', 'quiet', 'playful', 'hype'], 18: ['clean', 'cozy', 'quiet', 'film', 'playful'], 20: ['clean', 'hype'] }
-const STILL = { 1: [3], 2: [0], 3: [17], 4: [5], 5: [31], 6: [11], 7: [15], 8: [6], 9: [41], 10: [41], 11: [27], 12: [11, 15], 13: [13, 29], 14: [14, 41], 15: [14, 41], 16: [14, 41], 17: [14, 37], 18: [17, 37], 19: [12, 29], 20: [37] }
-function t50(L) { if (vid(L) === 'hype') return 120; let lo = 0, hi = 1; for (let i = 0; i < 24; i++) { const m = (lo + hi) / 2; if (L.ease(m) < 0.5) lo = m; else hi = m } return (lo * L.dur) }
-function onBeat(ms, L) { if (!GL.beat) return ms; const hit = ms + t50(L), nb = Math.round(hit / 600) * 600; return Math.abs(nb - hit) <= 100 ? ms + (nb - hit) : ms }
-function galleryTop() {
-  return `<div class="gal-top" style="grid-column:1/-1">
-    <span class="gt">Motion library v1 · design review</span>
-    <div class="ctrls">
-      <div class="vchips">${LOOK_ORDER.map((id) => `<button class="${GL.look === id ? 'on' : ''}" data-act="gal-look" data-l="${id}">${LOOKS[id].name}</button>`).join('')}</div>
-      <div class="seg"><button class="${!GL.h ? 'on' : ''}" data-act="gal-ar" data-v="v">9:16</button><button class="${GL.h ? 'on' : ''}" data-act="gal-ar" data-v="h">16:9</button></div>
-      <label data-act="gal-beat" style="display:flex;gap:6px;align-items:center;cursor:pointer;font-size:13px;white-space:nowrap"><span class="toggle ${GL.beat ? 'on' : ''}"></span>Beat</label>
-      <button class="btn btn-quiet btn-sm" data-act="gal-play">Play all</button>
-      <button class="btn btn-ghost btn-sm" data-act="go" data-to="clips">Exit</button>
-    </div></div>`
-}
-SCREENS.gallery = (v) => {
-  GL.t0 = performance.now()
-  const L = LOOKS[GL.look]
-  v.innerHTML = `<section class="screen"><div class="gal"><div class="ggrid ${GL.h ? 'h' : ''}" id="ggrid">${GAL.map(([n, name, fam, st, used]) => {
-    const na = (NA[n] || []).includes(GL.look)
-    return `<div class="tile" data-act="gal-big" data-n="${n}"><div class="tf ${lookClass(GL.look)}" data-tile="${n}"><canvas class="pic"></canvas><canvas class="fx" style="mix-blend-mode:screen"></canvas><canvas class="ovl"></canvas>${na ? `<div class="na">${n === 20 ? `No texture in ${L.name}` : `Not used in ${L.name}`}</div>` : ''}${GL.beat ? '<span class="bd beatdot"></span>' : ''}</div>
-      <div class="meta"><h5><small>${n}</small>${name}</h5><div class="fam">${fam} <span class="st ${st}">${ST_LABEL[st]}</span></div><p>${used}</p>
-      ${n === 14 ? '<div class="under">Needs 8 frames of spare footage each side — otherwise: warm light leak</div>' : ''}
-      ${n === 19 ? `<div class="jl"><span class="seg"><button class="${GL.jl === 'J' ? 'on' : ''}" data-act="gal-jl" data-v="J">Sound leads (J)</button><button class="${GL.jl === 'L' ? 'on' : ''}" data-act="gal-jl" data-v="L">Sound trails (L)</button></span></div>` : ''}</div></div>`
-  }).join('')}</div></div></section>`
-  const tiles = $$('[data-tile]').map((el) => ({ n: +el.dataset.tile, el, pc: el.children[0], fc: el.children[1], oc: el.children[2], dot: el.querySelector('.beatdot') }))
-  onFrame((now) => {
-    const L = LOOKS[GL.look], G = geo(!GL.h), el = now - GL.t0
-    for (const T of tiles) { const loop = T.n === 20 && GL.look === 'cozy' ? 13000 : 4000; drawTile(T, el % loop, L, G, now) }
-    if (GL.big) { drawTile(GL.big, el % (GL.big.n === 20 && GL.look === 'cozy' ? 13000 : 4000), L, G, now); const ph = $('#kfPH'); if (ph) ph.style.left = ((el % 4000) / 4000) * 100 + '%' }
-  })
-}
-function tileCtx(T, G) {
-  for (const c of [T.pc, T.fc, T.oc]) { if (!fitMax(c, 1.5)) return null }
-  const p = T.pc.getContext('2d'), f = T.fc.getContext('2d'), o = T.oc.getContext('2d')
-  for (const c of [p, f, o]) { c.setTransform(c.canvas.width / G.W, 0, 0, c.canvas.height / G.H, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; nosh(c) }
-  f.clearRect(0, 0, G.W, G.H); o.clearRect(0, 0, G.W, G.H)
-  return { p, f, o }
-}
-function fitMax(c, maxD) {
-  const r = c.getBoundingClientRect(); if (r.width < 2) return false
-  const d = Math.min(maxD, window.devicePixelRatio || 1), w = Math.round(r.width * d), h = Math.round(r.height * d)
-  if (c.width !== w || c.height !== h) { c.width = w; c.height = h }
-  return true
-}
-function drawTile(T, t, L, G, now) {
-  const C = tileCtx(T, G); if (!C) return
-  const { p, f, o } = C, n = T.n, [A, B] = STILL[n], id = vid(L)
-  if (T.dot) T.dot.classList.toggle('hit', GL.beat && (now - GL.t0) % 600 < 90)
-  let filt = ''
-  const img = (k, z = 1, ox = 0.5, oy = 0.42, tx = 0, ty = 0, ctx = p) => cover(ctx, pic(k), 0, 0, G.W, G.H, z, ox, oy, tx, ty)
-  const na = (NA[n] || []).includes(GL.look)
-  if (na) { img(A); o.fillStyle = 'rgba(0,0,0,.4)'; o.fillRect(0, 0, G.W, G.H); T.pc.style.filter = ''; return }
-  switch (n) {
-    case 1: img(A); E.hook(o, L, t, 2500, { text: '8:35 am · first day of term' }, G); break
-    case 2: img(A); if (id === 'film') { if (t < 3600) filmDate(o, G, now) } else E.clock(o, L, t - onBeat(400, L), 2000, { text: '8:35 am' }, G); break
-    case 3: img(A); E.place(o, L, t - onBeat(400, L), 2800, { text: 'Campus', sub: 'New York' }, G); break
-    case 4: img(A); E.part(o, L, t - 400, 2600, { text: 'Campus', kicker: 'Part 2' }, G); break
-    case 5: { img(A); const hold = Math.max(L.hold * 1000, (4 / 3 + 1) * 1000); E.diary(o, L, t - onBeat(400, L), hold, { text: 'slow start. coffee first.' }, G); break }
-    case 6: { img(A); const g = [[400, 'we finally'], [1300, 'made it'], [2200, 'to the'], [3100, 'top']]; const i = g.findIndex((x, k) => t >= x[0] && t < (g[k + 1] ? g[k + 1][0] : 3900)); if (i >= 0) E.group(o, L, t - g[i][0], (g[i + 1] ? g[i + 1][0] : 3900) - g[i][0], { text: g[i][1] }, G); break }
-    case 7: img(A); E.big(o, L, t - onBeat(800, L), 800, { text: 'Never' }, G); break
-    case 8: img(A); E.name(o, L, t - onBeat(900, L), 3000, { text: 'Sarah', sub: '@sarahvlogs' }, G); break
-    case 9: {
-      img(A)
-      const items = ['Campus', 'Library', 'Park']
-      items.forEach((nm, i) => { const on = onBeat(400 + i * 600, L); if (t < on) return; o.save(); if (t > 400 + (i + 1) * 600 && i < 2) o.globalAlpha = 0.45; E.list(o, L, t - on, 3400 - on, { text: `${i + 1} · ${nm}`, n: i + 1, y: (G.v ? 380 : 160) + i * (G.v ? 150 : 130) }, G); o.restore() })
-      break
-    }
-    case 10: { img(A); E.close(o, L, t - 2000, 1600, { text: 'A day out with Sarah' }, G); if (t > 3600) { o.fillStyle = `rgba(0,0,0,${(t - 3600) / 400})`; o.fillRect(0, 0, G.W, G.H) } break }
-    case 11: { const amt = { clean: 1.04, cozy: 1.05, cinematic: 1.06, playful: 1.06, hype: 1.06 }[id] || 1.06; img(A, lerp(1, amt, EASE.inout(t / 4000)), 0.5, 0.4); break }
-    case 12: { const z = { clean: 1.1, playful: 1.1, hype: 1.2 }[id] || 1.1, j = onBeat(1200, L); if (t < j) img(A); else if (t < 3200) { const e = t - j; const tx = id === 'hype' && e < 267 ? 4 * 3 * Math.exp(-e / 80) * Math.sin(2 * Math.PI * 11 * (e / 1000)) : 0; img(A, z, 0.5, 0.36, tx) } else img(B); break }
-    case 13: {
-      if (t < 2600) {
-        const push = t < 1000 ? lerp(1, 1.02, t / 1000) : lerp(1.02, 1.04, EASE.inout((t - 1000) / 1600)); img(A, push, 0.5, 0.4)
-        if (t >= 1000) { const k = clamp((t - 1000) / (id === 'cinematic' ? 800 : 200)); filt = id === 'film' ? `grayscale(${k})` : id === 'cozy' ? `sepia(${0.5 * k}) saturate(${lerp(1, 0.6, k)})` : `saturate(${lerp(1, 0.3, k)}) brightness(${lerp(1, 0.7, k)})`
-          if (id === 'hype' && t < 1067) { o.fillStyle = '#fff'; o.globalAlpha = 1 - (t - 1000) / 67; o.fillRect(0, 0, G.W, G.H); o.globalAlpha = 1 }
-          E.name(o, L, t - 1150, 1450, { text: 'Sarah', sub: 'the steps, 10:05 am' }, G)
-          if ((id === 'cozy' || id === 'playful') && t > 1150) { const a = clamp((t - 1150) / 300); o.save(); o.strokeStyle = L.pal[1]; o.lineWidth = 8; o.lineCap = 'round'; o.beginPath(); const x0 = G.W * 0.62, y0 = G.H * (G.v ? 0.56 : 0.62); for (let i = 0; i <= 20 * a; i++) { const u = i / 20; const x = x0 + u * 160, y = y0 - u * 220 + Math.sin(u * 5) * 20; i ? o.lineTo(x, y) : o.moveTo(x, y) } o.stroke(); o.restore() }
-          if (id === 'playful' && t < 1400) { o.save(); font(o, 800, 40, F.round); o.fillStyle = '#fff'; sh(o, 10); o.fillText('scratch!', G.W * 0.6, G.H * 0.18); o.restore() }
-        }
-      } else img(B)
-      break
-    }
-    case 14: {
-      const long = id === 'quiet' || id === 'cinematic', grey = id === 'film'
-      const [s0, s1] = long ? [1400, 2600] : grey ? [1800, 2200] : [1867, 2133]
-      img(A)
-      if (grey) { if (t >= 2000) img(B); const a = t < s0 || t > s1 ? 0 : 1 - Math.abs(t - 2000) / 200; o.fillStyle = '#8A8378'; o.globalAlpha = clamp(a); o.fillRect(0, 0, G.W, G.H); o.globalAlpha = 1 }
-      else if (t >= s0) { p.globalAlpha = clamp((t - s0) / (s1 - s0)); img(B); p.globalAlpha = 1 }
-      break
-    }
-    case 15: {
-      const col = { cozy: '#F3E6CF', film: '#8A8378' }[id] || '#000', q = id === 'quiet' || id === 'cinematic' ? 1.3 : 1
-      if (t < 2000) img(A); else img(B)
-      const a = t < 2000 ? clamp((t - (2000 - 200 * q)) / (200 * q)) : t < 2067 ? 1 : clamp(1 - (t - 2067) / (200 * q))
-      o.fillStyle = col; o.globalAlpha = a; o.fillRect(0, 0, G.W, G.H); o.globalAlpha = 1; break
-    }
-    case 16: { const fr = { film: 4, playful: 4, hype: 3 }[id] || 4, col = { film: '#FFF1DC', playful: '#FFF4D6' }[id] || '#FFFFFF', on = onBeat(2000, L) - (GL.beat ? t50(L) : 0) * 0
-      if (t < on) img(A); else img(B)
-      const d = t - on, a = d < 0 ? 0 : d < 33 ? d / 33 : clamp(1 - (d - 33) / ((fr - 1) * 33)); o.fillStyle = col; o.globalAlpha = a; o.fillRect(0, 0, G.W, G.H); o.globalAlpha = 1; break }
-    case 17: { if (t < 2000) img(A); else img(B)
-      const col = { cozy: '#FFB38A', cinematic: '#FFB060', film: '#FF7A1A' }[id] || '#FF7A1A', al = { cozy: 0.5, cinematic: 0.35, film: 0.8 }[id] || 0.8
-      const a = t < 1700 ? 0 : t < 1950 ? (t - 1700) / 250 : t <= 2000 ? 1 : clamp(1 - (t - 2000) / 350); leak(f, G, col, a * al, clamp((t - 1700) / 600)); break }
-    case 18: {
-      const [s0, s1] = id === 'cinematic' ? [1833, 2167] : [1867, 2133]
-      if (t < s0) img(A); else if (t > s1) img(B)
-      else { const u = EASE.smooth((t - s0) / (s1 - s0)), bl = Math.sin(Math.PI * ((t - s0) / (s1 - s0))); p.fillStyle = '#000'; p.fillRect(0, 0, G.W, G.H); for (let q = -2; q <= 2; q++) { p.globalAlpha = q === 0 ? 1 : 0.3 * bl; const off = q * bl * 40; cover(p, pic(A), -u * G.W + off, 0, G.W, G.H); cover(p, pic(B), (1 - u) * G.W + off, 0, G.W, G.H) } p.globalAlpha = 1 }
-      if (id === 'hype' && t > 1950 && t < 2400) { o.save(); font(o, 700, 36, F.inter); o.fillStyle = '#fff'; o.globalAlpha = 1 - (t - 1950) / 450; rr(o, G.W / 2 - 90, 90, 180, 60, 30); o.fillStyle = 'rgba(0,0,0,.55)'; o.fill(); o.fillStyle = '#fff'; o.textAlign = 'center'; o.fillText('whoosh', G.W / 2, 132); o.restore() }
-      break
-    }
-    case 19: {
-      if (t < 2000) img(A); else img(B)
-      const lane = (y, label) => { o.fillStyle = 'rgba(12,11,9,.72)'; o.fillRect(0, y, G.W, G.v ? 120 : 90); o.fillStyle = '#efe8dd'; font(o, 600, G.v ? 28 : 24, F.inter); o.fillText(label, 24, y + (G.v ? 40 : 34)) }
-      const y1 = G.H - (G.v ? 260 : 190), y2 = G.H - (G.v ? 130 : 95), X = (ms) => (ms / 4000) * G.W
-      lane(y1, 'Picture'); lane(y2, 'Sound')
-      o.fillStyle = '#b9c7d9'; o.fillRect(0, y1 + 56, X(2000) - 3, 44); o.fillStyle = '#e8c39e'; o.fillRect(X(2000) + 3, y1 + 56, G.W - X(2000), 44)
-      const wave = (x0, x1, col, yy) => { o.fillStyle = col; for (let x = x0; x < x1; x += 10) { const h = 10 + Math.abs(Math.sin(x * 0.07) * Math.cos(x * 0.013)) * 34; o.fillRect(x, yy + 76 - h / 2, 6, h) } }
-      const aEnd = GL.jl === 'L' ? 2500 : 2000, bStart = GL.jl === 'J' ? 1667 : 2000
-      wave(0, X(aEnd), '#b9c7d9', y2 - 8); wave(X(bStart), G.W, '#e8c39e', y2 + 14)
-      o.fillStyle = '#efe8dd'; o.fillRect(X(t), y1, 3, G.H - y1)
-      font(o, 500, G.v ? 26 : 22, F.inter); o.fillStyle = '#e9c78f'; o.fillText(GL.jl === 'J' ? 'Sound leads by 0.33 s' : 'Sound trails by 0.5 s', 24, y1 - 20)
-      break
-    }
-    case 20: {
-      img(A)
-      if (id === 'playful') { f.globalAlpha = 0.4; blurDraw(f, pic(A), G); f.globalAlpha = 1 }
-      if (id === 'cozy') { const lt = (t / 13000) % 1, a = 0.15 + 0.15 * (0.5 + 0.5 * Math.sin((t / 4700) * Math.PI * 2)); leak(f, G, '#FFB38A', a, lt) }
-      if (id === 'film') leak(f, G, '#FF7A1A', 0.22, 0.3)
-      vignette(o, G, { cozy: 0.3, quiet: 0.2, cinematic: 0.35, film: 0.35 }[id] || 0)
-      if (!G.v && (id === 'cinematic' || id === 'film')) grain(o, G, now)
-      break
-    }
-  }
-  T.pc.style.filter = filt ? `${L.filter === 'none' ? '' : L.filter} ${filt}` : ''
-}
-ACT['gal-look'] = (el) => { GL.look = el.dataset.l; teardown(); renderTop(); SCREENS.gallery($('#view')) }
-ACT['gal-ar'] = (el) => { GL.h = el.dataset.v === 'h'; teardown(); renderTop(); SCREENS.gallery($('#view')) }
-ACT['gal-beat'] = () => { GL.beat = !GL.beat; teardown(); renderTop(); SCREENS.gallery($('#view')) }
-ACT['gal-play'] = () => { GL.t0 = performance.now() }
-ACT['gal-jl'] = (el, e) => { e.stopPropagation(); GL.jl = el.dataset.v; $$('.jl .seg button').forEach((b) => b.classList.toggle('on', b.dataset.v === GL.jl)) }
-ACT['gal-big'] = (el, e) => {
-  if (e.target.closest('.jl')) return
-  const n = +el.dataset.n, row = GAL.find((g) => g[0] === n), L = LOOKS[GL.look]
-  const kfs = row[5], wide = GL.h
-  $('#layer').innerHTML = `<div class="scrim" data-act="gal-close"><div class="big">
-    <div class="tf ${wide ? 'h' : ''} ${lookClass(GL.look)}" id="bigTf"><canvas class="pic"></canvas><canvas class="fx" style="mix-blend-mode:screen"></canvas><canvas class="ovl"></canvas></div>
-    <div style="font-family:var(--serif);font-size:22px">${n} · ${row[1]} <span class="faint" style="font-family:var(--sans);font-size:13px">· ${L.name}${(NA[n] || []).includes(GL.look) ? ' · not used in this vibe' : ''}</span></div>
-    <div class="kfr"><div class="base"></div>${Array.from({ length: 9 }, (_, i) => `<i class="tk" style="left:${(i / 8) * 100}%"></i><span class="tl" style="left:${(i / 8) * 100}%">${i * 500}</span>`).join('')}
-      ${kfs.filter(([ms]) => ms <= 4000).map(([ms, lab], i) => `<i class="tk kf" style="left:${(ms / 4000) * 100}%"></i><span class="kl ${i % 2 ? 'alt' : ''}" style="left:${(ms / 4000) * 100}%">${ms} · ${lab}</span>`).join('')}
-      <i class="ph" id="kfPH"></i></div>
-    <div class="faint" style="font-size:12px">ms from the start of the 4 s loop · click anywhere to close</div></div></div>`
-  const tf = $('#bigTf')
-  GL.big = { n, el: tf, pc: tf.children[0], fc: tf.children[1], oc: tf.children[2] }
-}
-ACT['gal-close'] = () => { GL.big = null; $('#layer').innerHTML = '' }
-
 /* ------------------------------------------------------------ review menu (mockup chrome, not product UI) */
 const DEV = { open: false }
 function renderDev() {
@@ -3705,10 +3852,10 @@ function renderDev() {
     ${S('love', ['drop', 'link-pasted', 'reading', 'card', 'guard', 'too-short', 'mismatch', 'unreadable'])}
     ${S('making', ['', 'no-music', 'short-footage', 'failed-clips'])}${L('s=making&state=part-ready&fmt=long', 'making <small>· part-ready (long)</small>')}
     ${S('watch', ['', 'no-findings', 'left-out-open', 'what-i-did', 'restyling'])}${L('s=watch&state=finishing&fmt=long', 'watch <small>· finishing (long)</small>')}${L('s=watch&fmt=youtube', 'watch <small>· YouTube 16:9</small>')}${L('s=watch&look=film', 'watch <small>· Film</small>')}
-    ${S('export', ['', 'gate-open', 'ready', 'exporting', 'done'])}${L('s=export&state=error&err=space', 'export <small>· error: space</small>')}${L('s=export&state=error&err=stopped', 'export <small>· error: stopped</small>')}${L('s=export&state=error&err=effect', 'export <small>· error: effect</small>')}${L('s=export&child=1', 'export <small>· child warning</small>')}${L('s=export&music=paper_boats', 'export <small>· track needs credit</small>')}${L('s=export&fmt=youtube', 'export <small>· YouTube</small>')}
+    ${S('export', ['', 'gate-open', 'ready', 'exporting', 'done'])}${L('s=export&state=error&err=space', 'export <small>· error: space</small>')}${L('s=export&state=error&err=stopped', 'export <small>· error: stopped</small>')}${L('s=export&state=error&err=effect', 'export <small>· error: effect</small>')}${L('s=export&child=1', 'export <small>· child warning</small>')}${L('s=export&music=open_plan', 'export <small>· track needs credit</small>')}${L('s=export&fmt=youtube', 'export <small>· YouTube</small>')}
     <h6>Studio</h6>${S('edit', ['', 'no-key', 'thinking', 'couldnt', 'undo-dependent', 'preview-track'])}${L('s=edit&history=open', 'edit <small>· history open</small>')}${L('s=edit&tab=words', 'edit <small>· words</small>')}${L('s=edit&tab=music', 'edit <small>· music</small>')}${L('s=edit&fmt=youtube', 'edit <small>· YouTube</small>')}
     ${['offline-nofolder', 'reading-folder', 'missing', 'nothing-fits'].map((m) => L(`s=edit&tab=music&mstate=${m}`, `edit <small>· music: ${m}</small>`)).join('')}
-    ${S('frames', [''])}${S('gallery', [''])}
+    ${S('frames', [''])}<a href="motion.html">motion library <small>· motion.html</small></a>
     <h6>Talking to camera</h6>${L('s=vibe&kind=talking', 'vibe')}${L('s=vibe&kind=talking&state=speech-unavailable', 'vibe <small>· no speech reading</small>')}${L('s=vibe&kind=talking&state=no-talking', 'vibe <small>· no talking heard</small>')}${L('s=making&kind=talking', 'making')}${L('s=watch&kind=talking', 'watch')}${L('s=edit&kind=talking&tab=words', 'edit <small>· what you said</small>')}${L('s=edit&kind=talking&tab=words&state=script-lines', 'edit <small>· script lines</small>')}${L('s=edit&kind=talking&tab=part', 'edit <small>· part</small>')}${L('s=export&kind=talking&state=gate-open', 'export <small>· gate</small>')}
     <h6>Other kinds and vibes</h6>${L('s=watch&kind=quiet_day', 'watch <small>· a quiet day · Cozy</small>')}${L('s=watch&kind=trip&look=hype', 'watch <small>· a trip · Hype</small>')}${L('s=watch&kind=places_guide', 'watch <small>· places worth saving</small>')}${L('s=watch&kind=story_day&fmt=long', 'watch <small>· a story · long</small>')}${L('s=watch&look=playful', 'watch <small>· Playful</small>')}
   </div>` : ''}`
@@ -3728,7 +3875,6 @@ document.addEventListener('keydown', (e) => {
   const typing = e.target.closest && e.target.closest('input, textarea, select, [contenteditable="true"]')
   if (e.key === 'Escape') {
     if (POP) { closePop(); return }
-    if (GL.big) { ACT['gal-close'](); return }
     if ($('#layer').innerHTML) { if (EX.open) ACT['ex-close'](); else if ($('.love')) ACT['love-close'](); else if ($('#loPop')) ACT['lo-close'](); return }
     if (ED.drawer && APP.s === 'edit') { ED.drawer = false; renderHist(); return }
     return
@@ -3746,8 +3892,9 @@ document.addEventListener('keydown', (e) => {
 
 /* ------------------------------------------------------------ boot */
 function boot() {
+  if (APP.s === 'gallery') { location.replace('motion.html' + location.search); return } // one motion library, not two
   for (let i = 0; i < 42; i++) pic(i)
-  pic('hero.png')
+  Object.values(HERO).forEach((h) => pic(h[0]))
   if (document.fonts && document.fonts.load) ['400 20px "EB Garamond"', 'italic 400 20px "EB Garamond"', '500 20px "EB Garamond"', '700 20px "Nunito"', '800 20px "Nunito"'].forEach((f) => document.fonts.load(f).catch(() => {}))
   if (!SCREENS[APP.s]) APP.s = 'clips'
   APP.made = ['making', 'watch', 'export', 'edit', 'frames'].includes(APP.s)

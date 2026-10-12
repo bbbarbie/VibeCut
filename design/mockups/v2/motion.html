@@ -73,10 +73,19 @@ button:focus-visible, [tabindex]:focus-visible { outline: none; box-shadow: var(
 .brand { display: flex; align-items: baseline; gap: 14px; min-width: 0; }
 .logo { font-family: var(--serif); font-size: 21px; font-weight: 500; letter-spacing: -.01em; }
 .logo span { color: var(--accent-deep); }
-.doc-title { font-family: var(--serif); font-size: 21px; color: var(--text); white-space: nowrap; }
+.doc-title { font-family: var(--serif); font-weight: 400; font-size: 21px; line-height: 1.2; color: var(--text); white-space: nowrap; }
 .doc-title::before { content: "/"; margin-right: 14px; color: var(--faint); }
-.doc-title small { font-family: var(--sans); font-size: 12px; color: var(--faint); margin-left: 10px; letter-spacing: .02em; }
+.doc-title em { color: var(--accent); }
+.doc-title small { font-family: var(--sans); font-size: 12px; color: var(--faint); margin-left: 12px; letter-spacing: .02em; }
 .top-right { display: flex; gap: 8px; align-items: center; }
+a.btn { text-decoration: none; }
+#howBtn[aria-expanded="true"] { color: var(--text); background: var(--raised); }
+
+/* how to read this page: the old hero, one click away */
+.how { position: fixed; top: 64px; right: 24px; z-index: 40; width: 460px; max-width: calc(100vw - 48px); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-sheet); padding: 20px 22px 18px; }
+.how p { color: var(--muted); font-size: 13.5px; line-height: 1.55; }
+.how .legend { margin-top: 14px; gap: 8px 16px; font-size: 12px; }
+.how .hint { margin-top: 14px; line-height: 1.9; }
 
 .bar { position: sticky; top: 60px; z-index: 29; height: 60px; display: flex; align-items: center; gap: 14px; padding: 0 24px; background: rgba(19, 17, 14, .92); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line-soft); }
 .bar-label { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--faint); }
@@ -99,53 +108,60 @@ button:focus-visible, [tabindex]:focus-visible { outline: none; box-shadow: var(
 .toggle.on .beat-dot { background: var(--warn); opacity: 1; }
 
 /* ------------------------------------------------------------------ page */
-main { padding: 56px 40px 140px; }
+main { padding: 20px 40px 140px; }
 .wrap { max-width: calc(4 * var(--fw) + 3 * var(--gx)); margin: 0 auto; }
 body.wide .wrap { max-width: 1360px; }
 .eyebrow { font-size: 11.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--faint); }
-h1.display { font-family: var(--serif); font-weight: 400; font-size: 52px; line-height: 1.05; letter-spacing: -.015em; margin-top: 10px; }
-h1.display em { color: var(--accent); }
-.lede { color: var(--muted); font-size: 16px; margin-top: 14px; max-width: 660px; }
-.legend { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 22px; font-size: 12.5px; color: var(--muted); align-items: center; }
-.legend .k { color: var(--faint); font-size: 11.5px; }
-.hint { margin-top: 10px; font-size: 12px; color: var(--faint); }
+.legend { display: flex; flex-wrap: wrap; gap: 10px 22px; font-size: 12.5px; color: var(--muted); align-items: center; }
+.hint { font-size: 12px; color: var(--faint); }
 kbd { font: 11px var(--sans); color: var(--muted); background: var(--raised); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; }
 
-/* the vibe band */
-.vband { margin-top: 40px; display: grid; grid-template-columns: minmax(250px, 300px) 214px minmax(0, 1fr); gap: 28px; padding: 26px 28px; background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-lg); position: relative; overflow: hidden; }
-.vband::before { content: ""; position: absolute; inset: 0; background: radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--w-2) 10%, transparent), transparent 55%); pointer-events: none; transition: background var(--dur-3); }
-.vb-name { position: relative; }
-.vb-title { font-family: var(--f-display); font-weight: var(--f-display-w); font-size: 60px; line-height: 1; margin-top: 12px; color: var(--w-1); letter-spacing: -.01em; }
-.look-cinematic .vb-title { text-transform: uppercase; letter-spacing: .3em; font-size: 40px; margin-top: 22px; }
-.look-quiet .vb-title { font-style: italic; }
+/* the vibe strip: name, colours, entrance curve and four facts; the rest one click away */
+.vband { background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-lg); position: relative; overflow: hidden; }
+.vband::before { content: ""; position: absolute; inset: 0; background: radial-gradient(90% 140% at 0% 0%, color-mix(in srgb, var(--w-2) 10%, transparent), transparent 55%); pointer-events: none; transition: background var(--dur-3); }
+.vb-strip { position: relative; height: 118px; display: grid; grid-template-columns: minmax(0, 250px) auto minmax(0, 1fr) auto; align-items: center; gap: 28px; padding: 0 20px 0 26px; }
+.vb-name { min-width: 0; }
+.vb-head { display: flex; align-items: center; gap: 14px; }
+.vb-title { font-family: var(--f-display); font-weight: var(--f-display-w); font-size: 38px; line-height: 1; color: var(--w-1); letter-spacing: -.01em; white-space: nowrap; }
+.look-cinematic .vb-title { text-transform: uppercase; letter-spacing: .24em; font-size: 22px; }
+.look-quiet .vb-title { font-style: italic; font-size: 40px; }
 .look-hype .vb-title { text-transform: uppercase; letter-spacing: .01em; }
-.look-film .vb-title { text-transform: lowercase; font-size: 52px; }
-.look-cozy .vb-title { font-size: 66px; }
-.vb-line { font-family: var(--serif); font-style: italic; font-size: 19px; color: var(--muted); margin-top: 12px; line-height: 1.3; }
-.vb-pal { display: flex; gap: 14px; margin-top: 20px; }
-.vb-pal div { display: flex; flex-direction: column; gap: 5px; align-items: flex-start; font: 10.5px Menlo, "SF Mono", monospace; color: var(--faint); }
-.vb-pal i { width: 26px; height: 26px; border-radius: 50%; box-shadow: inset 0 0 0 1px #ffffff22, 0 4px 10px #0005; }
-.vb-fonts { margin-top: 16px; font-size: 12px; color: var(--muted); line-height: 1.5; }
-.vb-fonts b { color: var(--text); font-weight: 550; }
-.vb-curve { position: relative; }
-.vb-curve svg { display: block; width: 214px; height: 160px; background: var(--bg); border-radius: var(--r); border: 1px solid var(--line-soft); }
-.vb-curve .cap { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.45; }
+.look-film .vb-title { text-transform: lowercase; font-size: 34px; }
+.look-cozy .vb-title { font-size: 44px; }
+.vb-line { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--muted); margin-top: 8px; line-height: 1.25; }
+.vb-pal { display: flex; gap: 5px; }
+.vb-pal i { width: 16px; height: 16px; border-radius: 50%; box-shadow: inset 0 0 0 1px #ffffff26, 0 2px 6px #0005; }
+.vb-curve { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+.vb-curve svg { display: block; width: 120px; height: 64px; background: var(--bg); border-radius: 8px; border: 1px solid var(--line-soft); flex: none; }
+.vb-curve .cap { font-size: 11.5px; color: var(--muted); line-height: 1.45; white-space: nowrap; }
+.vb-curve .cap .tag { height: 16px; padding: 0 6px; font-size: 10px; margin-left: 4px; vertical-align: 0; }
 .vb-curve .cap b { color: var(--text); font-weight: 550; }
 .tag { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 999px; font-size: 10.5px; font-weight: 550; vertical-align: 1px; }
 .tag.measured { background: #1f2a1d; color: var(--accent); }
 .tag.prior { background: #2c2517; color: var(--warn); }
-.vb-tokens { position: relative; display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 7px 14px; font-size: 12.5px; align-content: start; }
+.vb-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 22px; min-width: 0; }
+.vb-facts dt { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+.vb-facts dd { font-size: 12.5px; color: var(--text); line-height: 1.35; margin-top: 2px; }
+.vb-more { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 13px; border-radius: 999px; background: var(--raised); color: var(--muted); font-size: 12.5px; white-space: nowrap; transition: background var(--dur-1), color var(--dur-1); }
+.vb-more:hover { color: var(--text); background: var(--hover); }
+.vb-more .car { display: inline-block; font-size: 10px; transition: transform var(--dur-2) var(--ease); }
+.vb-more[aria-expanded="true"] { color: var(--text); }
+.vb-more[aria-expanded="true"] .car { transform: rotate(180deg); }
+.vb-extra { position: relative; border-top: 1px solid var(--line-soft); padding: 18px 26px 22px; }
+.vb-tokens { position: relative; display: grid; grid-template-columns: 86px minmax(0, 1fr) 86px minmax(0, 1fr); gap: 9px 16px; font-size: 12.5px; align-content: start; }
 .vb-tokens dt { color: var(--faint); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; padding-top: 2px; }
 .vb-tokens dd { color: var(--text); line-height: 1.45; }
 .vb-tokens dd .muted { font-size: 12px; }
-body.wide .vb-tokens { grid-template-columns: 86px minmax(0, 1fr) 86px minmax(0, 1fr); }
+.vb-tokens .hex { display: inline-flex; align-items: center; gap: 5px; margin-right: 12px; font: 11px Menlo, "SF Mono", monospace; color: var(--muted); }
+.vb-tokens .hex i { width: 10px; height: 10px; border-radius: 50%; box-shadow: inset 0 0 0 1px #ffffff26; }
 
 /* sections */
-.sec { margin-top: 72px; }
-.sec-head { display: flex; align-items: flex-end; gap: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--line-soft); margin-bottom: 32px; }
-.sec-head h2 { font-family: var(--serif); font-weight: 400; font-size: 34px; line-height: 1.05; letter-spacing: -.01em; }
+.sec { margin-top: 64px; }
+.sec.first { margin-top: 26px; }
+.sec-head { display: flex; align-items: flex-end; gap: 24px; padding-bottom: 10px; border-bottom: 1px solid var(--line-soft); margin-bottom: 20px; }
+.sec-head h2 { font-family: var(--serif); font-weight: 400; font-size: 28px; line-height: 1.05; letter-spacing: -.01em; white-space: nowrap; }
 .sec-head h2 em { color: var(--accent); }
-.sec-head p { color: var(--muted); font-size: 13px; max-width: 520px; margin-left: auto; text-align: right; }
+.sec-head p { color: var(--muted); font-size: 12.5px; max-width: 780px; margin-left: auto; text-align: right; }
 
 /* tiles */
 .grid { display: grid; grid-template-columns: repeat(4, var(--fw)); column-gap: var(--gx); row-gap: 52px; }
@@ -230,24 +246,31 @@ body.wide .frame { width: 100%; height: auto; aspect-ratio: 16 / 9; }
 .sh-dl dd { color: var(--text); line-height: 1.45; }
 .sh-ctl { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; align-items: center; }
 .keys { list-style: none; padding: 0; margin-top: 18px; border-top: 1px solid var(--line-soft); }
-.keys li { display: grid; grid-template-columns: 64px 1fr; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line-soft); font-size: 12.5px; color: var(--muted); transition: color var(--dur-1); }
-.keys li span:first-child { font-variant-numeric: tabular-nums; color: var(--faint); }
+.keys li { display: grid; grid-template-columns: 18px 58px 1fr; gap: 10px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--line-soft); font-size: 12.5px; color: var(--muted); transition: color var(--dur-1); }
+.keys li .ms { font-variant-numeric: tabular-nums; color: var(--faint); }
 .keys li.now { color: var(--text); }
-.keys li.now span:first-child { color: var(--accent); }
+.keys li.now .ms { color: var(--accent); }
+/* keyframe number: the same badge on the ruler and in the table, so the ruler needs no words */
+.kn { width: 17px; height: 17px; border-radius: 50%; display: inline-grid; place-items: center; font: 600 10.5px/1 var(--sans); font-variant-numeric: tabular-nums; color: var(--muted); background: var(--raised); box-shadow: inset 0 0 0 1px #4a4238; transition: background var(--dur-1), color var(--dur-1), box-shadow var(--dur-1); }
+.now > .kn, .kn.now { color: var(--accent-ink); background: var(--accent); box-shadow: none; }
 .sh-lanes { display: block; margin-top: 12px; border-radius: 8px; background: var(--bg); }
 
+/* the ruler, top to bottom: keyframe numbers (two rows when they crowd) · playhead knob · the axis
+   with its ticks and keyframe diamonds · ms numerals · the sound. The playhead stops above the
+   numerals, so it never covers one; the words live in the table above, never on the ruler. */
 .ruler { position: relative; height: 100px; margin-top: 14px; user-select: none; -webkit-user-select: none; cursor: ew-resize; touch-action: none; }
 .r-axis { position: absolute; left: 0; right: 0; top: 58px; height: 1px; background: var(--line); }
 .r-tick { position: absolute; top: 55px; width: 1px; height: 6px; background: var(--line); }
 .r-tick.major { top: 51px; height: 14px; background: #463e34; }
-.r-ms { position: absolute; top: 70px; font-size: 10.5px; color: var(--faint); transform: translateX(-50%); font-variant-numeric: tabular-nums; }
-.r-beat { position: absolute; top: 44px; width: 2px; height: 28px; margin-left: -1px; background: #e9c78f40; border-radius: 1px; }
+.r-ms { position: absolute; top: 72px; font-size: 10.5px; line-height: 1; color: var(--faint); transform: translateX(-50%); font-variant-numeric: tabular-nums; }
+.r-ms.end { transform: translateX(-100%); }
+.r-ms.start { transform: none; }
+.r-beat { position: absolute; top: 47px; width: 2px; height: 22px; margin-left: -1px; background: #e9c78f40; border-radius: 1px; }
 .r-key { position: absolute; top: 54px; width: 9px; height: 9px; margin-left: -4.5px; transform: rotate(45deg); background: var(--accent); border-radius: 1.5px; box-shadow: 0 0 0 2px var(--surface); }
-.r-lab { position: absolute; font-size: 11px; color: var(--muted); white-space: nowrap; }
-.r-lab::before { content: ""; position: absolute; left: 50%; width: 1px; background: var(--line); }
-.r-sfx { position: absolute; top: 84px; font-size: 11px; color: var(--warn); transform: translateX(-50%); white-space: nowrap; }
-.r-head { position: absolute; top: 38px; height: 44px; width: 2px; margin-left: -1px; background: var(--text); border-radius: 2px; box-shadow: 0 0 8px #0008; pointer-events: none; }
-.r-head::after { content: ""; position: absolute; left: -4px; top: -6px; width: 10px; height: 10px; border-radius: 50%; background: var(--text); }
+.r-n { position: absolute; margin-left: -8.5px; cursor: default; }
+.r-sfx { position: absolute; top: 87px; font-size: 11px; line-height: 1; color: var(--warn); transform: translateX(-50%); white-space: nowrap; }
+.r-head { position: absolute; top: 45px; height: 24px; width: 2px; margin-left: -1px; background: var(--text); border-radius: 2px; box-shadow: 0 0 8px #0008; pointer-events: none; }
+.r-head::after { content: ""; position: absolute; left: -4px; top: -9px; width: 10px; height: 10px; border-radius: 50%; background: var(--text); box-shadow: 0 0 0 2px var(--surface); }
 .r-foot { display: flex; justify-content: space-between; margin-top: 2px; font-size: 11.5px; color: var(--faint); }
 
 .toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(16px); opacity: 0; z-index: 60; background: #2b261f; border: 1px solid var(--line); padding: 9px 18px; border-radius: 999px; font-size: 13px; transition: opacity var(--dur-2), transform var(--dur-2) var(--ease); box-shadow: 0 20px 50px #0008; pointer-events: none; }
@@ -257,12 +280,24 @@ body.wide .frame { width: 100%; height: auto; aspect-ratio: 16 / 9; }
 <body class="look-clean">
 
 <header class="top">
-  <div class="brand"><span class="logo">Vibe<span>Cut</span></span><span class="doc-title">Motion library v1 · design review<small>not in the product</small></span></div>
+  <div class="brand"><span class="logo">Vibe<span>Cut</span></span><h1 class="doc-title">Twenty moves, <em>one vibe</em> at a time.<small>Motion library v1 · design review, not in the product</small></h1></div>
   <div class="top-right">
+    <a class="btn btn-ghost btn-sm" href="index.html" title="Back to the flow mockup">← All screens</a>
+    <button class="btn btn-ghost btn-sm" id="howBtn" aria-expanded="false" aria-controls="how">How to read this ▾</button>
     <button class="btn btn-ghost btn-sm" id="pauseBtn" title="Space">Pause</button>
     <button class="btn btn-primary btn-sm" id="playAll">▶ Play all</button>
   </div>
 </header>
+
+<div class="how" id="how" role="dialog" aria-label="How to read this page" hidden>
+  <p>Every element runs live over Sarah’s own frames from her day out in New York, 8:35 am to 9:40 pm. Pick a vibe and all twenty restyle together: type, colour, timing, sound and joins. The words come only from her clips’ clocks and places, or from what she typed.</p>
+  <div class="legend">
+    <span class="rb">Drawn on Canvas — the same pixels in preview and export</span>
+    <span class="rb ff">Moves or recolours the footage — simulated here, rendered by ffmpeg in export</span>
+    <span><span class="st st-exists">exists</span> <span class="st st-extend">extend</span> <span class="st st-new">new</span> <span class="st st-engine">engine work</span></span>
+  </div>
+  <p class="hint">Click any frame to enlarge it with its timing ruler.<br>Keys: <kbd>1</kbd>–<kbd>7</kbd> vibes · <kbd>B</kbd> beat · <kbd>Space</kbd> pause · <kbd>←</kbd> <kbd>→</kbd> step through an enlarged tile · <kbd>Esc</kbd> close.</p>
+</div>
 
 <nav class="bar" aria-label="Review controls">
   <span class="bar-label">Vibe</span>
@@ -281,21 +316,9 @@ body.wide .frame { width: 100%; height: auto; aspect-ratio: 16 / 9; }
 
 <main>
   <div class="wrap">
-    <section class="intro">
-      <div class="eyebrow">Design review · round 2</div>
-      <h1 class="display">Twenty moves, <em>one vibe</em> at a time.</h1>
-      <p class="lede">Every element runs live over Sarah’s own frames from her day out in New York, 8:35 am to 9:40 pm. Pick a vibe and all twenty restyle together: type, colour, timing, sound and joins. The words come only from her clips’ clocks and places, or from what she typed.</p>
-      <div class="legend">
-        <span class="rb">Drawn on Canvas — the same pixels in preview and export</span>
-        <span class="rb ff">Moves or recolours the footage — simulated here, rendered by ffmpeg in export</span>
-        <span><span class="st st-exists">exists</span> <span class="st st-extend">extend</span> <span class="st st-new">new</span> <span class="st st-engine">engine work</span></span>
-      </div>
-      <p class="hint">Click any frame to enlarge it with its timing ruler. Keys: <kbd>1</kbd>–<kbd>7</kbd> vibes · <kbd>B</kbd> beat · <kbd>Space</kbd> pause · <kbd>←</kbd> <kbd>→</kbd> step through an enlarged tile.</p>
-    </section>
-
     <section class="vband" id="vband" aria-live="polite"></section>
 
-    <section class="sec">
+    <section class="sec first">
       <div class="sec-head">
         <h2>Words <em>on screen</em></h2>
         <p>Drawn on Canvas by <code>overlayDraw.ts</code>, so the preview is the export. Held cards stay pixel-still; only entrances and exits move.</p>
@@ -436,6 +459,8 @@ const env = {
   speed: [1, 0.5, 0.25].includes(Number(Q.get('speed'))) ? Number(Q.get('speed')) : 1,
   jl: Q.get('jl') === 'L' ? 'L' : 'J',
   guides: Q.get('guides') === 'on',
+  more: ['open', 'on', '1'].includes(Q.get('more')),
+  how: ['open', 'on', '1'].includes(Q.get('how')),
   paused: false,
   get wide() { return this.fmt === 'youtube' },
   get L() { return this.beat ? 4200 : 4000 },
@@ -450,6 +475,8 @@ function writeURL() {
   if (env.beat) p.set('beat', 'on')
   if (env.speed !== 1) p.set('speed', String(env.speed))
   if (env.jl === 'L') p.set('jl', 'L')
+  if (env.more) p.set('more', 'open')
+  if (env.how) p.set('how', 'open')
   if (sheet.open) { p.set('tile', String(sheet.id)); if (env.guides) p.set('guides', 'on') }
   try { history.replaceState(null, '', '?' + p.toString()) } catch (e) { /* file:// in some browsers */ }
 }
@@ -507,11 +534,16 @@ function img(file) {
   return IMG[file]
 }
 const ready = (im) => im.complete && im.naturalWidth > 0
-// Sharp 16:9 crops taken above the burned-in words of the exported frames (hero3: well above its subtitle).
+// 16:9 crops of the exported frames, taken above their burned-in words (hero3: well above its
+// subtitle). They are 540 px wide against the thumbnails' 216, so they stay sharp where a thumbnail
+// crop turns to mush. hero.png is never used here: a selfie can't be cropped to 16:9 — the crop is
+// a forehead-to-lips close-up that no clock or caption can sit on.
+// When the 1280×720 stills (w00–w09) land in ../assets, point each tile's `img.w` at them instead.
 const HERO = {
-  heroA: { f: 'hero.png', r: [0, 40 / 960, 1, 304 / 960], faces: [[0.36, 0.1, 0.9, 1]] },
   heroB: { f: 'hero2.png', r: [0, 250 / 960, 1, 304 / 960], faces: [[0.3, 0.26, 0.72, 1]] },
   heroC: { f: 'hero3.png', r: [0, 100 / 960, 1, 304 / 960], faces: [[0.58, 0, 1, 1]] },
+  // the reading room: cream wall and chandeliers top-left, her chin at the top-right edge
+  heroD: { f: 'hero3.png', r: [0, 330 / 960, 1, 304 / 960], faces: [[0.74, 0, 1, 0.36]] },
 }
 // Face boxes (0–1 of the upright still), marked by hand for the guides overlay.
 const FACES = {
@@ -593,6 +625,27 @@ function rr(c, x, y, w, h, r) {
 }
 function shadow(g, c, blur, col, oy = 0) { c.shadowColor = col; c.shadowBlur = blur * g.k; c.shadowOffsetX = 0; c.shadowOffsetY = oy * g.k }
 function noShadow(c) { c.shadowColor = 'transparent'; c.shadowBlur = 0; c.shadowOffsetY = 0 }
+/** The readability floor for any word drawn without a box: a tight dark shadow. A soft, faint glow
+ *  looks nicer on a dark test frame and vanishes over sky, leaves and white walls — which is where
+ *  a vlogger actually films. */
+function legible(g, c) { shadow(g, c, 8, 'rgba(0,0,0,.55)', 2) }
+/** The floor's second half. A blurred shadow of a hairline face (light caps, handwriting, a typewriter)
+ *  is nearly invisible — the blur spreads too little ink — so a word drawn while the floor is set first
+ *  gets a 6 px soft dark edge for the shadow to hold on to. Wired once into each words layer. */
+const FLOOR_COLOR = 'rgba(0, 0, 0, 0.55)' // the floor's shadow colour, as the canvas reports it back
+function floorEdges(c) {
+  if (c.floorEdges) return c
+  const fill = c.fillText
+  c.fillText = function (s, x, y) {
+    if (this.shadowColor === FLOOR_COLOR) { this.save(); this.lineWidth = 6; this.lineJoin = 'round'; this.strokeStyle = 'rgba(0,0,0,.35)'; this.strokeText(s, x, y); this.restore() }
+    return fill.call(this, s, x, y)
+  }
+  c.floorEdges = true
+  return c
+}
+/** Film's typewriter words. Courier New Bold stands in for Courier Prime, which runs heavier; a 2 px
+ *  stroke in the same ink makes up the weight so the line doesn't read as a hairline over a busy frame. */
+function typed(c, s, x, y) { c.fillText(s, x, y); c.save(); c.lineWidth = 2; c.lineJoin = 'round'; c.strokeStyle = c.fillStyle; c.strokeText(s, x, y); c.restore() }
 function tw(c, s, track = 0) {
   if (!track) return c.measureText(s).width
   let w = 0
@@ -641,7 +694,8 @@ function still(g, key, o = {}) {
   if (!ready(s.im)) return
   const { W, H } = g, sc = o.s ?? 1, ox = (o.ox ?? 0.5) * W, oy = (o.oy ?? 0.5) * H
   const one = (c, im, sx, sy, sw, sh, a) => {
-    c.save(); c.globalAlpha = a
+    // the stills are smaller than most tiles draw them; the high-quality filter keeps edges from smearing
+    c.save(); c.globalAlpha = a; c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high'
     c.translate(ox + (o.dx || 0), oy + (o.dy || 0)); c.scale(sc, sc); c.translate(-ox, -oy)
     c.drawImage(im, sx, sy, sw, sh, 0, 0, W, H)
     c.restore()
@@ -661,31 +715,56 @@ function pin(c, x, y, col, s = 1, dot = 'rgba(0,0,0,.35)') {
   c.restore()
 }
 const SEG = { 0: 'abcdef', 1: 'bc', 2: 'abged', 3: 'abgcd', 4: 'fgbc', 5: 'afgcd', 6: 'afgedc', 7: 'abc', 8: 'abcdefg', 9: 'abcdfg' }
-/** a camera-back date in seven segments (the DSEG7 stand-in), right-aligned at rx, bottom at by */
-function dateStamp(g, c, str, rx, by, h) {
-  const w = h * 0.52, th = h * 0.13, gap = h * 0.18, sp = h * 0.3, ap = h * 0.34
+/** width of a seven-segment date's ink: the last digit's trailing gap is air, and the 8% lean
+ *  pushes the top edge right, so a right-aligned date ends exactly at its edge */
+function dateInk(str, h) {
+  const w = h * 0.52, gap = h * 0.18, sp = h * 0.3, ap = h * 0.34
   let total = 0
   for (const ch of str) total += ch === ' ' ? sp : ch === "'" ? ap : w + gap
-  let x = rx - total, y = by - h
-  c.save(); c.fillStyle = '#FF9A3C'; shadow(g, c, 7, 'rgba(255,128,32,.95)')
+  return total - (/\d$/.test(str) ? gap : 0) + 0.08 * h
+}
+/** a camera-back date in seven segments (the DSEG7 stand-in), bottom at by; ax is its left or right ink edge */
+function dateStamp(g, c, str, ax, by, h, align = 'right') {
+  const w = h * 0.52, th = h * 0.13, gap = h * 0.18, sp = h * 0.3, ap = h * 0.34
+  const y = by - h, x0 = align === 'left' ? ax : ax - dateInk(str, h)
+  c.save(); c.fillStyle = '#FF9A3C'
   c.transform(1, 0, -0.08, 1, 0.08 * by, 0)
-  for (const ch of str) {
-    if (ch === ' ') { x += sp; continue }
-    if (ch === "'") { c.beginPath(); c.moveTo(x + th * 0.8, y); c.lineTo(x + th * 2.2, y); c.lineTo(x + th * 1.3, y + h * 0.34); c.lineTo(x + th * 0.3, y + h * 0.34); c.closePath(); c.fill(); x += ap; continue }
-    const on = SEG[ch] || '', hh = h / 2
-    const hs = (sx, sy) => { c.beginPath(); c.moveTo(sx + th * 0.6, sy); c.lineTo(sx + w - th * 0.6, sy); c.lineTo(sx + w - th * 1.1, sy + th * 0.5); c.lineTo(sx + w - th * 0.6, sy + th); c.lineTo(sx + th * 0.6, sy + th); c.lineTo(sx + th * 1.1, sy + th * 0.5); c.closePath(); c.fill() }
-    const vs = (sx, sy, len) => { c.beginPath(); c.moveTo(sx, sy + th * 0.6); c.lineTo(sx + th * 0.5, sy + th * 1.1); c.lineTo(sx + th, sy + th * 0.6); c.lineTo(sx + th, sy + len - th * 0.6); c.lineTo(sx + th * 0.5, sy + len - th * 0.1); c.lineTo(sx, sy + len - th * 0.6); c.closePath(); c.fill() }
-    if (on.includes('a')) hs(x, y - th * 0.5 + th * 0.5)
-    if (on.includes('g')) hs(x, y + hh - th / 2)
-    if (on.includes('d')) hs(x, y + h - th)
-    if (on.includes('f')) vs(x, y, hh)
-    if (on.includes('b')) vs(x + w - th, y, hh)
-    if (on.includes('e')) vs(x, y + hh - th * 0.3, hh)
-    if (on.includes('c')) vs(x + w - th, y + hh - th * 0.3, hh)
-    x += w + gap
+  // twice: the dark readability floor first, then the amber glow of a real camera date on top
+  legible(g, c); paintDigits(x0)
+  shadow(g, c, 7, 'rgba(255,128,32,.95)'); paintDigits(x0)
+  c.restore()
+  function paintDigits(x) {
+    for (const ch of str) {
+      if (ch === ' ') { x += sp; continue }
+      if (ch === "'") { c.beginPath(); c.moveTo(x + th * 0.8, y); c.lineTo(x + th * 2.2, y); c.lineTo(x + th * 1.3, y + h * 0.34); c.lineTo(x + th * 0.3, y + h * 0.34); c.closePath(); c.fill(); x += ap; continue }
+      const on = SEG[ch] || '', hh = h / 2
+      const hs = (sx, sy) => { c.beginPath(); c.moveTo(sx + th * 0.6, sy); c.lineTo(sx + w - th * 0.6, sy); c.lineTo(sx + w - th * 1.1, sy + th * 0.5); c.lineTo(sx + w - th * 0.6, sy + th); c.lineTo(sx + th * 0.6, sy + th); c.lineTo(sx + th * 1.1, sy + th * 0.5); c.closePath(); c.fill() }
+      const vs = (sx, sy, len) => { c.beginPath(); c.moveTo(sx, sy + th * 0.6); c.lineTo(sx + th * 0.5, sy + th * 1.1); c.lineTo(sx + th, sy + th * 0.6); c.lineTo(sx + th, sy + len - th * 0.6); c.lineTo(sx + th * 0.5, sy + len - th * 0.1); c.lineTo(sx, sy + len - th * 0.6); c.closePath(); c.fill() }
+      if (on.includes('a')) hs(x, y - th * 0.5 + th * 0.5)
+      if (on.includes('g')) hs(x, y + hh - th / 2)
+      if (on.includes('d')) hs(x, y + h - th)
+      if (on.includes('f')) vs(x, y, hh)
+      if (on.includes('b')) vs(x + w - th, y, hh)
+      if (on.includes('e')) vs(x, y + hh - th * 0.3, hh)
+      if (on.includes('c')) vs(x + w - th, y + hh - th * 0.3, hh)
+      x += w + gap
+    }
   }
+}
+/** Film's camera-back date. A real camera prints it in the bottom-right corner, and that corner is what
+ *  makes it read as the camera's own stamp rather than a stray label. On 9:16 the app's buttons own
+ *  x > 780 below y 840, so the date ends at x 780, baseline 1240 — as far into the corner as the
+ *  platform allows. On 16:9, the text box's own bottom-right corner. */
+const FILM_DATE = "9 25 '26"
+function filmDateSpot(g) { return g.wide ? { ax: 1824, by: 810, h: 58 } : { ax: 780, by: 1240, h: 56 } }
+function filmDate(g, c) {
+  const s = filmDateSpot(g)
+  c.save(); c.globalAlpha = rnd(Math.floor(g.t / 83)) > 0.5 ? 1 : 0.97
+  dateStamp(g, c, FILM_DATE, s.ax, s.by, s.h, 'right')
   c.restore()
 }
+/** captions in the bottom band move up this far while Film's date shows, so the two never touch */
+const DATE_LIFT = 64
 /** hand-drawn check mark */
 function tick(c, x, y, s, col, u, lw = 6) {
   c.save(); c.strokeStyle = col; c.lineWidth = lw; c.lineCap = 'round'; c.lineJoin = 'round'
@@ -724,7 +803,7 @@ function nameTag(g, c, t, t0, r0, out, x, y, name, role, opts = {}) {
       quiet: { nf: F.int(300, 42), nt: 8.4, rf: F.gar(400, 42, 1), rt: 0, nc: '#EFE8DD', rc: '#D8CBB6', N: name.toUpperCase(), R: role },
       cinematic: { nf: F.int(300, 42), nt: 12.6, rf: F.gar(400, 40, 1), rt: 0, nc: '#fff', rc: 'rgba(255,255,255,.8)', N: name.toUpperCase(), R: role },
     }[id]
-    shadow(g, c, 16, 'rgba(0,0,0,.55)', 2)
+    legible(g, c)
     c.save(); c.font = cfg.nf; const nw = tw(c, cfg.N, cfg.nt)
     c.globalAlpha = id === 'clean' ? clamp(e * 1.4) : e; clipW(nw, id === 'clean' ? e : 1)
     const sc = id === 'clean' ? lerp(0.95, 1, e) : 1
@@ -733,11 +812,11 @@ function nameTag(g, c, t, t0, r0, out, x, y, name, role, opts = {}) {
     c.fillStyle = cfg.rc; text(c, cfg.R, x - 24 * (1 - e2), y + (id === 'clean' ? 64 : 58)); c.restore()
   } else if (id === 'cozy') {
     c.font = F.cav(700, 80); const nw = c.measureText(name).width
-    shadow(g, c, 12, 'rgba(40,20,0,.35)', 2)
+    legible(g, c)
     c.save(); c.globalAlpha = clamp(e * 2); clipW(nw, e); c.fillStyle = '#F6EBD9'; c.fillText(name, x - 24 * (1 - e), y - 14); c.restore()
-    noShadow(c); c.globalAlpha = 1
+    c.globalAlpha = 1
     underline(c, x - 4, x + nw + 10, y + 66, '#F3C9A5', clamp((t - t0 - 300) / 400) * (1 - q), 6)
-    c.save(); shadow(g, c, 12, 'rgba(40,20,0,.5)'); c.globalAlpha = e2; c.font = F.gar(400, 42, 1); c.fillStyle = '#F3C9A5'; c.fillText(role, x - 24 * (1 - e2), y + 86); c.restore()
+    c.save(); legible(g, c); c.globalAlpha = e2; c.font = F.gar(400, 42, 1); c.fillStyle = '#F3C9A5'; c.fillText(role, x - 24 * (1 - e2), y + 86); c.restore()
   } else if (id === 'film') {
     if (q >= 1) { c.restore(); return }
     const tape = (label, ty, rot, start, fs) => {
@@ -817,7 +896,7 @@ EL[1] = {
     } else if (id === 'hype') {
       const rows = [['8:35', 'AM'], ['FIRST', 'DAY'], ['OF', 'TERM']], lh = 138, y0 = cy - lh, st = stag(70)
       c.font = F.ant(132); const sp = c.measureText(' ').width
-      shadow(g, c, 22, 'rgba(0,0,0,.4)', 4); c.fillStyle = '#fff'
+      legible(g, c); c.fillStyle = '#fff'
       let k = 0
       rows.forEach((ws, i) => {
         const wd = ws.map((w) => c.measureText(w).width), tot = wd.reduce((u, v) => u + v) + sp * (ws.length - 1)
@@ -830,14 +909,14 @@ EL[1] = {
       })
     } else {
       const cfg = {
-        cozy: { f: F.cav(700, 96), col: '#F6EBD9', lines: ['8:35 am', 'first day of term'], lh: 100, sh: 'rgba(40,20,0,.6)' },
+        cozy: { f: F.cav(700, 96), col: '#F6EBD9', lines: ['8:35 am', 'first day of term'], lh: 100 },
         quiet: { f: F.gar(400, 58, 1), col: '#EFE8DD', lines: ['8:35 am · first day of term'], lh: 0 },
         cinematic: { f: F.gar(400, 56), col: '#FFFFFF', lines: ['8:35 am · first day of term'], lh: 0 },
         film: { f: F.cou(700, 60), col: '#F5EEDC', lines: ['8:35 am', 'first day of term'], lh: 74 },
       }[id]
-      c.font = cfg.f; c.fillStyle = cfg.col; shadow(g, c, 18, cfg.sh || 'rgba(0,0,0,.55)', 2)
+      c.font = cfg.f; c.fillStyle = cfg.col; legible(g, c)
       const y0 = cy - (cfg.lh * (cfg.lines.length - 1)) / 2
-      cfg.lines.forEach((s, i) => c.fillText(s, cx, y0 + i * cfg.lh))
+      cfg.lines.forEach((s, i) => (id === 'film' ? typed(c, s, cx, y0 + i * cfg.lh) : c.fillText(s, cx, y0 + i * cfg.lh)))
     }
     c.restore()
   },
@@ -848,8 +927,8 @@ EL[2] = {
   name: 'Clock / date stamp', fam: 'Text', badge: 'canvas', status: 'extend',
   when: 'On a time spine, at each new session, at most 1 per 8 s. Film: a date on every shot.',
   from: 'capture_time, corrected for the time zone', render: 'Canvas · overlayDraw.ts — extends the date card',
-  img: { p: 't00', w: 'heroA' }, bright: true,
-  style: { clean: 'Clock at 60% white', cozy: 'Handwritten clock fading up — never boxed, no typing sounds', quiet: 'Light caps, tracked wide', cinematic: 'Light caps tracked wider, with a hairline', film: 'An amber camera-back date, no animation', playful: 'On a highlighter swipe', hype: '' },
+  img: { p: 't00', w: 'heroD' }, bright: true,
+  style: { clean: 'Clock at 60% white', cozy: 'Handwritten clock fading up — never boxed, no typing sounds', quiet: 'Light caps, tracked wide', cinematic: 'Light caps tracked wider, with a hairline', film: 'An amber camera-back date in the bottom-right corner, ending just left of the app buttons — on every shot, no animation', playful: 'On a highlighter swipe', hype: '' },
   plan() {
     const look = env.look
     if (look.id === 'hype') return NOT('Not used in Hype.', 'Hype saves its words for the drop — no clock stamps.')
@@ -861,18 +940,16 @@ EL[2] = {
   draw(g, t, P) {
     const c = g.c, look = g.look, id = look.id
     if (id === 'film') {
-      if (t < P.on || t >= P.off) return
-      c.save(); c.globalAlpha = rnd(Math.floor(t / 83)) > 0.5 ? 1 : 0.97
-      dateStamp(g, c, "9 25 '26", g.wide ? 1824 : 780, g.wide ? 810 : 1240, g.wide ? 58 : 56)
-      c.restore(); return
+      if (t >= P.on && t < P.off) filmDate(g, c)
+      return
     }
     const p = inProg(look, t, P.tIn), q = outProg(look, t, P.out), e = Math.max(0, p * (1 - q))
     if (e <= 0) return
     const x = g.wide ? 96 : 120, y = g.wide ? 84 : 300
     c.save(); c.textBaseline = 'top'; c.globalAlpha = clamp(e * 1.3); c.translate(0, (1 - e) * 12)
-    shadow(g, c, 18, 'rgba(0,0,0,.55)', 1)
+    legible(g, c)
     if (id === 'clean') { c.font = F.int(500, 46); const w = c.measureText('8:35 am').width; if (g.bright) { noShadow(c); rr(c, x - 18, y - 12, w + 36, 72, 14); c.fillStyle = 'rgba(0,0,0,.6)'; c.fill() } c.fillStyle = 'rgba(255,255,255,.62)'; c.fillText('8:35 am', x, y + 1) }
-    else if (id === 'cozy') { shadow(g, c, 20, 'rgba(40,20,0,.65)', 2); c.font = F.cav(700, 76); c.fillStyle = '#F6EBD9'; c.fillText('8:35 am', x, y - 10) }
+    else if (id === 'cozy') { c.font = F.cav(700, 76); c.fillStyle = '#F6EBD9'; c.fillText('8:35 am', x, y - 10) }
     else if (id === 'quiet') { c.font = F.int(300, 40); c.fillStyle = '#EFE8DD'; text(c, '8:35 AM', x, y + 4, { track: 8 }) }
     else if (id === 'cinematic') { c.fillStyle = 'rgba(255,255,255,.85)'; c.fillRect(x, y + 21, 88 * e, 2); c.font = F.int(300, 40); c.fillStyle = '#fff'; text(c, '8:35 AM', x + 112, y + 1, { track: 12 }) }
     else if (id === 'playful') {
@@ -892,7 +969,7 @@ EL[3] = {
   when: 'Once per place, right after the hook.',
   from: 'GPS → offline GeoNames (credited); editable', render: 'Canvas · overlayDraw.ts — new kind: place',
   img: { p: 't07', w: 't07' }, bright: true,
-  style: { clean: 'Pin and bold sans with a soft shadow', cozy: 'Round pin on a cream pill, handwritten', quiet: 'No pin; light caps; fade only', cinematic: 'Tracked caps, a hairline and the coordinates; 800 ms fade', film: 'Amber ink stamp in three steps, 1 px jitter', playful: 'Bouncing red pin on a sticker at −4°', hype: 'Condensed caps slam in with a short shake' },
+  style: { clean: 'Pin and bold sans with a soft shadow', cozy: 'Round pin on a cream pill, handwritten', quiet: 'No pin; light caps; fade only', cinematic: 'Tracked caps, a hairline and the coordinates; 800 ms fade', film: 'Amber ink stamp in three steps on a 20% dark bed, 1 px jitter', playful: 'Bouncing red pin on a sticker at −4°', hype: 'Condensed caps slam in with a short shake; an orange underline' },
   sfx: { cozy: 'paper rustle', film: 'tape click', playful: 'boing', hype: 'impact' },
   plan() {
     const id = env.look.id, tIn = snapHit(400), out = snapEnd(3200)
@@ -918,7 +995,7 @@ EL[3] = {
     c.save(); c.globalAlpha = fade; c.textBaseline = 'top'
     if (id === 'clean') {
       if (g.bright) { c.font = F.int(600, 52); const bw = Math.max(c.measureText(PLACE).width, 0) + 96, u = look.fn(clamp((t - P.pin) / 400)); rr(c, x0 - 18, y0 - 18, (bw + 20) * u, 136, 16); c.fillStyle = 'rgba(0,0,0,.6)'; c.fill() }
-      shadow(g, c, 12, 'rgba(0,0,0,.45)', 2)
+      legible(g, c)
       const pp = inProg(look, t, P.pin); pin(c, x0 + 18, y0 + 22 - (1 - pp) * 40, '#fff', 1.05)
       c.font = F.int(600, 52); const w = c.measureText(PLACE).width, pn = look.fn(clamp((t - P.name) / 400))
       c.save(); c.beginPath(); c.rect(x0 + 50, y0 - 20, (w + 30) * pn, 100); c.clip(); c.fillStyle = '#fff'; c.fillText(PLACE, x0 + 54, y0); c.restore()
@@ -931,13 +1008,13 @@ EL[3] = {
       c.beginPath(); c.arc(x0 + 48, y0 + ph / 2, 7, 0, Math.PI * 2); c.fillStyle = '#F3E6CF'; c.fill()
       c.save(); c.beginPath(); c.rect(x0 + 80, y0, (w + 20) * CURVE.expo(clamp((t - P.name) / 400)), ph); c.clip(); c.fillStyle = '#3A2E22'; c.fillText(PLACE, x0 + 82, y0 + 12); c.restore()
       c.restore()
-      c.globalAlpha = fade * clamp((t - P.sub) / 250); shadow(g, c, 16, 'rgba(40,20,0,.6)'); c.font = F.cav(700, 44); c.fillStyle = '#F6EBD9'; c.fillText('new york', x0 + 34, y0 + ph + 14)
+      c.globalAlpha = fade * clamp((t - P.sub) / 250); legible(g, c); c.font = F.cav(700, 48); c.fillStyle = '#F6EBD9'; c.fillText('new york', x0 + 34, y0 + ph + 12)
     } else if (id === 'quiet') {
-      shadow(g, c, 18, 'rgba(0,0,0,.5)')
+      legible(g, c)
       c.globalAlpha = fade * inProg(look, t, P.pin); c.font = F.int(300, 40); c.fillStyle = '#EFE8DD'; text(c, PLACE.toUpperCase(), x0, y0 + 10, { track: 8 })
       c.globalAlpha = fade * inProg(look, t, P.sub); c.font = F.gar(400, 44, 1); c.fillText('New York', x0, y0 + 64)
     } else if (id === 'cinematic') {
-      shadow(g, c, 18, 'rgba(0,0,0,.5)')
+      legible(g, c)
       const a = inProg(look, t, P.pin, 800); c.globalAlpha = fade * a
       c.font = F.int(300, 40); c.fillStyle = '#fff'; text(c, PLACE.toUpperCase(), x0, y0 + 8, { track: 12 })
       c.fillStyle = 'rgba(255,255,255,.8)'; c.fillRect(x0, y0 + 68, 120 * a, 2)
@@ -945,11 +1022,13 @@ EL[3] = {
     } else if (id === 'film') {
       const s = lerp(1.15, 1, inProg(look, t, P.pin)), j = Math.floor(t / 83)
       const jx = (rnd(j) - 0.5) * 3, jy = (rnd(j + 99) - 0.5) * 3
-      c.font = F.cou(700, 38); const w = c.measureText(PLACE.toUpperCase()).width + 48, h = 108
+      // an ink stamp: a 20% dark bed under it so the amber holds over leaves, a 7 px rim, Courier at 44
+      c.font = F.cou(700, 44); const w = c.measureText(PLACE.toUpperCase()).width + 56, h = 126
       c.translate(x0 + w / 2 + jx, y0 + h / 2 + jy); c.rotate(-3 * RAD); c.scale(s, s); c.translate(-w / 2, -h / 2)
-      c.globalAlpha = fade * 0.95; c.strokeStyle = '#FF9A3C'; c.fillStyle = '#FF9A3C'; shadow(g, c, 6, 'rgba(40,15,0,.55)', 1)
-      c.lineWidth = 5; rr(c, 0, 0, w, h, 6); c.stroke(); c.lineWidth = 1.5; rr(c, 9, 9, w - 18, h - 18, 3); c.stroke()
-      c.fillText(PLACE.toUpperCase(), 24, 18); c.font = F.cou(700, 24); c.fillText('NEW YORK · SEP 25 2026', 24, 62)
+      c.globalAlpha = fade * 0.95; rr(c, 0, 0, w, h, 7); c.fillStyle = 'rgba(0,0,0,.2)'; c.fill()
+      c.strokeStyle = '#FF9A3C'; c.fillStyle = '#FF9A3C'; legible(g, c)
+      c.lineWidth = 7; rr(c, 0, 0, w, h, 7); c.stroke(); c.lineWidth = 2.5; rr(c, 11, 11, w - 22, h - 22, 3); c.stroke()
+      typed(c, PLACE.toUpperCase(), 28, 22); c.font = F.cou(700, 30); typed(c, 'NEW YORK · SEP 25 2026', 28, 76)
     } else if (id === 'playful') {
       const pp = inProg(look, t, P.pin)
       shadow(g, c, 10, 'rgba(0,0,0,.35)', 4)
@@ -962,16 +1041,18 @@ EL[3] = {
         rr(c, 0, 0, w, h, 20); c.fillStyle = '#7BD3F7'; c.fill(); c.fillStyle = '#0f2833'; c.fillText(PLACE, 28, 14)
         c.restore()
       }
-      c.globalAlpha = fade * clamp((t - P.sub) / 250); shadow(g, c, 10, 'rgba(0,0,0,.45)'); c.font = F.pop(800, 32); c.fillStyle = '#fff'; c.fillText(CITY, x0 + 76, y0 + 110)
+      c.globalAlpha = fade * clamp((t - P.sub) / 250); legible(g, c); c.font = F.pop(800, 34); c.fillStyle = '#fff'; c.fillText(CITY, x0 + 76, y0 + 110)
     } else if (id === 'hype') {
       const hitT = P.pin + tHit(look), u = t - hitT
       const shake = u > 0 && u < 200 ? 16 * Math.exp(-u / 60) * Math.sin((2 * Math.PI * u) / 33) : 0
       const s = lerp(1.5, 1, CURVE.expo(clamp((t - P.pin) / 150)))
-      c.font = F.ant(g.wide ? 104 : 116); c.fillStyle = '#fff'; shadow(g, c, 20, 'rgba(0,0,0,.4)', 3)
+      c.font = F.ant(g.wide ? 104 : 116); c.fillStyle = '#fff'; legible(g, c)
       const w = c.measureText('MORNINGSIDE').width
       c.translate(x0 + w / 2 + shake, y0 + 110); c.scale(s, s); c.translate(-(x0 + w / 2), -(y0 + 110))
       c.fillText('MORNINGSIDE', x0, y0); c.fillText('HEIGHTS', x0, y0 + 118)
-      c.font = F.int(800, 36); c.fillStyle = '#FF6A3D'; shadow(g, c, 10, 'rgba(0,0,0,.4)'); text(c, 'NEW YORK', x0 + 4, y0 + 252, { track: 7 })
+      // the second line stays white; orange is only the underline, since orange type drowns in trees
+      c.font = F.int(800, 40); const nyw = text(c, 'NEW YORK', x0 + 4, y0 + 250, { track: 7 })
+      c.fillStyle = '#FF6A3D'; c.fillRect(x0 + 4, y0 + 302, nyw, 6)
     }
     c.restore()
   },
@@ -1009,13 +1090,13 @@ EL[4] = {
       if (t < P.tIn) { c.restore(); return }
       const a = id === 'film' ? (t < P.out ? 1 : 0) : clamp((t - P.tIn) / 200) * (1 - clamp((t - P.out) / 200))
       if (a <= 0) { c.restore(); return }
-      c.globalAlpha = a; c.textBaseline = 'top'; shadow(g, c, 20, 'rgba(0,0,0,.62)', 2)
+      c.globalAlpha = a; c.textBaseline = 'top'; legible(g, c)
       const x = 120, y = 300
       if (id === 'clean') { noShadow(c); rr(c, x - 20, y - 16, 230, 112, 14); c.fillStyle = 'rgba(0,0,0,.6)'; c.fill(); c.font = F.int(600, 26); c.fillStyle = 'rgba(255,255,255,.85)'; const w = text(c, 'PART ', x, y, { track: 4 }); c.fillStyle = '#F2C14E'; c.fillText('2', x + w + 4, y); c.font = F.int(600, 46); c.fillStyle = '#fff'; c.fillText('Campus', x, y + 36) }
-      else if (id === 'cozy') { shadow(g, c, 22, 'rgba(40,20,0,.7)', 2); c.font = F.cav(700, 60); c.fillStyle = '#F6EBD9'; c.fillText('part 2 · campus', x, y) }
+      else if (id === 'cozy') { c.font = F.cav(700, 60); c.fillStyle = '#F6EBD9'; c.fillText('part 2 · campus', x, y) }
       else if (id === 'quiet') { c.font = F.int(300, 40); c.fillStyle = '#EFE8DD'; text(c, 'CAMPUS', x, y, { track: 8 }) }
       else if (id === 'cinematic') { c.fillStyle = 'rgba(255,255,255,.85)'; c.fillRect(x, y + 21, 60, 2); c.font = F.int(300, 40); c.fillStyle = '#fff'; text(c, 'CAMPUS', x + 80, y, { track: 12 }) }
-      else if (id === 'film') { c.font = F.cou(700, 38); c.fillStyle = '#F5EEDC'; c.fillText('part 2 — campus', x, y) }
+      else if (id === 'film') { c.font = F.cou(700, 44); c.fillStyle = '#F5EEDC'; typed(c, 'part 2 — campus', x, y) }
       else if (id === 'playful') { noShadow(c); c.font = F.pop(900, 38); const w = c.measureText('2 · Campus').width; rr(c, x, y, w + 44, 64, 32); c.fillStyle = '#FF6FA8'; c.fill(); c.fillStyle = '#fff'; c.fillText('2 · Campus', x + 22, y + 10) }
       else if (id === 'hype') { c.font = F.ant(72); c.fillStyle = '#FF6A3D'; c.fillText('02', x, y); c.fillStyle = '#fff'; c.fillText('CAMPUS', x + c.measureText('02 ').width, y) }
       c.restore(); return
@@ -1037,23 +1118,23 @@ EL[4] = {
     const ka = clamp((t - P.k) / 250)
     const tp = inProg(look, t, P.ti)
     if (id === 'clean') {
-      shadow(g, c, 18, 'rgba(0,0,0,.4)', 2)
+      legible(g, c)
       c.globalAlpha = outA * ka; c.font = F.int(600, 30); c.fillStyle = 'rgba(255,255,255,.88)'
       const wP = tw(c, 'PART ', 5); text(c, 'PART ', cx - (wP + 18) / 2, cy - 112, { track: 5 }); c.fillStyle = '#F2C14E'; c.fillText('2', cx + (wP + 18) / 2 - 9, cy - 112)
       c.globalAlpha = outA * clamp(tp * 1.3); c.font = F.int(600, 136); c.fillStyle = '#fff'; text(c, 'Campus', cx, cy + 16 * (1 - tp), { align: 'center', track: 136 * 0.08 * (1 - tp) })
       noShadow(c); c.globalAlpha = outA; const hw = 120 * smooth(clamp((t - 700) / 500)); c.fillStyle = '#fff'; c.fillRect(cx - hw / 2, cy + 92, hw, 3)
     } else if (id === 'cozy') {
-      shadow(g, c, 14, 'rgba(40,20,0,.35)', 2)
+      legible(g, c)
       c.globalAlpha = outA * ka; c.font = F.cav(700, 58); c.fillStyle = '#F3C9A5'; c.fillText('part 2', cx, cy - 128)
       c.globalAlpha = outA * clamp(tp * 1.4); c.font = F.cav(700, 176); c.fillStyle = '#F6EBD9'; text(c, 'campus', cx, cy + 16 * (1 - tp), { align: 'center', track: 14 * (1 - tp) })
       noShadow(c); c.globalAlpha = outA; underline(c, cx - 200, cx + 200, cy + 92, '#F3C9A5', clamp((t - 700) / 400), 8)
     } else if (id === 'quiet') {
-      shadow(g, c, 14, 'rgba(0,0,0,.3)')
+      legible(g, c)
       c.globalAlpha = outA * ka; c.font = F.int(300, 40); c.fillStyle = '#EFE8DD'; text(c, 'PART TWO', cx, cy - 124, { align: 'center', track: 8 })
       c.globalAlpha = outA * tp; c.font = F.gar(400, 140, 1); text(c, 'Campus', cx, cy + 16 * (1 - tp), { align: 'center', track: 11 * (1 - tp) })
       noShadow(c); c.globalAlpha = outA * 0.7; const hw = 120 * smooth(clamp((t - 700) / 500)); c.fillStyle = '#EFE8DD'; c.fillRect(cx - hw / 2, cy + 96, hw, 1.5)
     } else if (id === 'cinematic') {
-      shadow(g, c, 14, 'rgba(0,0,0,.3)')
+      legible(g, c)
       c.globalAlpha = outA * ka; c.font = F.gar(400, 44, 1); c.fillStyle = 'rgba(255,255,255,.88)'; c.fillText('Part two', cx, cy - 108)
       c.globalAlpha = outA * tp; c.font = F.int(300, 88); c.fillStyle = '#fff'; text(c, 'CAMPUS', cx, cy + 10 * (1 - tp), { align: 'center', track: 88 * lerp(0.38, 0.3, tp) })
       noShadow(c); c.globalAlpha = outA * 0.8; const hw = 120 * smooth(clamp((t - 700) / 500)); c.fillStyle = '#fff'; c.fillRect(cx - hw / 2, cy + 74, hw, 1.5)
@@ -1062,16 +1143,21 @@ EL[4] = {
       rr(c, cx - kw / 2, cy - 150, kw, 54, 27); c.fillStyle = '#FF6FA8'; c.fill(); c.fillStyle = '#fff'; text(c, 'PART 2', cx, cy - 122, { align: 'center', track: 3 })
       c.globalAlpha = outA; c.font = F.pop(900, 156); c.textAlign = 'center'; const word = 'Campus', st = stag(40)
       const total = tw(c, word); let x = cx - total / 2
-      shadow(g, c, 0, 'rgba(70,30,0,.45)', 9); c.shadowOffsetX = 4 * g.k
       for (let i = 0; i < word.length; i++) {
         const ch = word[i], w = c.measureText(ch).width, lp = inProg(look, t, P.ti + i * st)
-        if (lp > 0) { c.save(); c.translate(x + w / 2, cy + 20 + (1 - lp) * 50); c.scale(lerp(0.2, 1, lp), lerp(0.2, 1, lp)); c.globalAlpha = outA * clamp(lp * 3); c.fillStyle = '#FFD84D'; c.fillText(ch, 0, 0); c.restore() }
+        if (lp > 0) {
+          c.save(); c.translate(x + w / 2, cy + 20 + (1 - lp) * 50); c.scale(lerp(0.2, 1, lp), lerp(0.2, 1, lp)); c.globalAlpha = outA * clamp(lp * 3); c.fillStyle = '#FFD84D'
+          legible(g, c); c.fillText(ch, 0, 0)
+          shadow(g, c, 0, 'rgba(70,30,0,.5)', 9); c.shadowOffsetX = 4 * g.k; c.fillText(ch, 0, 0)
+          c.restore()
+        }
         x += w
       }
     } else if (id === 'hype') {
-      c.globalAlpha = outA * ka; c.font = F.int(800, 32); c.fillStyle = '#FF6A3D'; text(c, 'PART 2', cx, cy - 150, { align: 'center', track: 6.4 })
+      c.globalAlpha = outA * ka; legible(g, c); c.font = F.int(800, 34); c.fillStyle = '#fff'; const kw = text(c, 'PART 2', cx, cy - 152, { align: 'center', track: 6.8 })
+      c.fillStyle = '#FF6A3D'; c.fillRect(cx - kw / 2, cy - 124, kw, 6)
       const s = lerp(1.5, 1, CURVE.expo(clamp((t - P.ti) / 150)))
-      if (t >= P.ti) { c.globalAlpha = outA; c.textAlign = 'center'; shadow(g, c, 24, 'rgba(0,0,0,.4)', 4); c.font = F.ant(g.wide ? 230 : 250); c.fillStyle = '#fff'; c.save(); c.translate(cx, cy + 20); c.scale(s, s); c.fillText('CAMPUS', 0, 8); c.restore() }
+      if (t >= P.ti) { c.globalAlpha = outA; c.textAlign = 'center'; legible(g, c); c.font = F.ant(g.wide ? 230 : 250); c.fillStyle = '#fff'; c.save(); c.translate(cx, cy + 20); c.scale(s, s); c.fillText('CAMPUS', 0, 8); c.restore() }
       const hit = P.ti + tHit(look); if (t >= hit && t < hit + 100) { c.globalAlpha = 1; fillAll(c, g, '#fff', 0.85 * (1 - (t - hit) / 100)) }
     }
     c.restore()
@@ -1081,11 +1167,11 @@ EL[4] = {
 // 5 · Diary line ------------------------------------------------------
 const DIARY = 'slow start. coffee first.'
 EL[5] = {
-  name: 'Diary line', fam: 'Caption', badge: 'canvas', status: 'exists',
+  name: 'Diary line', fam: 'Caption', badge: 'canvas', status: 'exists', dated: true,
   when: 'Quiet days and story days. Eight words at most, one every 10–15 s.',
   from: 'The creator, or her clips’ metadata', render: 'Canvas · overlayDraw.ts — the caption card',
   img: { p: 't16', w: 't16' },
-  style: { clean: 'Small sans, sentence case', cozy: 'Serif italic, lowercase, cream', quiet: 'Small serif italic at 90%', cinematic: 'Light sans, sentence case, small', film: 'Typed at 40 ms a character, silent', playful: 'Rounded on a soft pill', hype: '' },
+  style: { clean: 'Small sans, sentence case', cozy: 'Serif italic, lowercase, cream', quiet: 'Small serif italic at 90%', cinematic: 'Light sans, sentence case, small', film: 'Typed at 40 ms a character, silent; 64 px higher while the date shows', playful: 'Rounded on a soft pill', hype: '' },
   plan() {
     const look = env.look
     if (look.id === 'hype') return NOT('Not used in Hype.', 'Diary lines belong to quiet days and story days, which never get Hype.')
@@ -1099,9 +1185,9 @@ EL[5] = {
     if (t < P.t0) return
     const fade = id === 'film' ? (t < P.out ? 1 : 0) : 1 - clamp((t - P.out) / 300)
     if (fade <= 0) return
-    const cx = g.W / 2, cy = g.wide ? 752 : 1168, p = inProg(look, t, P.t0)
+    const cx = g.W / 2, cy = (g.wide ? 752 : 1168) - g.lift, p = inProg(look, t, P.t0)
     c.save(); c.globalAlpha = fade; c.textAlign = 'center'; c.textBaseline = 'middle'
-    shadow(g, c, 14, 'rgba(0,0,0,.5)', 2)
+    legible(g, c)
     if (id === 'clean') { c.globalAlpha *= clamp(p * 1.3); c.font = F.int(500, 46); c.fillStyle = '#fff'; c.fillText('Slow start. Coffee first.', cx, cy + 16 * (1 - p)) }
     else if (id === 'cozy') { c.globalAlpha *= clamp(p * 1.6); c.font = F.gar(400, 62, 1); c.fillStyle = '#F6EBD9'; c.fillText(DIARY, cx, cy + 26 * (1 - p)) }
     else if (id === 'quiet') { c.globalAlpha *= 0.9 * p; c.font = F.gar(400, 50, 1); c.fillStyle = '#EFE8DD'; c.fillText(DIARY, cx, cy + 10 * (1 - p)) }
@@ -1109,7 +1195,7 @@ EL[5] = {
     else if (id === 'film') {
       c.font = F.cou(700, 46); c.fillStyle = '#F5EEDC'; c.textAlign = 'left'
       const n = Math.min(DIARY.length, Math.floor((t - P.t0) / stag(40)) + 1), full = c.measureText(DIARY).width, x = cx - full / 2
-      c.fillText(DIARY.slice(0, n), x, cy)
+      typed(c, DIARY.slice(0, n), x, cy)
       const done = P.t0 + DIARY.length * stag(40)
       if (t < done + 500 && Math.floor(t / 250) % 2 === 0) { noShadow(c); c.fillRect(x + c.measureText(DIARY.slice(0, n)).width + 4, cy - 24, 24, 48) }
     } else if (id === 'playful') {
@@ -1145,7 +1231,7 @@ EL[6] = {
     const wordStart = GT[gi] + ((gEnd - GT[gi]) * wi) / gw.length
     const long = env.fmt !== 'short'
     c.save(); c.textBaseline = 'middle'; c.textAlign = 'left'
-    shadow(g, c, 14, 'rgba(0,0,0,.5)', 2)
+    legible(g, c)
     if (id === 'quiet') {
       c.font = F.gar(400, 56, 1); c.fillStyle = '#EFE8DD'; c.textAlign = 'center'
       if (g.wide) c.fillText('we finally made it to the top', cx, cy)
@@ -1209,7 +1295,7 @@ EL[7] = {
     const cx = g.wide ? 1270 : 450, cy = g.wide ? 560 : 830
     const u = clamp((t - P.t0) / P.inD)
     let s = 1, a = 1
-    c.save(); c.textAlign = 'center'; c.textBaseline = 'middle'; shadow(g, c, 26, 'rgba(0,0,0,.4)', 4)
+    c.save(); c.textAlign = 'center'; c.textBaseline = 'middle'; legible(g, c)
     let word = 'NEVER', font = F.int(800, 176), fill = '#fff', track = 0
     if (id === 'clean') { s = lerp(1.1, 1, CURVE.expo(u)); a = clamp(u * 3) }
     else if (id === 'cozy') { word = 'never'; font = F.cav(700, 250); fill = '#F6EBD9'; a = inProg(look, t, P.t0) }
@@ -1219,26 +1305,27 @@ EL[7] = {
     else if (id === 'hype') { font = F.ant(g.wide ? 250 : 280); s = lerp(1.5, 1, CURVE.expo(u)) }
     s *= lerp(1, 1.05, qq); a *= 1 - qq
     c.globalAlpha = a; c.translate(cx, cy); c.scale(s, s); c.font = font
-    if (id === 'playful') { noShadow(c); c.lineJoin = 'round'; c.lineWidth = 16; c.strokeStyle = '#fff'; c.strokeText(word, 0, 0); shadow(g, c, 0, 'rgba(60,20,0,.5)', 10) }
-    c.fillStyle = fill; text(c, word, 0, 0, { align: 'center', track })
+    if (id === 'playful') { c.lineJoin = 'round'; c.lineWidth = 16; c.strokeStyle = '#fff'; c.strokeText(word, 0, 0); shadow(g, c, 0, 'rgba(60,20,0,.5)', 10) }
+    c.fillStyle = fill
+    if (id === 'film') typed(c, word, 0, 0); else text(c, word, 0, 0, { align: 'center', track })
     c.restore()
   },
 }
 
 // 8 · Name tag ---------------------------------------------------------
 EL[8] = {
-  name: 'Name tag', fam: 'Lower third', badge: 'canvas', status: 'exists',
+  name: 'Name tag', fam: 'Lower third', badge: 'canvas', status: 'exists', dated: true,
   when: '0.5 s after a person first speaks or appears.',
   from: 'Her profile, or typed', render: 'Canvas · overlayDraw.ts — the name card',
   img: { p: 't05', w: 'heroB' },
-  style: { clean: 'Bold name, lighter handle, 95 → 100%', cozy: 'Handwritten with a doodled underline', quiet: 'Light caps, tracked', cinematic: 'Tracked caps, no box', film: 'Typed on paper tape at −1°', playful: 'A die-cut sticker tag at −3°', hype: 'A coloured slab slides in, 3-frame flash' },
+  style: { clean: 'Bold name, lighter handle, 95 → 100%', cozy: 'Handwritten with a doodled underline', quiet: 'Light caps, tracked', cinematic: 'Tracked caps, no box', film: 'Typed on paper tape at −1°; 64 px higher while the date shows', playful: 'A die-cut sticker tag at −3°', hype: 'A coloured slab slides in, 3-frame flash' },
   sfx: { cozy: 'paper rustle', film: 'tape click', playful: 'bubble pop', hype: 'whoosh' },
   plan() {
     const look = env.look, t0 = snapHit(900), r0 = t0 + stag(100), od = outDur(look)
     const out = snapEnd(Math.min(t0 + look.dur + 3000, env.L - od - 60))
     return { t0, r0, out, keys: [{ t: t0, l: look.id === 'film' ? 'Tape on — typed' : 'Name slides 24 px in, clip wipe' }, { t: r0, l: 'Handle follows 100 ms later' }, { t: out, l: look.id === 'film' ? 'Off — hard' : 'Mirrored out' }], sfxT: t0 }
   },
-  draw(g, t, P) { nameTag(g, g.c, t, P.t0, P.r0, P.out, g.wide ? 96 : 120, g.wide ? 650 : 1090, 'Sarah', '@sarahvlogs') },
+  draw(g, t, P) { nameTag(g, g.c, t, P.t0, P.r0, P.out, g.wide ? 96 : 120, (g.wide ? 650 : 1090) - g.lift, 'Sarah', '@sarahvlogs') },
 }
 
 // 9 · Numbered place + recap ------------------------------------------
@@ -1248,7 +1335,7 @@ EL[9] = {
   when: 'Places worth saving: one card per place, then a 1.5–2.5 s recap, in pages of 3 on 9:16.',
   from: 'Place names she kept or typed', render: 'Canvas · overlayDraw.ts — new kind: list',
   img: { p: 't32', w: 't13' },
-  style: { clean: 'White notes card, tabular numerals, round ticks', cozy: 'Notebook scrap at −2°, hand-drawn ticks', quiet: '', cinematic: 'Numbered serif, no card', film: 'Index card with a red-pen tick', playful: 'Coloured number circles, bouncing ticks', hype: '' },
+  style: { clean: 'White notes card, tabular numerals, round ticks', cozy: 'Notebook scrap at −2°, hand-drawn ticks', quiet: '', cinematic: 'Numbered serif, no card', film: 'Index card with a red-pen tick', playful: 'Coloured number circles on dark pills, bouncing ticks', hype: '' },
   sfx: { cozy: 'pencil', film: 'tape click', playful: 'ding' },
   plan() {
     const id = env.look.id
@@ -1298,7 +1385,7 @@ EL[9] = {
       })
       c.restore()
     } else if (id === 'cinematic') {
-      shadow(g, c, 14, 'rgba(0,0,0,.4)')
+      legible(g, c)
       ITEMS.forEach((s, i) => {
         if (t < P.at[i]) return
         const a = inProg(look, t, P.at[i]), ry = y + 40 + rowH * i
@@ -1325,14 +1412,18 @@ EL[9] = {
       const cols = ['#FF6FA8', '#7BD3F7', '#FFD84D']
       ITEMS.forEach((s, i) => {
         if (t < P.at[i]) return
-        const p = inProg(look, t, P.at[i]), e = Math.max(0, p * (1 - q)), ry = y + 50 + (rowH + 10) * i
-        c.save(); c.globalAlpha = clamp(e * 3) * dimOf(i); c.translate(x + 40, ry); c.scale(lerp(0.4, 1, e), lerp(0.4, 1, e)); c.translate(-(x + 40), -ry)
-        shadow(g, c, 12, 'rgba(0,0,0,.3)', 4)
+        const p = inProg(look, t, P.at[i]), e = Math.max(0, p * (1 - q)), ry = y + 50 + (rowH + 10) * i, a = clamp(e * 3)
+        c.save(); c.globalAlpha = a; c.translate(x + 40, ry); c.scale(lerp(0.4, 1, e), lerp(0.4, 1, e)); c.translate(-(x + 40), -ry)
+        // each place sits on its own dark pill, so white words hold over leaves; a covered item dims
+        // its words only — the pill and the number stay, so the list keeps its shape
+        c.font = F.pop(800, 46); const sw = c.measureText(s).width
+        rr(c, x - 4, ry - 44, sw + 186, 88, 20); c.fillStyle = 'rgba(0,0,0,.6)'; c.fill()
+        shadow(g, c, 8, 'rgba(0,0,0,.3)', 3)
         c.beginPath(); c.arc(x + 40, ry, 38, 0, Math.PI * 2); c.fillStyle = cols[i]; c.fill(); noShadow(c)
         c.font = F.pop(900, 42); c.textAlign = 'center'; c.fillStyle = i === 2 ? '#1d1400' : '#fff'; c.fillText(String(i + 1), x + 40, ry + 2)
-        c.textAlign = 'left'; shadow(g, c, 12, 'rgba(0,0,0,.5)', 2); c.font = F.pop(800, 46); c.fillStyle = '#fff'; c.fillText(s, x + 98, ry + 2)
+        c.textAlign = 'left'; c.font = F.pop(800, 46); c.fillStyle = '#fff'; c.globalAlpha = a * dimOf(i); c.fillText(s, x + 98, ry + 2); c.globalAlpha = a
         const tk = tickU(i)
-        if (tk > 0) { const b = CURVE.back(tk), tx = x + 120 + c.measureText(s).width; noShadow(c); c.beginPath(); c.arc(tx, ry, 24 * b, 0, Math.PI * 2); c.fillStyle = '#fff'; c.fill(); tick(c, tx - 2, ry + 2, 0.55 * b, '#2eb872', 1, 6) }
+        if (tk > 0) { const b = CURVE.back(tk), tx = x + 98 + sw + 46; c.beginPath(); c.arc(tx, ry, 24 * b, 0, Math.PI * 2); c.fillStyle = '#fff'; c.fill(); tick(c, tx - 2, ry + 2, 0.55 * b, '#2eb872', 1, 6) }
         c.restore()
       })
     }
@@ -1362,15 +1453,19 @@ EL[10] = {
     fillAll(c, g, '#000', 0.2 * clamp((t - 2000) / 400))
     if (t >= P.t0) {
       const p = id === 'cinematic' ? CURVE.inout(clamp((t - P.t0) / 1400)) : inProg(look, t, P.t0), xf = cardXf(look, p, 0)
-      c.save(); c.textAlign = 'center'; c.textBaseline = 'middle'; shadow(g, c, 18, 'rgba(0,0,0,.45)', 2)
+      c.save(); c.textAlign = 'center'; c.textBaseline = 'middle'; legible(g, c)
       applyXf(c, xf, cx, cy)
       if (id === 'film' && t > 3100) c.globalAlpha *= clamp(1 - (t - 3100) / 500) * (0.55 + 0.45 * rnd(Math.floor(t / 42)))
       if (id === 'clean') { c.font = F.int(600, g.wide ? 84 : 72); c.fillStyle = '#fff'; c.fillText('A day out with Sarah', cx, cy) }
       else if (id === 'cozy') { c.font = F.cav(700, 118); c.fillStyle = '#F6EBD9'; if (g.wide) c.fillText('a day out with sarah', cx, cy); else { c.fillText('a day out', cx, cy - 62); c.fillText('with sarah', cx, cy + 62) } }
       else if (id === 'quiet') { c.font = F.gar(400, 84, 1); c.fillStyle = '#EFE8DD'; c.fillText('A day out with Sarah', cx, cy) }
       else if (id === 'cinematic') { c.font = F.gar(400, 70); c.fillStyle = '#fff'; c.fillText('A day out with Sarah', cx, cy); c.fillStyle = 'rgba(255,255,255,.6)'; c.fillRect(cx - 60 * p, cy + 64, 120 * p, 1.5) }
-      else if (id === 'film') { c.font = F.cou(700, 60); c.fillStyle = '#F5EEDC'; c.fillText('a day out with sarah', cx, cy) }
-      else if (id === 'playful') { noShadow(c); shadow(g, c, 0, 'rgba(70,30,0,.45)', 9); c.font = F.pop(900, 84); c.fillStyle = '#FFD84D'; if (g.wide) c.fillText('A day out with Sarah', cx, cy); else { c.fillText('A day out', cx, cy - 50); c.fillText('with Sarah', cx, cy + 50) } }
+      else if (id === 'film') { c.font = F.cou(700, 60); c.fillStyle = '#F5EEDC'; typed(c, 'a day out with sarah', cx, cy) }
+      else if (id === 'playful') {
+        c.font = F.pop(900, 84); c.fillStyle = '#FFD84D'
+        const put = () => { if (g.wide) c.fillText('A day out with Sarah', cx, cy); else { c.fillText('A day out', cx, cy - 50); c.fillText('with Sarah', cx, cy + 50) } }
+        put(); shadow(g, c, 0, 'rgba(70,30,0,.5)', 9); put()
+      }
       else if (id === 'hype') { c.font = F.ant(g.wide ? 150 : 160); c.fillStyle = '#fff'; if (g.wide) c.fillText('A DAY OUT WITH SARAH', cx, cy); else { c.fillText('A DAY OUT', cx, cy - 84); c.fillText('WITH SARAH', cx, cy + 84) } }
       c.restore()
     }
@@ -1427,11 +1522,11 @@ EL[12] = {
 
 // 13 · Freeze + label --------------------------------------------------
 EL[13] = {
-  name: 'Freeze + label', fam: 'Peak', badge: 'mix', status: 'new',
+  name: 'Freeze + label', fam: 'Peak', badge: 'mix', status: 'new', dated: true,
   when: 'Only when the creator adds it — proposed in the Part tab under Moments.',
   from: 'A typed name or place', render: 'ffmpeg loop (source span shortens, frame count unchanged) + Canvas label',
   img: { p: ['t12', 't13'], w: ['t12', 't13'] },
-  style: { clean: 'Dim, plus a small sans label', cozy: 'Sepia, a handwritten name and a doodle arrow', quiet: '', cinematic: 'Slow desaturate, serif name, silent', film: 'Black and white, typed name', playful: 'Record scratch, sticker tag, doodle arrow', hype: 'Name slams in with a 2-frame flash' },
+  style: { clean: 'Dim, plus a small sans label', cozy: 'Sepia, a handwritten name and a doodle arrow', quiet: '', cinematic: 'Slow desaturate, serif name, silent', film: 'Black and white, typed name; 64 px higher while the date shows', playful: 'Record scratch, sticker tag, doodle arrow', hype: 'Name slams in with a 2-frame flash' },
   sfx: { cozy: 'pencil', film: 'shutter', playful: 'record scratch', hype: 'impact' },
   plan() {
     const look = env.look, id = look.id
@@ -1458,13 +1553,13 @@ EL[13] = {
   },
   draw(g, t, P) {
     if (t >= P.back) return
-    const c = g.c, id = g.look.id, x = g.wide ? 96 : 120, y = g.wide ? 690 : 1130
+    const c = g.c, id = g.look.id, x = g.wide ? 96 : 120, y = (g.wide ? 690 : 1130) - g.lift
     if (id === 'hype' && t >= P.F0 && t < P.F0 + 67) fillAll(c, g, '#fff', 0.8 * (1 - (t - P.F0) / 67))
     if (id === 'film') {
-      if (t >= P.lab) { c.save(); c.textBaseline = 'top'; c.font = F.cou(700, 48); c.fillStyle = '#F5EEDC'; shadow(g, c, 10, 'rgba(0,0,0,.6)'); const n = Math.min(5, Math.floor((t - P.lab) / stag(40)) + 1); c.fillText('sarah'.slice(0, n), x, y); c.restore() }
+      if (t >= P.lab) { c.save(); c.textBaseline = 'top'; c.font = F.cou(700, 48); c.fillStyle = '#F5EEDC'; legible(g, c); const n = Math.min(5, Math.floor((t - P.lab) / stag(40)) + 1); typed(c, 'sarah'.slice(0, n), x, y); c.restore() }
     } else if (id === 'cinematic') {
       const a = CURVE.inout(clamp((t - P.lab) / 1000))
-      if (a > 0) { c.save(); c.textBaseline = 'top'; c.globalAlpha = a; shadow(g, c, 12, 'rgba(0,0,0,.5)'); c.font = F.gar(400, 64, 1); c.fillStyle = '#fff'; c.fillText('Sarah', x, y); c.restore() }
+      if (a > 0) { c.save(); c.textBaseline = 'top'; c.globalAlpha = a; legible(g, c); c.font = F.gar(400, 64, 1); c.fillStyle = '#fff'; c.fillText('Sarah', x, y); c.restore() }
     } else {
       nameTag(g, c, t, P.lab, P.lab + stag(100), P.back + 100, x, y, 'Sarah', '@sarahvlogs')
     }
@@ -1708,7 +1803,7 @@ class Tile {
   constructor(E, frame, extra = {}) {
     this.E = E; this.frame = frame
     const [f, l, c] = frame.querySelectorAll('canvas')
-    this.cv = { f, l, c }; this.ctx = { f: f.getContext('2d'), l: l.getContext('2d'), c: c.getContext('2d') }
+    this.cv = { f, l, c }; this.ctx = { f: f.getContext('2d'), l: l.getContext('2d'), c: floorEdges(c.getContext('2d')) }
     this.plateEl = frame.querySelector('.plate'); this.pillEl = frame.querySelector('.pill'); this.liveEl = frame.querySelector('.live')
     this.fill = extra.fill; this.marks = extra.marks; this.sfxEl = extra.sfxEl; this.lanes = extra.lanes; this.big = !!extra.big
     this.t0 = performance.now(); this.pt = 0; this.visible = true; this.guides = false; this.k = 1; this.lastHit = null; this.lastLive = null
@@ -1743,7 +1838,9 @@ class Tile {
     const E = this.E, P = this.P, t = this.time(now)
     this.pt = t
     const W = env.wide ? 1920 : 1080, H = env.wide ? 1080 : 1920
-    const g = { f: this.ctx.f, l: this.ctx.l, c: this.ctx.c, k: this.k, W, H, wide: env.wide, look: env.look, bright: !!E.bright }
+    // Film stamps its date on every shot; the tiles whose words sit in the bottom band show it, so the lift is visible
+    const dated = env.look.id === 'film' && E.dated && !P.plate
+    const g = { f: this.ctx.f, l: this.ctx.l, c: this.ctx.c, k: this.k, W, H, wide: env.wide, look: env.look, bright: !!E.bright, t, lift: dated ? DATE_LIFT : 0 }
     for (const x of [g.f, g.l, g.c]) { x.setTransform(g.k, 0, 0, g.k, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = 'source-over'; x.textAlign = 'left'; x.textBaseline = 'alphabetic'; x.setLineDash([]); noShadow(x); x.clearRect(0, 0, W, H) }
     g.f.fillStyle = '#000'; g.f.fillRect(0, 0, W, H)
     if (E.foot) E.foot(g, t, P); else still(g, E.key())
@@ -1754,7 +1851,7 @@ class Tile {
     const vg = env.look.vignette
     if (vg) { const c = g.c; c.save(); c.translate(W / 2, H / 2); c.scale(W / 2, H / 2); const gr = c.createRadialGradient(0, 0, 0, 0, 0, Math.SQRT2); gr.addColorStop(0.55, 'rgba(0,0,0,0)'); gr.addColorStop(1, `rgba(0,0,0,${vg})`); c.fillStyle = gr; c.fillRect(-1, -1, 2, 2); c.restore() }
     if (P.plate) fillAll(g.f, g, '#0c0b09', 0.58)
-    else if (E.draw) E.draw(g, t, P)
+    else { if (dated) filmDate(g, g.c); if (E.draw) E.draw(g, t, P) }
     if (this.guides) drawGuides(g, E)
     if (this.fill) this.fill.style.transform = `scaleX(${t / P.L})`
     if (this.sfxEl && P.sfx) { const hit = t >= P.sfxT && t < P.sfxT + 260; if (hit !== this.lastHit) { this.sfxEl.classList.toggle('hit', hit); this.lastHit = hit } }
@@ -1772,6 +1869,12 @@ function drawGuides(g, E) {
   c.fillStyle = 'rgba(233,199,143,.16)'
   if (!g.wide) { c.fillRect(780, 840, 300, 1080); c.fillStyle = 'rgba(233,199,143,.9)'; c.save(); c.translate(1050, 1500); c.rotate(-Math.PI / 2); c.textAlign = 'center'; c.fillText('App buttons', 0, 0); c.restore() }
   else { c.fillRect(0, 810, g.W, 108); c.fillStyle = 'rgba(233,199,143,.9)'; c.textBaseline = 'middle'; c.fillText('YouTube’s own subtitles', 96, 864) }
+  if (g.look.id === 'film') {
+    // the corner Film's date keeps for itself; captions in the bottom band lift 64 px while it shows
+    const s = filmDateSpot(g), iw = dateInk(FILM_DATE, s.h), r = [s.ax - iw - 12, s.by - s.h - 8, iw + 12, s.h + 16]
+    c.save(); c.setLineDash([8, 6]); c.strokeStyle = 'rgba(255,154,60,.95)'; c.strokeRect(...r)
+    c.fillStyle = 'rgba(255,154,60,.95)'; c.textBaseline = 'bottom'; c.textAlign = 'left'; c.fillText('Date corner', r[0], r[1] - 6); c.restore()
+  }
   if (E.id <= 10 || E.id === 13) {
     const key = Array.isArray(E.key()) ? E.key()[0] : E.key()
     c.strokeStyle = 'rgba(229,156,143,.95)'; c.setLineDash([10, 8]); c.fillStyle = 'rgba(229,156,143,.95)'; c.textBaseline = 'top'
@@ -1851,52 +1954,82 @@ function build() {
 }
 
 // ------------------------------------------------------------------ vibe band + chips
+// the strip's 120×64 entrance curve: x is time over the entrance, y is progress (room above 1 for overshoot)
+const CX = (u) => 6 + u * 108, CY = (v) => 55 - v * 40
 function curvePath(look) {
-  const X = (u) => 12 + u * 190, Y = (v) => 128 - v * 88
   let d = ''
-  for (let i = 0; i <= 120; i++) { const u = i / 120, v = inProg(look, u * look.dur, 0); d += `${i ? 'L' : 'M'}${X(u).toFixed(1)},${Y(v).toFixed(1)}` }
+  for (let i = 0; i <= 96; i++) { const u = i / 96, v = inProg(look, u * look.dur, 0); d += `${i ? 'L' : 'M'}${CX(u).toFixed(1)},${CY(v).toFixed(1)}` }
   return d
 }
+// the one-line version of each vibe's joins, for the strip; the full rule sits under “More about”
+const JOIN_SHORT = {
+  clean: 'Straight cuts; a dip at day changes', cozy: 'Soft 8-frame fade; a cream dip', quiet: 'Straight cuts; long fades on matches',
+  cinematic: 'Dip to black; a silent whip', film: 'A light leak over the cut', playful: 'A pastel flash on a downbeat', hype: 'A whip and a whoosh; drop flashes',
+}
 function renderBand() {
-  const L = LOOKS[env.look.id], hitU = tHit(L) / L.dur
+  const L = LOOKS[env.look.id], hitU = tHit(L) / L.dur, hx = CX(hitU).toFixed(1)
   const kinds = (arr) => arr.map((k) => KIND[k]).join(' · ')
   const offered = []
   if (L.fit.star.length) offered.push(`<b>Default</b> for ${kinds(L.fit.star)}`)
   if (L.fit.card.length) offered.push(`<b>Shown</b> for ${kinds(L.fit.card)}`)
   if (L.fit.more.length) offered.push(`<b>Under More vibes</b> for ${kinds(L.fit.more)}`)
+  const exit = L.id === 'film' ? 'Off, hard — no fade' : L.id === 'hype' ? '150 ms fade' : `0.6× mirror · ${Math.round(L.dur * 0.6)} ms`
+  const over = /^0/.test(L.overshoot) ? 'no overshoot' : `${L.overshoot} overshoot`
+  const tagH = `<span class="tag ${L.measured ? 'measured' : 'prior'}">${L.measured ? 'measured' : 'prior'}</span>`
   $('#vband').innerHTML = `
-    <div class="vb-name">
-      <div class="eyebrow">The vibe</div>
-      <div class="vb-title">${L.name}</div>
-      <p class="vb-line">${L.line}</p>
-      <div class="vb-pal">${L.pal.map((c) => `<div><i style="background:${c}"></i>${c}</div>`).join('')}</div>
-      <p class="vb-fonts"><b>Words:</b> ${L.fonts}<br><span class="faint">Here ${L.here}.</span></p>
+    <div class="vb-strip">
+      <div class="vb-name">
+        <div class="vb-head"><div class="vb-title">${L.name}</div><div class="vb-pal" role="img" aria-label="Colours ${L.pal.join(', ')}">${L.pal.map((c) => `<i style="background:${c}" title="${c}"></i>`).join('')}</div></div>
+        <p class="vb-line">${L.line}</p>
+      </div>
+      <div class="vb-curve">
+        <svg viewBox="0 0 120 64" aria-label="Entrance curve, ${L.curve}, ${L.dur} ms">
+          <line x1="6" y1="55" x2="114" y2="55" stroke="#322c25"/>
+          <line x1="6" y1="15" x2="114" y2="15" stroke="#322c25" stroke-dasharray="2 3"/>
+          <line x1="${hx}" y1="5" x2="${hx}" y2="60" stroke="#e9c78f" stroke-opacity=".6" stroke-dasharray="2 2"/>
+          <path d="${curvePath(L)}" fill="none" stroke="#c9dcc1" stroke-width="1.8" stroke-linejoin="round"/>
+          <circle id="curveDot" r="3.5" cx="6" cy="55" fill="#efe8dd"/>
+        </svg>
+        <p class="cap"><b>${L.curve}</b>${tagH}<br>${L.dur} ms · hits at ${tHit(L)} ms</p>
+      </div>
+      <dl class="vb-facts">
+        <div><dt>Exit</dt><dd>${exit}</dd></div>
+        <div><dt>Stagger</dt><dd>${L.stagger} ms${L.id === 'film' ? ' a letter' : ''} · ${over}</dd></div>
+        <div><dt>Holds</dt><dd>≥ ${L.hold.toFixed(1)} s · ${L.maxOn} on screen</dd></div>
+        <div><dt>Joins</dt><dd>${JOIN_SHORT[L.id]}</dd></div>
+      </dl>
+      <button class="vb-more" id="vbMore" aria-expanded="${env.more}" aria-controls="vbExtra">More about ${L.name} <span class="car">▾</span></button>
     </div>
-    <div class="vb-curve">
-      <svg viewBox="0 0 214 160" aria-label="Entrance curve">
-        <line x1="12" y1="128" x2="202" y2="128" stroke="#322c25"/>
-        <line x1="12" y1="40" x2="202" y2="40" stroke="#322c25" stroke-dasharray="3 4"/>
-        <line x1="${(12 + hitU * 190).toFixed(1)}" y1="24" x2="${(12 + hitU * 190).toFixed(1)}" y2="136" stroke="#e9c78f" stroke-opacity=".55" stroke-dasharray="2 3"/>
-        <text x="${(hitU > 0.6 ? 8 + hitU * 190 : 16 + hitU * 190).toFixed(1)}" y="18" fill="#e9c78f" font-size="9.5" text-anchor="${hitU > 0.6 ? 'end' : 'start'}" font-family="-apple-system, system-ui, sans-serif">hit · ${tHit(L)} ms</text>
-        <text x="12" y="152" fill="#72695d" font-size="9.5" font-family="-apple-system, system-ui, sans-serif">0</text>
-        <text x="202" y="152" fill="#72695d" font-size="9.5" text-anchor="end" font-family="-apple-system, system-ui, sans-serif">${L.dur} ms</text>
-        <path d="${curvePath(L)}" fill="none" stroke="#c9dcc1" stroke-width="2" stroke-linejoin="round"/>
-        <circle id="curveDot" r="4.5" cx="12" cy="128" fill="#efe8dd"/>
-      </svg>
-      <p class="cap"><b>Entrance:</b> ${L.curve}${L.stepNote ? ', ' + L.stepNote : ''} · ${L.dur} ms <span class="tag ${L.measured ? 'measured' : 'prior'}">${L.measured ? 'measured' : 'prior'}</span><br><span class="faint">${L.bez}</span></p>
-    </div>
-    <dl class="vb-tokens">
-      <dt>Exit</dt><dd>${L.id === 'film' ? 'Switches off hard' : L.id === 'hype' ? 'Fades out over 150 ms' : `Mirrors the entrance at 0.6× — ${Math.round(L.dur * 0.6)} ms`}</dd>
-      <dt>Stagger</dt><dd>${L.stagger} ms${L.staggerNote ? ' ' + L.staggerNote : ''} · overshoot ${L.overshoot}</dd>
-      <dt>Holds</dt><dd>At least ${L.hold.toFixed(1)} s · up to ${L.maxOn} on screen</dd>
-      <dt>Joins</dt><dd>${L.joins}</dd>
-      <dt>Camera</dt><dd>${L.camera}</dd>
-      <dt>Texture</dt><dd>${L.texture}</dd>
-      <dt>Sounds</dt><dd>${L.sounds} <span class="muted">· CC0, 18 dB under a voice</span></dd>
-      <dt>Music</dt><dd>${L.music}</dd>
-      <dt>Spends</dt><dd>${L.spend} <span class="muted">· capped by the kind’s budget</span></dd>
-      <dt>Offered</dt><dd>${offered.join('<br>')}</dd>
-    </dl>`
+    <div class="vb-extra" id="vbExtra" ${env.more ? '' : 'hidden'}>
+      <dl class="vb-tokens">
+        <dt>Words</dt><dd>${L.fonts} <span class="muted">· here ${L.here}</span></dd>
+        <dt>Colours</dt><dd>${L.pal.map((c) => `<span class="hex"><i style="background:${c}"></i>${c}</span>`).join('')}</dd>
+        <dt>Entrance</dt><dd>${L.curve}${L.stepNote ? ', ' + L.stepNote : ''} · ${L.dur} ms · <span class="muted">${L.bez}</span> ${tagH}</dd>
+        <dt>Stagger</dt><dd>${L.stagger} ms${L.staggerNote ? ' ' + L.staggerNote : ''} · overshoot ${L.overshoot}</dd>
+        <dt>Exit</dt><dd>${L.id === 'film' ? 'Switches off hard' : L.id === 'hype' ? 'Fades out over 150 ms' : `Mirrors the entrance at 0.6× — ${Math.round(L.dur * 0.6)} ms`}</dd>
+        <dt>Joins</dt><dd>${L.joins}</dd>
+        <dt>Camera</dt><dd>${L.camera}</dd>
+        <dt>Texture</dt><dd>${L.texture}</dd>
+        <dt>Sounds</dt><dd>${L.sounds} <span class="muted">· CC0, 18 dB under a voice</span></dd>
+        <dt>Music</dt><dd>${L.music}</dd>
+        <dt>Spends</dt><dd>${L.spend} <span class="muted">· capped by the kind’s budget</span></dd>
+        <dt>Offered</dt><dd>${offered.join('<br>')}</dd>
+      </dl>
+    </div>`
+  $('#vbMore').addEventListener('click', () => setMore(!env.more))
+}
+function setMore(on) {
+  env.more = on
+  $('#vbExtra').hidden = !on
+  $('#vbMore').setAttribute('aria-expanded', String(on))
+  syncURL()
+}
+function setHow(on) {
+  env.how = on
+  $('#how').hidden = !on
+  $('#howBtn').setAttribute('aria-expanded', String(on))
+  $('#howBtn').innerHTML = `How to read this ${on ? '▴' : '▾'}`
+  syncURL()
 }
 function renderChips() {
   $('#vchips').innerHTML = ORDER.map((id, i) => `<button class="vchip ${env.look.id === id ? 'on' : ''}" data-look="${id}" title="${LOOKS[id].line} (${i + 1})"><span class="sw">${LOOKS[id].pal.map((c) => `<i style="background:${c}"></i>`).join('')}</span>${LOOKS[id].name}</button>`).join('')
@@ -1947,7 +2080,7 @@ function setPaused(p) {
 function setJL(v) { env.jl = v; replanAll(); syncURL() }
 
 // ------------------------------------------------------------------ the enlarged sheet
-const sheet = { open: false, id: 1, tile: null }
+const sheet = { open: false, id: 1, tile: null, cur: null }
 function sizeSheet() {
   const fr = $('#shFrame'), vh = window.innerHeight
   if (env.wide) { const w = Math.min(720, window.innerWidth - 32 - 56 - 360 - 32); fr.style.width = w + 'px'; fr.style.height = Math.round((w * 9) / 16) + 'px' }
@@ -1989,38 +2122,37 @@ function renderSheetInfo() {
     <dt>In ${env.look.name}</dt><dd>${sl || '—'}</dd>
     <dt>Sound</dt><dd>${P.sfx ? `♪ ${P.sfx} — its attack lands on the hit` : E.id === 19 ? P.lead : 'None'}</dd>
     ${E.id <= 10 || E.id === 13 ? `<dt>Timing</dt><dd>${env.look.curve} · ${env.look.dur} ms in · ${env.look.id === 'film' ? 'off hard' : env.look.id === 'hype' ? '150 ms fade out' : `${Math.round(env.look.dur * 0.6)} ms out`}${env.beat ? ' · beat-locked' : ''}</dd>` : `<dt>Timing</dt><dd>Frame counts at 30 fps — see the keyframes${env.beat ? ' · cuts move onto a beat within 0.35 s' : ''}</dd>`}`
-  $('#shKeys').innerHTML = P.keys.slice().sort((a, b) => a.t - b.t).map((k) => `<li data-t="${k.t}"><span>${Math.round(k.t)} ms</span><span>${k.l}</span></li>`).join('')
+  $('#shKeys').innerHTML = sortedKeys(P).map((k, i) => `<li data-t="${k.t}"><span class="kn">${i + 1}</span><span class="ms">${Math.round(k.t)} ms</span><span>${k.l}</span></li>`).join('')
   $('#shJL').hidden = E.id !== 19
   document.querySelectorAll('#shJL [data-jl]').forEach((b) => b.classList.toggle('on', b.dataset.jl === env.jl))
   buildRuler()
 }
+/** keyframes in time order; the ruler's numbers and the table's rows both count from this list */
+const sortedKeys = (P) => P.keys.slice().sort((a, b) => a.t - b.t)
 function buildRuler() {
   const P = sheet.tile.P, L = P.L, r = $('#ruler'), minor = L > 6000 ? 500 : 100, major = L > 6000 ? 1000 : 500
+  sheet.cur = null
   const pct = (t) => `${(clamp(t, 0, L) / L) * 100}%`
   const out = ['<div class="r-axis"></div>']
   for (let t = 0; t <= L; t += minor) out.push(`<span class="r-tick ${t % major === 0 ? 'major' : ''}" style="left:${pct(t)}"></span>`)
-  for (let t = 0; t <= L; t += major) out.push(`<span class="r-ms" style="left:${pct(t)}">${t}</span>`)
+  for (let t = 0; t <= L; t += major) out.push(`<span class="r-ms${t === 0 ? ' start' : t === L ? ' end' : ''}" style="left:${pct(t)}">${t}</span>`)
   if (env.beat) for (let b = 0; b <= L; b += BEAT) out.push(`<span class="r-beat" style="left:${pct(b)}"></span>`)
-  const keys = P.keys.slice().sort((a, b) => a.t - b.t)
-  keys.forEach((k, i) => {
-    out.push(`<span class="r-key" style="left:${pct(k.t)}" title="${k.l.replace(/"/g, '&quot;')}"></span>`)
-    out.push(`<span class="r-lab" data-t="${clamp(k.t, 0, L)}">${k.l}</span>`)
+  // keyframes carry a number only; the table beside the frame carries the words under the same number
+  const W = r.clientWidth || 700, D = 17, rowEnd = [-1e9, -1e9]
+  sortedKeys(P).forEach((k, i) => {
+    const tip = `${Math.round(k.t)} ms · ${k.l}`.replace(/"/g, '&quot;')
+    out.push(`<span class="r-key" style="left:${pct(k.t)}" title="${tip}"></span>`)
+    // centre the number over its diamond; a crowded one goes up a row, and if both rows are taken it
+    // sits just right of its neighbour on whichever row frees up first
+    let cx = clamp((clamp(k.t, 0, L) / L) * W, D / 2, W - D / 2), row = rowEnd.findIndex((end) => cx - D / 2 >= end + 2)
+    if (row < 0) { row = rowEnd[0] <= rowEnd[1] ? 0 : 1; cx = rowEnd[row] + 2 + D / 2 }
+    rowEnd[row] = cx + D / 2
+    out.push(`<span class="kn r-n" data-i="${i}" style="left:${cx}px;top:${row ? 0 : 18}px" title="${tip}">${i + 1}</span>`)
   })
   if (P.sfx) out.push(`<span class="r-sfx" style="left:${pct(P.sfxT)}">♪ ${P.sfx}</span>`)
   out.push('<span class="r-head" id="rHead"></span>')
   r.innerHTML = out.join('')
-  // place each label on the lowest row where it clears its neighbours
-  const W = r.clientWidth || 700, rows = []
-  r.querySelectorAll('.r-lab').forEach((el) => {
-    const w = el.offsetWidth, cx = (Number(el.dataset.t) / L) * W
-    let left = Math.max(0, Math.min(W - w, cx - w / 2))
-    let row = rows.findIndex((end) => end < left - 10)
-    if (row < 0) { row = rows.length; rows.push(0) }
-    if (row > 2) { row = 2 }
-    rows[row] = left + w
-    el.style.left = left + 'px'; el.style.top = (36 - row * 17) + 'px'
-  })
-  $('#rFootL').textContent = `Loop ${(L / 1000).toFixed(1)} s${env.beat ? ` · ${Math.round(L / BEAT)} beats at 100 BPM` : ''} · ms from the start of the tile`
+  $('#rFootL').textContent = `Loop ${(L / 1000).toFixed(1)} s${env.beat ? ` · ${Math.round(L / BEAT)} beats at 100 BPM` : ''} · ms from the start of the tile · the numbers match the steps above`
 }
 function scrubAt(ev) {
   const r = $('#ruler').getBoundingClientRect(), u = clamp((ev.clientX - r.left) / r.width)
@@ -2029,9 +2161,14 @@ function scrubAt(ev) {
 function renderSheetFrame(now) {
   const T = sheet.tile, t = T.render(now), L = T.P.L
   const h = $('#rHead'); if (h) h.style.left = `${(t / L) * 100}%`
-  let cur = null
-  document.querySelectorAll('#shKeys li').forEach((li) => { if (Number(li.dataset.t) <= t) cur = li })
-  document.querySelectorAll('#shKeys li').forEach((li) => li.classList.toggle('now', li === cur))
+  const lis = document.querySelectorAll('#shKeys li')
+  let cur = -1
+  lis.forEach((li, i) => { if (Number(li.dataset.t) <= t) cur = i })
+  if (cur !== sheet.cur) {
+    sheet.cur = cur
+    lis.forEach((li, i) => li.classList.toggle('now', i === cur))
+    document.querySelectorAll('#ruler .r-n').forEach((n) => n.classList.toggle('now', Number(n.dataset.i) === cur))
+  }
 }
 
 // ------------------------------------------------------------------ main loop
@@ -2043,7 +2180,7 @@ function frame(now) {
   const bd = $('#beatDot')
   if (env.beat && !env.paused) { const ph = (((now - globalT0) * env.speed) % BEAT) / BEAT, k = Math.pow(1 - ph, 3); bd.style.transform = `scale(${1 + 0.9 * k})`; bd.style.opacity = String(0.45 + 0.55 * k) } else { bd.style.transform = ''; bd.style.opacity = '' }
   const cd = document.getElementById('curveDot')
-  if (cd) { const L = env.look, cyc = L.dur + 900, u = ((((now - globalT0) * env.speed) % cyc) + cyc) % cyc, v = inProg(L, u, 0); cd.setAttribute('cx', (12 + clamp(u / L.dur) * 190).toFixed(1)); cd.setAttribute('cy', (128 - v * 88).toFixed(1)) }
+  if (cd) { const L = env.look, cyc = L.dur + 900, u = ((((now - globalT0) * env.speed) % cyc) + cyc) % cyc, v = inProg(L, u, 0); cd.setAttribute('cx', CX(clamp(u / L.dur)).toFixed(1)); cd.setAttribute('cy', CY(v).toFixed(1)) }
 }
 
 // ------------------------------------------------------------------ wiring
@@ -2055,6 +2192,8 @@ function wire() {
   $('#beatBtn').addEventListener('click', () => setBeat(!env.beat))
   $('#playAll').addEventListener('click', () => { env.paused = false; restartAll(); syncControls() })
   $('#pauseBtn').addEventListener('click', () => setPaused(!env.paused))
+  $('#howBtn').addEventListener('click', (ev) => { ev.stopPropagation(); setHow(!env.how) })
+  document.addEventListener('click', (ev) => { if (env.how && !ev.target.closest('#how') && !ev.target.closest('#howBtn')) setHow(false) })
   $('#shClose').addEventListener('click', closeSheet)
   $('#shPrev').addEventListener('click', () => stepSheet(-1))
   $('#shNext').addEventListener('click', () => stepSheet(1))
@@ -2077,6 +2216,7 @@ function wire() {
     if (ev.metaKey || ev.ctrlKey || ev.altKey) return
     const k = ev.key
     if (k === 'Escape' && sheet.open) { closeSheet(); return }
+    if (k === 'Escape' && env.how) { setHow(false); return }
     if (sheet.open && k === 'ArrowLeft') { stepSheet(-1); return }
     if (sheet.open && k === 'ArrowRight') { stepSheet(1); return }
     if (k >= '1' && k <= '7') { setLook(ORDER[Number(k) - 1]); return }
@@ -2088,6 +2228,7 @@ function wire() {
 // ------------------------------------------------------------------ start
 function start() {
   syncControls(); renderChips(); renderBand(); build(); renderMeta(); wire()
+  if (env.how) setHow(true)
   // preload every still in use
   for (const id in EL) { const im = EL[id].img; [im.p, im.w].flat().forEach((k) => (HERO[k] ? img(HERO[k].f) : img(k + '.jpg'))) }
   // canvas-only faces must be asked for explicitly
