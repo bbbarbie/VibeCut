@@ -46,6 +46,18 @@ def main() -> int:
         check("the credit line names the work, the maker, the licence and the page",
               "“t” by who (CC BY 3.0)" in c and "https://x/2" in c, c)
 
+        print("occasion songs")
+        occ = [row(10, "by", 120, "Happy Birthday To You"), row(11, "cc0", 120, "Feliz Cumpleaños"),
+               row(12, "by", 120, "Happy Days"), row(13, "by", 120, "Sunny Walk"),
+               row(14, "by", 120, "Snow Lights"), row(15, "by", 120, "Annie's Bday Jam")]
+        occ[4]["tags"] = [{"name": "christmas"}]
+        got = {r["title"] for r in ov.parse(occ)}
+        check("birthday, holiday and other occasion songs never reach the pick",
+              got == {"Happy Days", "Sunny Walk"}, str(sorted(got)))
+        near = {"title": "Merry-go-round Weddingless Santana", "tags": ["happy"]}
+        check("whole words only: an occasion word inside another word doesn't count",
+              not ov.occasion(near), near["title"])
+
         print("search cache")
         calls = []
 
