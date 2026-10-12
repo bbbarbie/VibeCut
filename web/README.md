@@ -547,6 +547,19 @@ overlays exported in 139 s on an M5; an 11 s voiceover edit in 4 s.
 `tests/test_export.py` checks frame-exact length, the overlay window to the
 frame, and one audio track through silent clips and gaps.
 
+## What the launch tracks
+
+One workflow counts: drop a day's clips, make the two picks, watch, export.
+After every export the dialog asks one question — *Would you post this?* —
+with room for a line. The answer sits on the export's record
+(`/api/exports/{n}/verdict`), and `python -m web.backend.launchlog` reads
+every project record into the numbers the launch checklist asks for:
+completions (an export made without a typed chat edit), successes (a yes),
+failures (unreadable files, a music hunt that found nothing, exports judged
+not postable, with the words), costs (model calls, render seconds, seconds
+spent hunting music) and how much was undone. Nothing is sent anywhere; it
+is a file on this Mac.
+
 ## Out of scope
 
 Auth, database, collaboration, automatic style learning (edits are only

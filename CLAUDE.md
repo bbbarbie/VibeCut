@@ -253,6 +253,14 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   - **Voiceover mode** (`web/backend/voiceover.py`): opt-in fourth proposal
     from the creator's SRT or script. See the amended non-goal below.
 
+- **Launch log** (`web/backend/launchlog.py`, `/api/exports/{n}/verdict`,
+  the question in `Export.tsx`; launch checklist, 2026-10-11): the one
+  workflow is drop → two picks → watch → export; completion = an export
+  without a chat edit (`default_path` on the record), success = "would you
+  post this?" answered yes. Bed outcomes and verdicts are `Project.events`;
+  the CLI sums completions, failures, costs and feedback from the records.
+  `tests/test_launchlog.py`. Eval of 2026-10-11 (20 real cases from the
+  index, 20 pass) and the launch plan: `design/eval/`.
 - **The bed** (`web/backend/bed.py`, `/api/bed`, the Music switch in
   Frames; plan of 2026-10-10, step 1): choosing a story puts music under
   it and moves the cuts onto its beat, one undoable turn that lands when

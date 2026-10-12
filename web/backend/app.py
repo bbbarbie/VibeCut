@@ -1256,7 +1256,12 @@ def _bed_start(force: bool = False) -> None:
     board = copy.deepcopy(b)
 
     def on_done(job: bed.Job) -> None:
+        with LOCK:
+            if PROJECT["p"] is pr and pr is not None:
+                pr.events.append({"kind": "bed", "at": time.time(), "stage": job.stage, "why": job.why,
+                                  "source": job.source, "elapsed": round(time.time() - job.started, 1)})
         if job.stage != "done" or not job.result:
+            _save()
             return
         with LOCK:
             if BED["job"] is not job or SESSION.board is None:
@@ -1546,11 +1551,36 @@ def api_export_status(jid: str) -> dict:
     # the Export stage list it, and it is how "done" is known after a restart.
     pr = PROJECT["p"]
     if pub["stage"] == "done" and pr is not None and not any(e.get("job") == jid for e in pr.exports):
+        live = [t for t in SESSION.turns if not t.undone]
         pr.exports.append({"job": jid, "file": pub["file"], "path": pub["path"], "at": time.time(),
                            "seconds": pub["total"], "size": pub["size"], "music": pub["music"],
-                           "overlays": pub["overlays"], "bytes": os.path.getsize(pub["path"]) if pub["path"] and os.path.isfile(pub["path"]) else None})
+                           "overlays": pub["overlays"], "bytes": os.path.getsize(pub["path"]) if pub["path"] and os.path.isfile(pub["path"]) else None,
+                           # for launchlog.py: how it was made and what it cost
+                           "elapsed": pub["elapsed"], "style": pub.get("style"),
+                           "turns": len(live), "undone": sum(t.undone for t in SESSION.turns),
+                           "chat_turns": sum(1 for t in live if t.kind == "chat" and t.ops),
+                           "default_path": not any(t.kind == "chat" and t.ops for t in live)})
         _save()
     return pub
+
+
+class VerdictReq(BaseModel):
+    post: bool
+    note: str = ""
+
+
+@app.post("/api/exports/{n}/verdict")
+def api_export_verdict(n: int, req: VerdictReq) -> dict:
+    """The one question after an export -- would you post this? -- kept on
+    the export's record. It is the launch metric (launchlog.py): a
+    completion is an export, a success is a yes."""
+    pr = PROJECT["p"]
+    if pr is None or not (0 <= n < len(pr.exports)):
+        raise HTTPException(404, "no such export")
+    with LOCK:
+        pr.exports[n]["verdict"] = {"post": req.post, "note": req.note.strip()[:500], "at": time.time()}
+        pr.events.append({"kind": "verdict", "at": time.time(), "export": n, "post": req.post})
+        return _session()
 
 
 @app.get("/api/exports/{n}/file")

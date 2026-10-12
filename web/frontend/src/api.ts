@@ -99,6 +99,7 @@ export const api = {
   talkToggle: (id: string) => j<TalkState>(post('/api/talk/toggle', { id })),
   talkApply: (captions: boolean, profile: Record<string, unknown>) => j<Session>(post('/api/talk/apply', { captions, profile })),
   exportReveal: (id: string) => fetch(`/api/export/${id}/reveal`, { method: 'POST' }),
+  exportVerdict: (n: number, wouldPost: boolean, note: string) => j<Session>(post(`/api/exports/${n}/verdict`, { post: wouldPost, note })),
   // Remix: reference reels + the shelf -> one finished short, then the board
   remixStart: (req: { refs: string[]; title?: string; sub?: string; length?: number }) =>
     j<RemixJob>(post('/api/remix', req)),

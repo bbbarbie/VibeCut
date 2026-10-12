@@ -41,31 +41,40 @@ Observations worth more than the pass marks:
 - **Case 2 — rough cut.** Nothing thrown out of 42 clips. Since shake became a warning (2026-10-04) the reject rules fire only on lens-cap, blur, mis-taps and duplicates; on this shoot none applied. That may be right; it has not been judged by the creator against her own picks.
 - **Cases 12–14** passed by doing nothing (the story was already at 59 s, already at fast pace, nothing to smooth). They prove the guards, not the operations; the operations are exercised in `tests/test_smooth.py`, `test_length.py`, `test_tempo.py` on fixtures.
 
-## 2. Launch plan
+## 2. Launch plan, by the checklist
 
-The repo has no launch checklist of its own; this follows a standard one (problem and user → working build → eval → user feedback loop → failure handling → onboarding and support → privacy, licences and rollback → metrics).
+The checklist (course, Launch readiness, 2026-10-11) has five items. Each is answered with what exists in the build, what is planned, and how it is checked.
 
-**Who it's for, and the promise.** A vlogger who films 40–100 phone clips a day and will not edit. The promise is *no amateur tells*, not *beautiful* (CLAUDE.md). First user: the creator herself (sarah), who has been the only real user and the source of every product decision since 2026-09-25.
+### 2.1 One workflow, one observable outcome
 
-**Feedback from the target user, so far.** Every decision in the last fortnight came from her reactions to real builds, recorded in CLAUDE.md with dates: "skip it" (the rough-trim page, 10-07), "as simple as possible" (home, 10-06), "build" (no questions, 10-07), "you should be able to realize what kind of editing tempo we want" (tempo read from footage), "never identical shots in the edit" (repeat removal), pausing means something should change (chat on pause, 10-05), and on the remixes: "blacked out between cuts" (96 kHz AAC bug), "feels like a pause between every edit" (metronomic equal shots). Her unanswered verdicts are the next inputs: she has not yet run the 10-10/11 build (music by default, beat cuts, looks, two picks) on her shoot.
+**The workflow:** drop a day's clips → pick the frame and the look → watch → export. No chat, no timeline, no questions beyond the two picks.
 
-**Feedback loop for the next users.** Each session with a user produces three artefacts: the export they got, the turn log (what they undid is the strongest signal; undone turns are already recorded), and one sentence from them per export ("would you post this?"). Every "no" becomes a row in the calibration bad set with their shoot's exports; every reference they bring becomes a row in the good set. That is how Step 3 moves from "better than a guess" to calibrated.
+**Completion** (observable, logged automatically): an MP4 is written from that path — the export record carries `default_path: true`, meaning no typed chat edit was involved. **Success**: after the export the dialog asks *Would you post this?*; a *yes* is a success. Both are read from the project records by `python -m web.backend.launchlog`. Secondary signals already on the record: turns undone (a step the user rejected), time from clips to export, render seconds.
 
-**How failures are handled.**
+### 2.2 The eval set on the launch version
 
-- *In the product:* nothing is destructive (originals are only read), every change is one undoable turn with a computed diff, every finding carries its number and what it rests on (`pending` when the reading isn't there), and what the machine can't do on this Mac is stated where the action would be. A failed music pick, reference fetch or transcription says why and leaves the edit standing.
-- *Triage:* a failure is one of four kinds, in order of cost: (1) wrong *judgement* — the cut is legal but she wouldn't post it: goes to the calibration set, no code change until the record says which threshold; (2) *honesty* failure — the app claimed something it didn't measure: fixed first, always; (3) *crash or stall* — reproduced with a synthetic fixture in `tests/` before the fix; (4) *platform* — a Mac or key dependency not stated in the UI: the capability line is extended. Items of kind 1 are never fixed by hand-tuning a number on one example.
-- *Known failure modes going in:* a cold online music pick takes ~3 min (prefetch hides most of it; a music folder avoids it); YouTube links need a current yt-dlp; speech, places and Vision labels are macOS-only; the level-based speech mask still hears music as talking where the voice reading hasn't run; an edit with no handles past its cuts silently falls back from dissolves to cuts (it says so in the export notes).
+Section 1 above: 20 real cases at commit `eff6c5b`, 20 pass, no human assistance during the run, one eval-side measurement bug found and disclosed. Review of what the passes do and don't cover is in the observations under the table: export, preview sound, voice reading and the UI were not exercised here because the originals are unreadable from this session; three cases passed by correctly doing nothing. The launch version is this branch plus the launch-log commit; the eval script is rerun before the branch is merged.
 
-**Onboarding the first users (five, after the creator).**
+### 2.3 A small group who have the problem, invited directly, watched
 
-1. *Week 1 — the creator, this build.* She restarts her server on this branch, runs her shoot through the two picks, and answers one question per export: would she post it. Her undo log is read with her. Fixes from this go in before anyone else sees it.
-2. *Week 2 — three to five vloggers she knows,* on their own Macs. Install is `pip install -r requirements.txt`, `npm run build`, `python -m web.backend`; the home screen lists what their machine can do. Each brings one day's clips and one reference reel. A 30-minute call: they drop clips, pick a frame and a look, watch, and say what's wrong *in their words* (no editor vocabulary is expected; the app uses none). Their exports and rejected drafts join the calibration sets with their permission.
-3. *Support:* one shared channel; every report is answered with what the app measured (the seams, the findings, the bed's reply), so the conversation is about numbers not impressions. No account, no upload, nothing leaves the Mac except a reference link to yt-dlp, an Openverse query, and — only with a key — storyboard *text* to Claude.
-4. *Rights before reach:* music is CC0/BY/BY-SA only with a credit file beside every export; a no-music export exists for platform sounds; reference frames never reach an export; fonts are only the user's own.
-5. *Go / no-go for wider use:* three of five users would post one export unedited, and the calibration record has ≥ 8 rejected edits from shoots other than the creator's.
+1. **The creator first (this week).** She restarts her server on this branch and runs her Sep 22 shoot through the workflow. Someone watches the whole session: where she hesitates, what she undoes, what she says at the export. Her undo log is read with her afterwards.
+2. **Three to five vloggers she knows (next two weeks),** each invited personally, each on their own Mac, each bringing one day of their own clips and one reel they wish they'd made. A 30-minute sitting, watched, not demonstrated: they drop, pick, watch, export, and answer the one question. No editing vocabulary is expected; the app uses none. Their exports and their rejected drafts go into the calibration sets with permission.
+3. **Why this group:** they film 40–100 phone clips a day and don't edit — the problem as stated in CLAUDE.md — and they are reachable for a second session.
 
-**Rollback.** Every change is a commit on a branch; the previous build (`main` at `86fd934`) runs with the same cache and projects on disk. Projects are JSON records and survive both directions.
+### 2.4 Limits stated, permissions minimal, recovery possible
+
+- **Limits, in the product:** the home screen lists what this machine can do (on-device labels and faces, speech, places: macOS; links: yt-dlp; typed edits: a key). A disabled action says why. Every finding carries its number and what it rests on, or says *not checked*. The export dialog says what will be rendered that the preview didn't show (the grade, the push). The music chip says when nothing was found and why.
+- **Limits, to the user up front:** the promise is *no amateur tells*, not *beautiful*; thresholds are first guesses with one calibration record behind three of them; the music is a first pick from a free catalogue; captions name the time and, when the picture says it plainly, what's happening — on the creator's shoot 7 of 16 could only say the time.
+- **Permissions and data:** the app reads the clips folder and writes to the cache and the exports folder; nothing else is touched (originals are never written; projects are JSON on disk). Network: a reference link goes to yt-dlp, a mood word to Openverse; with a key, storyboard *text* only, and index frames only when the creator uses chat-on-pause or best-moment, which say so. No account, no telemetry; the launch log is a local file.
+- **Recovery:** every change is one undoable turn with a computed diff; a project reopens exactly as left after a crash or restart; a failed music pick, link fetch or transcription leaves the edit standing and says why; the previous build on `main` runs on the same cache and records. A stuck render has a Cancel button.
+
+### 2.5 Tracking, and deciding what's next
+
+`python -m web.backend.launchlog` prints, from the records: projects, completions, successes, exports judged not postable with the user's words, unreadable files, music hunts that found nothing or failed, model calls, render seconds, music-hunt seconds, and turns undone. Run after every session with a user; the numbers go into the weekly update.
+
+**Decision rule.** Each failure is one of four kinds and gets one response: (1) *judgement* — the cut is legal but they wouldn't post it: their export joins the calibration bad set and their reference the good set; no threshold moves until the next record says which; (2) *honesty* — the app claimed what it didn't measure: fixed before anything else; (3) *crash or stall* — reproduced as a fixture in `tests/` before the fix; (4) *platform* — a dependency the UI didn't state: the capability line is extended. **What to test next** is whichever of these is most frequent in the log; today, with one user, the open question is (1) on the bed and the looks, which is why the creator's own session comes before anyone else's.
+
+**Go / no-go for a wider group:** three of five would post one export unedited, and the calibration record holds at least eight rejected edits from shoots other than the creator's.
 
 ## 3. Weekly update · week ending 2026-10-11
 

@@ -40,7 +40,9 @@ export type ProjectMeta = {
   edits: number; exports: number; board: { name: string; parts: number } | null; last_export: ExportRecord | null
 }
 export type ExportRecord = { job: string; file: string; path: string; at: number; seconds: number; size: { w: number; h: number }
-  music: boolean; overlays: number; bytes: number | null }
+  music: boolean; overlays: number; bytes: number | null
+  // launch tracking (backend/launchlog.py): the one question after an export, and what it cost
+  verdict?: { post: boolean; note: string; at: number }; elapsed?: number; default_path?: boolean; undone?: number }
 export type Brief = { message: string; style: StyleAnswers; said: string; at: number; tempo?: string }
 // What this machine can do -- shown, so nothing is offered that then fails.
 export type Capabilities = { llm: boolean; speech: boolean; vision: string; links: boolean; music_folder: string | null; platform: string }
