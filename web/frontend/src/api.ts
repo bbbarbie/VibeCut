@@ -66,6 +66,7 @@ export const api = {
   autoBrief: (picks?: { format: string; look: string }) => j<Session>(post('/api/brief/auto', picks ?? {})),
   setup: () => j<SetupData>(fetch('/api/brief/setup')),
   format: (format: string) => j<Session>(post('/api/format', { format })),
+  pile: (clip: string, into: boolean) => j<Session>(post('/api/pile', { clip, into })),
   captions: (on: boolean) => j<Session>(post('/api/captions', { on })),
   bed: (on: boolean) => j<Session>(post('/api/bed', { on })),
   pace: (pace: string) => j<Session>(post('/api/pace', { pace })),

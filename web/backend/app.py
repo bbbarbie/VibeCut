@@ -1079,6 +1079,38 @@ def api_length_set(req: LengthReq) -> dict:
         return {**_session(), "length_note": said}
 
 
+class PileReq(BaseModel):
+    clip: str
+    into: bool
+
+
+@app.post("/api/pile")
+def api_pile(req: PileReq) -> dict:
+    """A clip moved between Frames' two piles, Kept (in the video) and Left
+    out: in or out of the edit as one undoable turn. The rough cut's call is
+    set to match, so Footage's stacks agree and the length slider never puts
+    back a clip the creator took out."""
+    with LOCK:
+        if not SESSION.board:
+            raise HTTPException(409, "Pick a story first.")
+        c = CLIPS.get(req.clip)
+        if c is None:
+            raise HTTPException(404, "no such clip")
+        d = PLAN["plan"].clips.get(req.clip) if PLAN["plan"] else None
+        if d and d["rejected"] == req.into:
+            action = ("keep" if d["auto_rejected"] else "auto") if req.into else ("auto" if d["auto_rejected"] else "reject")
+            PLAN["plan"] = cut.override(PLAN["plan"], req.clip, action, CLIPS)
+            WORKFLOW.revise("user", f"{action} {req.clip}")
+            SESSION.replay(CATALOG["cat"], _make_proposals)
+        windows = [s for s in _pool() if s.clip_id == req.clip]
+        ops = brief.clip_ops(SESSION.board, CATALOG["cat"], req.clip, req.into, windows)
+        if ops:
+            SESSION.add({"kind": "direct", "ops": ops,
+                         "text": f"You {'put' if req.into else 'left'} {c['name']} {'in the video' if req.into else 'out'}"},
+                        CATALOG["cat"], _make_proposals)
+        return _session()
+
+
 @app.post("/api/brief/questions")
 def api_brief_questions(req: QuestionsReq) -> dict:
     """The style questions asked once, after the first description."""
