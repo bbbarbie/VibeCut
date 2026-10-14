@@ -34,6 +34,7 @@ from pathlib import Path
 import numpy as np
 
 os.environ["VIBECUT_CACHE"] = tempfile.mkdtemp(prefix="vibecut-day-")
+os.environ["VIBECUT_EXPORTS"] = os.path.join(os.environ["VIBECUT_CACHE"], "out")   # never her Movies folder
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
