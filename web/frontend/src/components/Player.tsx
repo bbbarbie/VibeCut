@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import type { Segment } from '../types'
 import { dur } from '../format'
-import { hideStill, swapSource } from '../hold'
+import { hideStill, settleStill, swapSource } from '../hold'
 import { OverlayCanvas, type OverlayEdit, type OverlayView } from './OverlayCanvas'
 
 // One <video> element. Two drivers share it: a preview (a span or a queue
@@ -47,14 +47,28 @@ export function Player({ videoRef, backRef, veilRef, bars, segment, label, gap, 
     const src = `/api/video/${segment.clipId}`
     hideStill()
     const go = () => {
+      if (seg.current !== segment) return // another preview took over while this one loaded
       el.currentTime = segment.start
-      if (segment.autoplay) el.play().catch(() => {})
+      // A paused element after the seek is what showed black (sarah, 2026-10-14,
+      // a left-out clip in Frames): if Safari won't start it with sound once the
+      // click is long past, start it muted rather than leave nothing playing,
+      // and keep the decoded frame up either way.
+      if (segment.autoplay) {
+        el.play().catch(() => {
+          el.muted = true
+          el.play().catch(() => settleStill(el))
+        })
+      } else settleStill(el)
     }
+    // Seek once a frame has arrived, not just the metadata: Safari paints
+    // black for a seek made before any frame data is in (transport.ts does the same).
     if (el.getAttribute('src') !== src) {
-      el.addEventListener('loadedmetadata', go, { once: true })
+      el.addEventListener('loadeddata', go, { once: true })
       swapSource(el, src)
-    } else {
+    } else if (el.readyState >= 2) {
       go()
+    } else {
+      el.addEventListener('loadeddata', go, { once: true })
     }
   }, [segment, videoRef])
 
@@ -94,7 +108,9 @@ export function Player({ videoRef, backRef, veilRef, bars, segment, label, gap, 
           {backRef && <video ref={backRef} muted playsInline aria-hidden
                              className={`pointer-events-none absolute inset-0 size-full object-contain ${gap ? 'invisible' : ''}`}
                              style={{ opacity: 0 }} />}
-          {veilRef && <div ref={veilRef} className="pointer-events-none absolute inset-0 z-[3]" style={{ opacity: 0, background: 'black' }} />}
+          {/* The edit's dips and flashes; never over a clip previewed from the shelf
+              (at a fade from black it covered the whole preview: sarah, 2026-10-14). */}
+          {veilRef && <div ref={veilRef} className={`pointer-events-none absolute inset-0 z-[3] ${segment ? 'invisible' : ''}`} style={{ opacity: 0, background: 'black' }} />}
           {staged && !!bars && <>
             <div className="pointer-events-none absolute inset-x-0 top-0 z-[3] bg-black" style={{ height: `${bars * 100}%` }} />
             <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[3] bg-black" style={{ height: `${bars * 100}%` }} />

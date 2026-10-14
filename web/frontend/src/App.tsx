@@ -507,7 +507,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     return its.length ? [Math.min(...its.map((x) => x.seq_start)), Math.max(...its.map((x) => x.seq_end))] as const : null
   }
   const preview = (clipId: string, start: number, end: number, shotId: string) => {
-    transport.stop()
+    transport.lend()
     stopQueue()
     setSegment({ key: shotId + uid(), clipId, start, end, autoplay: true })
   }
