@@ -45,7 +45,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   /** a shot's start ('in') or end ('out') dragged to this source time */
   onTrimEdge?: (key: string, edge: 'in' | 'out', to: number) => void
   selectedAudio?: string | null
-  /** a sound strip clicked: its menu (louder, quieter, mute, delete) */
+  /** a sound strip clicked: its tools show in the bar below */
   onSelectAudio?: (id: string, anchor: DOMRect) => void
   /** a sound strip dragged to start at this point of the edit */
   onAudioMove?: (id: string, at: number) => void
@@ -422,7 +422,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
               const label = `Sound of shot ${a.n ?? ''}`.trim()
               return (
                 <div key={a.id}
-                     title={`${label} · ${a.mute ? 'muted' : `${Math.round(a.gain * 100)}%`}\nClick for louder, quieter, mute or delete. Drag to move it (it sticks to cuts; hold ⌥ for exact).`}
+                     title={`${label} · ${a.mute ? 'muted' : `${Math.round(a.gain * 100)}%`}\nClick to change its volume and fades. Drag to move it (it sticks to cuts; hold ⌥ for exact).`}
                      onPointerDown={(e) => {
                        if (e.button !== 0) return
                        e.stopPropagation()

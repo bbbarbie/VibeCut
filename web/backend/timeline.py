@@ -147,8 +147,9 @@ def audio_lane(board: dict | None, items: list[dict]) -> dict:
     a strip under the picture at its place, and which shots now play silent."""
     snd = (board or {}).get("sound") or {}
     num = {it["key"]: it["n"] for it in items}
-    strips = [{"id": x["id"], "at": x["at"], "dur": round(x["end"] - x["start"], 4), "gain": x["gain"],
+    strips = [{"id": x["id"], "at": x["at"], "dur": round((x["end"] - x["start"]) / (x.get("speed") or 1.0), 4), "gain": x["gain"],
                "mute": x["mute"], "clip_id": x["shot"].split(":")[0], "shot": x["shot"],
-               "src_start": x["start"], "n": num.get(x["from"])}
+               "src_start": x["start"], "n": num.get(x["from"]),
+               "fade_in": x.get("fade_in", 0.0), "fade_out": x.get("fade_out", 0.0)}
               for x in snd.get("strips") or []]
     return {"strips": strips, "off": [k for k in snd.get("off") or [] if k in num]}

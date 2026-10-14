@@ -23,6 +23,7 @@ import type { ClassifyReq } from './components/Remember'
 import { Shelf } from './components/Shelf'
 import { SmoothButton, Story, type PlayItem, type Selection } from './components/Story'
 import { Timeline, type Marks } from './components/Timeline'
+import { ShotBar, StripBar } from './components/ShotBar'
 import { Footage, type Importing } from './components/Footage'
 import { fromDataTransfer, fromInput, takeHandoff, type Picked } from './drop'
 import { bytes, uid } from './format'
@@ -81,7 +82,8 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const [pending, setPending] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)   // Frames: timeline entry
   const [storySel, setStorySel] = useState<Selection>(null)
-  const [menu, setMenu] = useState<{ kind: 'story-shot' | 'frames-shot' | 'gap' | 'audio' | 'speed' | 'volume' | 'turn'; key: string; anchor: DOMRect } | null>(null)
+  const [menu, setMenu] = useState<{ kind: 'story-shot' | 'frames-shot' | 'gap'; key: string; anchor: DOMRect } | null>(null)
+  const [selAudio, setSelAudio] = useState<string | null>(null)   // Frames: a sound strip (extract audio)
   const [swap, setSwap] = useState<{ key: string; thumb: string; id: string } | null>(null)
   const [undoable, setUndoable] = useState<{ turn: number; text: string } | null>(null)
   // The rough cut and its gate.
@@ -642,7 +644,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
         trimBy(units, mod ? 'beat' : e.shiftKey ? 'second' : 'frame')
       } else if (e.key === 'Delete' || e.key === 'Backspace') deleteSelection(e.altKey)
       else if (e.key === '?') setHelp((h) => !h)
-      else if (e.key === 'Escape') { setHelp(false); setSelected(null) }
+      else if (e.key === 'Escape') { setHelp(false); setSelected(null); setSelAudio(null) }
       else handled = false
       if (handled) e.preventDefault()
     }
@@ -713,56 +715,6 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
         { label: 'Keep it', onClick: () => {} },
       ] }
     }
-    if (menu.kind === 'audio') {
-      // Sound taken off a shot (extract audio): its own level, mute, delete.
-      const a = tl.audio?.strips.find((x) => x.id === menu.key)
-      if (!a) return { title: '', items: [] }
-      const name = `the sound of shot ${a.n ?? ''}`.replace(/ $/, '')
-      const pct = Math.round(a.gain * 100)
-      const level = (g: number) => run([{ op: 'edit_audio', audio: a.id, gain: Math.round(g * 100) / 100 }],
-        `You set ${name} to ${Math.round(g * 100)}%`)
-      return { title: `Sound of shot ${a.n ?? ''} · ${a.mute ? 'muted' : `${pct}%`}`, items: [
-        { label: 'Louder', hint: `${Math.min(200, pct + 25)}%`, disabled: a.mute || pct >= 200, onClick: () => level(Math.min(2, a.gain + 0.25)) },
-        { label: 'Quieter', hint: `${Math.max(0, pct - 25)}%`, disabled: a.mute || pct <= 0, onClick: () => level(Math.max(0, a.gain - 0.25)) },
-        ...(pct !== 100 && !a.mute ? [{ label: 'Back to as filmed', hint: '100%', onClick: () => level(1) }] : []),
-        { label: a.mute ? 'Unmute' : 'Mute', onClick: () => run([{ op: 'edit_audio', audio: a.id, mute: !a.mute }], `You ${a.mute ? 'unmuted' : 'muted'} ${name}`) },
-        { label: 'Play from here', onClick: () => { timelineOwns(); transport.seek(a.at); transport.play(1) } },
-        { label: 'Delete this sound', danger: true, onClick: () => run([{ op: 'drop_audio', audio: a.id }], `You deleted ${name}`) },
-      ] }
-    }
-    if (menu.kind === 'speed' || menu.kind === 'volume' || menu.kind === 'turn') {
-      // The shot menu's everyday fixes, one small menu each (board.set_shot).
-      const fx = (patch: Record<string, unknown>, label: string) => run([{ op: 'set_shot', shot: menu.key, ...patch }], label)
-      const n = it?.n ?? ''
-      if (menu.kind === 'speed') {
-        const now = it?.speed ?? 1
-        return { title: `Speed of shot ${n} · ${now}×`, items: ([0.5, 1, 1.5, 2, 4] as const).map((x) => ({
-          label: x === 1 ? 'Normal speed' : x < 1 ? 'Slow motion' : x === 4 ? 'Fast forward' : 'Faster',
-          hint: `${x}×${now === x ? ' ✓' : ''}`, disabled: now === x,
-          onClick: () => fx({ speed: x }, x === 1 ? `You put shot ${n} back to normal speed` : `You set shot ${n} to ${x}×`),
-        })) }
-      }
-      if (menu.kind === 'volume') {
-        const g = it?.gain ?? 1
-        const pct = Math.round(g * 100)
-        const level = (x: number) => fx({ gain: Math.round(x * 100) / 100 }, `You set shot ${n}'s sound to ${Math.round(x * 100)}%`)
-        return { title: `Sound of shot ${n} · ${it?.mute ? 'muted' : `${pct}%`}`, items: [
-          { label: 'Louder', hint: `${Math.min(200, pct + 25)}%`, disabled: !!it?.mute || pct >= 200, onClick: () => level(Math.min(2, g + 0.25)) },
-          { label: 'Quieter', hint: `${Math.max(0, pct - 25)}%`, disabled: !!it?.mute || pct <= 0, onClick: () => level(Math.max(0, g - 0.25)) },
-          ...(pct !== 100 && !it?.mute ? [{ label: 'Back to as filmed', hint: '100%', onClick: () => level(1) }] : []),
-          { label: it?.mute ? 'Unmute' : 'Mute', onClick: () => fx({ mute: !it?.mute }, `You ${it?.mute ? 'unmuted' : 'muted'} shot ${n}`) },
-        ] }
-      }
-      const r = it?.rotate ?? 0
-      return { title: `Turn and crop shot ${n}`, items: [
-        { label: 'Turn right', hint: '↻ 90°', onClick: () => fx({ rotate: (r + 90) % 360 }, `You turned shot ${n} right`) },
-        { label: 'Turn left', hint: '↺ 90°', onClick: () => fx({ rotate: (r + 270) % 360 }, `You turned shot ${n} left`) },
-        it?.fill
-          ? { label: 'Show the whole picture', onClick: () => fx({ fill: false }, `Shot ${n} shows its whole picture`) }
-          : { label: 'Fill the frame (crop the edges)', onClick: () => fx({ fill: true }, `Shot ${n} fills the frame`) },
-        ...(r || it?.fill ? [{ label: 'Back to as filmed', onClick: () => fx({ rotate: 0, fill: false }, `You put shot ${n} back as filmed`) }] : []),
-      ] }
-    }
     const openSwap = () => e && setSwap({ key: menu.key, thumb: e.thumb, id: e.id })
     if (menu.kind === 'story-shot') {
       return { title: `This shot · ${e ? (e.end - e.start).toFixed(1) : '?'}s`, items: [
@@ -782,11 +734,6 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       { label: 'Start the shot here', hint: 'Q', onClick: () => trimToPlayhead('in', false) },
       { label: 'End the shot here', hint: 'W', onClick: () => trimToPlayhead('out', false) },
       { label: 'Swap for a different shot…', onClick: openSwap },
-      // a small menu each; opened after this one closes
-      { label: 'Speed…', hint: `${it?.speed ?? 1}×`, onClick: () => { const m = menu; setTimeout(() => setMenu({ ...m, kind: 'speed' }), 0) } },
-      { label: 'Volume…', hint: it?.mute ? 'muted' : `${Math.round((it?.gain ?? 1) * 100)}%`, disabled: tl.audio?.off.includes(menu.key),
-        onClick: () => { const m = menu; setTimeout(() => setMenu({ ...m, kind: 'volume' }), 0) } },
-      { label: 'Turn and crop…', onClick: () => { const m = menu; setTimeout(() => setMenu({ ...m, kind: 'turn' }), 0) } },
       tl.audio?.off.includes(menu.key)
         ? { label: 'Its sound is on its own strip below', disabled: true, onClick: () => {} }
         : { label: 'Take the sound off (extract audio)', onClick: () => run([{ op: 'extract_audio', shot: menu.key }], `You took the sound off shot ${it?.n}`) },
@@ -1159,18 +1106,43 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                         timelineOwns()
                         setSelected(key)
                         const it = tl.items.find((x) => x.key === key)
-                        if (key && anchor && it) setMenu({ kind: it.kind === 'gap' ? 'gap' : 'frames-shot', key, anchor })
+                        setSelAudio(null)
+                        // a shot's tools are the bar below; only an empty space gets a menu
+                        if (key && anchor && it?.kind === 'gap') setMenu({ kind: 'gap', key, anchor })
                       }}
                       onReorder={reorder} onInsertShot={insertShot} onClear={clear} onHelp={() => setHelp(true)}
                       overlays={ovData.items} selectedOverlay={selOverlay} onSelectOverlay={selectOverlay}
                       onOverlayEdit={editOverlayOnTimeline}
-                      selectedAudio={menu?.kind === 'audio' ? menu.key : null}
-                      onSelectAudio={(id, anchor) => { timelineOwns(); setSelected(null); setMenu({ kind: 'audio', key: id, anchor }) }}
+                      selectedAudio={selAudio}
+                      onSelectAudio={(id) => { timelineOwns(); setSelected(null); setSelAudio(id) }}
                       onAudioMove={(id, at) => {
                         const a = tl.audio?.strips.find((x) => x.id === id)
                         run([{ op: 'edit_audio', audio: id, at }], `You moved the sound of shot ${a?.n ?? ''} to ${clock(at)}`)
                       }} />
-            {undoable && <UndoToast text={undoable.text} onUndo={() => { toggle(undoable.turn); setUndoable(null) }} />}
+            {(() => {
+              const strip = selAudio ? tl.audio?.strips.find((x) => x.id === selAudio) : undefined
+              if (strip) return (
+                <StripBar strip={strip}
+                          onEdit={(patch, label) => run([{ op: 'edit_audio', audio: strip.id, ...patch }], label)}
+                          onDelete={() => { run([{ op: 'drop_audio', audio: strip.id }], `You deleted the sound of shot ${strip.n ?? ''}`); setSelAudio(null) }} />
+              )
+              const it = selected ? tl.items.find((x) => x.key === selected) : undefined
+              if (!it || it.kind !== 'shot') return null
+              const e = entry(it.key)
+              return (
+                <ShotBar item={it} extracted={!!tl.audio?.off.includes(it.key)}
+                         onFix={(patch, label) => run([{ op: 'set_shot', shot: it.key, ...patch }], label)}
+                         onSplit={() => {
+                           const t = phStore.get()
+                           cutAt(t > it.seq_start + fr && t < it.seq_end - fr ? t : (it.seq_start + it.seq_end) / 2)
+                         }}
+                         onSwap={() => e && setSwap({ key: it.key, thumb: e.thumb, id: e.id })}
+                         onDelete={() => { run([{ op: 'drop_shot', shot: it.key }], `You removed shot ${it.n}`); setSelected(null) }}
+                         onExtract={() => run([{ op: 'extract_audio', shot: it.key }], `You took the sound off shot ${it.n}`)} />
+              )
+            })()}
+            {undoable && <UndoToast text={undoable.text} onUndo={() => { toggle(undoable.turn); setUndoable(null) }}
+                                    lift={!!selAudio || tl.items.some((x) => x.key === selected && x.kind === 'shot')} />}
             {flash && level !== 'frames' && <Flash text={flash} />}
           </main>
         ) : (
@@ -1279,9 +1251,10 @@ function MoreMenu({ items, onClose }: { items: { label: string; hint?: string; o
   )
 }
 
-function UndoToast({ text, onUndo }: { text: string; onUndo: () => void }) {
+function UndoToast({ text, onUndo, lift }: { text: string; onUndo: () => void; lift?: boolean }) {
   return (
-    <div className="pointer-events-auto absolute bottom-4 left-1/2 z-30 flex max-w-[90%] -translate-x-1/2 items-center gap-3 rounded-xl border border-line bg-zinc-900 px-4 py-2 shadow-2xl shadow-black/60">
+    // lifted over the shot's tool bar, so it never covers a slider
+    <div style={lift ? { bottom: 168 } : undefined} className="pointer-events-auto absolute bottom-4 left-1/2 z-30 flex max-w-[90%] -translate-x-1/2 items-center gap-3 rounded-xl border border-line bg-zinc-900 px-4 py-2 shadow-2xl shadow-black/60">
       <span className="truncate text-[12px] text-zinc-200">{text}</span>
       <button type="button" onClick={onUndo} className="shrink-0 rounded-md bg-zinc-700 px-2.5 py-1 text-[12px] text-zinc-100 hover:bg-zinc-600">Undo</button>
     </div>

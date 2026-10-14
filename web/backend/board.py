@@ -60,7 +60,10 @@ AUDIO_GAIN_MAX = 2.0   # 200%: louder than filmed, short of distorting most phon
 # From the shot menu, never chat. Kept on the entry, so a cut keeps them.
 OPS = OPS + ("set_shot",)
 SPEEDS = (0.25, 4.0)           # the slowest and fastest a shot may play
-SHOT_FX = ("speed", "gain", "mute", "rotate", "fill")
+SHOT_FX = ("speed", "gain", "mute", "rotate", "fill", "mirror", "fade_in", "fade_out")
+FX_PLAIN = {"speed": 1.0, "gain": 1.0, "mute": False, "rotate": 0, "fill": False, "mirror": False,
+            "fade_in": 0.0, "fade_out": 0.0}
+FADE_MAX = 5.0   # a shot's own sound fading in or out, seconds
 
 FRAME = 1 / 30  # sequence frame; the smallest piece a cut or trim may leave
 
@@ -192,7 +195,9 @@ def _split(board: dict, k: str, at: float) -> str | None:
     if not (e["start"] < at < e["end"]):
         raise OpError(f"{at:.2f}s is outside that shot ({e['start']:.2f}–{e['end']:.2f}s)")
     second = {"key": _fresh_key(board, f"{e['id']}~{int(round(at * 1000))}"), "id": e["id"],
-              "start": round(at, 3), "end": e["end"], **{f: e[f] for f in SHOT_FX if f in e}}
+              "start": round(at, 3), "end": e["end"],
+              **{f: e[f] for f in SHOT_FX if f in e and f != "fade_in"}}
+    e.pop("fade_out", None)   # the fade in stays at the start, the fade out goes with the end
     e["end"] = round(at, 3)
     beat["shots"].insert(i + 1, second)
     off = (board.get("sound") or {}).get("off")
@@ -245,7 +250,12 @@ def _shot_fx(b: dict, op: dict) -> None:
         e["rotate"] = r % 360
     if "fill" in op:
         e["fill"] = bool(op["fill"])
-    for f, plain in (("speed", 1.0), ("gain", 1.0), ("mute", False), ("rotate", 0), ("fill", False)):
+    if "mirror" in op:
+        e["mirror"] = bool(op["mirror"])
+    for f in ("fade_in", "fade_out"):
+        if f in op:
+            e[f] = round(max(0.0, min(FADE_MAX, float(op[f]))), 2)
+    for f, plain in FX_PLAIN.items():
         if f in e and e[f] == plain:
             del e[f]
 
@@ -267,8 +277,15 @@ def _sound_op(b: dict, op: dict, kind: str, new_id) -> None:
         sid = op.get("id") or new_id()
         op["id"] = sid
         snd["off"].append(k)
-        snd["strips"].append({"id": sid, "shot": e["id"], "start": e["start"], "end": e["end"],
-                              "at": round(seq_start(b, k), 3), "gain": 1.0, "mute": False, "from": k})
+        # The strip sounds as the shot did: its speed, volume and fades come
+        # with it (a 4x shot's sound stays as long as the shot, not 4x longer).
+        strip = {"id": sid, "shot": e["id"], "start": e["start"], "end": e["end"],
+                 "at": round(seq_start(b, k), 3), "gain": 0.0 if e.get("mute") else float(e.get("gain", 1.0)),
+                 "mute": False, "from": k}
+        for f in ("speed", "fade_in", "fade_out"):
+            if e.get(f):
+                strip[f] = e[f]
+        snd["strips"].append(strip)
         return
     strip = next((x for x in snd["strips"] if x["id"] == op.get("audio")), None)
     if strip is None:
@@ -283,6 +300,13 @@ def _sound_op(b: dict, op: dict, kind: str, new_id) -> None:
         strip["mute"] = bool(op["mute"])
     if "at" in op:
         strip["at"] = round(max(0.0, float(op["at"])), 3)
+    for f in ("fade_in", "fade_out"):
+        if f in op:
+            v = round(max(0.0, min(FADE_MAX, float(op[f]))), 2)
+            if v:
+                strip[f] = v
+            else:
+                strip.pop(f, None)
 
 
 def _prune(board: dict) -> None:
@@ -760,7 +784,7 @@ def _describe_sound(a: dict | None, b: dict | None) -> list[dict]:
             o = ea.get(key(s))
             if o is None or is_gap(s):
                 continue
-            for f, plain in (("speed", 1.0), ("gain", 1.0), ("mute", False), ("rotate", 0), ("fill", False)):
+            for f, plain in FX_PLAIN.items():
                 x, y = o.get(f, plain), s.get(f, plain)
                 if x == y:
                     continue
@@ -768,8 +792,12 @@ def _describe_sound(a: dict | None, b: dict | None) -> list[dict]:
                         "gain": lambda: f"Shot volume {round(x * 100)}% → {round(y * 100)}%",
                         "mute": lambda: "Muted a shot" if y else "Unmuted a shot",
                         "rotate": lambda: f"Turned a shot to {y}°",
-                        "fill": lambda: "Shot fills the frame (edges cropped)" if y else "Shot shows its whole picture"}[f]()
-                lines.append({"kind": "sound" if f in ("gain", "mute") else "trimmed", "beat": bt["id"],
+                        "fill": lambda: "Shot fills the frame (edges cropped)" if y else "Shot shows its whole picture",
+                        "mirror": lambda: "Mirrored a shot" if y else "Shot no longer mirrored",
+                        "fade_in": lambda: f"Shot's sound fades in over {y:g}s" if y else "Shot's sound starts without a fade",
+                        "fade_out": lambda: f"Shot's sound fades out over {y:g}s" if y else "Shot's sound ends without a fade",
+                        }[f]()
+                lines.append({"kind": "sound" if f in ("gain", "mute", "fade_in", "fade_out") else "trimmed", "beat": bt["id"],
                               "shot": key(s), "text": text})
     sa = {x["id"]: x for x in (a.get("sound") or {}).get("strips", [])}
     sb_ = {x["id"]: x for x in (b.get("sound") or {}).get("strips", [])}
@@ -783,6 +811,10 @@ def _describe_sound(a: dict | None, b: dict | None) -> list[dict]:
             lines.append({"kind": "sound", "text": "Muted a sound strip" if y["mute"] else "Unmuted a sound strip"})
         if x["gain"] != y["gain"]:
             lines.append({"kind": "sound", "text": f"Sound strip volume {round(x['gain'] * 100)}% → {round(y['gain'] * 100)}%"})
+        for f, word in (("fade_in", "in"), ("fade_out", "out")):
+            if x.get(f, 0) != y.get(f, 0):
+                lines.append({"kind": "sound", "text": f"Sound strip fades {word} over {y.get(f, 0):g}s"
+                              if y.get(f) else f"Sound strip no longer fades {word}"})
         if x["at"] != y["at"]:
             lines.append({"kind": "sound", "text": f"Moved a sound strip {'later' if y['at'] > x['at'] else 'earlier'} by {abs(y['at'] - x['at']):.2f}s"})
     if (a.get("music") or None) != (b.get("music") or None):

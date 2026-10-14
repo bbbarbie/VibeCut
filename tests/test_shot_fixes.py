@@ -73,8 +73,8 @@ def frame(path: Path, t: float, w: int = 32, h: int = 18) -> np.ndarray:
 
 def main() -> int:
     A, B = TMP / "a.mov", TMP / "b.mov"
-    # A: brightness climbs with time (so speed shows in the picture), 440 Hz.
-    ff("-f", "lavfi", "-i", "nullsrc=s=320x180:r=30:d=8,geq=lum='min(255,T*30)':cb=128:cr=128",
+    # A: brightness climbs with time (so speed shows) and to the right (so a mirror shows), 440 Hz.
+    ff("-f", "lavfi", "-i", "nullsrc=s=320x180:r=30:d=8,geq=lum='min(255,T*20+X/3)':cb=128:cr=128",
        "-f", "lavfi", "-i", "sine=f=440:d=8:sample_rate=48000", "-c:v", "libx264", "-pix_fmt", "yuv420p",
        "-c:a", "pcm_s16le", "-shortest", str(A))
     ff("-f", "lavfi", "-i", "color=c=gray:s=320x180:r=30:d=8", "-f", "lavfi",
@@ -131,6 +131,16 @@ def main() -> int:
     s.toggle(tm.id, cat, mk)
     s.toggle(tv.id, cat, mk)
 
+    print("fades")
+    tf = fix(fade_in=1.0, fade_out=0.5)
+    x = mix()
+    early, mid, late = energy(x, 440, 0.0, 0.2), energy(x, 440, 1.5, 3.0), energy(x, 440, 3.75, 3.95)
+    check("fade in: quiet at the start, full by 1 s", early < 0.25 * full and abs(mid / full - 1) < 0.03,
+          f"start {early / full:.2f}, middle {mid / full:.2f}")
+    check("fade out: quiet in the last 0.25 s", late < 0.5 * full, f"{late / full:.2f}")
+    check("the next shot isn't faded", abs(energy(x, 880, 4.2, 5.8) - energy(before, 880, 4.2, 5.8)) < 0.01)
+    s.toggle(tf.id, cat, mk)
+
     print("a cut keeps the fixes")
     tc = fix(speed=2, gain=0.5)
     s.add({"kind": "direct", "text": "cut", "ops": [{"op": "split", "shot": "A:0", "at": 3.0}]}, cat, mk)
@@ -152,15 +162,21 @@ def main() -> int:
             s.toggle(t.id, cat, mk)
         return out
     plain, fast = render(), render(speed=2)
-    # source brightness = 30 * source seconds; the shot starts at 1 s
+    # source brightness = 20 * source seconds (+ a left-right ramp); the shot starts at 1 s
     b_plain, b_fast = frame(plain, 1.0).mean(), frame(fast, 1.0).mean()
-    check("1 s in, plain shows ~2 s of source, 2x shows ~3 s", b_fast - b_plain > 20,
+    check("1 s in, plain shows ~2 s of source, 2x shows ~3 s", b_fast - b_plain > 12,
           f"brightness {b_plain:.0f} -> {b_fast:.0f}")
     turned = frame(render(rotate=90), 0.5, 32, 18)
     side = (turned[:, :4].mean() + turned[:, -4:].mean()) / 2
     check("a quarter turn: tall picture, bars at the sides", side < 8 and turned[:, 12:20].mean() > 20,
           f"sides {side:.0f}, middle {turned[:, 12:20].mean():.0f}")
     filled = frame(render(rotate=90, fill=True), 0.5, 32, 18)
+    flat = frame(plain, 0.5)
+    mirrored = frame(render(mirror=True), 0.5)
+    check("a mirror swaps left and right", flat[:, -6:].mean() - flat[:, :6].mean() > 30
+          and mirrored[:, :6].mean() - mirrored[:, -6:].mean() > 30,
+          f"right-left {flat[:, -6:].mean() - flat[:, :6].mean():.0f} -> {mirrored[:, -6:].mean() - mirrored[:, :6].mean():.0f}")
+
     check("…filled: no bars", filled[:, :4].mean() > 20, f"sides {filled[:, :4].mean():.0f}")
 
     print()

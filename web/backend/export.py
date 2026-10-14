@@ -383,7 +383,8 @@ def _shot(job: Job, it: dict, out: Path, tr: dict | None = None) -> None:
     src = ["-ss", f"{it['src_start'] - tr['head'] / FPS:.4f}", "-t", f"{d * speed + 0.5:.4f}", "-i", c["path"]]
     # the shot menu's fixes: a quarter turn, then its speed (frames retimed;
     # its sound comes from the mix, stretched there)
-    turn = {90: "transpose=1,", 180: "hflip,vflip,", 270: "transpose=2,"}.get(int(it.get("rotate") or 0), "")
+    turn = ("hflip," if it.get("mirror") else "") + \
+        {90: "transpose=1,", 180: "hflip,vflip,", 270: "transpose=2,"}.get(int(it.get("rotate") or 0), "")
     retime = f"setpts=PTS/{speed:.6f}," if speed != 1 else ""
     vfade, afade = "", ""
     if tr["fade_in"]:

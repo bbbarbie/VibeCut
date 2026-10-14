@@ -125,6 +125,11 @@ def main() -> int:
     check("muted is silent", energy(mix(), 440, 0.2, 1.8) < 0.01)
     check("…and the 880 shot still plays", energy(mix(), 880, 2.2, 4.8) > 0.9 * energy(before, 880, 2.2, 4.8))
     s.toggle(m.id, cat, mk)
+    fd = s.add({"kind": "direct", "text": "fade", "ops": [{"op": "edit_audio", "audio": sid, "fade_in": 1.0}]}, cat, mk)
+    x = mix()
+    check("a strip's fade in: quiet at first, full by 1 s", energy(x, 440, 0.0, 0.2) < 0.25 * energy(x, 440, 1.2, 1.8),
+          f"{energy(x, 440, 0.0, 0.2):.3f} vs {energy(x, 440, 1.2, 1.8):.3f}")
+    s.toggle(fd.id, cat, mk)
     d = s.add({"kind": "direct", "text": "del", "ops": [{"op": "drop_audio", "audio": sid}]}, cat, mk)
     check("deleted: gone, the shot stays silent", energy(mix(), 440, 0.2, 1.8) < 0.01 and not s.board["sound"]["strips"])
     s.toggle(d.id, cat, mk)
@@ -143,6 +148,19 @@ def main() -> int:
     lane = timeline.build(s.board, {}, None)["audio"]
     check("the timeline knows both pieces are silent and where the strip is",
           len(lane["off"]) == 2 and lane["strips"][0]["at"] == 0.0 and lane["strips"][0]["mute"], str(lane))
+
+    print("a sped-up shot's sound comes off as it plays")
+    s.add({"kind": "direct", "text": "fast", "ops": [{"op": "set_shot", "shot": "B:0", "speed": 2.0, "gain": 0.5}]}, cat, mk)
+    seq = [it for it in timeline.layout(s.board) if it["key"] == "B:0"][0]
+    heard = energy(mix(), 880, seq["seq_start"] + 0.2, seq["seq_end"] - 0.2)
+    s.add({"kind": "direct", "text": "off", "ops": [{"op": "extract_audio", "shot": "B:0"}]}, cat, mk)
+    st = [x for x in timeline.build(s.board, {}, None)["audio"]["strips"] if x["shot"] == "B:0"][0]
+    check("the strip is as long as the 2x shot, not the filmed seconds",
+          abs(st["dur"] - (seq["seq_end"] - seq["seq_start"])) < 0.01 and st["gain"] == 0.5, str(st))
+    after = mix()
+    check("and sounds the same as before it came off", abs(energy(after, 880, seq["seq_start"] + 0.2, seq["seq_end"] - 0.2) / heard - 1) < 0.05
+          and energy(after, 880, seq["seq_end"] + 0.1, seq["seq_end"] + 1.0) < 0.01,
+          f"{energy(after, 880, seq['seq_start'] + 0.2, seq['seq_end'] - 0.2):.3f} vs {heard:.3f}")
 
     print()
     if failures:

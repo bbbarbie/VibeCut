@@ -20,6 +20,9 @@ export type SeqItem = {
   mute?: boolean
   rotate?: number    // quarter turns, clockwise
   fill?: boolean     // cover the frame, edges cropped
+  mirror?: boolean   // flipped left to right
+  fade_in?: number   // its own sound fading in / out, seconds
+  fade_out?: number
 }
 
 /** Index of the item under t (binary search). The very end belongs to the

@@ -133,7 +133,7 @@ export type TimelineData = { fps: number; total: number; items: SeqItem[]; targe
   // sits in the edit, its level, and which shots now play silent.
   audio?: { strips: SoundStrip[]; off: string[] } }
 export type SoundStrip = { id: string; at: number; dur: number; gain: number; mute: boolean
-  clip_id: string; shot: string; src_start: number; n: number | null }
+  clip_id: string; shot: string; src_start: number; n: number | null; fade_in: number; fade_out: number }
 
 // Words on screen. Anchored to the edit, its end, a part or a shot; the
 // server resolves each to sequence time (start/end) for drawing.

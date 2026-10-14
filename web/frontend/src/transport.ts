@@ -417,7 +417,8 @@ export function dress(el: HTMLVideoElement | null, it: SeqItem | null | undefine
   if (!el) return
   const r = it?.kind === 'shot' ? (it.rotate ?? 0) : 0
   const fill = it?.kind === 'shot' && !!it.fill
-  let transform = '', fit = fill ? 'cover' : ''
+  const flip = it?.kind === 'shot' && it.mirror ? ' scaleX(-1)' : ''   // export mirrors before turning
+  let transform = flip.trim(), fit = fill ? 'cover' : ''
   if (r) {
     fit = 'contain'
     const W = el.clientWidth || 1, H = el.clientHeight || 1
@@ -425,7 +426,7 @@ export function dress(el: HTMLVideoElement | null, it: SeqItem | null | undefine
     const c = Math.min(W / vw, H / vh)        // the picture as shown, unturned
     const [w, h] = r % 180 ? [vh * c, vw * c] : [vw * c, vh * c]   // ...and turned
     const k = fill ? Math.max(W / w, H / h) : Math.min(W / w, H / h)
-    transform = `rotate(${r}deg) scale(${k})`
+    transform = `rotate(${r}deg) scale(${k})${flip}`
   }
   // the held frame laid over the picture (hold.ts) is the same picture: dress it alike
   const still = hold ? el.parentElement?.querySelector<HTMLCanvasElement>('canvas[data-hold]') : null

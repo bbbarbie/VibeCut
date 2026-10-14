@@ -188,7 +188,8 @@ def plan(items: list[dict], clips: dict, joins: list[dict] | None = None,
             spans.append(None)
             continue
         spans.append({"key": it.get("key"), "speed": float(it.get("speed") or 1.0),
-                      "gain": 0.0 if it.get("mute") else float(1.0 if it.get("gain") is None else it["gain"]), "clip_id": it["clip_id"], "src": [float(it["src_start"]), float(it["src_end"])],
+                      "gain": 0.0 if it.get("mute") else float(1.0 if it.get("gain") is None else it["gain"]),
+                      "fades": (float(it.get("fade_in") or 0.0), float(it.get("fade_out") or 0.0)), "clip_id": it["clip_id"], "src": [float(it["src_start"]), float(it["src_end"])],
                       "seq": [float(it["seq_start"]), float(it["seq_end"])],
                       "fin": (MICRO_S, "micro"), "fout": (MICRO_S, "micro")})
     notes: list[str] = []
@@ -319,6 +320,18 @@ def render(items: list[dict], clips: dict, *, joins: list[dict] | None = None,
             env[:fi] *= _ramp(fi, s["fin"][1], True)
         if fo:
             env[length - fo:] *= _ramp(fo, s["fout"][1], False)
+        # the shot's own fades (the Sound bar), over its place in the edit
+        # (from where its picture starts to where it ends: a carried join's
+        # overlap is the crossfade's, not the fade's)
+        fa, fz = s["fades"]
+        if fa or fz:
+            q = s["seq"][0] + np.arange(length, dtype=np.float32) / SR
+            start = s["seq"][0] + (s["fin"][0] if s["fin"][1] == "cross" else 0.0)
+            end = s["seq"][1] - (s["fout"][0] if s["fout"][1] == "cross" else 0.0)
+            if fa:
+                env *= np.clip((q - start) / fa, 0, 1)
+            if fz:
+                env *= np.clip((end - q) / fz, 0, 1)
         seg *= (env * original * s["gain"])[:, None]
         # clip to the edit: a carry before the first frame or after the last is dropped
         a, z = max(0, q0), min(n, q0 + length)
@@ -360,16 +373,32 @@ def _place(out: np.ndarray, st: dict, clips: dict, original: float) -> None:
     snd = decode(c["path"]) if c else None
     if snd is None or st["gain"] <= 0:
         return
-    s0, s1 = int(round(st["src"][0] * SR)), int(round(st["src"][1] * SR))
-    s0, s1 = max(0, s0), min(len(snd), s1)
     q0 = int(round(st["at"] * SR))
-    if s1 <= s0 or q0 >= len(out):
-        return
-    seg = np.array(snd[s0:s1], np.float32)
+    speed = float(st.get("speed") or 1.0)
+    if abs(speed - 1.0) > 1e-6:
+        got = stretched(c["path"], st["src"][0], st["src"][1], speed)
+        if got is None or not len(got) or q0 >= len(out):
+            return
+        seg = np.array(got, np.float32)
+    else:
+        s0, s1 = int(round(st["src"][0] * SR)), int(round(st["src"][1] * SR))
+        s0, s1 = max(0, s0), min(len(snd), s1)
+        if s1 <= s0 or q0 >= len(out):
+            return
+        seg = np.array(snd[s0:s1], np.float32)
     f = min(len(seg) // 2, int(round(MICRO_S * SR)))
     if f:
         seg[:f] *= _ramp(f, "micro", True)[:, None]
         seg[-f:] *= _ramp(f, "micro", False)[:, None]
+    fa, fz = st.get("fades") or (0.0, 0.0)
+    if fa or fz:
+        q = np.arange(len(seg), dtype=np.float32) / SR
+        env = np.ones(len(seg), np.float32)
+        if fa:
+            env *= np.clip(q / fa, 0, 1)
+        if fz:
+            env *= np.clip((len(seg) / SR - q) / fz, 0, 1)
+        seg *= env[:, None]
     z = min(len(out), q0 + len(seg))
     out[q0:z] += seg[:z - q0] * float(st["gain"]) * original
 
@@ -383,7 +412,9 @@ def strips_of(board: dict | None) -> dict | None:
         return None
     return {"off": list(snd.get("off") or []),
             "strips": [{"clip_id": x["shot"].split(":")[0], "src": [x["start"], x["end"]], "at": x["at"],
-                        "gain": 0.0 if x.get("mute") else float(x.get("gain", 1.0))}
+                        "speed": float(x.get("speed") or 1.0),
+                        "gain": 0.0 if x.get("mute") else float(x.get("gain", 1.0)),
+                        "fades": (float(x.get("fade_in") or 0.0), float(x.get("fade_out") or 0.0))}
                        for x in snd.get("strips") or [] if not x.get("mute")]}
 
 
@@ -414,7 +445,8 @@ def spec(items: list[dict], clips: dict, board_joins: dict | None, transitions: 
     """Everything the mix depends on, as plain data -- its hash is the file name."""
     return {
         "items": [{k: it.get(k) for k in ("key", "kind", "clip_id", "src_start", "src_end", "seq_start",
-                                          "seq_end", "beat_id", "speed", "gain", "mute")} for it in items],
+                                          "seq_end", "beat_id", "speed", "gain", "mute", "fade_in", "fade_out")}
+                  for it in items],
         "files": {cid: [c.get("path"), c.get("duration")] for cid, c in clips.items()
                   if any(it.get("clip_id") == cid for it in items)
                   or any(x["clip_id"] == cid for x in (sound or {}).get("strips") or [])},
