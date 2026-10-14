@@ -33,7 +33,7 @@ import { go } from './router'
 import { deriveStage, reached, STAGES, type Stage } from './stage'
 import { phStore, snapStore, transport, transportStore, useStore } from './transport'
 import { Button, Confirm, cx, Wordmark } from './ui'
-import type { Capabilities, Clip, Msg, Option, Overlay, OverlayKind, Overlays as OverlayData, Segment, Session, Shot, StyleAnswers, StyleQuestion, TimelineData } from './types'
+import type { Capabilities, Clip, Msg, Option, Overlay, OverlayKind, Overlays as OverlayData, Segment, Session, StyleAnswers, StyleQuestion, TimelineData } from './types'
 
 const hello: Msg = {
   id: 'hello', role: 'app', at: 0,
@@ -121,16 +121,12 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const caps = session?.capabilities ?? NO_CAPS
   const brief = session?.brief ?? null
   const parts = useMemo(() => partsOf(tl.items), [tl.items])
+  const inEdit = useMemo(() => new Set(tl.items.flatMap((x) => (x.clip_id ? [x.clip_id] : []))), [tl.items])
   const overlayView = useMemo(() => ({ items: ovData.items, style: ovData.style, parts }), [ovData, parts])
   const profileInitial = useMemo(() => {
     try { return loadProfile(window.localStorage).profile.name.trim().charAt(0).toUpperCase() || '☺' } catch { return '☺' }
   }, [])
 
-  const shots = useMemo(() => {
-    const m = new Map<string, { clip: Clip; shot: Shot }>()
-    for (const c of clips) for (const s of c.shots) m.set(s.id, { clip: c, shot: s })
-    return m
-  }, [clips])
 
   const refresh = useCallback(async () => {
     const [p, s] = await Promise.all([api.project(), api.session()])
@@ -511,7 +507,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     return its.length ? [Math.min(...its.map((x) => x.seq_start)), Math.max(...its.map((x) => x.seq_end))] as const : null
   }
   const preview = (clipId: string, start: number, end: number, shotId: string) => {
-    transport.stop()
+    transport.lend()
     stopQueue()
     setSegment({ key: shotId + uid(), clipId, start, end, autoplay: true })
   }
@@ -879,9 +875,6 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       : queue.source.startsWith('card:') ? `“${session?.proposals?.options.find((o) => `card:${o.key}` === queue.source)?.name ?? 'Option'}”`
         : queue.source.startsWith('beat:') ? `“${beatById(queue.source.slice(5))?.title ?? 'This part'}”` : 'Preview'} — shot ${queue.index + 1} of ${queue.items.length}`
     : segment ? (clips.find((x) => x.id === segment.clipId)?.name ?? 'One shot') : 'Nothing playing'
-  const activeShot = queue ? queue.items[queue.index]?.id ?? null
-    : segment ? [...shots.values()].find((v) => v.clip.id === segment.clipId && v.shot.start <= segment.start
-      && segment.start < v.shot.end)?.shot.id ?? null : null
 
   // ---- screens -------------------------------------------------------------
   if (opened !== 'ok') {
@@ -1077,11 +1070,22 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                 {framesTab === 'words' && overlaysPanel ? (
                   <div className="min-h-0 flex-1 overflow-y-auto p-3">{overlaysPanel}</div>
                 ) : (
-                  <Shelf clips={clips} activeShot={activeShot} busy={!!importing}
+                  <Shelf clips={clips} inEdit={inEdit} busy={!!importing}
                          onPick={(fl) => importPicked(fromInput(fl))}
-                         onPreview={(c, sh) => preview(c.id, sh.start, sh.end, sh.id)}
-                         onAdd={(_, sh) => insertShot(sh.id, tl.items.length)}
-                         onUseRejected={(c) => cutOverride(c.id, 'keep')} />
+                         onPreview={(c) => {
+                           // what the video uses of it, else its first shot
+                           const it = tl.items.find((x) => x.clip_id === c.id && x.shot_id)
+                           const sh = c.shots[0]
+                           if (it) preview(c.id, it.src_start, it.src_end, it.shot_id!)
+                           else if (sh) preview(c.id, sh.start, sh.end, sh.id)
+                         }}
+                         onMove={async (c, into) => {
+                           try {
+                             const r = await api.pile(c.id, into)
+                             setSession(r); offerUndo(r)
+                             setClips((await api.project()).clips) // the rough cut's call moved with it
+                           } catch (e) { note((e as Error).message) }
+                         }} />
                 )}
               </div>
               <div className="flex w-[44%] min-w-[320px] flex-col">{player(true)}{pauseChat}</div>

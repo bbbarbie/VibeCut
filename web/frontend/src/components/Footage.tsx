@@ -16,7 +16,7 @@ import { Button, Notice, Progress, cx } from '../ui'
 
 export type Importing = { text: string; frac: number | null } | null
 
-type Side = 'kept' | 'out'
+export type Side = 'kept' | 'out'
 type Decide = 'keep' | 'reject' | 'auto'
 
 const side = (c: Clip): Side => (c.cut?.rejected ? 'out' : 'kept')
@@ -191,7 +191,7 @@ export function Footage({ clips, importing, errors, vision, onPick, onRetry, onD
 
 // A fanned pile like a photo stack in Messages: the last few clips dealt on
 // top, a count, and the whole pile opens on a click or a sideways swipe.
-function Stack({ side: s, clips, onOpen }: { side: Side; clips: Clip[]; onOpen: () => void }) {
+export function Stack({ side: s, clips, onOpen }: { side: Side; clips: Clip[]; onOpen: () => void }) {
   const down = useRef<number | null>(null)
   const top = clips.slice(-3)
   const tilt = ['-rotate-6 -translate-x-3', 'rotate-4 translate-x-3', 'rotate-0']

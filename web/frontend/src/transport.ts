@@ -91,7 +91,18 @@ export class Transport {
       else this.stop()
     }
     if (phStore.get() > total) phStore.set(total)
-    if (!transportStore.get().playing) this.showFrame(phStore.get())
+    if (!transportStore.get().playing && !this.lent) this.showFrame(phStore.get())
+  }
+
+  // While the player shows a single clip from the shelf (a preview), the edit
+  // must not take the picture back: a session refresh used to put the edit's
+  // frame (or, mid-load, nothing) where the clip should be playing.
+  private lent = false
+  /** Hand the primary element to a preview until the edit next seeks or plays. */
+  lend() {
+    this.stop()
+    this.lent = true
+    this.seekQueued = null
   }
 
   private state(p: Partial<TransportState>) {
@@ -121,6 +132,7 @@ export class Transport {
 
   /** Move the playhead. Paused: shows that frame. */
   seek(t: number) {
+    this.lent = false
     t = Math.max(0, Math.min(t, this.total))
     phStore.set(t)
     if (!transportStore.get().playing) this.showFrame(t)
@@ -139,10 +151,11 @@ export class Transport {
         this.seekQueued = null
         const k = locate(this.items, at)
         const it = this.items[k]
-        if (!it) break
+        if (!it || this.lent) break
         if (it.kind === 'gap') { this.state({ gap: true }); continue }
         this.state({ gap: false })
         await this.ensureClip(it.clip_id!, toSource(it, at))
+        if (this.lent) break
         if (this.video) this.video.currentTime = Math.min(toSource(it, at), it.src_end - EPS)
         this.paint(at)
       }
@@ -152,6 +165,7 @@ export class Transport {
   }
 
   play(rate = 1) {
+    this.lent = false
     if (!this.items.length || !this.video) return
     hideStill()
     cancelAnimationFrame(this.raf)

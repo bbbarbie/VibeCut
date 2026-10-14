@@ -483,21 +483,10 @@ def length_ops(board: dict | None, cat, pool: list, target: float, vision: bool)
                 continue
             if vision and any(alike(s, k) for k in kept):
                 continue
-            # next to the shot filmed just before it, else before the first one filmed after it
-            when = lambda sid: cat.shots[sid].when if sid in cat.shots else None  # noqa: E731
-            spots = [(bi, i, when(e["id"])) for bi, bt in enumerate(beats) for i, e in enumerate(bt["shots"])
-                     if e["id"] and when(e["id"]) is not None and bi >= hook]
-            if s.when is not None and spots:
-                before = [t for t in spots if t[2] <= s.when]
-                bi, i = (max(before, key=lambda t: t[2])[:2] if before else min(spots, key=lambda t: t[2])[:2])
-                at = i + 1 if before else i
-            elif beats:
-                bi, at = len(beats) - 1, len(beats[-1]["shots"])
-            else:
+            op = _put_back(beats, hook, cat, s)
+            if op is None:
                 break
-            beats[bi]["shots"].insert(at, {"key": s.id, "id": s.id, "len": d, "gap": False})
-            ops.append({"op": "add_shot", "shot": s.id, "beat": beats[bi]["id"], "to_index": at,
-                        "start": round(s.start, 3), "end": round(s.end, 3)})
+            ops.append(op)
             on.add(s.id)
             kept.append(s)
             total += d
@@ -508,6 +497,54 @@ def length_ops(board: dict | None, cat, pool: list, target: float, vision: bool)
         return ops, (f"Now about {say_length(total)} (was {say_length(was)}): put back {added} "
                      f"shot{'s' * (added != 1)}, each where it happened.{more} Undo takes them out again.")
     return [], f"It's already about {say_length(total)}."
+
+
+def _put_back(beats: list, hook: int, cat, s) -> dict | None:
+    """The add_shot that puts `s` (its window) back where it happened: next to
+    the shot filmed just before it, else before the first one filmed after it.
+    Updates `beats` (length_ops' light copy of the board) to match."""
+    when = lambda sid: cat.shots[sid].when if sid in cat.shots else None  # noqa: E731
+    spots = [(bi, i, when(e["id"])) for bi, bt in enumerate(beats) for i, e in enumerate(bt["shots"])
+             if e["id"] and when(e["id"]) is not None and bi >= hook]
+    if s.when is not None and spots:
+        before = [t for t in spots if t[2] <= s.when]
+        bi, i = (max(before, key=lambda t: t[2])[:2] if before else min(spots, key=lambda t: t[2])[:2])
+        at = i + 1 if before else i
+    elif beats:
+        bi, at = len(beats) - 1, len(beats[-1]["shots"])
+    else:
+        return None
+    beats[bi]["shots"].insert(at, {"key": s.id, "id": s.id, "len": s.end - s.start, "gap": False})
+    return {"op": "add_shot", "shot": s.id, "beat": beats[bi]["id"], "to_index": at,
+            "start": round(s.start, 3), "end": round(s.end, 3)}
+
+
+def _light(board: dict | None) -> tuple[list, int]:
+    from . import board as bd
+    beats = [{"id": bt["id"], "title": bt.get("title", ""),
+              "shots": [{"key": bd.key(e), "id": e.get("id"), "len": e["end"] - e["start"], "gap": bool(e.get("gap"))}
+                        for e in bt["shots"]]} for bt in (board or {}).get("beats", [])]
+    return beats, 1 if beats and beats[0]["title"] == "Opening" and len(beats) > 1 else 0
+
+
+def clip_ops(board: dict | None, cat, clip_id: str, into: bool, windows: list) -> list[dict]:
+    """One clip moved between the piles in Frames (sarah, 2026-10-13: just
+    Kept and Left out, like Footage). Out: every shot of it the edit has.
+    In: its rough-cut windows (`windows`, the pool's shots of this clip; else
+    its best-made shot whole), each where it happened in filming order."""
+    beats, hook = _light(board)
+    mine = lambda sid: bool(sid) and sid in cat.shots and cat.shots[sid].clip_id == clip_id  # noqa: E731
+    if not into:
+        return [{"op": "drop_shot", "shot": e["key"]} for bt in beats for e in bt["shots"] if mine(e["id"])]
+    on = {e["id"] for bt in beats for e in bt["shots"] if e["id"]}
+    shots = [s for s in windows if s.id not in on] or \
+        [max((s for sid, s in cat.shots.items() if mine(sid) and sid not in on), key=lambda s: s.score, default=None)]
+    ops = []
+    for s in sorted((s for s in shots if s is not None), key=lambda s: (s.when is None, s.when or 0, s.start)):
+        op = _put_back(beats, hook, cat, s)
+        if op:
+            ops.append(op)
+    return ops
 
 
 def reachable_s(board: dict | None, cat, pool: list, vision: bool) -> float:
