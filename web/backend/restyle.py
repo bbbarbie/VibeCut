@@ -118,7 +118,9 @@ def retime(b: dict, cat, pace: dict | None, grid: dict | None, keep: set[str] | 
     Shots in `keep` (someone talking: a beat must not cut a sentence) hold
     their window; what follows them still moves onto the beat."""
     keep = keep or set()
-    entries = [(bt, e) for bt in b["beats"] if not bt.get("line")
+    # A preview (bookends.py) is already cut in whole beats, each flash on a
+    # stretch chosen away from the story's: it keeps its windows, like a voice line.
+    entries = [(bt, e) for bt in b["beats"] if not bt.get("line") and not bt.get("preview")
                for e in bt["shots"] if not e.get("gap") and e["id"] not in keep]
     held = sum(1 for bt in b["beats"] if bt.get("line"))
     before = [e["end"] - e["start"] for _, e in entries]
@@ -140,7 +142,7 @@ def retime(b: dict, cat, pace: dict | None, grid: dict | None, keep: set[str] | 
         for bt in b["beats"]:
             for e in bt["shots"]:
                 d = e["end"] - e["start"]
-                if e.get("gap") or bt.get("line") or e["id"] in keep:
+                if e.get("gap") or bt.get("line") or bt.get("preview") or e["id"] in keep:
                     t += d
                     continue
                 s = cat.get(e["id"])

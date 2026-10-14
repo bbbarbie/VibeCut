@@ -100,7 +100,7 @@ def order_ops(board: dict, clips: dict) -> tuple[list[dict], dict]:
     ops, saved, parts = [], 0.0, 0
     for bi, beat in enumerate(board["beats"]):
         keys = [bd.key(s) for s in beat["shots"]]
-        if any(bd.is_gap(s) for s in beat["shots"]):
+        if beat.get("preview") or any(bd.is_gap(s) for s in beat["shots"]):
             continue    # a gap is a deliberate hole (a voiceover line); leave the part as placed
         first = order.index(keys[0])
         before = order[first - 1] if first > 0 else None
@@ -126,6 +126,8 @@ def nudge_ops(board: dict, clips: dict, cat: bd.Catalog) -> tuple[list[dict], di
     """trim ops that slide shot windows onto movement, within their own shot."""
     ops, moved = [], 0
     for beat in board["beats"]:
+        if beat.get("preview"):
+            continue
         for e in beat["shots"]:
             if bd.is_gap(e) or e["id"] not in cat.shots:
                 continue

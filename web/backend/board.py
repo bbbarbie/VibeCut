@@ -41,11 +41,11 @@ LLM_OPS = ("choose_option", "move_beat", "drop_beat", "drop_shot", "swap_shot",
            "add_overlay", "edit_overlay", "drop_overlay", "set_join", "set_look")
 # Plus the precise timeline edits, which come from the keyboard, never from
 # a sentence: cut at a point, trim an edge to a point, remove a range.
-OPS = LLM_OPS + ("split", "trim", "drop_range", "overlay_style", "apply_style", "set_music")
+OPS = LLM_OPS + ("split", "trim", "drop_range", "overlay_style", "apply_style", "set_music", "preview")
 # How the sound crosses a cut (audiomix.py): hard, carried out (L), carried in (J).
 JOIN_SOUNDS = ("cut", "carry_out", "carry_in", "default")
 # What set_music may record about the bed under the edit (export and preview mix it the same).
-MUSIC_KEYS = ("track", "in", "gain", "original", "level", "fade_out", "duck", "sfx")
+MUSIC_KEYS = ("track", "in", "gain", "original", "level", "fade_out", "duck", "sfx", "bpm", "drop")
 # Words on screen (overlays.py): same log, same undo, but they never touch a shot.
 OVERLAY_OPS = ("add_overlay", "edit_overlay", "drop_overlay", "overlay_style")
 
@@ -286,6 +286,25 @@ def apply(board: dict | None, op: dict, cat: Catalog, proposals: dict | None,
         # The bed under the whole edit: which track, where it starts, how
         # loud, where it ducks. From the music card or a Remix, never chat.
         b["music"] = {k: op[k] for k in MUSIC_KEYS if k in op}
+        return b, op
+
+    if kind == "preview":
+        # The Opening + ending switch's quick look at the day (bookends.py):
+        # its own part at the front, each flash a stretch of a shot the story
+        # also uses (a different stretch), so its entries carry their own keys.
+        bid = op.get("beat") or "pv"
+        b["beats"] = [x for x in b["beats"] if x["id"] != bid]
+        shots = []
+        for x in op.get("shots") or []:
+            s = cat.get(x["id"])
+            a, z = max(s.start, float(x["start"])), min(s.end, float(x["end"]))
+            if z - a < FRAME:
+                raise OpError(f"a preview moment of {x['id']} is outside the shot")
+            shots.append({"key": f"pv~{len(shots)}~{x['id']}", "id": x["id"], "start": round(a, 3), "end": round(z, 3)})
+        if len(shots) < 2:
+            raise OpError("a preview needs at least two moments")
+        b["beats"].insert(0, {"id": bid, "title": "Opening", "detail": "A quick look at the day, on the beat.",
+                              "preview": True, "shots": shots})
         return b, op
 
     if kind == "move_beat":

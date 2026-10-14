@@ -450,7 +450,8 @@ def length_ops(board: dict | None, cat, pool: list, target: float, vision: bool)
     hook = 1 if beats and beats[0]["title"] == "Opening" and len(beats) > 1 else 0
     if total > target + tol:
         while total > target + tol:
-            spare = [(rank(e["id"]), bi, e) for bi, bt in enumerate(beats) if len(bt["shots"]) > 1
+            # never a flash of the opening's preview (bookends.py): it's cut as a whole
+            spare = [(rank(e["id"]), bi, e) for bi, bt in enumerate(beats) if len(bt["shots"]) > 1 and bi >= hook
                      for e in bt["shots"] if not e["gap"] and e["id"] in cat.shots]
             if not spare:
                 break

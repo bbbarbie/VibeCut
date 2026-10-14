@@ -278,6 +278,29 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   soon as the pace is read and the chip shows done/total. Openverse's
   commercial slice is thin: one-word moods only (phrases return 0).
   Not yet judged on real footage.
+- **Opening / Ending** (`web/backend/bookends.py`, `/api/bookends {part, on}`,
+  two switches in Frames; sarah, 2026-10-14: "only make if users want it",
+  then "separate opening and ending", so two, both off by default). Each on:
+  its own undoable turn (labels `TEXTS`); off undoes it. **Opening** = a quick
+  look at the day (sarah, after trying one held hook: "very short clips that
+  match the music's beats throughout the day ... some information in the
+  captions"): op `preview`, its own part at the front (`preview: True`,
+  entries keyed `pv~…`), `count` moments by length (≤90 s: 3–4, a few
+  minutes: 5–8, long: up to 12), one per stretch of the story, the liveliest
+  of each, never two from one clip or a look-alike, in filming order, each a
+  stretch of its shot ≥0.5 s away from the one the story shows (else skipped);
+  each flash a whole number of beats near 0.7 s (preview ≥ 2.5 s), 0.6 s+
+  without music; caption "Sep 22 · Kyoto" (recording day + `_day_place`) from
+  1 s in. retime / pace / smooth / daylog / length leave the preview alone.
+  **Closer** = from the last quarter, the shot that reads most like an ending
+  (still, a calm view, late) moves to the end. With music, the in-point moves
+  so the drop lands as the story starts, cuts go back on the beat, the closer
+  stretches ≤3 s within what was filmed so the edit ends RING_S 1.5 s after
+  16 (else 8, 4) beats from the drop and the music fades over that ring
+  (`bed.relay`; `set_music` records `bpm` and `drop`). Music that lands while
+  they're on re-cuts the preview on its beat / ends the same way
+  (`bed.ops(opening=, ending=)`). All numbers priors.
+  `tests/test_bookends.py`.
 - **Sound as glue** (`web/backend/audiomix.py`; research
   `design/research/08-fluency-and-motion-ux.md`, P0/P1). One numpy mixer builds the
   edit's whole sound; the preview plays it (picture muted, rate-nudged to
