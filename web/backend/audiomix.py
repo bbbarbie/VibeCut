@@ -151,7 +151,7 @@ def plan(items: list[dict], clips: dict, joins: list[dict] | None = None,
         if it["kind"] != "shot":
             spans.append(None)
             continue
-        spans.append({"clip_id": it["clip_id"], "src": [float(it["src_start"]), float(it["src_end"])],
+        spans.append({"key": it.get("key"), "clip_id": it["clip_id"], "src": [float(it["src_start"]), float(it["src_end"])],
                       "seq": [float(it["seq_start"]), float(it["seq_end"])],
                       "fin": (MICRO_S, "micro"), "fout": (MICRO_S, "micro")})
     notes: list[str] = []
@@ -233,14 +233,21 @@ def duck_envelope(n: int, ducks: list) -> np.ndarray:
 
 
 def render(items: list[dict], clips: dict, *, joins: list[dict] | None = None,
-           transitions: list[dict] | None = None, music: dict | None = None) -> tuple[np.ndarray, list[str]]:
-    """The whole edit's sound: (n, 2) float32 at SR, exactly the timeline's length."""
+           transitions: list[dict] | None = None, music: dict | None = None,
+           sound: dict | None = None) -> tuple[np.ndarray, list[str]]:
+    """The whole edit's sound: (n, 2) float32 at SR, exactly the timeline's length.
+
+    `sound` is `strips_of(board)`: shots whose own sound was taken off, and
+    the strips it went to, each placed and levelled on its own."""
     total = float(items[-1]["seq_end"]) if items else 0.0
     n = int(round(total * SR))
     out = np.zeros((n, 2), np.float32)
     spans, notes = plan(items, clips, joins, transitions)
     original = float((music or {}).get("original", 1.0)) if (music or {}).get("path") else 1.0
+    off = set((sound or {}).get("off") or [])
     for s in spans:
+        if s.get("key") in off:
+            continue
         c = clips.get(s["clip_id"])
         snd = decode(c["path"]) if c else None
         if snd is None:
@@ -267,6 +274,9 @@ def render(items: list[dict], clips: dict, *, joins: list[dict] | None = None,
         if z > a:
             out[a:z] += seg[a - q0:z - q0]
 
+    for st in (sound or {}).get("strips") or []:
+        _place(out, st, clips, original)
+
     m = music or {}
     if m.get("path"):
         track = decode(m["path"])
@@ -292,6 +302,40 @@ def render(items: list[dict], clips: dict, *, joins: list[dict] | None = None,
     return out, notes
 
 
+def _place(out: np.ndarray, st: dict, clips: dict, original: float) -> None:
+    """One extracted strip into the mix: its own source seconds at its own
+    place, micro-faded at both ends (it was cut out of a longer sound)."""
+    c = clips.get(st["clip_id"])
+    snd = decode(c["path"]) if c else None
+    if snd is None or st["gain"] <= 0:
+        return
+    s0, s1 = int(round(st["src"][0] * SR)), int(round(st["src"][1] * SR))
+    s0, s1 = max(0, s0), min(len(snd), s1)
+    q0 = int(round(st["at"] * SR))
+    if s1 <= s0 or q0 >= len(out):
+        return
+    seg = np.array(snd[s0:s1], np.float32)
+    f = min(len(seg) // 2, int(round(MICRO_S * SR)))
+    if f:
+        seg[:f] *= _ramp(f, "micro", True)[:, None]
+        seg[-f:] *= _ramp(f, "micro", False)[:, None]
+    z = min(len(out), q0 + len(seg))
+    out[q0:z] += seg[:z - q0] * float(st["gain"]) * original
+
+
+def strips_of(board: dict | None) -> dict | None:
+    """The board's extracted sound (board.extract_audio), as the mixer needs
+    it: which shots play silent, and each strip's file, seconds, place and
+    level. A muted strip is simply left out."""
+    snd = (board or {}).get("sound")
+    if not snd or not (snd.get("off") or snd.get("strips")):
+        return None
+    return {"off": list(snd.get("off") or []),
+            "strips": [{"clip_id": x["shot"].split(":")[0], "src": [x["start"], x["end"]], "at": x["at"],
+                        "gain": 0.0 if x.get("mute") else float(x.get("gain", 1.0))}
+                       for x in snd.get("strips") or [] if not x.get("mute")]}
+
+
 def write_wav(buf: np.ndarray, path: Path, level: bool = False) -> None:
     """16-bit WAV. `level` runs the same loudness normalisation export always used."""
     pcm = (np.clip(buf, -1.0, 1.0) * 32767).astype("<i2")
@@ -315,16 +359,18 @@ def write_wav(buf: np.ndarray, path: Path, level: bool = False) -> None:
 # --------------------------------------------------------------------------
 
 def spec(items: list[dict], clips: dict, board_joins: dict | None, transitions: list[dict] | None,
-         music: dict | None) -> dict:
+         music: dict | None, sound: dict | None = None) -> dict:
     """Everything the mix depends on, as plain data -- its hash is the file name."""
     return {
         "items": [{k: it.get(k) for k in ("key", "kind", "clip_id", "src_start", "src_end", "seq_start",
                                           "seq_end", "beat_id")} for it in items],
         "files": {cid: [c.get("path"), c.get("duration")] for cid, c in clips.items()
-                  if any(it.get("clip_id") == cid for it in items)},
+                  if any(it.get("clip_id") == cid for it in items)
+                  or any(x["clip_id"] == cid for x in (sound or {}).get("strips") or [])},
         "joins": board_joins or {},
         "transitions": transitions,
         "music": music,
+        "sound": sound,
         "v": 1,
     }
 
@@ -339,7 +385,7 @@ def preview_file(sp: dict, clips: dict) -> Path:
     path = MIX_CACHE / f"{key_of(sp)}.wav"
     if not path.exists():
         buf, _ = render(sp["items"], clips, joins=joins_for(sp["items"], sp["joins"]),
-                        transitions=sp["transitions"], music=sp["music"])
+                        transitions=sp["transitions"], music=sp["music"], sound=sp.get("sound"))
         with tempfile.NamedTemporaryFile(dir=MIX_CACHE, suffix=".wav", delete=False) as fh:
             tmp = Path(fh.name)
         write_wav(buf, tmp, level=bool((sp["music"] or {}).get("level")))

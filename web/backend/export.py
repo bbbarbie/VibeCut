@@ -139,6 +139,8 @@ class Job:
     mix: dict | None = None
     # How the sound crosses each cut ({entry key: {"sound"}}, board.set_join).
     joins: dict | None = None
+    # Sound taken off shots onto their own strips (audiomix.strips_of).
+    sound: dict | None = None
 
     @property
     def dir(self) -> Path:
@@ -163,7 +165,7 @@ def _safe_name(s: str) -> str:
 
 def create(items: list[dict], clips: dict[str, dict], name: str, music: str | None,
            style: dict | None = None, mix: dict | None = None, joins: dict | None = None,
-           want: str | None = None) -> Job:
+           want: str | None = None, sound: dict | None = None) -> Job:
     sp = spans(items)
     if not sp:
         raise ValueError("the timeline is empty — choose a story first")
@@ -177,7 +179,7 @@ def create(items: list[dict], clips: dict[str, dict], name: str, music: str | No
         raise ValueError("the borrowed look's file is gone — apply the style again")
     job = Job(id=uuid.uuid4().hex[:10], items=sp, clips=clips, size=frame_size(sp, clips, want),
               total=sum(s["frames"] for s in sp) / FPS, name=_safe_name(name), music=music, style=style,
-              mix=mix, joins=joins)
+              mix=mix, joins=joins, sound=sound)
     job.dir.mkdir(parents=True, exist_ok=True)
     (job.dir / "frames").mkdir(exist_ok=True)
     JOBS[job.id] = job
@@ -554,7 +556,7 @@ def _run(job: Job) -> None:
         music = music_spec(job.music, job.mix)
         buf, sound_notes = audiomix.render(job.items, job.clips,
                                            joins=audiomix.joins_for(job.items, job.joins),
-                                           transitions=plan, music=music)
+                                           transitions=plan, music=music, sound=job.sound)
         job.notes += sound_notes
         wav = job.dir / "mix.wav"
         audiomix.write_wav(buf, wav, level=bool((music or {}).get("level")))

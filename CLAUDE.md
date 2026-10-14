@@ -298,6 +298,16 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   30 frames were wrong). CARRY_S 0.5 s and MICRO_S are priors — calibrate.
   Tests: `tests/test_audiomix.py`, additions in `test_export.py`,
   `test_brief.py`, `test_remix.py`.
+- **Extract audio** (`board.SOUND_OPS`: `extract_audio` / `edit_audio` /
+  `drop_audio`; `audiomix.strips_of`, `timeline.audio_lane`; sarah,
+  2026-10-14: "at least have the basic functions for most video editing
+  apps"). Frames' shot menu "Take the sound off" puts the shot's sound on its
+  own strip in a Sound lane under the picture (`sound.off` + `sound.strips`
+  on the board): the strip sits at a place in the edit (unlinked, like
+  CapCut), drag to move it (sticks to the same targets), click for Louder /
+  Quieter (25% steps, 0–200%) / Mute / Delete. Deleting leaves the shot
+  silent; a cut through a silenced shot keeps both pieces silent. Preview and
+  export hear it through the same mixer. `tests/test_extract_audio.py`.
 - **Every cut checked** (`cutgrammar/joins.py`, `web/backend/seams.py`;
   research 08 P2). Report only: per cut, brightness jump, colour change
   (best-frame proxy), same view again, energy step, loudness step, going

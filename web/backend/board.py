@@ -42,6 +42,12 @@ LLM_OPS = ("choose_option", "move_beat", "drop_beat", "drop_shot", "swap_shot",
 # Plus the precise timeline edits, which come from the keyboard, never from
 # a sentence: cut at a point, trim an edge to a point, remove a range.
 OPS = LLM_OPS + ("split", "trim", "drop_range", "overlay_style", "apply_style", "set_music")
+# A shot's own sound taken off onto its own strip under the picture (the
+# "extract audio" every editor has): then it can be moved, made louder or
+# quieter, muted or deleted on its own. From the timeline, never chat.
+SOUND_OPS = ("extract_audio", "edit_audio", "drop_audio")
+OPS = OPS + SOUND_OPS
+AUDIO_GAIN_MAX = 2.0   # 200%: louder than filmed, short of distorting most phone sound
 # How the sound crosses a cut (audiomix.py): hard, carried out (L), carried in (J).
 JOIN_SOUNDS = ("cut", "carry_out", "carry_in", "default")
 # What set_music may record about the bed under the edit (export and preview mix it the same).
@@ -177,6 +183,9 @@ def _split(board: dict, k: str, at: float) -> str | None:
               "start": round(at, 3), "end": e["end"]}
     e["end"] = round(at, 3)
     beat["shots"].insert(i + 1, second)
+    off = (board.get("sound") or {}).get("off")
+    if off is not None and k in off:
+        off.append(second["key"])   # its sound is on a strip: cutting the picture doesn't bring it back
     return second["key"]
 
 
@@ -200,6 +209,41 @@ def _span(cat: Catalog, sid: str, dur: float) -> tuple[float, float]:
     c = cat.best_t.get(sid, (s.start + s.end) / 2)
     a = min(max(s.start, c - dur / 2), s.end - dur)
     return round(a, 3), round(a + dur, 3)
+
+
+def _sound_op(b: dict, op: dict, kind: str, new_id) -> None:
+    """Extracted sound. `sound.off` lists the entries whose own sound no
+    longer plays under them; `sound.strips` is what was taken off, each at a
+    place in the edit (sequence seconds), like an unlinked audio clip: it
+    stays where it was put when shots before it change."""
+    snd = b.setdefault("sound", {"off": [], "strips": []})
+    if kind == "extract_audio":
+        k = op.get("shot")
+        beat, i = _where(b, k)
+        e = beat["shots"][i]
+        if is_gap(e):
+            raise OpError("an empty space has no sound to take off")
+        if k in snd["off"]:
+            raise OpError("this shot's sound is already on its own strip")
+        sid = op.get("id") or new_id()
+        op["id"] = sid
+        snd["off"].append(k)
+        snd["strips"].append({"id": sid, "shot": e["id"], "start": e["start"], "end": e["end"],
+                              "at": round(seq_start(b, k), 3), "gain": 1.0, "mute": False, "from": k})
+        return
+    strip = next((x for x in snd["strips"] if x["id"] == op.get("audio")), None)
+    if strip is None:
+        raise OpError(f"no sound strip {op.get('audio')!r}")
+    if kind == "drop_audio":
+        # Like any editor: deleting the strip leaves the shot silent. Undo brings it back.
+        snd["strips"].remove(strip)
+        return
+    if "gain" in op:
+        strip["gain"] = round(max(0.0, min(AUDIO_GAIN_MAX, float(op["gain"]))), 3)
+    if "mute" in op:
+        strip["mute"] = bool(op["mute"])
+    if "at" in op:
+        strip["at"] = round(max(0.0, float(op["at"])), 3)
 
 
 def _prune(board: dict) -> None:
@@ -271,6 +315,10 @@ def apply(board: dict | None, op: dict, cat: Catalog, proposals: dict | None,
         else:
             joins[k] = {"sound": sound}
         b["joins"] = joins
+        return b, op
+
+    if kind in SOUND_OPS:
+        _sound_op(b, op, kind, new_id)
         return b, op
 
     if kind == "set_look":
@@ -662,6 +710,20 @@ def _describe_sound(a: dict | None, b: dict | None) -> list[dict]:
         text = (f"At {place}, {SOUND_WORDS[jb[k]['sound']]} it" if k in jb
                 else f"At {place}, the sound is back to automatic")
         lines.append({"kind": "sound", "beat": bt["id"] if bt else None, "shot": k, "text": text})
+    sa = {x["id"]: x for x in (a.get("sound") or {}).get("strips", [])}
+    sb_ = {x["id"]: x for x in (b.get("sound") or {}).get("strips", [])}
+    for i in sb_.keys() - sa.keys():
+        lines.append({"kind": "sound", "shot": sb_[i]["from"], "text": "Took a shot's sound off onto its own strip"})
+    for i in sa.keys() - sb_.keys():
+        lines.append({"kind": "sound", "text": "Deleted a sound strip (its shot stays silent)"})
+    for i in sa.keys() & sb_.keys():
+        x, y = sa[i], sb_[i]
+        if x["mute"] != y["mute"]:
+            lines.append({"kind": "sound", "text": "Muted a sound strip" if y["mute"] else "Unmuted a sound strip"})
+        if x["gain"] != y["gain"]:
+            lines.append({"kind": "sound", "text": f"Sound strip volume {round(x['gain'] * 100)}% → {round(y['gain'] * 100)}%"})
+        if x["at"] != y["at"]:
+            lines.append({"kind": "sound", "text": f"Moved a sound strip {'later' if y['at'] > x['at'] else 'earlier'} by {abs(y['at'] - x['at']):.2f}s"})
     if (a.get("music") or None) != (b.get("music") or None):
         m = b.get("music") or {}
         lines.append({"kind": "sound", "text": "Music taken off the edit" if "track" in m and not m["track"]

@@ -128,7 +128,12 @@ import type { SeqItem } from './sequence'
 import type { Trans } from './joinView'
 import type { Target } from './snap'
 export type TimelineData = { fps: number; total: number; items: SeqItem[]; targets: Target[]; grid: { bpm: number; phase: number } | null
-  frame?: { w: number; h: number } }
+  frame?: { w: number; h: number }
+  // Sound taken off shots onto its own strips (backend board.extract_audio): where each
+  // sits in the edit, its level, and which shots now play silent.
+  audio?: { strips: SoundStrip[]; off: string[] } }
+export type SoundStrip = { id: string; at: number; dur: number; gain: number; mute: boolean
+  clip_id: string; shot: string; src_start: number; n: number | null }
 
 // Words on screen. Anchored to the edit, its end, a part or a shot; the
 // server resolves each to sequence time (start/end) for drawing.

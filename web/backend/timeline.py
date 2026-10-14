@@ -136,4 +136,17 @@ def build(board: dict | None, clips: dict[str, dict], track: music.Track | None)
     total = items[-1]["seq_end"] if items else 0.0
     music_in = float(((board or {}).get("music") or {}).get("in") or 0.0)
     return {"fps": FPS, "total": round(total, 4), "items": items,
-            "targets": targets(items, clips, track, music_in), "grid": grid_of(track, music_in)}
+            "targets": targets(items, clips, track, music_in), "grid": grid_of(track, music_in),
+            "audio": audio_lane(board, items)}
+
+
+def audio_lane(board: dict | None, items: list[dict]) -> dict:
+    """Sound taken off shots (board.extract_audio), as the timeline draws it:
+    a strip under the picture at its place, and which shots now play silent."""
+    snd = (board or {}).get("sound") or {}
+    num = {it["key"]: it["n"] for it in items}
+    strips = [{"id": x["id"], "at": x["at"], "dur": round(x["end"] - x["start"], 4), "gain": x["gain"],
+               "mute": x["mute"], "clip_id": x["shot"].split(":")[0], "shot": x["shot"],
+               "src_start": x["start"], "n": num.get(x["from"])}
+              for x in snd.get("strips") or []]
+    return {"strips": strips, "off": [k for k in snd.get("off") or [] if k in num]}
