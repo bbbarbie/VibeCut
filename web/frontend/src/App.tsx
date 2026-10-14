@@ -21,6 +21,8 @@ import { Menu, SwapPicker, type MenuItem } from './components/Menus'
 import { Music } from './components/Music'
 import type { ClassifyReq } from './components/Remember'
 import { Shelf } from './components/Shelf'
+import { Handle, useLayout } from './components/Split'
+import type { CSSProperties } from 'react'
 import { SmoothButton, Story, type PlayItem, type Selection } from './components/Story'
 import { Timeline, type Marks } from './components/Timeline'
 import { Footage, type Importing } from './components/Footage'
@@ -72,6 +74,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const level = view
   const setLevel = (k: 'story' | 'frames') => go({ kind: 'project', id, view: k })
   const narrow = useNarrow()
+  const [layout, resize] = useLayout()   // Frames: the borders the creator dragged
   const [opened, setOpened] = useState<'loading' | 'ok' | string>('loading')
   const [clips, setClips] = useState<Clip[]>([])
   const [session, setSession] = useState<Session | null>(null)
@@ -948,9 +951,13 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     )
 
   const storyStage = shown === 'story' && !talkOpen
-  const cols = storyStage && level === 'frames' ? (narrow ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[320px_minmax(0,1fr)]')
-    : storyStage ? (narrow ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[320px_minmax(0,1fr)_420px]')
-      : narrow || screen === 'footage' ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)_400px]'
+  const cols = storyStage ? 'grid-cols-[minmax(0,1fr)]'
+    : narrow || screen === 'footage' ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)_400px]'
+  // The chat column is as wide as its border was dragged.
+  const sideBySide = storyStage && !narrow
+  const colStyle = sideBySide
+    ? { gridTemplateColumns: level === 'frames' ? `${layout.chat}px minmax(0,1fr)` : `${layout.chat}px minmax(0,1fr) 420px` }
+    : undefined
 
   return (
     <>
@@ -1007,15 +1014,22 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
         </Button>
       </header>
 
-      <div className={cx('relative grid min-h-0', cols)}>
+      <div className={cx('relative grid min-h-0', cols)} style={colStyle}>
+        {sideBySide && (
+          <Handle axis="x" size={layout.chat} onSize={(v, save) => resize('chat', v, save)}
+                  max={() => window.innerWidth - 700} label="Drag to make the chat wider or narrower"
+                  className="absolute! inset-y-0 -ml-1" style={{ left: layout.chat }} />
+        )}
         {storyStage && (narrow ? (chatOpen && (
           <div className="absolute inset-y-0 left-0 z-30 w-[min(360px,90vw)] shadow-2xl shadow-black/60" onKeyDown={(e) => { if (e.key === 'Escape') setChatOpen(false) }}>{chat}</div>
         )) : chat)}
 
         {storyStage && level === 'frames' ? (
-          <main className="relative flex min-h-0 min-w-0 flex-col">
-            <div className="flex min-h-0 flex-1">
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-panel">
+          // The timeline is the section straight under main; its height is
+          // the border dragged above it (set here so Timeline stays as is).
+          <main className="relative flex min-h-0 min-w-0 flex-col [&>section:first-of-type]:h-(--tl-h)"
+                style={{ '--tl-h': `${layout.timeline}px` } as CSSProperties}>
+            <div className="flex min-h-0 flex-1 flex-col bg-panel">
                 {session?.board && (
                   <div className="flex min-h-8 shrink-0 flex-wrap items-end gap-1 border-b border-line px-3" role="tablist">
                     {([['shots', 'Shots'], ['words', `Captions${ovData.items.length ? ` · ${ovData.items.length}` : ''}`]] as const).map(([k, name]) => (
@@ -1067,6 +1081,9 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                     </div>
                   </div>
                 )}
+            <div className="flex min-h-0 flex-1">
+              {/* the piles (or captions) on the left, as narrow as dragged; the preview takes the rest */}
+              <div className="flex min-h-0 min-w-0 max-w-[55%] shrink-0 flex-col bg-panel" style={{ width: layout.shelf }}>
                 {framesTab === 'words' && overlaysPanel ? (
                   <div className="min-h-0 flex-1 overflow-y-auto p-3">{overlaysPanel}</div>
                 ) : (
@@ -1088,8 +1105,13 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                          }} />
                 )}
               </div>
-              <div className="flex w-[44%] min-w-[320px] flex-col">{player(true)}{pauseChat}</div>
+              <Handle axis="x" size={layout.shelf} onSize={(v, save) => resize('shelf', v, save)}
+                      max={() => window.innerWidth - layout.chat - 380} label="Drag to make the clips wider or narrower" />
+              <div className="flex min-w-[320px] flex-1 flex-col">{player(true)}{pauseChat}</div>
             </div>
+            </div>
+            <Handle axis="y" size={layout.timeline} grow={-1} onSize={(v, save) => resize('timeline', v, save)}
+                    max={() => window.innerHeight - 320} label="Drag to make the timeline taller or shorter" className="-my-1" />
             <Timeline tl={tl} marks={marks} marksOf={marksOf} selected={selected} flash={flash} alt={alt}
                       onTrimEdge={(key, edge, to) => {
                         const it = tl.items.find((x) => x.key === key)

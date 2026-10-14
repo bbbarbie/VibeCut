@@ -191,18 +191,18 @@ export function Footage({ clips, importing, errors, vision, onPick, onRetry, onD
 
 // A fanned pile like a photo stack in Messages: the last few clips dealt on
 // top, a count, and the whole pile opens on a click or a sideways swipe.
-export function Stack({ side: s, clips, onOpen }: { side: Side; clips: Clip[]; onOpen: () => void }) {
+export function Stack({ side: s, clips, onOpen, small }: { side: Side; clips: Clip[]; onOpen: () => void; small?: boolean }) {
   const down = useRef<number | null>(null)
   const top = clips.slice(-3)
   const tilt = ['-rotate-6 -translate-x-3', 'rotate-4 translate-x-3', 'rotate-0']
   const red = s === 'out'
   return (
-    <div className="flex flex-col items-center gap-3">
+    <div className={cx('flex flex-col items-center', small ? 'gap-1.5' : 'gap-3')}>
       <button type="button" disabled={!clips.length} onClick={onOpen} aria-label={`Open ${red ? 'Left out' : 'Kept'}, ${clips.length} clips`}
               onPointerDown={(e) => { down.current = e.clientX }}
               onPointerUp={(e) => { if (down.current !== null && Math.abs(e.clientX - down.current) > 30) onOpen(); down.current = null }}
               onWheel={(e) => { if (clips.length && Math.abs(e.deltaX) > 20) onOpen() }}
-              className="group relative h-[150px] w-[210px] touch-pan-y">
+              className={cx('group relative touch-pan-y', small ? 'h-[84px] w-[118px]' : 'h-[150px] w-[210px]')}>
         {!clips.length && (
           <div className={cx('absolute inset-0 grid place-items-center rounded-2xl border-2 border-dashed font-serif text-[17px]',
             red ? 'border-rose-900/70 text-rose-300/80' : 'border-zinc-700 text-zinc-400')}>
@@ -228,7 +228,7 @@ export function Stack({ side: s, clips, onOpen }: { side: Side; clips: Clip[]; o
         )}
       </button>
       <div className="text-center">
-        <div className={cx('font-serif text-[20px]', red ? 'text-rose-200' : 'text-zinc-100')}>{red ? 'Left out' : 'Kept'}</div>
+        <div className={cx('font-serif', small ? 'text-[17px]' : 'text-[20px]', red ? 'text-rose-200' : 'text-zinc-100')}>{red ? 'Left out' : 'Kept'}</div>
       </div>
     </div>
   )
