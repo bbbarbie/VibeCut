@@ -42,18 +42,18 @@ LLM_OPS = ("choose_option", "move_beat", "drop_beat", "drop_shot", "swap_shot",
 # Plus the precise timeline edits, which come from the keyboard, never from
 # a sentence: cut at a point, trim an edge to a point, remove a range.
 OPS = LLM_OPS + ("split", "trim", "drop_range", "overlay_style", "apply_style", "set_music")
-# A shot's own sound taken off onto its own strip under the picture (the
-# "extract audio" every editor has): then it can be moved, made louder or
-# quieter, muted or deleted on its own. From the timeline, never chat.
-SOUND_OPS = ("extract_audio", "edit_audio", "drop_audio")
-OPS = OPS + SOUND_OPS
-AUDIO_GAIN_MAX = 2.0   # 200%: louder than filmed, short of distorting most phone sound
 # How the sound crosses a cut (audiomix.py): hard, carried out (L), carried in (J).
 JOIN_SOUNDS = ("cut", "carry_out", "carry_in", "default")
 # What set_music may record about the bed under the edit (export and preview mix it the same).
 MUSIC_KEYS = ("track", "in", "gain", "original", "level", "fade_out", "duck", "sfx")
 # Words on screen (overlays.py): same log, same undo, but they never touch a shot.
 OVERLAY_OPS = ("add_overlay", "edit_overlay", "drop_overlay", "overlay_style")
+# A shot's own sound taken off onto its own strip under the picture (the
+# "extract audio" every editor has): then it can be moved, made louder or
+# quieter, muted or deleted on its own. From the timeline, never chat.
+SOUND_OPS = ("extract_audio", "edit_audio", "drop_audio")
+OPS = OPS + SOUND_OPS
+AUDIO_GAIN_MAX = 2.0   # 200%: louder than filmed, short of distorting most phone sound
 
 FRAME = 1 / 30  # sequence frame; the smallest piece a cut or trim may leave
 
