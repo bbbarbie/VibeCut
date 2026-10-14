@@ -1039,7 +1039,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                         Captions {ovData.items.length ? 'on' : 'off'}
                       </button>
                       <button type="button" aria-pressed={!!session.bookends}
-                              title="Open on the best moment and end on a closing shot, with the song finishing on a phrase"
+                              title="Open on a quick look at the day, cut on the beat, and end on a closing shot with the song finishing on a phrase"
                               onClick={async () => {
                                 try { const on = !session.bookends; const r = await api.bookends(on); setSession(r); if (on) offerUndo(r) }
                                 catch (e) { note((e as Error).message) }

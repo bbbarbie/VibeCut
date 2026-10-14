@@ -98,6 +98,8 @@ def moments(board: dict, cat, places: dict | None = None) -> list[dict]:
     last_say: str | None = None
     last_place: str | None = None
     for bt in board.get("beats", []):
+        if bt.get("preview"):
+            continue    # the day's preview has its own date-and-place line (bookends.py)
         for e in bt["shots"]:
             if e.get("gap") or not e.get("id") or e["end"] - e["start"] < MIN_SHOT_S:
                 continue

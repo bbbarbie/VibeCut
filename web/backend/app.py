@@ -14,6 +14,7 @@ import sys
 import threading
 import time
 import uuid
+from collections import Counter
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -1332,6 +1333,24 @@ def api_bed(req: BedReq) -> dict:
         return _session()
 
 
+def _day_place() -> str | None:
+    """Where the day was, for the preview's caption: the one place every
+    located clip shares, else the city most of them are in. Cached geocoder
+    answers only when the Mac's helper can't run (places.py)."""
+    try:
+        found = places.lookup([c.get("gps") for c in CLIPS.values()])
+    except Exception:  # noqa: BLE001 -- no place is fine; the date stands alone
+        return None
+    answers = [found.get(places.key(c.get("gps")) or "") for c in CLIPS.values()]
+    answers = [a for a in answers if a]
+    names = {places.short_name(a) for a in answers} - {None}
+    if len(names) == 1:
+        return names.pop()
+    cities = Counter((a.get("city") or "").strip() for a in answers)
+    cities.pop("", None)
+    return cities.most_common(1)[0][0] if cities else None
+
+
 class BookendsReq(BaseModel):
     on: bool
 
@@ -1356,10 +1375,12 @@ def api_bookends(req: BookendsReq) -> dict:
         cat = CATALOG["cat"]
         talking = tempo.talking(list(CLIPS.values()), _pool())
         m, track = b.get("music") or {}, _track()
-        relay = None
+        relay, period = None, None
         if m.get("track") and track is not None and track.id == m["track"]:
             relay = lambda trial: bed.relay(trial, cat, m, track, talking)  # noqa: E731
-        ops, said = bookends.turn(b, cat, talking, _want(), relay)
+            bpm = float(m.get("bpm") or track.bpm or 0)
+            period = 60.0 / bpm if bpm else None
+        ops, said = bookends.turn(b, cat, _day_place(), relay, period)
         if not ops:
             raise HTTPException(409, "This edit is too short for an opening and an ending of its own.")
         SESSION.add({"kind": "direct", "text": bookends.TEXT, "ops": ops, "reply": said}, cat, _make_proposals)

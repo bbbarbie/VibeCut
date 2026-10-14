@@ -67,6 +67,7 @@ MIN_TALK_S = 0.8      # a duck shorter than this would be heard as a wobble, not
 ENERGY_POINTS = 32    # the arc, as pick_from wants it
 MUSIC_GAIN = audiomix.MUSIC_GAIN
 FADE_OUT_S = 2.0
+PREVIEW_MAX_S = 12.0  # a long video's preview can run past the hook cap; the drop still waits for it
 
 
 # --------------------------------------------------------------------------
@@ -84,12 +85,15 @@ def fingerprint(board: dict, cat, pace: str | None) -> dict:
     else:
         energy = np.linspace(0.3, 1.0, ENERGY_POINTS)   # one part: assume it builds, as music does
     first = next((s["end"] - s["start"] for bt in board["beats"] for s in bt["shots"] if not s.get("gap")), 1.5)
+    from . import bookends
+    if bookends.preview_of(board) is not None:
+        first = bookends.opening_end(board)   # the drop lands as the story starts, after the preview
     rise = float(energy[-ENERGY_POINTS // 4:].mean() - energy[:ENERGY_POINTS // 4].mean())
     return {
         "bpm": PACE_BPM[pace], "pace": pace,
         "energy": [round(float(v), 3) for v in energy],
         "arc": "builds" if rise > 0.1 else "falls" if rise < -0.1 else "steady",
-        "hook_s": round(float(np.clip(first, *HOOK_S)), 2),
+        "hook_s": round(float(np.clip(first, HOOK_S[0], max(HOOK_S[1], PREVIEW_MAX_S))), 2),
         "duration": round(float(sum(s.duration for s in sections)), 1),
     }
 
@@ -179,6 +183,27 @@ def ops(board: dict, cat, mx: dict, talking: set[str], end: bool = False) -> tup
     trial = copy.deepcopy(board)
     report = {"on_beat": 0, "shots": 0}
     phase = (track.meta.get("tempo") or {}).get("phase")
+    if end:
+        from . import bookends
+        if bookends.preview_of(trial) is not None:
+            # the day's preview, re-cut in whole beats of this track, and the
+            # track started so its drop lands as the story begins
+            pv = bookends.preview_op(trial, cat, mx["period"])
+            now = bookends.preview_of(trial)["shots"]
+            if pv and [(x["id"], x["start"], x["end"]) for x in pv["shots"]] != [(x["id"], x["start"], x["end"]) for x in now]:
+                trial, _ = bd.apply(trial, pv, cat, None, lambda: "x")
+                out.append(pv)
+                length = sum(x["end"] - x["start"] for x in pv["shots"])
+                for o in trial.get("overlays", []):
+                    if (o.get("anchor") or {}).get("id") == bookends.PREVIEW:
+                        fix = {"op": "edit_overlay", "overlay": o["id"],
+                               "dur": round(max(1.0, length - bookends.CAPTION_AT_S), 2)}
+                        trial, _ = bd.apply(trial, fix, cat, None, lambda: "x")
+                        out.append(fix)
+            drop = mx.get("drop")
+            start = float(drop) - bookends.opening_end(trial) if drop is not None else -1
+            if start >= 0:
+                mx = {**mx, "in": round(start, 3)}
     if track.bpm and phase is not None:
         # In edit time: the track starts `in` seconds in. mx["bpm"] may be the
         # track's tempo doubled (a half-time track cut on its eighths), so the
@@ -207,17 +232,15 @@ def ops(board: dict, cat, mx: dict, talking: set[str], end: bool = False) -> tup
 
 def relay(board: dict, cat, music: dict, track: mu.Track, talking: set[str]) -> tuple[list[dict], str]:
     """The music already under the edit, laid again after the order changed
-    (the Opening + ending switch): the in-point moves so the drop still lands
-    at the end of the first shot, the cuts go back onto the beat and the
-    song ends on a phrase. Keeps the creator's levels. (ops, a sentence)."""
+    (the Opening + ending switch): the preview is re-cut on the beat, the
+    in-point moves so the drop lands as the story starts, the cuts go back
+    onto the beat and the song ends on a phrase. Keeps the creator's levels.
+    (ops, a sentence)."""
     bpm = float(music.get("bpm") or track.bpm or 0)
     if not bpm:
         return [], ""
     drop = music.get("drop")
-    first = timeline.layout(board)[0]["seq_end"] if board.get("beats") else 0.0
     t_in = float(music.get("in") or 0.0)
-    if drop is not None and float(drop) - first >= 0:
-        t_in = round(float(drop) - first, 3)
     mx = {"track": track, "in": t_in, "bpm": bpm, "period": 60.0 / bpm, "drop": drop}
     out, report = ops(board, cat, mx, talking, end=True)
     keep = {k: music[k] for k in ("gain", "original", "level", "sfx") if k in music}

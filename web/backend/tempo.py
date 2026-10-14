@@ -126,6 +126,8 @@ def pace_ops(board: dict, cat, windows: dict, pace: str, talk: set[str]) -> list
     cap = brief.PACE_CAP_S[pace]
     ops = []
     for bt in board.get("beats", []):
+        if bt.get("preview"):
+            continue    # the preview's flashes are cut on the beat, not to a pace
         for e in bt["shots"]:
             if is_gap(e) or e["id"] not in cat.shots:
                 continue

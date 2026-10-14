@@ -1,35 +1,42 @@
-"""Opening + ending: the video starts on its best moment and finishes on a
-closing shot, with the song ending on a phrase. Only when the creator turns
-it on (sarah, 2026-10-14: "only make if users want it", the switch in
-Frames); off by default.
+"""Opening + ending: the video opens on a quick preview of the day and
+finishes on a closing shot, with the song ending on a phrase. Only when the
+creator turns it on (sarah, 2026-10-14: "only make if users want it", the
+switch in Frames); off by default.
 
 Why this exists, in editing terms: a vlog that starts at the first clip
 filmed spends its first seconds on the camera finding its subject, and
-viewers decide in those seconds. Vlog editors open on the most striking
-moment as a hook, then go back to the start (research thread "Patterns in
-YouTube vlogs", 2026-10-14). Endings are chosen too: a quiet closing shot
+viewers decide in those seconds. Vlog editors open with a preview: very
+short moments from across the whole day, cut on the music's beat, with a
+line saying when and where (sarah, 2026-10-14, after trying a single held
+hook: "very short clips that match the music's beats throughout the day to
+kind of give a preview of whats going on ... and usually there is some
+information in the captions"). Endings are chosen too: a quiet closing shot
 (a sunset, a view, lights off) rather than whatever was filmed last, and
 the music finishes on a downbeat instead of being faded at a random bar.
 
 What the turn does, all as ordinary ops, so one Undo takes it away:
 
-1. **The hook**: the shot with the most going on (well made, moving,
-   people, what the story leans on) moves to the very start, trimmed to
-   HOOK_S around its best frame. Never a talking shot -- a hook cut
-   mid-sentence is worse than no hook. The shot leaves its old place, so
-   nothing is shown twice.
-2. **The closer**: from the last stretch of the edit, the shot that best
+1. **The preview** (op `preview`, its own part at the front): more moments
+   the longer the video (`count`), one from each stretch of the story, the
+   one with the most going on in each (well made, moving, people), never a
+   look-alike or a second from the same clip. Each flash is a *different*
+   stretch of its shot from the one the story uses (sarah: never the same
+   shot twice), else it's left out. In filming order. Each lasts the beat
+   unit (`unit`): about UNIT_S, a whole number of the music's beats.
+   Captioned with the date and place, from 1 s in (no words in the first
+   second, sarah 2026-10-06).
+2. **The closer**: from the last stretch of the story, the shot that best
    reads as an ending -- still, a calm view, late in the day -- moves to
    the very end.
-3. **The song's end** (only when music is under the edit, bed.py): the
-   closing shot is stretched or shortened, within what was filmed, so the
-   edit ends RING_S after a phrase boundary of the track (16 beats from
-   its drop; else 8, else a bar); the music fades over that ring, so the
-   last downbeat is heard whole. The in-point moves with the new hook so
-   the drop still lands on its end, and the cuts go back onto the beat.
+3. **The song** (only when music is under the edit, bed.py): the preview is
+   cut on its beat and the in-point moves so the drop lands as the story
+   starts; the closing shot is stretched or shortened, within what was
+   filmed, so the edit ends RING_S after a phrase boundary of the track
+   (16 beats from its drop; else 8, else a bar); the music fades over that
+   ring, so the last downbeat is heard whole.
 
-Nothing here is calibrated: the weights, HOOK_S, RING_S and the reach are
-priors, like every threshold in cutgrammar. No model.
+Nothing here is calibrated: the counts, weights, UNIT_S, RING_S and the
+reach are priors, like every threshold in cutgrammar. No model.
 """
 
 from __future__ import annotations
@@ -43,10 +50,14 @@ from . import timeline
 from .tempo import MOVING, STILL
 
 TEXT = "Opening + ending"          # the turn's label: the switch reads its state from it
-HOOK_S = {"short": 3.0}            # how long the hook holds, by frame [prior; research: first 3 s for Shorts]
-HOOK_DEFAULT_S = 6.0               # longer videos: 5-10 s [prior]
-MIN_HOOK_S = 1.5
-TAIL_SHARE = 0.25                  # the closer comes from the last quarter of the edit's shots [prior]
+PREVIEW = "pv"                     # the preview part's id (one per edit)
+UNIT_S = 0.7                       # a preview flash, before it's rounded to whole beats [prior]
+NO_MUSIC_UNIT_S = 0.6              # without music: an even half-second-ish rhythm [prior]
+MIN_PREVIEW_S = 2.5                # long enough for its date line to be read after the first second [prior]
+PAD_S = 0.5                        # a flash stays this far from the stretch the story uses [prior]
+SIMILAR = 0.78                     # look-alikes, as brief.SIMILAR
+CAPTION_AT_S = 1.0                 # no words in the first second
+TAIL_SHARE = 0.25                  # the closer comes from the last quarter of the story's shots [prior]
 MIN_TAIL = 3
 # What an ending looks like in Vision's labels: a view, the light going, the
 # day winding down. [prior, hand-written]
@@ -60,10 +71,34 @@ PHRASES = ((16, "phrase"), (8, "half phrase"), (4, "bar"))
 # How the reply says where the song stopped.
 ENDING_WORDS = {"phrase": "where a musical phrase ends", "half phrase": "where a musical phrase ends",
                 "bar": "on the first beat of a bar", "beat": "on a beat"}
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def count(total_s: float) -> int:
+    """How many moments the preview shows, by the video's length [prior]:
+    a short gets a taste (3-4), a vlog of a few minutes 5-8, a long one up
+    to 12 (sarah, 2026-10-14: "depends on the length of the video")."""
+    if total_s <= 90:
+        return 3 if total_s < 45 else 4
+    if total_s < 600:
+        return int(round(5 + 3 * (total_s - 90) / 510))
+    return int(min(12, round(8 + (total_s - 600) / 300)))
+
+
+def unit(period: float | None, n: int) -> float:
+    """One flash: a whole number of beats near UNIT_S (more when `n` of them
+    would be over before MIN_PREVIEW_S), or the plain rhythm."""
+    if not period:
+        return max(NO_MUSIC_UNIT_S, MIN_PREVIEW_S / max(1, n))
+    beats = max(1, round(UNIT_S / period))
+    while n * beats * period < MIN_PREVIEW_S - 1e-6:
+        beats += 1
+    return round(beats * period, 4)
 
 
 def _shots(board: dict) -> list[tuple[dict, dict]]:
-    return [(bt, e) for bt in board.get("beats", []) for e in bt["shots"] if not bd.is_gap(e) and e.get("id")]
+    return [(bt, e) for bt in board.get("beats", []) if not bt.get("preview")
+            for e in bt["shots"] if not bd.is_gap(e) and e.get("id")]
 
 
 def _moving(s) -> float:
@@ -85,42 +120,118 @@ def is_on(turns) -> bool:
     return any(t.text == TEXT and not t.undone for t in turns)
 
 
-def pick(board: dict, cat, talking: set[str]) -> tuple[str | None, str | None]:
-    """(hook key, closer key), either None when the edit has no good one."""
-    flat = [(bt, e) for bt, e in _shots(board) if e["id"] in cat.shots]
+def preview_of(board: dict) -> dict | None:
+    return next((bt for bt in board.get("beats", []) if bt.get("preview")), None)
+
+
+def opening_end(board: dict) -> float:
+    """Where the story proper starts: the end of the preview, else of the first shot."""
+    lay = timeline.layout(board) if board.get("beats") else []
+    if not lay:
+        return 0.0
+    pv = preview_of(board)
+    if pv is None:
+        return float(lay[0]["seq_end"])
+    keys = {bd.key(e) for e in pv["shots"]}
+    return float(max((it["seq_end"] for it in lay if it.get("key") in keys), default=lay[0]["seq_end"]))
+
+
+def _free(cat, board: dict, sid: str, length: float) -> tuple[float, float] | None:
+    """A `length` window of the shot away from every stretch the story uses,
+    as near its best frame as it can be."""
+    s = cat.shots[sid]
+    used = sorted((e["start"] - PAD_S, e["end"] + PAD_S) for _, e in _shots(board) if e["id"] == sid)
+    pieces, at = [], s.start
+    for a, z in used:
+        if a > at:
+            pieces.append((at, min(a, s.end)))
+        at = max(at, z)
+    if at < s.end:
+        pieces.append((at, s.end))
+    best = cat.best_t.get(sid, (s.start + s.end) / 2)
+    fits = []
+    for lo, hi in pieces:
+        if hi - lo >= length - 1e-6:
+            c = min(max(best, lo + length / 2), hi - length / 2)
+            fits.append((abs(c - best), c))
+    if not fits:
+        return None
+    c = min(fits)[1]
+    return round(c - length / 2, 3), round(c + length / 2, 3)
+
+
+def preview_op(board: dict, cat, period: float | None = None) -> dict | None:
+    """The preview part as one op: `count` flashes, one per stretch of the
+    story, in filming order. None when the story has too few moments."""
+    story = [e for _, e in _shots(board) if e["id"] in cat.shots]
+    lay = [it for it in timeline.layout(board) if not str(it.get("key", "")).startswith("pv~")] if board.get("beats") else []
+    total = sum(it["seq_end"] - it["seq_start"] for it in lay)
+    n = min(count(total), len(story))
+    if n < 2:
+        return None
+    u = unit(period, n)
+    picked: list = []
+    for chunk in np.array_split(np.arange(len(story)), n):
+        for i in sorted(chunk, key=lambda i: -hook_rank(cat.shots[story[i]["id"]])):
+            sh = cat.shots[story[i]["id"]]
+            if any(sh.clip_id == p[0].clip_id or (sh.vec.shape == p[0].vec.shape and float(sh.vec @ p[0].vec) >= SIMILAR)
+                   for p in picked):
+                continue
+            w = _free(cat, board, sh.id, u)
+            if w:
+                picked.append((sh, w, i))
+                break
+    if len(picked) < 2:
+        return None
+    picked.sort(key=lambda p: (p[0].when is None, p[0].when or 0, p[2]))
+    return {"op": "preview", "beat": PREVIEW,
+            "shots": [{"id": sh.id, "start": a, "end": z} for sh, (a, z), _ in picked]}
+
+
+def caption(cat, op: dict, place: str | None) -> dict | None:
+    """When and where, over the preview: "Sep 22 · Kyoto". Only what the
+    clips know (their recording day, the geocoder's name for their GPS)."""
+    days = sorted({cat.shots[x["id"]].when.date() for x in op["shots"] if cat.shots[x["id"]].when})
+    when = ""
+    if days:
+        a, b = days[0], days[-1]
+        md = lambda d: f"{_MONTHS[d.month - 1]} {d.day}"  # noqa: E731
+        when = md(a) if a == b else (f"{md(a)}–{b.day}" if (a.year, a.month) == (b.year, b.month) else f"{md(a)} – {md(b)}")
+    text = " · ".join(x for x in (when, place) if x)
+    length = sum(x["end"] - x["start"] for x in op["shots"])
+    if not text or length < CAPTION_AT_S + 1.0:
+        return None
+    return {"op": "add_overlay", "kind": "caption", "text": text, "anchor": {"to": "beat", "id": PREVIEW},
+            "at": CAPTION_AT_S, "dur": round(length - CAPTION_AT_S, 2)}
+
+
+def closer_key(board: dict, cat) -> str | None:
+    """From the last stretch of the story, the shot that reads most like an ending."""
+    flat = [e for _, e in _shots(board) if e["id"] in cat.shots]
     if len(flat) < 3:
-        return None, None
-    pool = [e for _, e in flat if e["id"] not in talking]
-    hook = max(pool, key=lambda e: hook_rank(cat.shots[e["id"]]), default=None)
+        return None
     n = max(MIN_TAIL, int(round(len(flat) * TAIL_SHARE)))
-    tail = [e for _, e in flat[-n:] if e is not hook]
+    tail = flat[-n:]
     when = [cat.shots[e["id"]].when for e in tail]
     order = sorted(range(len(tail)), key=lambda i: (when[i] is None, when[i] or 0, i))
     late = {id(tail[i]): (r / max(1, len(tail) - 1)) for r, i in enumerate(order)}
-    closer = max(tail, key=lambda e: close_rank(cat.shots[e["id"]], late[id(e)]), default=None)
-    return (bd.key(hook) if hook else None), (bd.key(closer) if closer else None)
+    closer = max(tail, key=lambda e: close_rank(cat.shots[e["id"]], late[id(e)]))
+    return bd.key(closer)
 
 
-def layout_ops(board: dict, cat, talking: set[str], fmt: str | None) -> tuple[list[dict], dict]:
-    """The hook to the front (trimmed), the closer to the end. (ops, what was done)."""
-    hk, ck = pick(board, cat, talking)
+def layout_ops(board: dict, cat, place: str | None = None, period: float | None = None) -> tuple[list[dict], dict]:
+    """The preview at the front, the closer at the end. (ops, what was done)."""
     ops: list[dict] = []
-    done = {"hook": None, "closer": None}
-    if hk:
-        ops.append({"op": "open_with", "shot": hk})
-        b, e = _find(board, hk)
-        cap = HOOK_S.get(fmt or "", HOOK_DEFAULT_S)
-        if e["end"] - e["start"] > cap + 0.05:
-            c = cat.best_t.get(e["id"], (e["start"] + e["end"]) / 2)
-            a = float(min(max(e["start"], c - cap / 2), e["end"] - cap))
-            ops += [{"op": "trim", "shot": hk, "edge": "in", "to": round(a, 3)},
-                    {"op": "trim", "shot": hk, "edge": "out", "to": round(a + cap, 3)}]
-        done["hook"] = e["id"]
-        # its clock caption would put a later time first; the story's own
-        # first caption starts the day (Undo / off brings it back)
-        ops += [{"op": "drop_overlay", "overlay": o["id"]} for o in board.get("overlays", [])
-                if o.get("kind") == "caption" and (o.get("anchor") or {}).get("to") == "shot"
-                and o["anchor"].get("id") == hk]
+    done: dict = {"preview": 0, "closer": None}
+    pv = preview_op(board, cat, period)
+    if pv:
+        ops.append(pv)
+        done["preview"] = len(pv["shots"])
+        cap = caption(cat, pv, place)
+        if cap:
+            ops.append(cap)
+            done["caption"] = cap["text"]
+    ck = closer_key(board, cat)
     if ck:
         ops.append({"op": "end_with", "shot": ck})
         done["closer"] = _find(board, ck)[1]["id"]
@@ -167,19 +278,22 @@ def end_on_phrase(board: dict, cat, music: dict, track_s: float, talking: set[st
     return None, ""
 
 
-def turn(board: dict, cat, talking: set[str], fmt: str | None, music_ops=None) -> tuple[list[dict], str]:
+def turn(board: dict, cat, place: str | None = None, music_ops=None,
+         period: float | None = None) -> tuple[list[dict], str]:
     """Everything the switch does, as one turn's ops, and the reply.
-    `music_ops(trial) -> (ops, note)` re-lays the bed on the new order when
-    the edit has music (app: bed.relay)."""
-    ops, done = layout_ops(board, cat, talking, fmt)
+    `period` is the beat of the music under the edit, if any; then
+    `music_ops(trial) -> (ops, note)` re-lays the bed on the new order
+    (app: bed.relay)."""
+    ops, done = layout_ops(board, cat, place, period)
     if not ops:
         return [], ""
     trial = copy.deepcopy(board)
     for o in ops:
         trial, _ = bd.apply(trial, o, cat, None, lambda: "x")
     said = []
-    if done["hook"]:
-        said.append(f"It opens on {cat.shots[done['hook']].clip_name}, the moment with the most going on, then goes back to the start.")
+    if done["preview"]:
+        said.append(f"It opens on a quick look at the day: {done['preview']} moments, then the story from the start"
+                    + (f", with \u201c{done['caption']}\u201d over them." if done.get("caption") else "."))
     if done["closer"]:
         said.append(f"It ends on {cat.shots[done['closer']].clip_name}, the shot that reads most like an ending.")
     if music_ops is not None:
