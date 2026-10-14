@@ -81,7 +81,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const [pending, setPending] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)   // Frames: timeline entry
   const [storySel, setStorySel] = useState<Selection>(null)
-  const [menu, setMenu] = useState<{ kind: 'story-shot' | 'frames-shot' | 'gap' | 'audio'; key: string; anchor: DOMRect } | null>(null)
+  const [menu, setMenu] = useState<{ kind: 'story-shot' | 'frames-shot' | 'gap' | 'audio' | 'speed' | 'volume' | 'turn'; key: string; anchor: DOMRect } | null>(null)
   const [swap, setSwap] = useState<{ key: string; thumb: string; id: string } | null>(null)
   const [undoable, setUndoable] = useState<{ turn: number; text: string } | null>(null)
   // The rough cut and its gate.
@@ -730,6 +730,39 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
         { label: 'Delete this sound', danger: true, onClick: () => run([{ op: 'drop_audio', audio: a.id }], `You deleted ${name}`) },
       ] }
     }
+    if (menu.kind === 'speed' || menu.kind === 'volume' || menu.kind === 'turn') {
+      // The shot menu's everyday fixes, one small menu each (board.set_shot).
+      const fx = (patch: Record<string, unknown>, label: string) => run([{ op: 'set_shot', shot: menu.key, ...patch }], label)
+      const n = it?.n ?? ''
+      if (menu.kind === 'speed') {
+        const now = it?.speed ?? 1
+        return { title: `Speed of shot ${n} · ${now}×`, items: ([0.5, 1, 1.5, 2, 4] as const).map((x) => ({
+          label: x === 1 ? 'Normal speed' : x < 1 ? 'Slow motion' : x === 4 ? 'Fast forward' : 'Faster',
+          hint: `${x}×${now === x ? ' ✓' : ''}`, disabled: now === x,
+          onClick: () => fx({ speed: x }, x === 1 ? `You put shot ${n} back to normal speed` : `You set shot ${n} to ${x}×`),
+        })) }
+      }
+      if (menu.kind === 'volume') {
+        const g = it?.gain ?? 1
+        const pct = Math.round(g * 100)
+        const level = (x: number) => fx({ gain: Math.round(x * 100) / 100 }, `You set shot ${n}'s sound to ${Math.round(x * 100)}%`)
+        return { title: `Sound of shot ${n} · ${it?.mute ? 'muted' : `${pct}%`}`, items: [
+          { label: 'Louder', hint: `${Math.min(200, pct + 25)}%`, disabled: !!it?.mute || pct >= 200, onClick: () => level(Math.min(2, g + 0.25)) },
+          { label: 'Quieter', hint: `${Math.max(0, pct - 25)}%`, disabled: !!it?.mute || pct <= 0, onClick: () => level(Math.max(0, g - 0.25)) },
+          ...(pct !== 100 && !it?.mute ? [{ label: 'Back to as filmed', hint: '100%', onClick: () => level(1) }] : []),
+          { label: it?.mute ? 'Unmute' : 'Mute', onClick: () => fx({ mute: !it?.mute }, `You ${it?.mute ? 'unmuted' : 'muted'} shot ${n}`) },
+        ] }
+      }
+      const r = it?.rotate ?? 0
+      return { title: `Turn and crop shot ${n}`, items: [
+        { label: 'Turn right', hint: '↻ 90°', onClick: () => fx({ rotate: (r + 90) % 360 }, `You turned shot ${n} right`) },
+        { label: 'Turn left', hint: '↺ 90°', onClick: () => fx({ rotate: (r + 270) % 360 }, `You turned shot ${n} left`) },
+        it?.fill
+          ? { label: 'Show the whole picture', onClick: () => fx({ fill: false }, `Shot ${n} shows its whole picture`) }
+          : { label: 'Fill the frame (crop the edges)', onClick: () => fx({ fill: true }, `Shot ${n} fills the frame`) },
+        ...(r || it?.fill ? [{ label: 'Back to as filmed', onClick: () => fx({ rotate: 0, fill: false }, `You put shot ${n} back as filmed`) }] : []),
+      ] }
+    }
     const openSwap = () => e && setSwap({ key: menu.key, thumb: e.thumb, id: e.id })
     if (menu.kind === 'story-shot') {
       return { title: `This shot · ${e ? (e.end - e.start).toFixed(1) : '?'}s`, items: [
@@ -749,6 +782,11 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       { label: 'Start the shot here', hint: 'Q', onClick: () => trimToPlayhead('in', false) },
       { label: 'End the shot here', hint: 'W', onClick: () => trimToPlayhead('out', false) },
       { label: 'Swap for a different shot…', onClick: openSwap },
+      // a small menu each; opened after this one closes
+      { label: 'Speed…', hint: `${it?.speed ?? 1}×`, onClick: () => { const m = menu; setTimeout(() => setMenu({ ...m, kind: 'speed' }), 0) } },
+      { label: 'Volume…', hint: it?.mute ? 'muted' : `${Math.round((it?.gain ?? 1) * 100)}%`, disabled: tl.audio?.off.includes(menu.key),
+        onClick: () => { const m = menu; setTimeout(() => setMenu({ ...m, kind: 'volume' }), 0) } },
+      { label: 'Turn and crop…', onClick: () => { const m = menu; setTimeout(() => setMenu({ ...m, kind: 'turn' }), 0) } },
       tl.audio?.off.includes(menu.key)
         ? { label: 'Its sound is on its own strip below', disabled: true, onClick: () => {} }
         : { label: 'Take the sound off (extract audio)', onClick: () => run([{ op: 'extract_audio', shot: menu.key }], `You took the sound off shot ${it?.n}`) },

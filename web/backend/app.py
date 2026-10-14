@@ -1061,7 +1061,7 @@ def api_length() -> dict:
     how long the edit is now. Free; nothing leaves the Mac."""
     with LOCK:
         b = SESSION.board
-        now = sum(e["end"] - e["start"] for bt in (b or {}).get("beats", []) for e in bt["shots"])
+        now = sum(bd.seq_dur(e) for bt in (b or {}).get("beats", []) for e in bt["shots"])
         return {**brief.length_marks(_usable_s(), _about()), "current": round(now, 1)}
 
 

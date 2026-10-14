@@ -54,6 +54,13 @@ OVERLAY_OPS = ("add_overlay", "edit_overlay", "drop_overlay", "overlay_style")
 SOUND_OPS = ("extract_audio", "edit_audio", "drop_audio")
 OPS = OPS + SOUND_OPS
 AUDIO_GAIN_MAX = 2.0   # 200%: louder than filmed, short of distorting most phone sound
+# The everyday shot fixes every editor has, on the shot itself: speed (slow
+# motion, fast forward), its own volume or mute, a quarter turn for a clip
+# filmed sideways, and filling the frame (crop the edges) instead of bars.
+# From the shot menu, never chat. Kept on the entry, so a cut keeps them.
+OPS = OPS + ("set_shot",)
+SPEEDS = (0.25, 4.0)           # the slowest and fastest a shot may play
+SHOT_FX = ("speed", "gain", "mute", "rotate", "fill")
 
 FRAME = 1 / 30  # sequence frame; the smallest piece a cut or trim may leave
 
@@ -64,6 +71,11 @@ FRAME = 1 / 30  # sequence frame; the smallest piece a cut or trim may leave
 # same duration arithmetic, nothing to show.
 def key(e: dict) -> str:
     return e.get("key") or e["id"]
+
+
+def seq_dur(e: dict) -> float:
+    """How long an entry lasts in the edit: its source seconds at its speed."""
+    return (e["end"] - e["start"]) / float(e.get("speed") or 1.0)
 
 
 def is_gap(e: dict) -> bool:
@@ -157,7 +169,7 @@ def _flat(board: dict) -> list[tuple[dict, int, float]]:
     for b in board["beats"]:
         for i, s in enumerate(b["shots"]):
             out.append((b, i, t))
-            t += s["end"] - s["start"]
+            t += seq_dur(s)
     return out
 
 
@@ -180,7 +192,7 @@ def _split(board: dict, k: str, at: float) -> str | None:
     if not (e["start"] < at < e["end"]):
         raise OpError(f"{at:.2f}s is outside that shot ({e['start']:.2f}–{e['end']:.2f}s)")
     second = {"key": _fresh_key(board, f"{e['id']}~{int(round(at * 1000))}"), "id": e["id"],
-              "start": round(at, 3), "end": e["end"]}
+              "start": round(at, 3), "end": e["end"], **{f: e[f] for f in SHOT_FX if f in e}}
     e["end"] = round(at, 3)
     beat["shots"].insert(i + 1, second)
     off = (board.get("sound") or {}).get("off")
@@ -209,6 +221,33 @@ def _span(cat: Catalog, sid: str, dur: float) -> tuple[float, float]:
     c = cat.best_t.get(sid, (s.start + s.end) / 2)
     a = min(max(s.start, c - dur / 2), s.end - dur)
     return round(a, 3), round(a + dur, 3)
+
+
+def _shot_fx(b: dict, op: dict) -> None:
+    """Speed, volume, mute, turn and fill on one shot. A value back at its
+    default is removed, so an untouched shot stays a plain entry."""
+    beat, i = _where(b, op.get("shot"))
+    e = beat["shots"][i]
+    if is_gap(e):
+        raise OpError("an empty space has nothing to change")
+    if not any(f in op for f in SHOT_FX):
+        raise OpError("nothing to change")
+    if "speed" in op:
+        e["speed"] = round(max(SPEEDS[0], min(SPEEDS[1], float(op["speed"]))), 3)
+    if "gain" in op:
+        e["gain"] = round(max(0.0, min(AUDIO_GAIN_MAX, float(op["gain"]))), 3)
+    if "mute" in op:
+        e["mute"] = bool(op["mute"])
+    if "rotate" in op:
+        r = int(op["rotate"])
+        if r % 90:
+            raise OpError("a shot turns in quarter turns (0, 90, 180, 270)")
+        e["rotate"] = r % 360
+    if "fill" in op:
+        e["fill"] = bool(op["fill"])
+    for f, plain in (("speed", 1.0), ("gain", 1.0), ("mute", False), ("rotate", 0), ("fill", False)):
+        if f in e and e[f] == plain:
+            del e[f]
 
 
 def _sound_op(b: dict, op: dict, kind: str, new_id) -> None:
@@ -317,6 +356,10 @@ def apply(board: dict | None, op: dict, cat: Catalog, proposals: dict | None,
         b["joins"] = joins
         return b, op
 
+    if kind == "set_shot":
+        _shot_fx(b, op)
+        return b, op
+
     if kind in SOUND_OPS:
         _sound_op(b, op, kind, new_id)
         return b, op
@@ -384,8 +427,9 @@ def apply(board: dict | None, op: dict, cat: Catalog, proposals: dict | None,
             raise OpError("the marked range refers to a shot that's no longer there")
         f_e = _where(b, op["from_shot"])
         t_e = _where(b, op["to_shot"])
-        a = t0 + float(op["from_at"]) - f_e[0]["shots"][f_e[1]]["start"]
-        z = t1 + float(op["to_at"]) - t_e[0]["shots"][t_e[1]]["start"]
+        fe, te = f_e[0]["shots"][f_e[1]], t_e[0]["shots"][t_e[1]]
+        a = t0 + (float(op["from_at"]) - fe["start"]) / float(fe.get("speed") or 1.0)
+        z = t1 + (float(op["to_at"]) - te["start"]) / float(te.get("speed") or 1.0)
         if z - a < FRAME / 2:
             raise OpError("mark an out point after the in point")
         k2 = _split(b, op["to_shot"], float(op["to_at"]))
@@ -393,7 +437,7 @@ def apply(board: dict | None, op: dict, cat: Catalog, proposals: dict | None,
         doomed = []
         for bt, i, t in _flat(b):
             e = bt["shots"][i]
-            if t >= a - FRAME / 2 and t + (e["end"] - e["start"]) <= z + FRAME / 2:
+            if t >= a - FRAME / 2 and t + seq_dur(e) <= z + FRAME / 2:
                 doomed.append((bt, key(e)))
         if not doomed:
             raise OpError("nothing inside that range")
@@ -524,7 +568,7 @@ def _stay_put(seq: list[str], order: dict[str, int]) -> set[str]:
 
 
 def _total(board: dict | None) -> float:
-    return sum(e["end"] - e["start"] for bt in (board or {}).get("beats", []) for e in bt["shots"])
+    return sum(seq_dur(e) for bt in (board or {}).get("beats", []) for e in bt["shots"])
 
 
 def diff(a: dict | None, b: dict | None) -> dict:
@@ -543,7 +587,7 @@ def diff(a: dict | None, b: dict | None) -> dict:
     for x in A:
         if x["id"] not in bb:
             out["beats"]["removed"].append({"id": x["id"], "title": x["title"], "n": len(x["shots"]),
-                                            "dur": sum(s["end"] - s["start"] for s in x["shots"])})
+                                            "dur": sum(seq_dur(s) for s in x["shots"])})
     for i, x in enumerate(B):
         if x["id"] not in ab:
             out["beats"]["added"].append({"id": x["id"], "title": x["title"]})
@@ -563,14 +607,14 @@ def diff(a: dict | None, b: dict | None) -> dict:
     for bid, s in fa:
         if key(s) not in sb_:
             out["shots"]["removed"].append({"id": key(s), "beat": bid, "with_beat": bid in removed_beats,
-                                            "gap": is_gap(s), "dur": round(s["end"] - s["start"], 2)})
+                                            "gap": is_gap(s), "dur": round(seq_dur(s), 2)})
     common = [key(s) for _, s in fb if key(s) in sa]
     stay = _stay_put(common, {key(s): i for i, (_, s) in enumerate(fa)})
     for bid, s in fb:
         k = key(s)
         if k not in sa:
             out["shots"]["added"].append({
-                "id": k, "beat": bid, "gap": is_gap(s), "dur": round(s["end"] - s["start"], 2),
+                "id": k, "beat": bid, "gap": is_gap(s), "dur": round(seq_dur(s), 2),
                 # a new piece of a shot that was already there = a cut
                 "split": bool(s["id"]) and s["id"] in before_ids and b is not None,
                 "at": seq_start(b, k)})
@@ -710,6 +754,23 @@ def _describe_sound(a: dict | None, b: dict | None) -> list[dict]:
         text = (f"At {place}, {SOUND_WORDS[jb[k]['sound']]} it" if k in jb
                 else f"At {place}, the sound is back to automatic")
         lines.append({"kind": "sound", "beat": bt["id"] if bt else None, "shot": k, "text": text})
+    ea = {key(s): s for bt in a["beats"] for s in bt["shots"]}
+    for bt in b["beats"]:
+        for s in bt["shots"]:
+            o = ea.get(key(s))
+            if o is None or is_gap(s):
+                continue
+            for f, plain in (("speed", 1.0), ("gain", 1.0), ("mute", False), ("rotate", 0), ("fill", False)):
+                x, y = o.get(f, plain), s.get(f, plain)
+                if x == y:
+                    continue
+                text = {"speed": lambda: f"Shot plays at {y:g}×" if y != 1 else "Shot back to normal speed",
+                        "gain": lambda: f"Shot volume {round(x * 100)}% → {round(y * 100)}%",
+                        "mute": lambda: "Muted a shot" if y else "Unmuted a shot",
+                        "rotate": lambda: f"Turned a shot to {y}°",
+                        "fill": lambda: "Shot fills the frame (edges cropped)" if y else "Shot shows its whole picture"}[f]()
+                lines.append({"kind": "sound" if f in ("gain", "mute") else "trimmed", "beat": bt["id"],
+                              "shot": key(s), "text": text})
     sa = {x["id"]: x for x in (a.get("sound") or {}).get("strips", [])}
     sb_ = {x["id"]: x for x in (b.get("sound") or {}).get("strips", [])}
     for i in sb_.keys() - sa.keys():

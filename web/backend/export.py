@@ -271,14 +271,18 @@ def _ff(args: list[str], job: Job, total_s: float | None = None, base: float = 0
         raise RuntimeError((err or "").strip().splitlines()[-1] if err and err.strip() else "ffmpeg failed")
 
 
-def _fit(size: dict, style: dict | None = None, fades: str = "") -> str:
+def _fit(size: dict, style: dict | None = None, fades: str = "", fill: bool = False) -> str:
     w, h = size["w"], size["h"]
     look = (style or {}).get("look")
     # The grade goes on the picture before padding, so bars stay black, and
     # after any fade, so a dip bottoms out at the grade's black -- a lifted
     # black stays lifted through a dip, as it does under a graded edit.
     grade = f"lut3d=file='{_esc(look['lut'])}':interp=tetrahedral," if look else ""
-    chain = (f"scale={w}:{h}:force_original_aspect_ratio=decrease:flags=bicubic,{fades}{grade}"
+    # `fill` (the shot menu's crop): cover the frame and cut the edges off,
+    # instead of showing the whole picture with bars
+    fit = (f"scale={w}:{h}:force_original_aspect_ratio=increase:flags=bicubic,crop={w}:{h}" if fill
+           else f"scale={w}:{h}:force_original_aspect_ratio=decrease:flags=bicubic")
+    chain = (f"{fit},{fades}{grade}"
              f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps={FPS}")
     bar = _bar(size, style)
     if bar:
@@ -353,8 +357,8 @@ def plan_transitions(items: list[dict], clips: dict[str, dict], style: dict | No
 def _room(it: dict, clips: dict[str, dict], side: str, n: int) -> bool:
     """Is there footage for n frames beyond this span's edge?"""
     c = clips.get(it.get("clip_id") or "")
-    if not c:
-        return False
+    if not c or float(it.get("speed") or 1) != 1:
+        return False   # a sped-up or slowed shot has no handle at the edit's speed: it cuts
     need = n / FPS
     if side == "head":
         return it["src_start"] - need >= 0
@@ -375,7 +379,12 @@ def _shot(job: Job, it: dict, out: Path, tr: dict | None = None) -> None:
         return
     c = job.clips[it["clip_id"]]
     info = _display(c["path"])
-    src = ["-ss", f"{it['src_start'] - tr['head'] / FPS:.4f}", "-t", f"{d + 0.5:.4f}", "-i", c["path"]]
+    speed = float(it.get("speed") or 1.0)
+    src = ["-ss", f"{it['src_start'] - tr['head'] / FPS:.4f}", "-t", f"{d * speed + 0.5:.4f}", "-i", c["path"]]
+    # the shot menu's fixes: a quarter turn, then its speed (frames retimed;
+    # its sound comes from the mix, stretched there)
+    turn = {90: "transpose=1,", 180: "hflip,vflip,", 270: "transpose=2,"}.get(int(it.get("rotate") or 0), "")
+    retime = f"setpts=PTS/{speed:.6f}," if speed != 1 else ""
     vfade, afade = "", ""
     if tr["fade_in"]:
         k, color = tr["fade_in"]
@@ -405,7 +414,8 @@ def _shot(job: Job, it: dict, out: Path, tr: dict | None = None) -> None:
     # A span that runs to the very end of its file can decode a frame or two
     # short; hold the last frame so every shot is exactly its frame count.
     args = [*src, "-map", "0:v:0", *amap, "-vf",
-            _fit(size, job.style, vfade) + punch + ",tpad=stop_mode=clone:stop_duration=1", *common]
+            turn + retime + _fit(size, job.style, vfade, bool(it.get("fill"))) + punch
+            + ",tpad=stop_mode=clone:stop_duration=1", *common]
     hw = ["-hwaccel", "videotoolbox"] if sys.platform == "darwin" else []
     try:
         _ff(hw + args, job)

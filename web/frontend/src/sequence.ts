@@ -14,6 +14,12 @@ export type SeqItem = {
   beat_id: string
   beat_title: string
   n: number | null
+  // the shot menu's fixes (backend board.set_shot), only where set
+  speed?: number     // 2 = twice as fast: half as long in the edit
+  gain?: number
+  mute?: boolean
+  rotate?: number    // quarter turns, clockwise
+  fill?: boolean     // cover the frame, edges cropped
 }
 
 /** Index of the item under t (binary search). The very end belongs to the
@@ -32,7 +38,7 @@ export function locate(items: SeqItem[], t: number): number {
 
 /** Source time inside the item under t. */
 export function toSource(item: SeqItem, t: number): number {
-  return item.src_start + (t - item.seq_start)
+  return item.src_start + (t - item.seq_start) * (item.speed ?? 1)
 }
 
 /** "21.3", "0:21.3", "1:02:03.5", or SMPTE "00:00:21:09" -> seconds.

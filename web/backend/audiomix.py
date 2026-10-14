@@ -91,6 +91,40 @@ def decode(path: str) -> np.ndarray | None:
     return np.memmap(raw, dtype=np.float32, mode="r").reshape(-1, 2)
 
 
+def _tempo(speed: float) -> str:
+    """atempo takes 0.5–2 per stage; chain stages for 0.25 or 4."""
+    stages, x = [], speed
+    while x > 2.0:
+        stages.append(2.0)
+        x /= 2.0
+    while x < 0.5:
+        stages.append(0.5)
+        x /= 0.5
+    stages.append(x)
+    return ",".join(f"atempo={v:.6f}" for v in stages)
+
+
+def stretched(path: str, a: float, b: float, speed: float) -> np.ndarray | None:
+    """Source seconds [a, b) played at `speed`, pitch kept: (n, 2) float32 at SR.
+    Cached per file, range and speed."""
+    AUDIO_CACHE.mkdir(parents=True, exist_ok=True)
+    k = hashlib.sha1(f"{_file_key(path)}|{a:.4f}|{b:.4f}|{speed:.4f}".encode()).hexdigest()[:16]
+    raw, none = AUDIO_CACHE / f"t{k}.f32", AUDIO_CACHE / f"t{k}.none"
+    if none.exists():
+        return None
+    if not raw.exists():
+        p = subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-ss", f"{max(0.0, a):.4f}", "-t", f"{b - a:.4f}",
+                            "-i", path, "-vn", "-map", "0:a:0?", "-af", _tempo(speed),
+                            "-f", "f32le", "-ac", "2", "-ar", str(SR), "-"], capture_output=True)
+        if p.returncode != 0 or not p.stdout:
+            none.touch()
+            return None
+        tmp = raw.with_suffix(".part")
+        tmp.write_bytes(p.stdout)
+        tmp.replace(raw)
+    return np.fromfile(raw, dtype=np.float32).reshape(-1, 2)
+
+
 # --------------------------------------------------------------------------
 # joins
 # --------------------------------------------------------------------------
@@ -129,6 +163,8 @@ def fits(items: list[dict], clips: dict, k: int, sound: str) -> bool:
     a, b = items[k], items[k + 1]
     if sound == "cut" or a["kind"] != "shot" or b["kind"] != "shot":
         return sound == "cut"
+    if float(a.get("speed") or 1) != 1 or float(b.get("speed") or 1) != 1:
+        return False
     if sound == "carry_out":
         room, other = _room(a, clips, "tail"), (b["seq_end"] - b["seq_start"]) / 2
     else:
@@ -151,7 +187,8 @@ def plan(items: list[dict], clips: dict, joins: list[dict] | None = None,
         if it["kind"] != "shot":
             spans.append(None)
             continue
-        spans.append({"key": it.get("key"), "clip_id": it["clip_id"], "src": [float(it["src_start"]), float(it["src_end"])],
+        spans.append({"key": it.get("key"), "speed": float(it.get("speed") or 1.0),
+                      "gain": 0.0 if it.get("mute") else float(1.0 if it.get("gain") is None else it["gain"]), "clip_id": it["clip_id"], "src": [float(it["src_start"]), float(it["src_end"])],
                       "seq": [float(it["seq_start"]), float(it["seq_end"])],
                       "fin": (MICRO_S, "micro"), "fout": (MICRO_S, "micro")})
     notes: list[str] = []
@@ -173,6 +210,8 @@ def plan(items: list[dict], clips: dict, joins: list[dict] | None = None,
         sound = joins[k]["sound"] if k < len(joins) else "cut"
         if sound == "cut" or not (sa and sb):
             continue
+        if sa["speed"] != 1 or sb["speed"] != 1:
+            continue   # a sped-up or slowed shot's sound isn't carried: its handle would play at the wrong speed
         if sound == "carry_out":
             d = min(CARRY_S, _room(a, clips, "tail"), (b["seq_end"] - b["seq_start"]) / 2)
             if d < MIN_CARRY_S:
@@ -249,18 +288,30 @@ def render(items: list[dict], clips: dict, *, joins: list[dict] | None = None,
         if s.get("key") in off:
             continue
         c = clips.get(s["clip_id"])
-        snd = decode(c["path"]) if c else None
-        if snd is None:
+        if s["gain"] <= 0 or not c:
             continue
-        s0, s1 = int(round(s["src"][0] * SR)), int(round(s["src"][1] * SR))
         q0 = int(round(s["seq"][0] * SR))
-        length = s1 - s0
-        if length <= 0:
-            continue
-        seg = np.zeros((length, 2), np.float32)
-        lo, hi = max(0, s0), min(len(snd), s1)
-        if hi > lo:
-            seg[lo - s0:hi - s0] = snd[lo:hi]
+        if s["speed"] != 1:
+            # played faster or slower: the same seconds, stretched to the
+            # shot's length in the edit, pitch kept (atempo), like any editor
+            length = int(round((s["seq"][1] - s["seq"][0]) * SR))
+            got = stretched(c["path"], s["src"][0], s["src"][1], s["speed"])
+            if got is None or length <= 0:
+                continue
+            seg = np.zeros((length, 2), np.float32)
+            seg[:min(length, len(got))] = got[:length]
+        else:
+            snd = decode(c["path"])
+            if snd is None:
+                continue
+            s0, s1 = int(round(s["src"][0] * SR)), int(round(s["src"][1] * SR))
+            length = s1 - s0
+            if length <= 0:
+                continue
+            seg = np.zeros((length, 2), np.float32)
+            lo, hi = max(0, s0), min(len(snd), s1)
+            if hi > lo:
+                seg[lo - s0:hi - s0] = snd[lo:hi]
         env = np.ones(length, np.float32)
         fi = min(length, int(round(s["fin"][0] * SR)))
         fo = min(length, int(round(s["fout"][0] * SR)))
@@ -268,7 +319,7 @@ def render(items: list[dict], clips: dict, *, joins: list[dict] | None = None,
             env[:fi] *= _ramp(fi, s["fin"][1], True)
         if fo:
             env[length - fo:] *= _ramp(fo, s["fout"][1], False)
-        seg *= (env * original)[:, None]
+        seg *= (env * original * s["gain"])[:, None]
         # clip to the edit: a carry before the first frame or after the last is dropped
         a, z = max(0, q0), min(n, q0 + length)
         if z > a:
@@ -363,7 +414,7 @@ def spec(items: list[dict], clips: dict, board_joins: dict | None, transitions: 
     """Everything the mix depends on, as plain data -- its hash is the file name."""
     return {
         "items": [{k: it.get(k) for k in ("key", "kind", "clip_id", "src_start", "src_end", "seq_start",
-                                          "seq_end", "beat_id")} for it in items],
+                                          "seq_end", "beat_id", "speed", "gain", "mute")} for it in items],
         "files": {cid: [c.get("path"), c.get("duration")] for cid, c in clips.items()
                   if any(it.get("clip_id") == cid for it in items)
                   or any(x["clip_id"] == cid for x in (sound or {}).get("strips") or [])},

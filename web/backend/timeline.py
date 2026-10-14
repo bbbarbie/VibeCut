@@ -30,7 +30,7 @@ def layout(board: dict | None) -> list[dict]:
     items, t, n = [], 0.0, 0
     for b in (board or {}).get("beats", []):
         for e in b["shots"]:
-            d = e["end"] - e["start"]
+            d = bd.seq_dur(e)
             gap = bd.is_gap(e)
             if not gap:
                 n += 1
@@ -40,6 +40,8 @@ def layout(board: dict | None) -> list[dict]:
                 "src_start": e["start"], "src_end": e["end"],
                 "seq_start": round(t, 4), "seq_end": round(t + d, 4),
                 "beat_id": b["id"], "beat_title": b["title"], "n": None if gap else n,
+                # the shot fixes (board.set_shot), only where set
+                **{f: e[f] for f in bd.SHOT_FX if f in e},
             })
             t += d
     return items

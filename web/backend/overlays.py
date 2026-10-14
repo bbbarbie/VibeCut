@@ -163,7 +163,7 @@ def _entries(board: dict) -> list[tuple[str, str, float, float]]:
     out, t = [], 0.0
     for b in board.get("beats", []):
         for e in b["shots"]:
-            d = e["end"] - e["start"]
+            d = (e["end"] - e["start"]) / float(e.get("speed") or 1.0)
             out.append((b["id"], e.get("key") or e["id"], t, t + d))
             t += d
     return out

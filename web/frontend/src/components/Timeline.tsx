@@ -350,7 +350,8 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
               const mark = marksOf[it.key]
               const ed = edge?.key === it.key ? edge : null
               const grow = ed ? (ed.edge === 'out' ? ed.to - it.src_end : it.src_start - ed.to) : 0
-              const w = Math.max(MIN_W, geo.w[k] + grow * (geo.w[k] / Math.max(it.seq_end - it.seq_start, 1e-6)))
+              const sp = it.speed ?? 1   // source seconds per second of the edit
+              const w = Math.max(MIN_W, geo.w[k] + (grow / sp) * (geo.w[k] / Math.max(it.seq_end - it.seq_start, 1e-6)))
               const lo = it.src_min ?? it.src_start
               const hi = it.src_max ?? it.src_end
               // Drag either end: shorter, or longer up to the whole shot as filmed.
@@ -362,7 +363,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                     if (e.button !== 0) return
                     e.stopPropagation(); e.preventDefault()
                     e.currentTarget.setPointerCapture(e.pointerId)
-                    edging.current = { x: e.clientX, base: side === 'in' ? it.src_start : it.src_end, pps: geo.w[k] / Math.max(it.seq_end - it.seq_start, 1e-6) }
+                    edging.current = { x: e.clientX, base: side === 'in' ? it.src_start : it.src_end, pps: geo.w[k] / Math.max(it.seq_end - it.seq_start, 1e-6) / sp }
                     setEdge({ key: it.key, edge: side, to: edging.current.base })
                   }}
                   onPointerMove={(e) => {
@@ -405,9 +406,9 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                   {mark && <div className={`absolute inset-x-0 top-0 h-1 ${MARK_CLS[mark]}`} />}
                   {handle('in')}
                   {handle('out')}
-                  {ed && <div className="pointer-events-none absolute left-1/2 top-1 -translate-x-1/2 rounded bg-black/80 px-1.5 text-[12px] tabular-nums text-zinc-100">{(it.src_end - it.src_start + grow).toFixed(1)}s</div>}
+                  {ed && <div className="pointer-events-none absolute left-1/2 top-1 -translate-x-1/2 rounded bg-black/80 px-1.5 text-[12px] tabular-nums text-zinc-100">{((it.src_end - it.src_start + grow) / sp).toFixed(1)}s</div>}
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 pb-1 pt-3 text-[10px] tabular-nums text-zinc-200">
-                    {it.kind === 'gap' ? 'gap ' : it.n != null ? `${it.n} · ` : ''}{(it.seq_end - it.seq_start).toFixed(1)}s{silent.has(it.key) ? ' · sound below' : ''}
+                    {it.kind === 'gap' ? 'gap ' : it.n != null ? `${it.n} · ` : ''}{(it.seq_end - it.seq_start).toFixed(1)}s{sp !== 1 ? ` · ${sp}×` : ''}{it.mute ? ' · muted' : it.gain != null ? ` · ${Math.round(it.gain * 100)}%` : ''}{silent.has(it.key) ? ' · sound below' : ''}
                   </div>
                 </div>
               )

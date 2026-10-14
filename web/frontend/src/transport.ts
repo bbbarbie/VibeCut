@@ -101,6 +101,7 @@ export class Transport {
   /** Hand the primary element to a preview until the edit next seeks or plays. */
   lend() {
     this.stop()
+    dress(this.primary, null)   // a clip from the shelf plays as filmed
     this.lent = true
     this.seekQueued = null
   }
@@ -157,6 +158,7 @@ export class Transport {
         await this.ensureClip(it.clip_id!, toSource(it, at))
         if (this.lent) break
         if (this.video) this.video.currentTime = Math.min(toSource(it, at), it.src_end - EPS)
+        dress(this.video, it)
         this.paint(at)
       }
       this.seeking = false
@@ -231,7 +233,7 @@ export class Transport {
     if (!b || this.leaving) return
     const target = preloadAt(this.items, k, this.trans, this.fps)
     const it = this.items[k], nx = this.items[k + 1]
-    if (!target || (it && nx && it.kind === 'shot' && nx.clip_id === it.clip_id && Math.abs(nx.src_start - it.src_end) < 0.02)) {
+    if (!target || (it && nx && seamless(it, nx))) {
       return   // nothing next, or the other half of a cut: the front keeps playing
     }
     if (this.pre && this.pre.k === k + 1 && this.pre.clip === target.clip && Math.abs(this.pre.t - target.t) < 1e-3) return
@@ -242,6 +244,7 @@ export class Transport {
     const park = () => {
       if (this.pre !== pre) return
       b.addEventListener('seeked', () => { if (this.pre === pre) pre.ready = true }, { once: true })
+      dress(b, this.items[k + 1], false)
       b.currentTime = target.t
     }
     if (b.getAttribute('src') !== url) {
@@ -273,7 +276,8 @@ export class Transport {
     this.state({ gap: false })
     await this.ensureClip(it.clip_id!)
     v.currentTime = toSource(it, t)
-    v.playbackRate = rate
+    v.playbackRate = rate * (it.speed ?? 1)
+    dress(v, it)
     await v.play().catch(() => {})
   }
 
@@ -326,7 +330,7 @@ export class Transport {
           done = pos >= it.seq_end
         } else {
           const ct = this.video!.currentTime
-          pos = it.seq_start + (ct - it.src_start)
+          pos = it.seq_start + (ct - it.src_start) / (it.speed ?? 1)
           done = ct >= it.src_end - EPS || this.video!.ended
         }
         this.preload(this.cur)
@@ -335,7 +339,7 @@ export class Transport {
         if (d && pos >= d.from && this.pre?.k === this.cur + 1 && this.pre.ready && this.back?.paused) {
           // start where the playhead already is inside the window, not at its edge
           this.back.currentTime = d.inFrom + Math.max(0, pos - d.from)
-          this.back.playbackRate = rate
+          this.back.playbackRate = rate * (this.items[this.cur + 1]?.speed ?? 1)
           this.back.play().catch(() => {})
         }
         // the outgoing shot of a dissolve plays out its tail under the new one
@@ -347,23 +351,22 @@ export class Transport {
           this.cur = next
           phStore.set(nx.seq_start)
           // the other half of a cut, straight after: keep playing, no seek
-          const seamless = it.kind === 'shot' && nx.kind === 'shot' && nx.clip_id === it.clip_id
-            && Math.abs(nx.src_start - it.src_end) < 0.02
+          const joined = seamless(it, nx)
           const pre = this.pre
-          if (nx.kind === 'shot' && !seamless && pre && pre.k === next && pre.ready && this.back) {
+          if (nx.kind === 'shot' && !joined && pre && pre.k === next && pre.ready && this.back) {
             // the next shot is already waiting: swap pictures, no seek, no flash
             const out = this.video!
             this.video = this.back
             this.back = out
             this.pre = null
             this.state({ gap: false })
+            this.video.playbackRate = rate * (nx.speed ?? 1)
             if (this.video.paused) {
-              this.video.playbackRate = rate
               this.video.play().catch(() => {})
             }
             if (d && d.to > d.cut && it.kind === 'shot') this.leaving = { el: out, from: d.from, to: d.to }
             else out.pause()
-          } else if (!seamless) {
+          } else if (!joined) {
             this.switching = true
             this.enter(next, nx.seq_start, rate).then(() => { this.switching = false; this.last = performance.now() })
           }
@@ -400,4 +403,35 @@ export class Transport {
 }
 
 export const transport = new Transport()
+
+/** The other half of a cut, straight after: the same file runs on, no seek. */
+function seamless(it: SeqItem, nx: SeqItem): boolean {
+  return it.kind === 'shot' && nx.kind === 'shot' && nx.clip_id === it.clip_id
+    && Math.abs(nx.src_start - it.src_end) < 0.02 && (nx.speed ?? 1) === (it.speed ?? 1)
+    && (nx.rotate ?? 0) === (it.rotate ?? 0) && !!nx.fill === !!it.fill
+}
+
+/** The shot menu's turn and fill on the picture, as export draws them
+ *  (export._fit): the whole turned picture inside the frame, or covering it. */
+export function dress(el: HTMLVideoElement | null, it: SeqItem | null | undefined, hold = true) {
+  if (!el) return
+  const r = it?.kind === 'shot' ? (it.rotate ?? 0) : 0
+  const fill = it?.kind === 'shot' && !!it.fill
+  let transform = '', fit = fill ? 'cover' : ''
+  if (r) {
+    fit = 'contain'
+    const W = el.clientWidth || 1, H = el.clientHeight || 1
+    const vw = el.videoWidth || W, vh = el.videoHeight || H
+    const c = Math.min(W / vw, H / vh)        // the picture as shown, unturned
+    const [w, h] = r % 180 ? [vh * c, vw * c] : [vw * c, vh * c]   // ...and turned
+    const k = fill ? Math.max(W / w, H / h) : Math.min(W / w, H / h)
+    transform = `rotate(${r}deg) scale(${k})`
+  }
+  // the held frame laid over the picture (hold.ts) is the same picture: dress it alike
+  const still = hold ? el.parentElement?.querySelector<HTMLCanvasElement>('canvas[data-hold]') : null
+  for (const x of still ? [el, still] : [el]) {
+    x.style.transform = transform
+    x.style.objectFit = fit
+  }
+}
 
