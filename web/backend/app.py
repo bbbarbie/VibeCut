@@ -30,7 +30,7 @@ from cutgrammar import grade
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, bed, brief, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, bed, bookends, brief, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import Workflow, WorkflowError
 
@@ -275,6 +275,7 @@ def _session() -> dict:
         "cut": cut.summary(PLAN["plan"]) if PLAN["plan"] else None,
         "music": _music_public(),
         "bed": BED["job"].public() if BED["job"] else None,
+        "bookends": bookends.is_on(SESSION.turns),
         "mix": _mix_public(b, tl),
         "preferences": PREFS.public(SESSION),
         "voiceover": _voiceover_public(),
@@ -1305,7 +1306,8 @@ def _bed_start(force: bool = False) -> None:
                          "reply": job.result["reply"]}, CATALOG["cat"], _make_proposals)
         _save()
 
-    BED["job"] = bed.start(board, CATALOG["cat"], pace, own, need_s, talking, on_done)
+    BED["job"] = bed.start(board, CATALOG["cat"], pace, own, need_s, talking, on_done,
+                           end=bookends.is_on(SESSION.turns))
 
 
 class BedReq(BaseModel):
@@ -1327,6 +1329,40 @@ def api_bed(req: BedReq) -> dict:
                          "ops": [{"op": "set_music", "track": None}],
                          "reply": "Music off — the edit plays with its own sound. Undo puts the track back."},
                         CATALOG["cat"], _make_proposals)
+        return _session()
+
+
+class BookendsReq(BaseModel):
+    on: bool
+
+
+@app.post("/api/bookends")
+def api_bookends(req: BookendsReq) -> dict:
+    """The Opening + ending switch in Frames (bookends.py), off unless the
+    creator turns it on. On: one undoable turn that opens on the best
+    moment, ends on a closing shot and, with music, ends the song on a
+    phrase. Off: that turn is undone, so everything goes back."""
+    with LOCK:
+        b = SESSION.board
+        if not b:
+            raise HTTPException(409, "Choose a story first.")
+        if not req.on:
+            for t in reversed(SESSION.turns):
+                if t.text == bookends.TEXT and not t.undone:
+                    SESSION.toggle(t.id, CATALOG["cat"], _make_proposals)
+            return _session()
+        if bookends.is_on(SESSION.turns):
+            return _session()
+        cat = CATALOG["cat"]
+        talking = tempo.talking(list(CLIPS.values()), _pool())
+        m, track = b.get("music") or {}, _track()
+        relay = None
+        if m.get("track") and track is not None and track.id == m["track"]:
+            relay = lambda trial: bed.relay(trial, cat, m, track, talking)  # noqa: E731
+        ops, said = bookends.turn(b, cat, talking, _want(), relay)
+        if not ops:
+            raise HTTPException(409, "This edit is too short for an opening and an ending of its own.")
+        SESSION.add({"kind": "direct", "text": bookends.TEXT, "ops": ops, "reply": said}, cat, _make_proposals)
         return _session()
 
 

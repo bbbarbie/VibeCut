@@ -1038,6 +1038,15 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                               className="whitespace-nowrap rounded-md border border-line px-2 py-1 text-[11px] text-zinc-300 hover:bg-raised">
                         Captions {ovData.items.length ? 'on' : 'off'}
                       </button>
+                      <button type="button" aria-pressed={!!session.bookends}
+                              title="Open on the best moment and end on a closing shot, with the song finishing on a phrase"
+                              onClick={async () => {
+                                try { const on = !session.bookends; const r = await api.bookends(on); setSession(r); if (on) offerUndo(r) }
+                                catch (e) { note((e as Error).message) }
+                              }}
+                              className="whitespace-nowrap rounded-md border border-line px-2 py-1 text-[11px] text-zinc-300 hover:bg-raised">
+                        Opening + ending {session.bookends ? 'on' : 'off'}
+                      </button>
                       <button type="button" aria-pressed={!!session.music} disabled={session.bed?.stage === 'looking'}
                               title={session.music ? `${session.music.title} — click to take the music out`
                                 : session.bed?.stage === 'looking' ? `Finding a track${session.bed.source ? ` from ${session.bed.source}` : ''}…`

@@ -45,6 +45,7 @@ from cutgrammar import openverse as ov
 from cutgrammar import songpack
 
 from . import audiomix, musiclib, remix, restyle, timeline
+from . import board as bd
 
 # The tempo a cutting pace asks for [prior]. Fast is the Remix range; calm is
 # a walking tempo; balanced sits between.
@@ -167,10 +168,12 @@ def ducks(board: dict, talking: set[str]) -> list[list[float]]:
     return [[round(a, 3), round(b, 3), g] for a, b, g in out if b - a >= MIN_TALK_S]
 
 
-def ops(board: dict, cat, mx: dict, talking: set[str]) -> tuple[list[dict], dict]:
+def ops(board: dict, cat, mx: dict, talking: set[str], end: bool = False) -> tuple[list[dict], dict]:
     """The two ops of the turn: cuts onto the beat, then the bed under them.
-    Returns (ops, report). Everything the ops need is decided here, so
-    replay is exact (restyle's rule)."""
+    With `end` (the Opening + ending switch is on, bookends.py) the closing
+    shot is also stretched so the song ends on a phrase. Returns (ops,
+    report). Everything the ops need is decided here, so replay is exact
+    (restyle's rule)."""
     track: mu.Track = mx["track"]
     out: list[dict] = []
     trial = copy.deepcopy(board)
@@ -185,9 +188,44 @@ def ops(board: dict, cat, mx: dict, talking: set[str]) -> tuple[list[dict], dict
               "style": {}, "grid": grid, "keep": sorted(talking)}
         report = restyle.retime(trial, cat, None, grid, talking)
         out.append(op)
+    fade = FADE_OUT_S
+    if end:
+        from . import bookends
+        trim, report["ending"] = bookends.end_on_phrase(
+            trial, cat, {"in": mx["in"], "bpm": mx["bpm"], "drop": mx.get("drop"), "phase": phase},
+            track.duration, talking)
+        if trim:
+            trial, _ = bd.apply(trial, trim, cat, None, lambda: "x")
+            out.append(trim)
+        if report["ending"]:
+            fade = bookends.RING_S   # the last downbeat rings out under the closer
     out.append({"op": "set_music", "track": track.id, "in": mx["in"], "gain": MUSIC_GAIN, "original": 1.0,
-                "fade_out": FADE_OUT_S, "duck": ducks(trial, talking), "sfx": [], "level": False})
+                "fade_out": fade, "duck": ducks(trial, talking), "sfx": [], "level": False,
+                "bpm": mx["bpm"], "drop": mx.get("drop")})
     return out, report
+
+
+def relay(board: dict, cat, music: dict, track: mu.Track, talking: set[str]) -> tuple[list[dict], str]:
+    """The music already under the edit, laid again after the order changed
+    (the Opening + ending switch): the in-point moves so the drop still lands
+    at the end of the first shot, the cuts go back onto the beat and the
+    song ends on a phrase. Keeps the creator's levels. (ops, a sentence)."""
+    bpm = float(music.get("bpm") or track.bpm or 0)
+    if not bpm:
+        return [], ""
+    drop = music.get("drop")
+    first = timeline.layout(board)[0]["seq_end"] if board.get("beats") else 0.0
+    t_in = float(music.get("in") or 0.0)
+    if drop is not None and float(drop) - first >= 0:
+        t_in = round(float(drop) - first, 3)
+    mx = {"track": track, "in": t_in, "bpm": bpm, "period": 60.0 / bpm, "drop": drop}
+    out, report = ops(board, cat, mx, talking, end=True)
+    keep = {k: music[k] for k in ("gain", "original", "level", "sfx") if k in music}
+    out[-1] = {**out[-1], **keep}
+    end = report.get("ending")
+    from .bookends import ENDING_WORDS
+    return out, (f"The song stops {ENDING_WORDS[end]}, under the closing shot." if end
+                 else "The song fades out under the closing shot.")
 
 
 def say(mx: dict, report: dict, source: str, talking: int) -> str:
@@ -200,6 +238,9 @@ def say(mx: dict, report: dict, source: str, talking: int) -> str:
         parts.append(f"{report['on_beat']} of {report['shots']} cuts moved onto the beat.")
     if talking:
         parts.append(f"{talking} shot{'s' * (talking != 1)} with someone talking kept their timing, the music dips under them.")
+    if report.get("ending"):
+        from .bookends import ENDING_WORDS
+        parts.append(f"The song stops {ENDING_WORDS[report['ending']]}, under the closing shot.")
     parts.append("The track's a first pick, not a judgement. Undo takes the music and the beat away together.")
     return " ".join(parts)
 
@@ -224,7 +265,7 @@ class Job:
 
 
 def start(board: dict, cat, pace: str | None, own: list[mu.Track] | None, need_s: float,
-          talking: set[str], on_done) -> Job:
+          talking: set[str], on_done, end: bool = False) -> Job:
     """Pick in the background; `on_done(job)` gets the ops to add as a turn.
     The board passed in is a copy: the pick must not depend on later edits."""
     job = Job()
@@ -249,7 +290,7 @@ def start(board: dict, cat, pace: str | None, own: list[mu.Track] | None, need_s
                 job.stage, job.why = "nothing", (f"None of the {len(pool)} tracks is long enough for this edit "
                                                  f"({need_s:.0f} s) with a steady beat — no music this time.")
                 return
-            turn_ops, report = ops(board, cat, mx, talking)
+            turn_ops, report = ops(board, cat, mx, talking, end)
             job.result = {"music": mx, "ops": turn_ops, "report": report,
                           "reply": say(mx, report, job.source, len(talking))}
             job.stage = "done"

@@ -172,6 +172,7 @@ export type Session = {
   music: MusicTrack | null
   // Music by default (backend/bed.py): the pick runs in the background and lands as a turn.
   bed: { stage: 'looking' | 'done' | 'nothing' | 'error'; why: string; source: string; done: number; total: number; elapsed: number } | null
+  bookends?: boolean
   // The edit's sound as one track (backend/audiomix.py) -- what preview plays and export writes.
   mix: { key: string; audio: string; joins: JoinInfo[]; transitions: Trans[]; bars: number } | null
   board: Board | null

@@ -278,6 +278,20 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   soon as the pace is read and the chip shows done/total. Openverse's
   commercial slice is thin: one-word moods only (phrases return 0).
   Not yet judged on real footage.
+- **Opening + ending** (`web/backend/bookends.py`, `/api/bookends`, the
+  "Opening + ending" switch in Frames; sarah, 2026-10-14: "only make if users
+  want it", so off by default). On: one undoable turn that moves the shot
+  with the most going on (well made, moving, people; never a talking one) to
+  the start, trimmed to 3 s for a short / 6 s otherwise around its best frame,
+  dropping its out-of-order clock caption; and moves the shot that reads most
+  like an ending (still, a calm view, late) from the last quarter to the end.
+  With music, the closer stretches ≤3 s within what was filmed so the edit
+  ends RING_S 1.5 s after 16 (else 8, 4) beats from the drop, the music fades
+  over that ring, the in-point moves so the drop still lands on the hook's end
+  and the cuts go back on the beat (`bed.relay`; `set_music` now records
+  `bpm` and `drop`). Music that lands while it's on ends the same way
+  (`bed.ops(end=True)`). Off undoes the turn. All weights priors.
+  `tests/test_bookends.py`.
 - **Sound as glue** (`web/backend/audiomix.py`; research
   `design/research/08-fluency-and-motion-ux.md`, P0/P1). One numpy mixer builds the
   edit's whole sound; the preview plays it (picture muted, rate-nudged to
