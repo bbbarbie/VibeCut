@@ -278,9 +278,10 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   soon as the pace is read and the chip shows done/total. Openverse's
   commercial slice is thin: one-word moods only (phrases return 0).
   Not yet judged on real footage.
-- **Opening + ending** (`web/backend/bookends.py`, `/api/bookends`, the
-  "Opening + ending" switch in Frames; sarah, 2026-10-14: "only make if users
-  want it", so off by default). On: one undoable turn. **Opening** = a quick
+- **Opening / Ending** (`web/backend/bookends.py`, `/api/bookends {part, on}`,
+  two switches in Frames; sarah, 2026-10-14: "only make if users want it",
+  then "separate opening and ending", so two, both off by default). Each on:
+  its own undoable turn (labels `TEXTS`); off undoes it. **Opening** = a quick
   look at the day (sarah, after trying one held hook: "very short clips that
   match the music's beats throughout the day ... some information in the
   captions"): op `preview`, its own part at the front (`preview: True`,
@@ -297,8 +298,8 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   stretches ≤3 s within what was filmed so the edit ends RING_S 1.5 s after
   16 (else 8, 4) beats from the drop and the music fades over that ring
   (`bed.relay`; `set_music` records `bpm` and `drop`). Music that lands while
-  it's on re-cuts the preview on its beat and ends the same way
-  (`bed.ops(end=True)`). Off undoes the turn. All numbers priors.
+  they're on re-cuts the preview on its beat / ends the same way
+  (`bed.ops(opening=, ending=)`). All numbers priors.
   `tests/test_bookends.py`.
 - **Sound as glue** (`web/backend/audiomix.py`; research
   `design/research/08-fluency-and-motion-ux.md`, P0/P1). One numpy mixer builds the

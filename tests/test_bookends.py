@@ -135,24 +135,30 @@ def main() -> int:
     check("a busy street shot is not the closer", bookends.closer_key(s3.board, cat3) != CLOSER,
           str(bookends.closer_key(s3.board, cat3)))
 
-    print("the turn (no music)")
-    ops, said = bookends.turn(s.board, cat, "Kyoto")
-    t = s.add({"kind": "direct", "text": bookends.TEXT, "ops": ops, "reply": said}, cat, lambda d: None)
+    print("the two switches (no music)")
+    ops, said = bookends.turn(s.board, cat, "opening", "Kyoto")
+    t = s.add({"kind": "direct", "text": bookends.TEXTS["opening"], "ops": ops, "reply": said}, cat, lambda d: None)
     check("it applied", not t.skipped, str(t.skipped))
-    check("the preview opens it", s.board["beats"][0].get("preview") and len(flashes(s.board)) == len(got))
-    check("then the story from the start, its closer at the end",
-          story(s.board)[0] == "hotel0000001:0" and story(s.board)[-1] == CLOSER, str(story(s.board)[-3:]))
-    check("the story itself is untouched but for the closer",
-          sorted(story(s.board)) == sorted(story(before)))
+    check("Opening alone: the preview opens it", s.board["beats"][0].get("preview") and len(flashes(s.board)) == len(got))
+    check("and the story is exactly as it was", story(s.board) == story(before), str(story(s.board)[-3:]))
+    check("Ending reads off", bookends.is_on(s.turns, "opening") and not bookends.is_on(s.turns, "ending"))
+    ops2, said2 = bookends.turn(s.board, cat, "ending")
+    t2 = s.add({"kind": "direct", "text": bookends.TEXTS["ending"], "ops": ops2, "reply": said2}, cat, lambda d: None)
+    check("Ending: the closer moves to the end, nothing else", story(s.board)[-1] == CLOSER
+          and sorted(story(s.board)) == sorted(story(before)) and flashes(s.board) and "ends on" in said2,
+          str(story(s.board)[-3:]))
+    check("Ending makes no preview of its own", not any(o["op"] == "preview" for o in ops2))
+    s.toggle(t2.id, cat, lambda d: None)
+    check("Ending off: the closer goes back, the preview stays",
+          story(s.board) == story(before) and flashes(s.board))
     cap = [o for o in s.board["overlays"] if o["anchor"].get("id") == bookends.PREVIEW]
     check("date and place over the preview, from 1 s in",
           len(cap) == 1 and cap[0]["text"] == "May 2 · Kyoto" and cap[0]["at"] == bookends.CAPTION_AT_S, str(cap))
     check("the story's own captions stay", any(o["text"] == "8:00 am" for o in s.board["overlays"]))
     check("the reply says what it did", "quick look at the day" in said, said)
-    check("the switch reads on", bookends.is_on(s.turns))
     s.toggle(t.id, cat, lambda d: None)
-    check("off puts every shot back", s.board["beats"] == before["beats"] and s.board.get("overlays") == before["overlays"])
-    check("and reads off", not bookends.is_on(s.turns))
+    check("Opening off puts every shot back", s.board["beats"] == before["beats"] and s.board.get("overlays") == before["overlays"])
+    check("and both read off", not bookends.is_on(s.turns, "opening") and not bookends.is_on(s.turns, "ending"))
 
     print("the song")
     with tempfile.TemporaryDirectory() as d:
@@ -184,9 +190,15 @@ def main() -> int:
             return all(abs((c - phase) / period - round((c - phase) / period)) * period < 0.02 for c in cuts)
 
         before = copy.deepcopy(s.board)
-        ops, said = bookends.turn(s.board, cat, None, lambda trial: bed.relay(trial, cat, m, mx["track"], set()), period)
-        t = s.add({"kind": "direct", "text": bookends.TEXT, "ops": ops, "reply": said}, cat, lambda d: None)
-        check("it applied", not t.skipped, str(t.skipped))
+        ops, said = bookends.turn(s.board, cat, "opening", None,
+                                  lambda trial: bed.relay(trial, cat, m, mx["track"], set(), True, False), period)
+        t = s.add({"kind": "direct", "text": bookends.TEXTS["opening"], "ops": ops, "reply": said}, cat, lambda d: None)
+        m1 = s.board["music"]
+        check("Opening with music: the song still fades as before", m1["fade_out"] == bed.FADE_OUT_S, str(m1["fade_out"]))
+        ops2, said = bookends.turn(s.board, cat, "ending", None,
+                                   lambda trial: bed.relay(trial, cat, m1, mx["track"], set(), True, True), period)
+        t2 = s.add({"kind": "direct", "text": bookends.TEXTS["ending"], "ops": ops2, "reply": said}, cat, lambda d: None)
+        check("both applied", not t.skipped and not t2.skipped, str(t.skipped + t2.skipped))
         u = flashes(s.board)[0]["end"] - flashes(s.board)[0]["start"]
         check("each flash is whole beats of the song", abs(u / period - round(u / period)) < 1e-3 and 0.4 < u < 1.1
               and len(flashes(s.board)) * u >= bookends.MIN_PREVIEW_S,
@@ -200,18 +212,20 @@ def main() -> int:
         check("the edit ends a ring after a phrase from the drop", off1 < 0.02, f"{k1:.3f} half phrases")
         check("the music fades over the ring", mm["fade_out"] == bookends.RING_S, str(mm["fade_out"]))
         check("the edit still ends on the closer", story(s.board)[-1] == CLOSER)
+        s.toggle(t2.id, cat, lambda d: None)
         s.toggle(t.id, cat, lambda d: None)
-        check("off puts the music back too", s.board["music"] == before["music"] and s.board["beats"] == before["beats"])
+        check("both off puts the music back too", s.board["music"] == before["music"] and s.board["beats"] == before["beats"])
 
         # the music lands after the switch is on: the bed's own turn re-cuts the preview and ends on a phrase
         s, cat = session(cs)
-        ops, _ = bookends.turn(s.board, cat, "Kyoto")
-        s.add({"kind": "direct", "text": bookends.TEXT, "ops": ops}, cat, lambda d: None)
+        for which in ("opening", "ending"):
+            ops, _ = bookends.turn(s.board, cat, which, "Kyoto")
+            s.add({"kind": "direct", "text": bookends.TEXTS[which], "ops": ops}, cat, lambda d: None)
         fp = bed.fingerprint(s.board, cat, "balanced")
         check("the music's hook waits for the preview", abs(fp["hook_s"] - bookends.opening_end(s.board)) < 0.01,
               f"{fp['hook_s']} vs {bookends.opening_end(s.board)}")
         mx = bed.pick(fp, pool, timeline.layout(s.board)[-1]["seq_end"])
-        more, report = bed.ops(s.board, cat, mx, set(), end=True)
+        more, report = bed.ops(s.board, cat, mx, set(), True, True)
         s.add({"kind": "direct", "text": "Music and the beat", "ops": more}, cat, lambda d: None)
         mm = s.board["music"]
         k2, off2 = halves(s.board)
@@ -232,15 +246,20 @@ def main() -> int:
     A._make_proposals = lambda d: None
     real_session, A._session = A._session, lambda: {}
     before, n = copy.deepcopy(s.board), len(s.turns)
-    check("off until asked", not bookends.is_on(A.SESSION.turns))
-    A.api_bookends(A.BookendsReq(on=True))
-    check("on: one turn, the preview first, the closer last", len(A.SESSION.turns) == n + 1
-          and A.SESSION.board["beats"][0].get("preview") and story(A.SESSION.board)[-1] == CLOSER,
-          str(story(A.SESSION.board)[-3:]))
-    A.api_bookends(A.BookendsReq(on=True))
+    check("both off until asked", not bookends.is_on(A.SESSION.turns, "opening") and not bookends.is_on(A.SESSION.turns, "ending"))
+    A.api_bookends(A.BookendsReq(part="opening", on=True))
+    check("Opening on: one turn, the preview first", len(A.SESSION.turns) == n + 1
+          and A.SESSION.board["beats"][0].get("preview") and story(A.SESSION.board) == story(before))
+    A.api_bookends(A.BookendsReq(part="opening", on=True))
     check("asking twice adds no second turn", len(A.SESSION.turns) == n + 1)
-    A.api_bookends(A.BookendsReq(on=False))
-    check("off: back as it was", A.SESSION.board["beats"] == before["beats"] and not bookends.is_on(A.SESSION.turns))
+    A.api_bookends(A.BookendsReq(part="ending", on=True))
+    check("Ending on: its own turn, the closer last", len(A.SESSION.turns) == n + 2
+          and story(A.SESSION.board)[-1] == CLOSER, str(story(A.SESSION.board)[-3:]))
+    A.api_bookends(A.BookendsReq(part="opening", on=False))
+    check("Opening off: the preview goes, the ending stays", not bookends.preview_of(A.SESSION.board)
+          and story(A.SESSION.board)[-1] == CLOSER and bookends.is_on(A.SESSION.turns, "ending"))
+    A.api_bookends(A.BookendsReq(part="ending", on=False))
+    check("Ending off: back as it was", A.SESSION.board["beats"] == before["beats"])
     A._session = real_session
 
     print()

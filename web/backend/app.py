@@ -276,7 +276,8 @@ def _session() -> dict:
         "cut": cut.summary(PLAN["plan"]) if PLAN["plan"] else None,
         "music": _music_public(),
         "bed": BED["job"].public() if BED["job"] else None,
-        "bookends": bookends.is_on(SESSION.turns),
+        "opening": bookends.is_on(SESSION.turns, "opening"),
+        "ending": bookends.is_on(SESSION.turns, "ending"),
         "mix": _mix_public(b, tl),
         "preferences": PREFS.public(SESSION),
         "voiceover": _voiceover_public(),
@@ -1308,7 +1309,8 @@ def _bed_start(force: bool = False) -> None:
         _save()
 
     BED["job"] = bed.start(board, CATALOG["cat"], pace, own, need_s, talking, on_done,
-                           end=bookends.is_on(SESSION.turns))
+                           opening=bookends.is_on(SESSION.turns, "opening"),
+                           ending=bookends.is_on(SESSION.turns, "ending"))
 
 
 class BedReq(BaseModel):
@@ -1352,38 +1354,45 @@ def _day_place() -> str | None:
 
 
 class BookendsReq(BaseModel):
+    part: str
     on: bool
 
 
 @app.post("/api/bookends")
 def api_bookends(req: BookendsReq) -> dict:
-    """The Opening + ending switch in Frames (bookends.py), off unless the
-    creator turns it on. On: one undoable turn that opens on the best
-    moment, ends on a closing shot and, with music, ends the song on a
-    phrase. Off: that turn is undone, so everything goes back."""
+    """The Opening and Ending switches in Frames (bookends.py), each off
+    unless the creator turns it on. Opening on: a quick look at the day at
+    the front, cut on the beat. Ending on: a closing shot at the end, the
+    song stopping on a phrase. Each is one undoable turn; off undoes it."""
+    if req.part not in bookends.TEXTS:
+        raise HTTPException(422, "part is opening or ending")
+    text = bookends.TEXTS[req.part]
     with LOCK:
         b = SESSION.board
         if not b:
             raise HTTPException(409, "Choose a story first.")
         if not req.on:
             for t in reversed(SESSION.turns):
-                if t.text == bookends.TEXT and not t.undone:
+                if t.text == text and not t.undone:
                     SESSION.toggle(t.id, CATALOG["cat"], _make_proposals)
             return _session()
-        if bookends.is_on(SESSION.turns):
+        if bookends.is_on(SESSION.turns, req.part):
             return _session()
         cat = CATALOG["cat"]
         talking = tempo.talking(list(CLIPS.values()), _pool())
         m, track = b.get("music") or {}, _track()
         relay, period = None, None
         if m.get("track") and track is not None and track.id == m["track"]:
-            relay = lambda trial: bed.relay(trial, cat, m, track, talking)  # noqa: E731
+            opening = req.part == "opening" or bookends.is_on(SESSION.turns, "opening")
+            ending = req.part == "ending" or bookends.is_on(SESSION.turns, "ending")
+            relay = lambda trial: bed.relay(trial, cat, m, track, talking, opening, ending)  # noqa: E731
             bpm = float(m.get("bpm") or track.bpm or 0)
             period = 60.0 / bpm if bpm else None
-        ops, said = bookends.turn(b, cat, _day_place(), relay, period)
+        ops, said = bookends.turn(b, cat, req.part, _day_place(), relay, period)
         if not ops:
-            raise HTTPException(409, "This edit is too short for an opening and an ending of its own.")
-        SESSION.add({"kind": "direct", "text": bookends.TEXT, "ops": ops, "reply": said}, cat, _make_proposals)
+            raise HTTPException(409, "This edit is too short for a preview of its own." if req.part == "opening"
+                                else "This edit is too short to pick a closing shot.")
+        SESSION.add({"kind": "direct", "text": text, "ops": ops, "reply": said}, cat, _make_proposals)
         return _session()
 
 

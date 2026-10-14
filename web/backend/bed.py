@@ -174,10 +174,12 @@ def ducks(board: dict, talking: set[str]) -> list[list[float]]:
     return [[round(a, 3), round(b, 3), g] for a, b, g in out if b - a >= MIN_TALK_S]
 
 
-def ops(board: dict, cat, mx: dict, talking: set[str], end: bool = False) -> tuple[list[dict], dict]:
+def ops(board: dict, cat, mx: dict, talking: set[str], opening: bool = False,
+        ending: bool = False) -> tuple[list[dict], dict]:
     """The two ops of the turn: cuts onto the beat, then the bed under them.
-    With `end` (the Opening + ending switch is on, bookends.py) the closing
-    shot is also stretched so the song ends on a phrase. Returns (ops,
+    With `opening` on (bookends.py) the day's preview is re-cut on this
+    track's beat and the drop lands as the story starts; with `ending` on
+    the closing shot is stretched so the song ends on a phrase. Returns (ops,
     report). Everything the ops need is decided here, so replay is exact
     (restyle's rule)."""
     track: mu.Track = mx["track"]
@@ -185,7 +187,7 @@ def ops(board: dict, cat, mx: dict, talking: set[str], end: bool = False) -> tup
     trial = copy.deepcopy(board)
     report = {"on_beat": 0, "shots": 0}
     phase = (track.meta.get("tempo") or {}).get("phase")
-    if end:
+    if opening:
         from . import bookends
         if bookends.preview_of(trial) is not None:
             # the day's preview, re-cut in whole beats of this track, and the
@@ -216,7 +218,7 @@ def ops(board: dict, cat, mx: dict, talking: set[str], end: bool = False) -> tup
         report = restyle.retime(trial, cat, None, grid, talking)
         out.append(op)
     fade = FADE_OUT_S
-    if end:
+    if ending:
         from . import bookends
         trim, report["ending"] = bookends.end_on_phrase(
             trial, cat, {"in": mx["in"], "bpm": mx["bpm"], "drop": mx.get("drop"), "phase": phase},
@@ -232,7 +234,8 @@ def ops(board: dict, cat, mx: dict, talking: set[str], end: bool = False) -> tup
     return out, report
 
 
-def relay(board: dict, cat, music: dict, track: mu.Track, talking: set[str]) -> tuple[list[dict], str]:
+def relay(board: dict, cat, music: dict, track: mu.Track, talking: set[str],
+          opening: bool, ending: bool) -> tuple[list[dict], str]:
     """The music already under the edit, laid again after the order changed
     (the Opening + ending switch): the preview is re-cut on the beat, the
     in-point moves so the drop lands as the story starts, the cuts go back
@@ -244,11 +247,13 @@ def relay(board: dict, cat, music: dict, track: mu.Track, talking: set[str]) -> 
     drop = music.get("drop")
     t_in = float(music.get("in") or 0.0)
     mx = {"track": track, "in": t_in, "bpm": bpm, "period": 60.0 / bpm, "drop": drop}
-    out, report = ops(board, cat, mx, talking, end=True)
+    out, report = ops(board, cat, mx, talking, opening, ending)
     keep = {k: music[k] for k in ("gain", "original", "level", "sfx") if k in music}
     out[-1] = {**out[-1], **keep}
     end = report.get("ending")
     from .bookends import ENDING_WORDS
+    if not ending:
+        return out, "The music starts so its big moment lands as the story begins."
     return out, (f"The song stops {ENDING_WORDS[end]}, under the closing shot." if end
                  else "The song fades out under the closing shot.")
 
@@ -290,7 +295,7 @@ class Job:
 
 
 def start(board: dict, cat, pace: str | None, own: list[mu.Track] | None, need_s: float,
-          talking: set[str], on_done, end: bool = False) -> Job:
+          talking: set[str], on_done, opening: bool = False, ending: bool = False) -> Job:
     """Pick in the background; `on_done(job)` gets the ops to add as a turn.
     The board passed in is a copy: the pick must not depend on later edits."""
     job = Job()
@@ -315,7 +320,7 @@ def start(board: dict, cat, pace: str | None, own: list[mu.Track] | None, need_s
                 job.stage, job.why = "nothing", (f"None of the {len(pool)} tracks is long enough for this edit "
                                                  f"({need_s:.0f} s) with a steady beat — no music this time.")
                 return
-            turn_ops, report = ops(board, cat, mx, talking, end)
+            turn_ops, report = ops(board, cat, mx, talking, opening, ending)
             job.result = {"music": mx, "ops": turn_ops, "report": report,
                           "reply": say(mx, report, job.source, len(talking))}
             job.stage = "done"

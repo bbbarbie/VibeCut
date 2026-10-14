@@ -49,7 +49,9 @@ from . import board as bd
 from . import timeline
 from .tempo import MOVING, STILL
 
-TEXT = "Opening + ending"          # the turn's label: the switch reads its state from it
+# Two switches (sarah, 2026-10-14: "separate opening and ending"); each
+# turn's label is how its switch reads its state.
+TEXTS = {"opening": "Opening", "ending": "Ending"}
 PREVIEW = "pv"                     # the preview part's id (one per edit)
 UNIT_S = 0.7                       # a preview flash, before it's rounded to whole beats [prior]
 NO_MUSIC_UNIT_S = 0.6              # without music: an even half-second-ish rhythm [prior]
@@ -116,8 +118,8 @@ def close_rank(s, late: float) -> float:
     return s.score + 0.25 * (1 - _moving(s)) + 0.2 * min(1.0, calm / 0.5) + 0.1 * late
 
 
-def is_on(turns) -> bool:
-    return any(t.text == TEXT and not t.undone for t in turns)
+def is_on(turns, which: str) -> bool:
+    return any(t.text == TEXTS[which] and not t.undone for t in turns)
 
 
 def preview_of(board: dict) -> dict | None:
@@ -219,22 +221,26 @@ def closer_key(board: dict, cat) -> str | None:
     return bd.key(closer)
 
 
-def layout_ops(board: dict, cat, place: str | None = None, period: float | None = None) -> tuple[list[dict], dict]:
-    """The preview at the front, the closer at the end. (ops, what was done)."""
+def layout_ops(board: dict, cat, which: str, place: str | None = None,
+               period: float | None = None) -> tuple[list[dict], dict]:
+    """The preview at the front (opening) or the closer at the end (ending).
+    (ops, what was done)."""
     ops: list[dict] = []
     done: dict = {"preview": 0, "closer": None}
-    pv = preview_op(board, cat, period)
-    if pv:
-        ops.append(pv)
-        done["preview"] = len(pv["shots"])
-        cap = caption(cat, pv, place)
-        if cap:
-            ops.append(cap)
-            done["caption"] = cap["text"]
-    ck = closer_key(board, cat)
-    if ck:
-        ops.append({"op": "end_with", "shot": ck})
-        done["closer"] = _find(board, ck)[1]["id"]
+    if which == "opening":
+        pv = preview_op(board, cat, period)
+        if pv:
+            ops.append(pv)
+            done["preview"] = len(pv["shots"])
+            cap = caption(cat, pv, place)
+            if cap:
+                ops.append(cap)
+                done["caption"] = cap["text"]
+    else:
+        ck = closer_key(board, cat)
+        if ck:
+            ops.append({"op": "end_with", "shot": ck})
+            done["closer"] = _find(board, ck)[1]["id"]
     return ops, done
 
 
@@ -278,13 +284,13 @@ def end_on_phrase(board: dict, cat, music: dict, track_s: float, talking: set[st
     return None, ""
 
 
-def turn(board: dict, cat, place: str | None = None, music_ops=None,
+def turn(board: dict, cat, which: str, place: str | None = None, music_ops=None,
          period: float | None = None) -> tuple[list[dict], str]:
-    """Everything the switch does, as one turn's ops, and the reply.
+    """Everything one switch does, as one turn's ops, and the reply.
     `period` is the beat of the music under the edit, if any; then
     `music_ops(trial) -> (ops, note)` re-lays the bed on the new order
     (app: bed.relay)."""
-    ops, done = layout_ops(board, cat, place, period)
+    ops, done = layout_ops(board, cat, which, place, period)
     if not ops:
         return [], ""
     trial = copy.deepcopy(board)
