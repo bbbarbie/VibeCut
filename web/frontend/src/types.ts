@@ -248,7 +248,7 @@ export type StyleQuestion = { id: string; question: string; multi: boolean; hint
   /** asked only when an earlier answer is one of these: { captions: ['describe', 'transcribe'] } */
   when?: Record<string, string[]> }
 export type StyleAnswers = { length?: string; seconds?: number; pace?: string; opening?: string; captions?: string; caption_look?: string
-  format?: 'short' | 'tall' | 'wide'; look?: string }
+  format?: 'short' | 'tall' | 'wide'; look?: string; joins?: string }
 
 // How the sound crosses a cut: carried out (L cut), carried in (J cut), or a clean break.
 export type JoinSound = 'cut' | 'carry_out' | 'carry_in' | 'default'

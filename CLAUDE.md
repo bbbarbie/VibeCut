@@ -360,6 +360,18 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   `tests/test_polish.py`, `test_polish_api.py` (face in the lower third vs
   the top, through the API), `polishDraw.test.ts`. Windows and margins are
   priors.
+- **Your profile** (`web/backend/profile.py`, `/api/profile`, `ProfileAsk.tsx`;
+  sarah, 2026-10-14). Asked once, after the first export (any project): the
+  email (the only typing; names the profile, never sent anywhere, no account)
+  plus four picture taps, preset to what that video used: vlogs / lessons,
+  quick / steady / calm, straight cut / soft fade / fade to black / flash,
+  caption style (a look's words) or none. Skip = never asked again. Kept in
+  `$VIBECUT_CACHE/profile.json`. The next video starts from it in
+  `/api/brief/auto` (pace instead of the footage's, lessons get subtitles of
+  what's said, the look, and the joins as `style.joins`, used by `_style`
+  while the look is still the one it started with). Pace, look and Captions
+  off changed in Frames move the profile (`learned`), only once one exists.
+  Not a settings panel (sarah disliked one). `tests/test_profile.py`.
 - **Fonts: only what's already on the creator's machine.** A system family,
   or a font file the creator points at (served back only if a saved recipe
   names it). Never bundle or ship a font. **Recognising a font in a

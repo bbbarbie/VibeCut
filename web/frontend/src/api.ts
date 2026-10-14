@@ -114,4 +114,12 @@ export const api = {
     j<Session>(post(`/api/references/${rid}/apply`, { traits, strength })),
   refForget: (rid: string) => j<{ references: RefSummary[]; links: boolean }>(fetch(`/api/references/${rid}`, { method: 'DELETE' })),
   useTrack: (trackId: string | null) => j<Session>(post('/api/music/use', { track_id: trackId })),
+  // your profile: asked once after the first export, kept on this Mac
+  profile: () => j<CreatorHabits>(fetch('/api/profile')),
+  profileSave: (p: { email: string; kind: string | null; pace: string | null; joins: string | null; captions: string | null }) =>
+    j<CreatorHabits>(post('/api/profile', p)),
+  profileSkip: () => j<CreatorHabits>(post('/api/profile/skip', {})),
 }
+
+export type CreatorHabits = { email: string | null; kind: string | null; pace: string | null; joins: string | null
+  captions: string | null; exports: number; ask: boolean; learned: { field: string; from: string | null; to: string | null; why: string; at: number }[] }
