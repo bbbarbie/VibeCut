@@ -57,15 +57,25 @@ func analyse(_ path: String) async -> Out {
 // second of a clip (trim needs to know when a person is in or leaving frame).
 struct FaceOut: Encodable {
     let path: String
-    let faces: [[Double]]   // [x, y, w, h], normalised, origin bottom-left
+    let faces: [[Double]]   // [x, y, w, h, yaw?], normalised, origin bottom-left; yaw in degrees
+}
+
+// Which way a face is turned: 0 is straight at the lens. Talking to the
+// audience is done looking into the phone; chatting with a friend is done
+// turned towards them -- the one thing that tells the two apart.
+func degrees(_ m: Measurement<UnitAngle>?) -> Double? {
+    guard let m else { return nil }
+    return m.converted(to: .degrees).value
 }
 
 func faces(_ path: String) async -> FaceOut {
     let url = URL(fileURLWithPath: path)
     let found = (try? await DetectFaceRectanglesRequest().perform(on: url)) ?? []
     return FaceOut(path: path, faces: found.map {
-        [Double($0.boundingBox.origin.x), Double($0.boundingBox.origin.y),
-         Double($0.boundingBox.width), Double($0.boundingBox.height)]
+        let box = [Double($0.boundingBox.origin.x), Double($0.boundingBox.origin.y),
+                   Double($0.boundingBox.width), Double($0.boundingBox.height)]
+        if let yaw = degrees($0.yaw) { return box + [yaw] }
+        return box
     })
 }
 

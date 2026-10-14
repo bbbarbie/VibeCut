@@ -7,7 +7,7 @@ import { useSyncExternalStore } from 'react'
 import { locate, toSource, type SeqItem } from './sequence'
 import type { Target } from './snap'
 import { hideStill, settleStill, swapSource } from './hold'
-import { dissolveAfter, mixAt, preloadAt, veilAt, type TransMap } from './joinView'
+import { dissolveAfter, mixAt, preloadAt, swipeAt, veilAt, SWIPE_BLUR, type TransMap } from './joinView'
 
 export function createStore<T>(initial: T) {
   let v = initial
@@ -53,7 +53,7 @@ export class Transport {
   trans: TransMap = new Map()
   fps = 30
   private pre: { k: number; clip: string; t: number; ready: boolean } | null = null
-  private leaving: { el: HTMLVideoElement; from: number; to: number } | null = null
+  private leaving: { el: HTMLVideoElement; from: number; to: number; swipe: boolean } | null = null
   items: SeqItem[] = []
   total = 0
   private raf = 0
@@ -205,17 +205,25 @@ export class Transport {
   private paint(t: number) {
     const v = this.video, b = this.back
     let top = v, alpha = 1, under: HTMLVideoElement | null = null
+    let win: { from: number; to: number; swipe: boolean } | null = null
     if (this.leaving && v) {
-      top = v; under = this.leaving.el; alpha = mixAt(this.leaving, t)
+      top = v; under = this.leaving.el; alpha = mixAt(this.leaving, t); win = this.leaving
     } else if (b && v && !b.paused) {
       const d = dissolveAfter(this.items, this.cur, this.trans, this.fps)
-      if (d) { top = b; under = v; alpha = mixAt(d, t) }
+      if (d) { top = b; under = v; alpha = mixAt(d, t); win = d }
     }
+    // a swipe slides both pictures instead of blending them
+    const sw = win && win.swipe && under ? swipeAt(win, t) : null
+    if (sw) alpha = 1
+    const smear = sw?.smear && top ? `blur(${Math.max(1, (top.clientWidth || 640) * SWIPE_BLUR / 2).toFixed(1)}px)` : ''
     for (const el of [v, b]) {
       if (!el) continue
       if (el === top) { el.style.zIndex = '2'; el.style.opacity = String(alpha) }
       else if (el === under) { el.style.zIndex = '1'; el.style.opacity = '1' }
       else { el.style.zIndex = '0'; el.style.opacity = '0' }
+      const x = !sw ? 0 : el === top ? sw.inX : el === under ? sw.outX : 0
+      el.style.transform = x ? `translateX(${(x * 100).toFixed(2)}%)` : ''
+      el.style.filter = sw && (el === top || el === under) ? smear : ''
     }
     if (this.veil) {
       const k = locate(this.items, t)
@@ -361,7 +369,7 @@ export class Transport {
               this.video.playbackRate = rate
               this.video.play().catch(() => {})
             }
-            if (d && d.to > d.cut && it.kind === 'shot') this.leaving = { el: out, from: d.from, to: d.to }
+            if (d && d.to > d.cut && it.kind === 'shot') this.leaving = { el: out, from: d.from, to: d.to, swipe: d.swipe }
             else out.pause()
           } else if (!seamless) {
             this.switching = true

@@ -6,7 +6,7 @@
 
 import type { SeqItem } from './sequence'
 
-export type Trans = { key: string; head: number; tail: number; fade_in: [number, string] | null; fade_out: [number, string] | null }
+export type Trans = { key: string; head: number; tail: number; fade_in: [number, string] | null; fade_out: [number, string] | null; swipe?: boolean }
 export type TransMap = Map<string, Trans>
 
 export const byKey = (list: Trans[] | undefined | null): TransMap => new Map((list ?? []).map((t) => [t.key, t]))
@@ -34,13 +34,26 @@ export function veilAt(items: SeqItem[], k: number, tr: TransMap, t: number, fps
  *  Export overlaps the two shots over [cut - head, cut + tail], mixing
  *  linearly; null when that cut is a plain cut. */
 export function dissolveAfter(items: SeqItem[], k: number, tr: TransMap, fps: number):
-  { from: number; cut: number; to: number; inFrom: number } | null {
+  { from: number; cut: number; to: number; inFrom: number; swipe: boolean } | null {
   const a = items[k], b = items[k + 1]
   if (!a || !b || a.kind !== 'shot' || b.kind !== 'shot') return null
   const tail = (tr.get(a.key)?.tail ?? 0) / fps, head = (tr.get(b.key)?.head ?? 0) / fps
   if (tail <= 0 && head <= 0) return null
   const cut = a.seq_end
-  return { from: cut - head, cut, to: cut + tail, inFrom: b.src_start - head }
+  return { from: cut - head, cut, to: cut + tail, inFrom: b.src_start - head, swipe: !!tr.get(a.key)?.swipe }
+}
+
+// The export's swipe (export.SWIPE_BLUR / SWIPE_SMEAR): xfade's slideleft,
+// smeared sideways over the middle of the move.
+export const SWIPE_BLUR = 0.03
+export const SWIPE_SMEAR: [number, number] = [0.2, 0.8]
+
+/** Where the two pictures sit at t inside a swipe window: the incoming one
+ *  slides in from the right as the outgoing one leaves to the left (shares
+ *  of the frame width), and whether the move is smeared. */
+export function swipeAt(d: { from: number; to: number }, t: number): { outX: number; inX: number; smear: boolean } {
+  const p = mixAt(d, t)
+  return { outX: -p, inX: 1 - p, smear: p > SWIPE_SMEAR[0] && p < SWIPE_SMEAR[1] }
 }
 
 /** How much of the incoming shot shows at t inside a dissolve window (0..1). */

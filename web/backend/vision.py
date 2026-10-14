@@ -104,26 +104,47 @@ def faces(paths: list[str]) -> dict[str, list[list[float]]]:
         return {r["path"]: r["faces"] for rs in ex.map(run, chunks) for r in rs}
 
 
+# A face this much smaller than the largest in frame is someone in the
+# background (a lecture hall, a street), not a second person in the shot.
+COMPANION = 0.25
+# Turned less than this from the lens counts as looking into it. [prior]
+FACING_DEG = 25.0
+TRACK_COLS = 4   # faces.json rows written before face direction had 2
+
+
 def face_track(boxes_per_sample: list[list[list[float]]], times: list[float], n_sec: int) -> list[list[float]]:
-    """Per-second [presence, edge] from face boxes on each sampled frame.
+    """Per-second [presence, edge, people, facing] from face boxes on each
+    sampled frame.
 
     Presence: the largest face is at least ~1% of the frame. Edge: that face
-    touches or nearly touches a side -- someone entering or leaving.
+    touches or nearly touches a side -- someone entering or leaving. People:
+    how many faces are in the shot (background faces left out). Facing: the
+    share of samples where the largest face looks into the lens; -1 when the
+    helper gave no direction (older macOS), so nobody guesses from it.
     """
     per = []
     for boxes in boxes_per_sample:
         if not boxes:
-            per.append((0.0, 0.0))
+            per.append((0.0, 0.0, 0, 0.0))
             continue
-        x, y, w, h = max(boxes, key=lambda b: b[2] * b[3])
+        big = max(boxes, key=lambda b: b[2] * b[3])
+        x, y, w, h = big[:4]
         presence = min(1.0, (w * h) / 0.01)
         gap = min(x, y, 1 - (x + w), 1 - (y + h))
-        per.append((presence, max(0.0, min(1.0, (0.04 - gap) / 0.04))))
+        people = sum(1 for b in boxes if b[2] * b[3] >= COMPANION * w * h)
+        facing = -1.0 if len(big) < 5 else float(abs(big[4]) <= FACING_DEG)
+        per.append((presence, max(0.0, min(1.0, (0.04 - gap) / 0.04)), people, facing))
     out = []
     for k in range(n_sec):
         idx = [i for i, t in enumerate(times) if k <= t < k + 1]
         if not idx and times:
             idx = [min(range(len(times)), key=lambda i: abs(times[i] - (k + 0.5)))]
+        if not idx:
+            out.append([0.0, 0.0, 0.0, -1.0])
+            continue
+        seen = [per[i][3] for i in idx if per[i][0] > 0]
         out.append([round(sum(per[i][0] for i in idx) / len(idx), 3),
-                    round(max(per[i][1] for i in idx), 3)] if idx else [0.0, 0.0])
+                    round(max(per[i][1] for i in idx), 3),
+                    float(max(per[i][2] for i in idx)),
+                    -1.0 if not seen or min(seen) < 0 else round(sum(seen) / len(seen), 3)])
     return out

@@ -25,6 +25,11 @@ import numpy as np
 # The quality floor is a guess, like every threshold in cutgrammar; it only
 # decides what is left off the storyboard, never what is cut out of a file.
 MIN_QUALITY = 0.25
+# Evening and night shots score low on exposure by nature. One with lights in
+# it -- lit windows, street lamps, a campus at night -- is the end of the day,
+# not a mistake: it is never left out for quality alone. [prior]
+NIGHT_FROM, NIGHT_TO = 18, 6
+LIT = 0.4
 SESSION_GAP = timedelta(minutes=45)
 PLACE_RADII_M = [120, 300, 700, 1500, 4000, 15000, 60000]
 MAX_BEATS = 6
@@ -87,6 +92,7 @@ class Shot:
     vec: np.ndarray
     order: int = 0          # position in plain file order
     lean: bool = False
+    contrast: float = 0.0   # best frame's contrast part (bestframe), lights against the dark
 
     @property
     def duration(self) -> float:
@@ -176,16 +182,23 @@ def shots_from_clips(clips: list[dict], cut: tuple[set, dict] | None = None) -> 
                 face_area=s.get("face_area", 0.0),
                 activity=s.get("activity", 0.0),
                 vec=emb,
+                contrast=float((s.get("parts") or {}).get("contrast", 0.0)),
             ))
     for i, s in enumerate(out):
         s.order = i
     return out
 
 
+def lit_night(s: Shot) -> bool:
+    night = s.when is not None and (s.when.hour >= NIGHT_FROM or s.when.hour < NIGHT_TO)
+    night = night or any(s.labels.get(k, 0) >= 0.3 for k in ("night", "illumination", "evening"))
+    return night and s.contrast >= LIT
+
+
 def usable(shots: list[Shot]) -> tuple[list[Shot], list[str]]:
     keep, notes = [], []
     screens = [s for s in shots if s.utility]
-    poor = [s for s in shots if not s.utility and s.quality < MIN_QUALITY]
+    poor = [s for s in shots if not s.utility and s.quality < MIN_QUALITY and not lit_night(s)]
     keep = [s for s in shots if s not in screens and s not in poor]
     if not keep:  # never hand back an empty board
         return shots, notes

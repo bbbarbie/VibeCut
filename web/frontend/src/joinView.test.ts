@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { byKey, dissolveAfter, mixAt, preloadAt, veilAt } from './joinView.ts'
+import { byKey, dissolveAfter, mixAt, preloadAt, swipeAt, veilAt } from './joinView.ts'
 import type { SeqItem } from './sequence'
 
 const it = (key: string, s0: number, s1: number, q0: number, extra: Partial<SeqItem> = {}): SeqItem => ({
@@ -44,4 +44,18 @@ test('nothing next to a gap dissolves, and a gap preloads nothing', () => {
   const g = [it('a:0', 1, 3, 0), { ...it('gap', 0, 1, 2), kind: 'gap' as const, clip_id: null }]
   assert.equal(dissolveAfter(g, 0, tr, FPS), null)
   assert.equal(preloadAt(g, 0, tr, FPS), null)
+})
+
+test('a swipe uses the dissolve window but slides: out to the left, in from the right', () => {
+  const sw = byKey([
+    { key: 'a:0', head: 0, tail: 5, fade_in: null, fade_out: null, swipe: true },
+    { key: 'b:0', head: 5, tail: 0, fade_in: null, fade_out: null },
+  ])
+  const d = dissolveAfter(items, 0, sw, FPS)!
+  assert.equal(d.swipe, true)
+  assert.deepEqual(swipeAt(d, d.from), { outX: -0, inX: 1, smear: false })
+  const mid = swipeAt(d, d.cut)
+  assert.ok(Math.abs(mid.outX + 0.5) < 1e-9 && Math.abs(mid.inX - 0.5) < 1e-9 && mid.smear)
+  assert.deepEqual(swipeAt(d, d.to), { outX: -1, inX: 0, smear: false })
+  assert.equal(dissolveAfter(items, 0, tr, FPS)!.swipe, false, 'a dissolve stays a dissolve')
 })
