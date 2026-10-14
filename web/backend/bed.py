@@ -86,14 +86,16 @@ def fingerprint(board: dict, cat, pace: str | None) -> dict:
         energy = np.linspace(0.3, 1.0, ENERGY_POINTS)   # one part: assume it builds, as music does
     first = next((s["end"] - s["start"] for bt in board["beats"] for s in bt["shots"] if not s.get("gap")), 1.5)
     from . import bookends
+    cap = HOOK_S[1]
     if bookends.preview_of(board) is not None:
         first = bookends.opening_end(board)   # the drop lands as the story starts, after the preview
+        cap = PREVIEW_MAX_S
     rise = float(energy[-ENERGY_POINTS // 4:].mean() - energy[:ENERGY_POINTS // 4].mean())
     return {
         "bpm": PACE_BPM[pace], "pace": pace,
         "energy": [round(float(v), 3) for v in energy],
         "arc": "builds" if rise > 0.1 else "falls" if rise < -0.1 else "steady",
-        "hook_s": round(float(np.clip(first, HOOK_S[0], max(HOOK_S[1], PREVIEW_MAX_S))), 2),
+        "hook_s": round(float(np.clip(first, HOOK_S[0], cap)), 2),
         "duration": round(float(sum(s.duration for s in sections)), 1),
     }
 
