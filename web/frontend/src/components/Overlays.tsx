@@ -122,7 +122,7 @@ export function Overlays({ data, items, level, selected, busy, onSelect, onRun, 
         <ol className="space-y-1">
           {list.map((o) => (
             <Item key={o.id} o={o} where={where(o)} open={selected === o.id} findings={byOverlay.get(o.id) ?? []} level={level}
-                  onToggle={() => onSelect(selected === o.id ? null : o.id)} onRun={onRun} onWatch={() => onWatch(o)} />
+                  onToggle={() => onSelect(selected === o.id ? null : o.id)} onRun={onRun} onWatch={() => onWatch(o)} picked={data.style.enter} />
           ))}
         </ol>
         <div className="relative mt-2">
@@ -150,8 +150,10 @@ export function Overlays({ data, items, level, selected, busy, onSelect, onRun, 
   )
 }
 
-function Item({ o, where, open, findings, level, onToggle, onRun, onWatch }: {
+function Item({ o, where, open, findings, level, onToggle, onRun, onWatch, picked }: {
   o: Overlay; where: string; open: boolean; findings: OverlayFinding[]; level: 'story' | 'frames'
+  /** an entrance picked for every caption (the Animation tab), which this caption follows */
+  picked?: string | null
   onToggle: () => void; onRun: Ops; onWatch: () => void
 }) {
   const meta = KIND_META[o.kind]
@@ -199,7 +201,9 @@ function Item({ o, where, open, findings, level, onToggle, onRun, onWatch }: {
           )}
           {o.kind !== 'chapters' && (
             <Row label="Comes in">
-              <Seg value={o.anim} options={ANIMS.map(([k, n]) => [k, n])} onChange={(v) => edit({ anim: v }, 'animation')} />
+              {o.kind === 'caption' && picked
+                ? <span className="font-serif text-[15px] text-zinc-100">Like every caption: change it under Animation, below the timeline</span>
+                : <Seg value={o.anim} options={ANIMS.map(([k, n]) => [k, n])} onChange={(v) => edit({ anim: v }, 'animation')} />}
             </Row>
           )}
           <Row label="Length">

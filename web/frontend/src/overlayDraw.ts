@@ -8,7 +8,7 @@
 // state at t is computed, never accumulated, which is what lets the export
 // render any frame in any order.
 
-import type { Motion, Overlay, OverlayKind, OverlayStyle } from './types'
+import type { CaptionEnter, CaptionTemplate, Motion, Overlay, OverlayKind, OverlayStyle } from './types'
 
 export type Part = { id: string; title: string; start: number; end: number }
 
@@ -83,6 +83,16 @@ export function pose(o: Pick<Overlay, 'anim' | 'kind' | 'start' | 'shown_end'>, 
   const typing = o.anim === 'type'
   let alpha = (typing ? Math.min(1, p * 4) : clamp01(e)) * pout
   let dx = 0, dy = 0, scale = 1, rot = 0
+  const ce = motion?.caption_enter
+  if (ce) {
+    // a caption template's entrance (the Animation tab), for captions only
+    if (ce === 'fade') { dy = (1 - e) * 0.035 * u; alpha = clamp01(e) * pout }
+    else if (ce === 'pop') { scale = Math.max(0.02, e); alpha = Math.min(1, p * 4) * pout }
+    else if (ce === 'slide') { dx = -(1 - e) * 0.14 * u; alpha = Math.min(1, p * 2.5) * pout }
+    else if (ce === 'stamp') { scale = 1 + (1 - e) * 1.1; rot = (-(1 - e) * 4 * Math.PI) / 180; alpha = Math.min(1, p * 3) * pout }
+    else alpha = (p > 0 ? 1 : 0) * pout   // type, word: the words appear; nothing moves
+    return { dx, dy, alpha, scale, rot }
+  }
   if (big && motion?.enter === 'slam') {            // Hype: in from 1.5×, fast
     scale = 1.5 - 0.5 * e
     alpha = Math.min(1, p * 3) * pout
@@ -104,10 +114,10 @@ export function partAt(parts: Part[], t: number): number {
 
 /** Identical keys draw identical pixels. The exporter sends one frame per
  *  run of equal keys -- a title holding still is one PNG with a duration. */
-export function frameKey(items: Overlay[], parts: Part[], t: number, motion?: Motion | null): string {
+export function frameKey(items: Overlay[], parts: Part[], t: number, motion?: Motion | null, style?: OverlayStyle | null): string {
   const out: string[] = []
   for (const o of items) {
-    const p = phase(o, t, motion)
+    const p = phase(o, t, style ? motionFor(o, style) : motion)
     if (!p.on) continue
     out.push(`${o.id}:${Math.round(p.pin * 1000)}:${Math.round(p.pout * 1000)}${o.kind === 'chapters' ? `:${partAt(parts, t)}` : ''}`)
   }
@@ -142,18 +152,118 @@ const WEIGHT: Record<OverlayStyle['font'], { bold: number; regular: number }> = 
 }
 export const fontCss = (style: OverlayStyle, px: number, bold: boolean) =>
   `${bold ? WEIGHT[style.font].bold : WEIGHT[style.font].regular} ${Math.round(px)}px ${FAMILY[style.font]}`
+const lineFont = (style: OverlayStyle, ln: Line, px = ln.px) =>
+  ln.family ? `${ln.weight ?? 700} ${Math.round(px)}px ${ln.family}` : fontCss(style, px, ln.bold)
 
 /** Web fonts must be loaded before a canvas can draw them. */
 export async function ensureFonts(style: OverlayStyle): Promise<void> {
   if (typeof document === 'undefined' || !document.fonts) return
-  await Promise.all([fontCss(style, 40, true), fontCss(style, 40, false)].map((f) => document.fonts.load(f).catch(() => [])))
+  const tpl = style.template ? TEMPLATES[style.template] : null
+  const fonts = [fontCss(style, 40, true), fontCss(style, 40, false), ...(tpl ? [`${tpl.weight} 40px ${tpl.family}`] : [])]
+  await Promise.all(fonts.map((f) => document.fonts.load(f).catch(() => [])))
+}
+
+// ---- caption templates ----------------------------------------------------
+//
+// How every caption in the video is dressed (the Style tab when a caption is
+// clicked; overlays.TEMPLATES). Each one carries its own way of being read
+// over any frame -- a black edge, a backing, a marker band -- so the
+// contrast fix (ink.py) only matters for the two that are bare letters.
+// Fonts: what every Mac already has, first (CLAUDE.md: never bundle a font).
+
+type Tpl = {
+  family: string; weight: number; size: number; color: string
+  case?: 'upper' | 'lower'; track?: number
+  stroke?: { color: string; w: number }            // edge width as a share of the letter size
+  box?: { fill: string; ink: string; round: number }   // a backing per line; round as a share of its height
+  marker?: { band: string; ink: string }           // a highlighter stroke behind each line
+  shadow?: boolean
+  split?: boolean                                  // "7:42 am · coffee run": the time on its own line, on top
+  pop?: string[]                                   // the longest words in colour
+  rule?: boolean                                   // a thin line above
+}
+const SERIF = '"Times New Roman", "EB Garamond", Georgia, "Songti SC", serif'
+const SANS = '"Helvetica Neue", Helvetica, Arial, "PingFang SC", sans-serif'
+export const TEMPLATES: Record<CaptionTemplate, Tpl> = {
+  outlined: { family: SERIF, weight: 700, size: 0.064, color: '#ffffff', stroke: { color: '#000000', w: 0.13 }, split: true },
+  bold: { family: `"Avenir Next", "Avenir", ${SANS}`, weight: 800, size: 0.066, color: '#ffffff', case: 'upper',
+          stroke: { color: '#000000', w: 0.2 }, split: true },
+  label: { family: SANS, weight: 700, size: 0.048, color: '#141414', box: { fill: '#ffffff', ink: '#141414', round: 0.5 } },
+  highlight: { family: SANS, weight: 700, size: 0.052, color: '#141414', marker: { band: '#ffe14d', ink: '#141414' } },
+  handwritten: { family: '"Bradley Hand", "Noteworthy", "Marker Felt", "Segoe Print", cursive', weight: 700, size: 0.07,
+                 color: '#fff8ec', case: 'lower', shadow: true },
+  tape: { family: '"American Typewriter", "Courier New", "Courier Prime", monospace', weight: 600, size: 0.044,
+          color: '#222222', box: { fill: '#f4efe3', ink: '#222222', round: 0.08 } },
+  pop: { family: `"Arial Rounded MT Bold", "Nunito", "Avenir Next", ${SANS}`, weight: 800, size: 0.066, color: '#ffffff',
+         stroke: { color: '#1a1a1a', w: 0.18 }, pop: ['#ffd84d', '#7fe0ff'], split: true },
+  quiet: { family: SANS, weight: 400, size: 0.03, color: '#ffffff', case: 'upper', track: 0.3, shadow: true, rule: true },
+}
+
+// The time at the head of a describing caption, "7:42 am · coffee run".
+const TIME_HEAD = /^(\d{1,2}[:.]\d{2}\s*(?:[ap]\.?m\.?)?)\s*[·•\-–—|]\s*(.+)$/i
+
+function templateLines(o: Overlay, tpl: Tpl, u: number, chars: number): Line[] {
+  const s = SIZE[o.size]
+  const base = { bold: true, family: tpl.family, weight: tpl.weight, color: tpl.color, track: tpl.track, tpl }
+  const cased = (x: string) => tpl.case === 'lower' ? x.toLowerCase() : x
+  const upper = tpl.case === 'upper'
+  const out: Line[] = []
+  if (o.sub) out.push({ ...base, text: cased(o.sub), px: tpl.size * 0.5 * u * s, upper: true, track: (tpl.track ?? 0) + 0.12 })
+  // Typed or word-by-word: `chars` of the whole text show, split the same way
+  // as the finished caption so nothing jumps from one line to two.
+  const m = tpl.split ? TIME_HEAD.exec(o.text) : null
+  if (m) {
+    const at = o.text.lastIndexOf(m[2])
+    const time = m[1].slice(0, chars), said = chars > at ? m[2].slice(0, chars - at) : ''
+    out.push({ ...base, text: time, px: tpl.size * 0.9 * u * s, upper })
+    if (said) out.push({ ...base, text: cased(said), px: tpl.size * u * s, upper })
+  } else {
+    out.push({ ...base, text: cased(o.text.slice(0, chars)), px: tpl.size * u * s, upper })
+  }
+  return out.filter((ln) => ln.text)
+}
+
+/** The caption's own motion when the creator picked an entrance (the
+ *  Animation tab): how long it takes and its curve. Everything else keeps
+ *  the look's motion. */
+const ENTER: Record<CaptionEnter, { curve: Motion['curve']; in_s: (o: Overlay) => number; stagger_s: number }> = {
+  fade: { curve: [0.22, 1, 0.36, 1], in_s: () => 0.5, stagger_s: 0.08 },
+  pop: { curve: [0.34, 1.56, 0.64, 1], in_s: () => 0.45, stagger_s: 0.06 },
+  slide: { curve: [0.16, 1, 0.3, 1], in_s: () => 0.5, stagger_s: 0.08 },
+  stamp: { curve: [0.2, 0.9, 0.3, 1], in_s: () => 0.32, stagger_s: 0 },
+  type: { curve: [0, 0, 1, 1], in_s: (o) => Math.min(1.6, 0.045 * o.text.length), stagger_s: 0 },
+  word: { curve: [0, 0, 1, 1], in_s: (o) => Math.min(2.4, 0.3 * o.text.split(/\s+/).length), stagger_s: 0 },
+}
+export function motionFor(o: Overlay, style: OverlayStyle): Motion | null {
+  const m = style.motion ?? null
+  if (o.kind !== 'caption' || !style.enter) return m
+  const e = ENTER[style.enter]
+  return { case: m?.case ?? 'sentence', track: m?.track ?? 0, beat_lock: !!m?.beat_lock,
+           curve: e.curve, in_s: e.in_s(o), step_fps: 0, stagger_s: e.stagger_s, enter: null, caption_enter: style.enter }
+}
+
+/** How much of the caption's words show at intro progress pin, for the
+ *  entrances that write themselves out. */
+function shownChars(o: Overlay, style: OverlayStyle, pin: number): number {
+  const n = o.text.length
+  const how = o.kind === 'caption' && style.enter ? style.enter : o.anim === 'type' ? 'type' : null
+  if (how === 'type') return style.enter ? Math.ceil(n * clamp01(pin)) : Math.ceil(n * clamp01(pin * 1.6))
+  if (how === 'word') {
+    const words = o.text.split(/(\s+)/)
+    const count = words.filter((w) => w.trim()).length
+    let want = Math.max(1, Math.ceil(count * clamp01(pin))), k = 0, out = ''
+    for (const w of words) { if (w.trim()) { if (k === want) break; k++ } out += w }
+    return out.trimEnd().length
+  }
+  return n
 }
 
 const SIZE = { S: 0.78, M: 1, L: 1.4 }
 
 // ---- layout ---------------------------------------------------------------
 
-type Line = { text: string; px: number; bold: boolean; color: string; track?: number; upper?: boolean }
+type Line = { text: string; px: number; bold: boolean; color: string; track?: number; upper?: boolean
+  family?: string; weight?: number; tpl?: Tpl }
 
 export function safe(W: number, H: number) {
   const portrait = H > W
@@ -183,6 +293,9 @@ export function wrap(measure: (s: string) => number, text: string, maxW: number,
 }
 
 function linesFor(o: Overlay, style: OverlayStyle, u: number, chars: number): Line[] {
+  if (o.kind === 'caption' && style.template) {
+    return templateLines(o, TEMPLATES[style.template], u, chars)
+  }
   const lines = baseLines(o, style, u, chars)
   const m = style.motion
   if (!m || o.kind === 'date') return lines
@@ -248,13 +361,12 @@ export function drawOverlays(ctx: CanvasRenderingContext2D | OffscreenCanvasRend
   items: Overlay[], style: OverlayStyle, parts: Part[], t: number, boxes?: OverlayBox[]): void {
   ctx.clearRect(0, 0, W, H)
   const u = Math.min(W, H)
-  const motion = style.motion ?? null
   for (const o of items) {
+    const motion = motionFor(o, style)
     const p = phase(o, t, motion)
     if (!p.on) continue
     if (o.kind === 'chapters') { drawChapters(ctx, W, H, u, style, parts, t, easeOut(p.pin) * p.pout); continue }
-    const typing = o.anim === 'type'
-    const chars = typing ? Math.ceil(o.text.length * clamp01(p.pin * 1.6)) : o.text.length
+    const chars = shownChars(o, style, p.pin)
     const pos = o.kind === 'caption' ? (style.captions === 'center' ? 'center' : 'bottom') : o.pos
     // placed by hand: centred where it was dropped, at its own size
     const a: Anchor = o.place ? { x: o.place.x * W, align: 'center', v: 'middle', y: o.place.y * H } : anchorFor(pos, W, H)
@@ -279,12 +391,15 @@ function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingConte
     let ln = ln0, out: string[] = []
     for (let k = 1; ; k *= 0.9) {
       ln = k === 1 ? ln0 : { ...ln0, px: ln0.px * k }
-      ctx.font = fontCss(style, ln.px, ln.bold)
+      ctx.font = lineFont(style, ln)
       setTracking(ctx, ln.track ? ln.track * ln.px : 0)
-      out = wrap((s) => ctx.measureText(s).width, text, maxW, max)
+      // a backing's padding comes out of the room the words have
+      out = wrap((s) => ctx.measureText(s).width, text, maxW - (ln.tpl?.box || ln.tpl?.marker ? ln.px * 0.9 : 0), max)
       if (!out[out.length - 1]?.endsWith('…') || text.endsWith('…') || k < 0.62) break
     }
-    for (const r of out) rows.push({ text: r, line: ln, w: ctx.measureText(r).width, h: ln.px * 1.18 })
+    // a backing or an edge needs room around the letters, inside the block
+    const lh = ln.tpl?.box ? 1.75 : ln.tpl?.marker ? 1.45 : ln.tpl?.stroke ? 1.3 : 1.18
+    for (const r of out) rows.push({ text: r, line: ln, w: ctx.measureText(r).width + (ln.tpl?.box || ln.tpl?.marker ? ln.px * 0.9 : 0), h: ln.px * lh })
   }
   if (!rows.length) return
   const gap = 0.012 * u
@@ -322,7 +437,14 @@ function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingConte
   ctx.scale(pl0.sc, pl0.sc)
   ctx.translate(-cx, -cy)
   ctx.globalAlpha = p0.alpha
-  if (style.backing === 'box' || o.kind === 'name') {
+  const tpl = lines[0]?.tpl
+  if (tpl) {
+    // a caption template brings its own edge or backing (drawn per line below)
+    if (tpl.rule) {
+      ctx.fillStyle = tpl.color
+      ctx.fillRect(x - (a.align === 'center' ? 0.025 * u : a.align === 'right' ? 0.05 * u : 0), y - 0.014 * u, 0.05 * u, Math.max(1, 0.0015 * u))
+    }
+  } else if (style.backing === 'box' || o.kind === 'name') {
     const pad = 0.022 * u
     const left = a.align === 'left' ? x - pad : a.align === 'right' ? x - blockW - pad : x - blockW / 2 - pad
     ctx.fillStyle = style.backing === 'none' ? 'rgba(0,0,0,0)' : 'rgba(10,10,12,0.55)'
@@ -340,7 +462,14 @@ function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingConte
     const lx = a.align === 'left' ? x : a.align === 'right' ? x - w : x - w / 2
     ctx.fillRect(lx, y + blockH + 0.014 * u, w, Math.max(2, 0.004 * u))
   }
-  if (o.halo) {
+  if (tpl && !tpl.shadow) {
+    ctx.shadowColor = 'rgba(0,0,0,0)'
+    ctx.shadowBlur = 0
+  } else if (tpl && !o.halo) {
+    ctx.shadowColor = 'rgba(0,0,0,0.7)'
+    ctx.shadowBlur = 0.02 * u
+    ctx.shadowOffsetY = 0.003 * u
+  } else if (o.halo) {
     // nothing in the palette stands out from this frame enough on its own
     ctx.shadowColor = o.halo
     ctx.shadowBlur = 0.022 * u
@@ -356,7 +485,7 @@ function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingConte
   let group = 0
   for (const r of rows) {
     if (prev && prev !== r.line) { y += gap; group++ }
-    ctx.font = fontCss(style, r.line.px, r.line.bold)
+    ctx.font = lineFont(style, r.line)
     setTracking(ctx, r.line.track ? r.line.track * r.line.px : 0)
     ctx.fillStyle = r.line.color
     // later lines fade in a stagger behind the first (the look's rhythm);
@@ -365,6 +494,13 @@ function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingConte
     // letter-spacing adds trailing space; shift so tracked text stays aligned
     const shift = r.line.track && a.align !== 'left' ? (r.line.track * r.line.px) / (a.align === 'center' ? 2 : 1) : 0
     const ty = y + (r.h - r.line.px) / 2
+    if (r.line.tpl) {
+      ctx.globalAlpha = group ? at(group).alpha : p0.alpha
+      drawTemplateRow(ctx, r.text, r.w, r.line, r.line.tpl, x + shift, y, r.h, a.align)
+      y += r.h
+      prev = r.line
+      continue
+    }
     if (o.halo) {
       // a tight dark edge hugging the letters carries them over the pale
       // parts of a split frame; the soft glow set above adds the rest
@@ -379,6 +515,45 @@ function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingConte
   }
   ctx.restore()
   setTracking(ctx, 0)
+}
+
+/** One line of a caption template: its backing or marker, its edge, its
+ *  words (some in colour for Pop). `w` includes the backing's padding. */
+function drawTemplateRow(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, text: string, w: number, ln: Line,
+  tpl: Tpl, x: number, y: number, h: number, align: CanvasTextAlign) {
+  const px = ln.px
+  const left = align === 'left' ? x : align === 'right' ? x - w : x - w / 2
+  const ty = y + (h - px) / 2
+  const pad = tpl.box || tpl.marker ? px * 0.45 : 0
+  if (tpl.box) {
+    const bh = px * 1.5
+    ctx.fillStyle = tpl.box.fill
+    roundRect(ctx, left, y + (h - bh) / 2, w, bh, bh * tpl.box.round)
+    ctx.fill()
+  } else if (tpl.marker) {
+    ctx.fillStyle = tpl.marker.band
+    roundRect(ctx, left, ty - px * 0.08, w, px * 1.16, px * 0.12)
+    ctx.fill()
+  }
+  // the words: left to right from the line's own start, so Pop can colour some
+  ctx.textAlign = 'left'
+  const words = tpl.pop ? text.split(/(\s+)/) : [text]
+  const ranked = tpl.pop ? [...new Set(words.filter((t) => t.trim()))].sort((p, q) => q.length - p.length) : []
+  const lit = new Map(ranked.slice(0, ranked.length >= 4 ? 2 : 1).map((t, i) => [t, tpl.pop![i]]))
+  let cx = left + pad
+  for (const word of words) {
+    if (!word) continue
+    if (tpl.stroke && word.trim()) {
+      ctx.lineJoin = 'round'
+      ctx.lineWidth = px * tpl.stroke.w
+      ctx.strokeStyle = tpl.stroke.color
+      ctx.strokeText(word, cx, ty)
+    }
+    ctx.fillStyle = lit.get(word) ?? ln.color
+    ctx.fillText(word, cx, ty)
+    cx += ctx.measureText(word).width
+  }
+  ctx.textAlign = align
 }
 
 function drawChapters(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, W: number, H: number, u: number,
@@ -455,7 +630,7 @@ export async function renderSchedule(opts: {
     if (opts.cancelled?.()) throw new Error('cancelled')
     const f = frames[i]
     const t = f / fps
-    const key = frameKey(items, parts, t, style.motion)
+    const key = frameKey(items, parts, t, style.motion, style)
     if (!key) { prevF = f; prevKey = ''; continue }
     if (key === prevKey && f === prevF + 1) {
       schedule[schedule.length - 1].end = (f + 1) / fps

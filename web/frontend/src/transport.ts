@@ -7,7 +7,7 @@ import { useSyncExternalStore } from 'react'
 import { locate, toSource, type SeqItem } from './sequence'
 import type { Target } from './snap'
 import { hideStill, settleStill, swapSource } from './hold'
-import { dissolveAfter, mixAt, preloadAt, veilAt, type TransMap } from './joinView'
+import { blendLook, dissolveAfter, mixAt, preloadAt, veilAt, type Pic, type TransMap } from './joinView'
 
 export function createStore<T>(initial: T) {
   let v = initial
@@ -53,7 +53,7 @@ export class Transport {
   trans: TransMap = new Map()
   fps = 30
   private pre: { k: number; clip: string; t: number; ready: boolean } | null = null
-  private leaving: { el: HTMLVideoElement; from: number; to: number } | null = null
+  private leaving: { el: HTMLVideoElement; from: number; to: number; blend: string } | null = null
   items: SeqItem[] = []
   total = 0
   private raf = 0
@@ -206,24 +206,35 @@ export class Transport {
   /** Which picture is on top, how see-through, and the dip veil, at t. */
   private paint(t: number) {
     const v = this.video, b = this.back
-    let top = v, alpha = 1, under: HTMLVideoElement | null = null
+    let top = v, under: HTMLVideoElement | null = null
+    let look: ReturnType<typeof blendLook> | null = null
     if (this.leaving && v) {
-      top = v; under = this.leaving.el; alpha = mixAt(this.leaving, t)
+      top = v; under = this.leaving.el; look = blendLook(this.leaving.blend, mixAt(this.leaving, t))
     } else if (b && v && !b.paused) {
       const d = dissolveAfter(this.items, this.cur, this.trans, this.fps)
-      if (d) { top = b; under = v; alpha = mixAt(d, t) }
+      if (d) { top = b; under = v; look = blendLook(d.blend, mixAt(d, t)) }
+    }
+    const put = (el: HTMLVideoElement, z: string, p: Pic | null, opacity: number) => {
+      el.style.zIndex = z
+      el.style.opacity = String(p ? p.opacity : opacity)
+      el.style.translate = p?.translate ?? ''
+      el.style.scale = p?.scale ?? ''
+      el.style.filter = p?.filter ?? ''
     }
     for (const el of [v, b]) {
       if (!el) continue
-      if (el === top) { el.style.zIndex = '2'; el.style.opacity = String(alpha) }
-      else if (el === under) { el.style.zIndex = '1'; el.style.opacity = '1' }
-      else { el.style.zIndex = '0'; el.style.opacity = '0' }
+      if (el === top) put(el, '2', look?.in ?? null, 1)
+      else if (el === under) put(el, '1', look?.out ?? null, 1)
+      else put(el, '0', null, 0)
     }
     if (this.veil) {
       const k = locate(this.items, t)
       const w = k < 0 ? null : veilAt(this.items, k, this.trans, t, this.fps)
-      this.veil.style.opacity = w ? String(w.alpha) : '0'
+      // a light leak's glow uses the same veil (a blend has no dip or flash at its cut)
+      const g = look?.glow
+      this.veil.style.opacity = w ? String(w.alpha) : g ? String(g.alpha) : '0'
       if (w) this.veil.style.background = w.color
+      else if (g) this.veil.style.background = g.background
     }
   }
 
@@ -364,7 +375,7 @@ export class Transport {
             if (this.video.paused) {
               this.video.play().catch(() => {})
             }
-            if (d && d.to > d.cut && it.kind === 'shot') this.leaving = { el: out, from: d.from, to: d.to }
+            if (d && d.to > d.cut && it.kind === 'shot') this.leaving = { el: out, from: d.from, to: d.to, blend: d.blend }
             else out.pause()
           } else if (!joined) {
             this.switching = true

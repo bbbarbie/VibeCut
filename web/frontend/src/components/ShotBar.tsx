@@ -132,7 +132,7 @@ function SpeedRow({ speed, onFix }: { speed: number; onFix: (x: number) => void 
   )
 }
 
-function Slider({ label, value, min, max, step, unit, disabled, onCommit }: {
+export function Slider({ label, value, min, max, step, unit, disabled, onCommit }: {
   label: string; value: number; min: number; max: number; step: number; unit: string; disabled?: boolean
   onCommit: (v: number) => void
 }) {
@@ -153,11 +153,11 @@ function Slider({ label, value, min, max, step, unit, disabled, onCommit }: {
   )
 }
 
-function Row({ children }: { children: React.ReactNode }) {
+export function Row({ children }: { children: React.ReactNode }) {
   return <div className="mt-2 flex items-center gap-4 rounded-xl border border-line bg-raised/40 px-4 py-2.5">{children}</div>
 }
 
-function Chip({ children, onClick, on, danger }: { children: React.ReactNode; onClick: () => void; on?: boolean; danger?: boolean }) {
+export function Chip({ children, onClick, on, danger }: { children: React.ReactNode; onClick: () => void; on?: boolean; danger?: boolean }) {
   return (
     <button type="button" onClick={onClick}
             className={cx('shrink-0 whitespace-nowrap rounded-lg border px-3 py-1.5 font-serif text-[15px]',

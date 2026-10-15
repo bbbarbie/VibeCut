@@ -375,7 +375,7 @@ def _mix_public(b: dict | None, tl: dict) -> dict | None:
     # The picture side of the same plan export renders (plan_transitions):
     # per shot, frames of handle for a dissolve and any dip or flash, so the
     # player can show the join the file will have. Only non-trivial entries.
-    trans = [{"key": it["key"], "head": p["head"], "tail": p["tail"],
+    trans = [{"key": it["key"], "head": p["head"], "tail": p["tail"], "blend": p.get("blend"),
               "fade_in": list(p["fade_in"]) if p["fade_in"] else None,
               "fade_out": list(p["fade_out"]) if p["fade_out"] else None}
              for it, p in zip(sp["items"], sp["transitions"] or [])
@@ -387,8 +387,25 @@ def _mix_public(b: dict | None, tl: dict) -> dict | None:
             # `fits`: False where a carry was asked for but the shot wasn't
             # filmed long enough past the cut -- it plays as a clean break, and says so
             "joins": [{"after": it["key"], "at": sp["items"][i + 1]["seq_start"], **j,
-                       "fits": audiomix.fits(sp["items"], CLIPS, i, j["sound"])}
+                       "fits": audiomix.fits(sp["items"], CLIPS, i, j["sound"]),
+                       **_picture_at(b, sp["transitions"] or [], i, it["key"])}
                       for i, (it, j) in enumerate(zip(sp["items"], joins))]}
+
+
+def _picture_at(b: dict, plan: list[dict], i: int, k: str) -> dict:
+    """What the picture does at the cut after item i (what will play), and
+    what the creator picked there, if anything (transitions.py)."""
+    p, q = (plan[i] if i < len(plan) else {}), (plan[i + 1] if i + 1 < len(plan) else {})
+    if p.get("blend"):
+        shown = p["blend"]
+    elif p.get("fade_out") and q.get("fade_in"):
+        shown = "flash" if p["fade_out"][1] == "white" else "dip_black"
+    else:
+        shown = "cut"
+    one = (b.get("picture_joins") or {}).get(k)
+    pick = one or b.get("picture_all") or {}
+    return {"picture": shown, "picked": pick.get("kind"), "picked_dur": pick.get("dur"),
+            "picked_all": bool(pick) and not one}
 
 
 @app.get("/api/mix/{name}")
