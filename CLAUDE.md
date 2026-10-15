@@ -368,6 +368,28 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   flashes are a colour veil at the same opacity as the export's fade, and
   cinematic bars are drawn. The grade (LUT) still appears only in export.
 
+- **Caption and transition templates** (sarah, 2026-10-15: "build";
+  mockups in the project's `templates/` folder). Opt-in: nothing changes
+  until picked. Click a caption → the bottom bar's **Style** (8 templates,
+  `overlays.TEMPLATES`: outlined = her own hand edit, serif + black edge +
+  the time on its own line; bold, label, highlight, handwritten, tape, pop,
+  quiet) and **Animation** (6 entrances, `overlays.ENTERS`: fade, pop,
+  slide, stamp, type, word). Both are `overlay_style` fields (`template`,
+  `enter`; None = the look's own), one per video, kept when the look
+  changes, drawn by `overlayDraw.ts` (TEMPLATES, motionFor) for preview and
+  export alike; Mac system fonts only. Click the dot between two shots →
+  **transitions** (`transitions.py`, `set_transition {shot | all, kind,
+  dur}`): cut, fade, dip, flash, zoom through, slide up, blur, light leak;
+  board `picture_joins` / `picture_all`, folded into the style's
+  transitions policy (`at`) that `export.plan_transitions` reads. The four
+  new ones are ffmpeg xfades over footage past the cut (light leak a custom
+  expression), else a cut, said at export and in the bar; the player draws
+  the same with CSS (`joinView.blendLook`; its blur is a plain blur where
+  ffmpeg's hblur smears sideways). Tiles move the way the result will.
+  Tests: `test_transitions.py` (each blend really at its cut, centred,
+  length kept, all different), `test_caption_templates.py`,
+  `overlayTemplates.test.ts` (safe area every intro frame, every template ×
+  entrance). Sizes, durations and the glow are priors.
 - **polish/** (`polish/`, `web/backend/polish_api.py`, `Polish.tsx`,
   `polishDraw.ts`; page `#polish`). Assisting an edit that is already cut:
   input is one finished video, never raw clips; no auto-editing, no

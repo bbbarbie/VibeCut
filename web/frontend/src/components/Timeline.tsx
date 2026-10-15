@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { clock, locate, parseTimecode, readout, smpte, type SeqItem } from '../sequence'
 import { approaching, snap, type Target, type TargetType } from '../snap'
 import { phStore, snapStore, transport, transportStore, useStore } from '../transport'
-import type { Overlay, SoundStrip, TimelineData } from '../types'
+import type { JoinInfo, Overlay, SoundStrip, TimelineData } from '../types'
 import { KIND_META } from '../overlayDraw'
 import { SHOT_MIME } from './Shelf'
 
@@ -24,7 +24,7 @@ type Drag = { id: string; mode: 'move' | 'end'; x0: number; grab: number; start:
 
 export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, onReorder,
   onInsertShot, onClear, onHelp, overlays = [], selectedOverlay = null, onSelectOverlay, onOverlayEdit, onExport, onTrimEdge,
-  selectedAudio = null, onSelectAudio, onAudioMove }: {
+  selectedAudio = null, onSelectAudio, onAudioMove, joins = [], selectedJoin = null, onSelectJoin }: {
   tl: TimelineData
   marks: Marks
   marksOf: Record<string, 'added' | 'moved' | 'trimmed' | undefined>
@@ -49,6 +49,10 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   onSelectAudio?: (id: string, anchor: DOMRect) => void
   /** a sound strip dragged to start at this point of the edit */
   onAudioMove?: (id: string, at: number) => void
+  /** every cut (session.mix.joins): a dot between the two shots opens its transitions below */
+  joins?: JoinInfo[]
+  selectedJoin?: string | null
+  onSelectJoin?: (after: string) => void
 }) {
   const ph = useStore(phStore)
   const tr = useStore(transportStore)
@@ -411,6 +415,27 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                     {it.kind === 'gap' ? 'gap ' : it.n != null ? `${it.n} · ` : ''}{(it.seq_end - it.seq_start).toFixed(1)}s{sp !== 1 ? ` · ${sp}×` : ''}{it.mute ? ' · muted' : it.gain != null ? ` · ${Math.round(it.gain * 100)}%` : ''}{silent.has(it.key) ? ' · sound below' : ''}
                   </div>
                 </div>
+              )
+            })}
+
+            {/* the cut between two shots: click to pick how the picture changes there */}
+            {onSelectJoin && items.map((it, k) => {
+              const nx = items[k + 1]
+              if (!nx || it.kind !== 'shot' || nx.kind !== 'shot') return null
+              const j = joins.find((x) => x.after === it.key)
+              if (!j) return null
+              const on = selectedJoin === it.key, styled = j.picture !== 'cut'
+              return (
+                <button key={`join-${it.key}`} type="button"
+                        title={styled ? 'How the picture changes here — click to change it' : 'A plain cut — click to pick a transition'}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => { e.stopPropagation(); onSelectJoin(it.key) }}
+                        className={`absolute z-20 flex size-[22px] -translate-x-1/2 items-center justify-center rounded-full border-2 text-[11px] leading-none shadow ${
+                          on ? 'border-accent bg-accent text-accent-ink ring-4 ring-accent/30'
+                            : styled ? 'border-accent bg-white text-accent' : 'border-stone-300 bg-white text-stone-400 hover:border-accent'}`}
+                        style={{ left: geo.left[k + 1] + PAD - GAP / 2, top: 50 + laneH + 4 }}>
+                  {styled ? '✦' : '·'}
+                </button>
               )
             })}
 

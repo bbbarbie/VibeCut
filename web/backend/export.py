@@ -311,32 +311,41 @@ def _bar(size: dict, style: dict | None) -> int:
 # --------------------------------------------------------------------------
 
 def plan_transitions(items: list[dict], clips: dict[str, dict], style: dict | None) -> tuple[list[dict], list[str]]:
-    """Per item: handles (dissolves) and fades (dips, flashes, open, close).
+    """Per item: handles (blends) and fades (dips, flashes, open, close).
 
     Returns (per-item dicts, notes). A boundary is "between parts" when the
-    two shots belong to different beats of the storyboard.
+    two shots belong to different beats of the storyboard. A join the
+    creator picked (`at`, transitions.py) wins over the policy. A blend --
+    a dissolve, or one of the creator's zoom / slide / blur / light leak --
+    needs footage past the cut on both sides; `blend` on the outgoing item
+    names the xfade it renders with.
     """
-    per = [{"head": 0, "tail": 0, "fade_in": None, "fade_out": None} for _ in items]
+    from .transitions import BLENDS, KINDS
+    per = [{"head": 0, "tail": 0, "fade_in": None, "fade_out": None, "blend": None} for _ in items]
     pol = (style or {}).get("transitions")
     notes: list[str] = []
     if not pol or not items:
         return per, notes
-    half = max(1, int(round(pol.get("dur", 0.5) / 2 * FPS)))
-    fell_back = 0
+    at = pol.get("at") or {}
+    fell_back: dict[str, int] = {}
     for k in range(len(items) - 1):
         a, b = items[k], items[k + 1]
-        kind = pol["between"] if a.get("beat_id") != b.get("beat_id") else pol["within"]
-        if kind == "cut":
+        pick = at.get(a.get("key") or "")
+        kind = pick["kind"] if pick else pol["between"] if a.get("beat_id") != b.get("beat_id") else pol["within"]
+        if kind == "cut" or kind not in KINDS:
             continue
+        dur = float(pick["dur"]) if pick else float(pol.get("dur", 0.5))
+        half = max(1, int(round(dur / 2 * FPS)))
         n = min(half, a["frames"] // 2, b["frames"] // 2)
         if n < 1:
             continue
-        if kind == "dissolve":
+        if kind in BLENDS:
             if a["kind"] == "shot" and b["kind"] == "shot" and _room(a, clips, "tail", n) and _room(b, clips, "head", n):
                 per[k]["tail"], per[k + 1]["head"] = n, n
+                per[k]["blend"] = kind
                 continue
             if a["kind"] == "shot" and b["kind"] == "shot":
-                fell_back += 1
+                fell_back[kind] = fell_back.get(kind, 0) + 1
                 continue
             kind = "dip_black"   # next to a gap (already black): fade the shot side
         color = "white" if kind == "flash" else "black"
@@ -348,9 +357,10 @@ def plan_transitions(items: list[dict], clips: dict[str, dict], style: dict | No
         per[0]["fade_in"] = (min(FPS, items[0]["frames"] // 2), "black")
     if pol.get("close") and items[-1]["kind"] == "shot" and not per[-1]["fade_out"]:
         per[-1]["fade_out"] = (min(int(1.5 * FPS), items[-1]["frames"] // 2), "black")
-    if fell_back:
-        notes.append(f"{fell_back} dissolve{'s' * (fell_back != 1)} became a cut: the shot wasn't "
-                     "filmed long enough past the cut to blend")
+    for kind, n in fell_back.items():
+        name = KINDS[kind]["name"].lower()
+        notes.append(f"{n} {name}{'s' * (n != 1 and not name.endswith('h'))}{'es' * (n != 1 and name.endswith('h'))} "
+                     f"became {'a cut' if n == 1 else 'cuts'}: the shot wasn't filmed long enough past the cut to blend")
     return per, notes
 
 
@@ -426,6 +436,15 @@ def _shot(job: Job, it: dict, out: Path, tr: dict | None = None) -> None:
         _ff(args, job)   # a codec the hardware decoder won't take
 
 
+def _xfade(kind: str | None) -> str:
+    """The xfade a blend renders with (transitions.KINDS)."""
+    from .transitions import KINDS, LIGHT_LEAK
+    x = KINDS.get(kind or "dissolve", KINDS["dissolve"])["xfade"] or "fade"
+    if x == "custom":
+        return f"transition=custom:expr='{LIGHT_LEAK}'"
+    return f"transition={x}"
+
+
 def _dissolve_runs(job: Job, segs: list[Path], plan: list[dict], seg_dir: Path) -> list[Path]:
     """Overlap each run of shots joined by dissolves into one segment.
 
@@ -452,7 +471,8 @@ def _dissolve_runs(job: Job, segs: list[Path], plan: list[dict], seg_dir: Path) 
         length = lens[0]
         for n in range(1, len(run)):
             ov = plan[run[n - 1]]["tail"] + plan[run[n]]["head"]
-            parts.append(f"{v}[v{n}]xfade=transition=fade:duration={ov / FPS:.6f}:offset={(length - ov) / FPS:.6f}[x{n}]")
+            parts.append(f"{v}[v{n}]xfade={_xfade(plan[run[n - 1]].get('blend'))}:duration={ov / FPS:.6f}"
+                         f":offset={(length - ov) / FPS:.6f}[x{n}]")
             parts.append(f"{a}[a{n}]acrossfade=d={ov / FPS:.6f}:c1=tri:c2=tri[y{n}]")
             v, a = f"[x{n}]", f"[y{n}]"
             length += lens[n] - ov

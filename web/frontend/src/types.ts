@@ -151,10 +151,16 @@ export type Overlay = {
 }
 export type OverlayPlace = { x: number; y: number; scale: number }
 export type OverlayStyle = { font: 'Clean' | 'Editorial' | 'Rounded' | 'Mono' | 'Condensed'; color: string; accent: string; captions: 'bottom' | 'center'; backing: 'shadow' | 'box' | 'none'
-  look?: string; motion?: Motion | null }
+  look?: string; motion?: Motion | null
+  /** the caption template and entrance the creator picked (overlays.TEMPLATES / ENTERS); null = the look's own */
+  template?: CaptionTemplate | null; enter?: CaptionEnter | null }
+export type CaptionTemplate = 'outlined' | 'bold' | 'label' | 'highlight' | 'handwritten' | 'tape' | 'pop' | 'quiet'
+export type CaptionEnter = 'fade' | 'pop' | 'slide' | 'stamp' | 'type' | 'word'
 // How a look moves words (backend looks/*.json): one curve and timing for the whole video.
 export type Motion = { curve: [number, number, number, number]; in_s: number; step_fps: number; stagger_s: number
-  enter: 'card' | 'slam' | null; case: 'sentence' | 'lower' | 'upper'; track: number; beat_lock: boolean }
+  enter: 'card' | 'slam' | null; case: 'sentence' | 'lower' | 'upper'; track: number; beat_lock: boolean
+  /** a caption's own entrance, picked in the Animation tab (overlayDraw.motionFor) */
+  caption_enter?: CaptionEnter }
 export type LookInfo = { id: string; name: string; line: string; font: OverlayStyle['font']; palette: string[]; status: string; review_by: string }
 export type OverlayFinding = { overlay: string; rule: string; value: number; verdict: 'ok' | 'warn' | 'bad' | 'pending'; basis: string; message: string }
 export type Overlays = { items: Overlay[]; style: OverlayStyle; findings: OverlayFinding[]
@@ -257,7 +263,9 @@ export type StyleAnswers = { length?: string; seconds?: number; pace?: string; o
 
 // How the sound crosses a cut: carried out (L cut), carried in (J cut), or a clean break.
 export type JoinSound = 'cut' | 'carry_out' | 'carry_in' | 'default'
-export type JoinInfo = { after: string; at: number; sound: Exclude<JoinSound, 'default'>; set: boolean; fits: boolean }
+export type JoinInfo = { after: string; at: number; sound: Exclude<JoinSound, 'default'>; set: boolean; fits: boolean
+  /** the picture at this cut: what plays, and what the creator picked (transitions.py), here or for every cut */
+  picture: string; picked: string | null; picked_dur: number | null; picked_all: boolean }
 
 export type SeamFinding = { key: string; label: string; value: number | null; unit: string; verdict: 'ok' | 'warn' | 'bad' | 'pending'; detail: string }
 export type Seam = { after: string; before: string; at: number; verdict: 'ok' | 'warn' | 'bad'; findings: SeamFinding[] }

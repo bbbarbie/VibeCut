@@ -41,7 +41,7 @@ LLM_OPS = ("choose_option", "move_beat", "drop_beat", "drop_shot", "swap_shot",
            "add_overlay", "edit_overlay", "drop_overlay", "set_join", "set_look")
 # Plus the precise timeline edits, which come from the keyboard, never from
 # a sentence: cut at a point, trim an edge to a point, remove a range.
-OPS = LLM_OPS + ("split", "trim", "drop_range", "overlay_style", "apply_style", "set_music")
+OPS = LLM_OPS + ("split", "trim", "drop_range", "overlay_style", "apply_style", "set_music", "set_transition")
 # How the sound crosses a cut (audiomix.py): hard, carried out (L), carried in (J).
 JOIN_SOUNDS = ("cut", "carry_out", "carry_in", "default")
 # What set_music may record about the bed under the edit (export and preview mix it the same).
@@ -326,7 +326,8 @@ def apply(board: dict | None, op: dict, cat: Catalog, proposals: dict | None,
     # null means "not given" -- except an overlay's length, where it means
     # "as long as what it hangs off" (a caption filling its spoken line) and its
     # place, where it means "back where it usually goes" (undoing a drag).
-    op = {k: v for k, v in op.items() if v is not None or (k in ("dur", "place") and kind in OVERLAY_OPS)}
+    op = {k: v for k, v in op.items() if v is not None or (k in ("dur", "place") and kind in OVERLAY_OPS)
+          or (k in ("template", "enter") and kind == "overlay_style")}   # None = back to the look's own
 
     if kind == "choose_option":
         snap = op.get("snapshot")
@@ -378,6 +379,21 @@ def apply(board: dict | None, op: dict, cat: Catalog, proposals: dict | None,
         else:
             joins[k] = {"sound": sound}
         b["joins"] = joins
+        return b, op
+
+    if kind == "set_transition":
+        # How the picture crosses a cut, picked by the creator (transitions.py):
+        # the join after this shot, or every cut. From the timeline, never chat.
+        from . import transitions
+
+        def where(k):
+            beat, i = _where(b, k)
+            if beat is b["beats"][-1] and i == len(beat["shots"]) - 1:
+                raise OpError("that's the last shot — there's no cut after it")
+        try:
+            transitions.apply(b, op, where)
+        except transitions.TransitionError as e:
+            raise OpError(str(e)) from e
         return b, op
 
     if kind == "set_shot":
@@ -754,6 +770,8 @@ def describe(d: dict, a: dict | None, b: dict | None, ops: list[dict] | None = N
     lines += _describe_sound(a, b)
     from . import looks
     lines += looks.describe(a, b)
+    from . import transitions
+    lines += transitions.describe(a, b)
     if not lines:
         lines.append({"kind": "none", "text": "No change"})
     return lines

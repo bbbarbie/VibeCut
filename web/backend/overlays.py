@@ -56,6 +56,17 @@ BACKINGS = ("shadow", "box", "none")
 DEFAULT_STYLE = {"font": "Clean", "color": "#ffffff", "accent": "#b9d9eb", "captions": "bottom",
                  "backing": "shadow"}
 
+# Caption templates (the Style tab when a caption is clicked): how every
+# caption in the video is dressed -- lettering, edge, backing -- drawn by
+# overlayDraw.ts for preview and export alike. None = the look's own words.
+# "outlined" is sarah's own hand edit: serif, black edge, the time on top.
+TEMPLATES = {"outlined": "Outlined", "bold": "Big & bold", "label": "Label", "highlight": "Highlighter",
+             "handwritten": "Handwritten", "tape": "Typed tape", "pop": "Pop colour", "quiet": "Quiet"}
+# How captions arrive (the Animation tab). None = the look's own entrance.
+ENTERS = {"fade": "Fade up", "pop": "Pop", "slide": "Slide in", "stamp": "Stamp", "type": "Typewriter",
+          "word": "Word by word"}
+STYLE_FIELDS = ("font", "color", "accent", "captions", "backing", "template", "enter")
+
 TEXT_MAX = 140
 EDITABLE = ("text", "sub", "pos", "size", "anim", "dur", "place")
 # Dragged on the picture by hand: block centre as a fraction of the frame and
@@ -103,6 +114,11 @@ def clean_style(patch: dict) -> dict:
         if patch["backing"] not in BACKINGS:
             raise OverlayError(f"backing must be one of {', '.join(BACKINGS)}")
         out["backing"] = patch["backing"]
+    for k, allowed in (("template", TEMPLATES), ("enter", ENTERS)):
+        if k in patch:
+            if patch[k] is not None and patch[k] not in allowed:
+                raise OverlayError(f"{k} must be one of {', '.join(allowed)}")
+            out[k] = patch[k]
     return out
 
 
@@ -319,15 +335,16 @@ def drop(b: dict, op: dict) -> None:
 
 
 def set_style(b: dict, op: dict) -> None:
-    patch = clean_style({k: op[k] for k in ("font", "color", "accent", "captions", "backing") if k in op})
+    patch = clean_style({k: op[k] for k in STYLE_FIELDS if k in op})
     if not patch:
         raise OverlayError("nothing to change")
     b["overlay_style"] = {**(b.get("overlay_style") or {}), **patch}
     # Remembered as set by hand, so a later look fills in only the rest. The
     # profile's saved defaults (source "profile") are a starting point, not
     # a choice made on this video: a look replaces them.
-    if op.get("source") != "profile":
-        b["style_set"] = sorted(set(b.get("style_set") or []) | set(patch))
+    # (A template or an entrance never comes from a look, so it needs no marking.)
+    if op.get("source") != "profile" and set(patch) - {"template", "enter"}:
+        b["style_set"] = sorted(set(b.get("style_set") or []) | (set(patch) - {"template", "enter"}))
 
 
 def prune(b: dict) -> None:
@@ -392,6 +409,12 @@ def describe(a: dict | None, b: dict | None) -> list[dict]:
             lines.append({"kind": "retitled", "text": f"Changed the {what_list(what)} of the {_name(o)}"})
     sa, sb_ = (a or {}).get("overlay_style"), (b or {}).get("overlay_style")
     if b is not None and sa != sb_ and sb_:
+        sa_, sb2 = style_of(a), style_of(b)
+        for k, names, what in (("template", TEMPLATES, "Captions"), ("enter", ENTERS, "Captions come in")):
+            if sa_.get(k) != sb2.get(k):
+                v = sb2.get(k)
+                lines.append({"kind": "retitled", "text": f"{what}: {names[v]}" if v
+                              else f"{what}: back to the look's own"})
         changed = [k for k in ("font", "color", "accent", "captions", "backing")
                    if style_of(a).get(k) != style_of(b).get(k)]
         if changed:
