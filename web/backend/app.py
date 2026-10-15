@@ -359,7 +359,7 @@ def _mix_spec(b: dict | None, items: list[dict]) -> dict | None:
     sp = export.spans(items)
     plan, _ = export.plan_transitions(sp, CLIPS, _style(b))
     music = export.music_spec(t.path if t else None, b.get("music"))
-    return audiomix.spec(sp, CLIPS, b.get("joins"), plan, music)
+    return audiomix.spec(sp, CLIPS, b.get("joins"), plan, music, audiomix.strips_of(b))
 
 
 def _mix_public(b: dict | None, tl: dict) -> dict | None:
@@ -1061,7 +1061,7 @@ def api_length() -> dict:
     how long the edit is now. Free; nothing leaves the Mac."""
     with LOCK:
         b = SESSION.board
-        now = sum(e["end"] - e["start"] for bt in (b or {}).get("beats", []) for e in bt["shots"])
+        now = sum(bd.seq_dur(e) for bt in (b or {}).get("beats", []) for e in bt["shots"])
         return {**brief.length_marks(_usable_s(), _about()), "current": round(now, 1)}
 
 
@@ -1533,7 +1533,8 @@ def api_export(req: ExportReq) -> dict:
             title = next((o["text"] for o in SESSION.board.get("overlays", []) if o["kind"] == "title"), None)
             job = export.create(looks.camera(tl["items"], SESSION.board), dict(CLIPS), title or SESSION.board.get("name", ""),
                                 track.path if track else None, _style(SESSION.board, for_export=True),
-                                mix=SESSION.board.get("music"), joins=SESSION.board.get("joins"), want=_want())
+                                mix=SESSION.board.get("music"), joins=SESSION.board.get("joins"), want=_want(),
+                                sound=audiomix.strips_of(SESSION.board))
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
         return job.public()

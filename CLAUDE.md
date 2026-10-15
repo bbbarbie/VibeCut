@@ -298,6 +298,36 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   30 frames were wrong). CARRY_S 0.5 s and MICRO_S are priors — calibrate.
   Tests: `tests/test_audiomix.py`, additions in `test_export.py`,
   `test_brief.py`, `test_remix.py`.
+- **Extract audio** (`board.SOUND_OPS`: `extract_audio` / `edit_audio` /
+  `drop_audio`; `audiomix.strips_of`, `timeline.audio_lane`; sarah,
+  2026-10-14: "at least have the basic functions for most video editing
+  apps"). The shot bar's Sound › "Take the sound off" puts the shot's sound
+  on its own strip in a Sound lane under the picture (`sound.off` +
+  `sound.strips` on the board), sounding as the shot did (its speed, volume
+  and fades come along): the strip sits at a place in the edit (unlinked,
+  like CapCut), drag to move it (sticks to the same targets), click it for
+  its own bar (Volume 0–200%, Fade in / out, Mute, Delete this sound).
+  Deleting leaves the shot silent; a cut through a silenced shot keeps both
+  pieces silent. Preview and export hear it through the same mixer.
+  `tests/test_extract_audio.py`.
+- **Shot bar** (`ShotBar.tsx`; `board.set_shot`, fields `speed` / `gain` /
+  `mute` / `rotate` / `fill` / `mirror` / `fade_in` / `fade_out` on the
+  entry, kept through a cut except the fade on the cut side; sarah,
+  2026-10-14: the stepped menus were "very not user friendly", one click to
+  a tool then a slider). Clicking a shot in Frames opens a bar along the
+  bottom, no pop-up menu: Split · Sound (Volume slider 0–200%, Fade in /
+  out 0–3 s, Mute, Take the sound off) · Speed (doubling slider ¼×–4×,
+  0.5 / 1 / 2 / 4 presets) · Turn & crop (quarter turns, Mirror, Fill the
+  frame = cover and crop instead of bars, Show it all) · Swap · Delete.
+  A slider is one undoable turn when let go. A shot lasts `bd.seq_dur` =
+  source seconds / speed; `timeline.layout`, the board's own arithmetic and
+  overlays use it, the player plays the file at rate × speed and dresses
+  the picture with the same turn / mirror / fill as `export._shot`. Sound
+  at a speed is stretched with atempo (pitch kept, `audiomix.stretched`); a
+  sped-up or slowed shot never carries sound or dissolves across its cuts.
+  Known: the length slider, the bed's beat snap and restyle still count
+  source seconds, so they're approximate on a shot that isn't at 1×.
+  `tests/test_shot_fixes.py`.
 - **Every cut checked** (`cutgrammar/joins.py`, `web/backend/seams.py`;
   research 08 P2). Report only: per cut, brightness jump, colour change
   (best-frame proxy), same view again, energy step, loudness step, going
