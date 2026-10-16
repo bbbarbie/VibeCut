@@ -5,6 +5,7 @@ import { phStore, snapStore, transport, transportStore, useStore } from '../tran
 import type { JoinInfo, Overlay, SoundStrip, TimelineData } from '../types'
 import { KIND_META } from '../overlayDraw'
 import { SHOT_MIME } from './Shelf'
+import { Icon, type IconName } from './icons'
 
 const TL_MIME = 'application/x-vibecut-tl'
 const MIN_W = 56
@@ -18,13 +19,20 @@ const TICK_H: Record<TargetType, number> = { shot: 14, silence: 9, motion: 7, be
 const MARK_CLS = { added: 'bg-emerald-400', moved: 'bg-amber-300', trimmed: 'bg-sky-400' } as const
 export type Marks = { in: number | null; out: number | null }
 
-const LANE_ROW = 17
-const SOUND_H = 26   // the lane of sound taken off shots, under the picture
+const LANE_ROW = 20
+const SOUND_H = 26   // a row of the Audio lane: sound taken off shots, the music
+// The lanes, top to bottom: the ruler, the parts' names, the picture (Video),
+// the captions, then the sound (Audio) -- as in her reference picture
+// (sarah, 2026-10-16), each named in a column on the left.
+const VIDEO_TOP = 48
+const LANE_GAP = 6
+const LABEL_W = 96
 type Drag = { id: string; mode: 'move' | 'end'; x0: number; grab: number; start: number; end: number; moved: boolean }
 
 export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, onReorder,
   onInsertShot, onClear, onHelp, overlays = [], selectedOverlay = null, onSelectOverlay, onOverlayEdit, onExport, onTrimEdge,
-  selectedAudio = null, onSelectAudio, onAudioMove, joins = [], selectedJoin = null, onSelectJoin }: {
+  selectedAudio = null, onSelectAudio, onAudioMove, joins = [], selectedJoin = null, onSelectJoin,
+  music = null, onSelectMusic, onSplit, onDelete, height = 290 }: {
   tl: TimelineData
   marks: Marks
   marksOf: Record<string, 'added' | 'moved' | 'trimmed' | undefined>
@@ -53,6 +61,13 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   joins?: JoinInfo[]
   selectedJoin?: string | null
   onSelectJoin?: (after: string) => void
+  /** the song under the edit, drawn along the Audio lane; clicking it opens its controls */
+  music?: { title: string } | null
+  onSelectMusic?: () => void
+  /** the toolbar's Split (at the playhead) and Delete (the selection) */
+  onSplit?: () => void
+  onDelete?: () => void
+  height?: number
 }) {
   const ph = useStore(phStore)
   const tr = useStore(transportStore)
@@ -165,10 +180,18 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
     }
     return { row, n: ends.length }
   }, [overlays])
-  const laneH = lanes.n ? lanes.n * LANE_ROW + 6 : 0
   const strips: SoundStrip[] = tl.audio?.strips ?? []
   const silent = useMemo(() => new Set(tl.audio?.off ?? []), [tl.audio])
-  const shotsBottom = strips.length ? 12 + SOUND_H + 4 : 12
+  // Measured from the bottom: Audio (strips, then the music), Captions, and
+  // the picture takes what is left.
+  const audioRows = (strips.length ? 1 : 0) + 1
+  const audioH = audioRows * SOUND_H + (audioRows - 1) * 4 + 8
+  const capH = Math.max(1, lanes.n) * LANE_ROW + 8
+  const audioBottom = 8
+  const capBottom = audioBottom + audioH + LANE_GAP
+  const shotsBottom = capBottom + capH + LANE_GAP
+  const musicBottom = audioBottom + 4
+  const stripBottom = musicBottom + SOUND_H + 4
   const [moving, setMoving] = useState<{ id: string; x0: number; grab: number; at: number; moved: boolean } | null>(null)
   const overlayTime = (clientX: number, bypass: boolean) => {
     const el = track.current!
@@ -183,16 +206,20 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   const outX = marks.out != null ? xOf(marks.out) : null
 
   return (
-    <section className="flex h-[250px] shrink-0 flex-col border-t border-line bg-panel">
-      <header className="flex h-10 shrink-0 items-center gap-2.5 border-b border-line px-3">
+    <section className="flex min-h-0 shrink-0 flex-col" style={{ height }}>
+      <header className="flex h-12 shrink-0 items-center gap-2.5 border-b border-line px-3">
         <div className="flex items-center gap-1">
           <TB title="Play backwards (J — press again to go faster)" onClick={() => transport.play(rate < 0 ? Math.max(rate * 2, -8) : -1)}>◀◀</TB>
           <TB title="Play / pause (Space)" onClick={() => (tr.playing ? transport.stop() : transport.play(1))} wide>
-            {tr.playing ? '❚❚' : '▶'}
+            <Icon name={tr.playing ? 'pause' : 'play'} size={18} />
           </TB>
           <TB title="Play forwards (L — press again to go faster)" onClick={() => transport.play(rate > 0 ? Math.min(rate * 2, 8) : 1)}>▶▶</TB>
           {tr.playing && rate !== 1 && <span className="w-8 text-[11px] tabular-nums text-accent">{rate > 0 ? `${rate}×` : `−${-rate}×`}</span>}
         </div>
+        <span className="h-6 w-px bg-line" aria-hidden />
+        {onSplit && <Tool icon="split" label="Split" title="Split the shot at the playhead (B)" onClick={onSplit} disabled={!items.length} />}
+        {onDelete && <Tool icon="trash" label="Delete" title="Delete the selected shot, or the marked part (Delete)" onClick={onDelete} disabled={!items.length} />}
+        <span className="h-6 w-px bg-line" aria-hidden />
 
         <input
           value={tc ?? smpte(ph, tl.fps)}
@@ -229,11 +256,14 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
             <i key={t} className="inline-block h-2.5 w-[3px] rounded-sm" style={{ background: TICK[t] }} title={t} />
           ))}
         </span>
-        <label className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted">
-          Zoom
-          <input type="range" min={1} max={40} step={0.5} value={zoom}
-                 onChange={(e) => setZoom(Number(e.target.value))} className="w-20 accent-[#1f5f8b]" />
-        </label>
+        <div className="flex shrink-0 items-center gap-1.5" title="Zoom the timeline">
+          <button type="button" aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(1, z / 1.5))}
+                  className="grid size-7 place-items-center rounded-md text-zinc-300 hover:bg-raised"><Icon name="minus" size={18} /></button>
+          <input type="range" min={1} max={40} step={0.5} value={zoom} aria-label="Zoom"
+                 onChange={(e) => setZoom(Number(e.target.value))} className="w-24 accent-[#1f5f8b]" />
+          <button type="button" aria-label="Zoom in" onClick={() => setZoom((z) => Math.min(40, z * 1.5))}
+                  className="grid size-7 place-items-center rounded-md text-zinc-300 hover:bg-raised"><Icon name="plus" size={18} /></button>
+        </div>
         {onExport && (
           <button type="button" onClick={onExport} disabled={!items.length} title="Render the edit, its captions and its music to one video file"
                   className="shrink-0 rounded-md bg-accent px-2 py-0.5 text-[11px] font-semibold text-accent-ink disabled:opacity-30">Export…</button>
@@ -244,6 +274,14 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                 className="shrink-0 rounded-md px-1.5 py-1 text-[11px] text-muted hover:text-zinc-200 disabled:opacity-30">Clear</button>
       </header>
 
+      <div className="flex min-h-0 flex-1">
+      {items.length > 0 && (
+        <div className="relative shrink-0 border-r border-line" style={{ width: LABEL_W }} aria-hidden>
+          <LaneLabel icon="video" style={{ top: VIDEO_TOP, bottom: shotsBottom }}>Video</LaneLabel>
+          <LaneLabel icon="lines" style={{ bottom: capBottom, height: capH }}>Captions</LaneLabel>
+          <LaneLabel icon="music" style={{ bottom: audioBottom, height: audioH }}>Audio</LaneLabel>
+        </div>
+      )}
       <div
         ref={track}
         className="relative min-h-0 flex-1 select-none overflow-x-auto overflow-y-hidden"
@@ -294,6 +332,20 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
               </svg>
             </div>
 
+            {/* the Captions and Audio lanes' bands */}
+            <div className="pointer-events-none absolute inset-x-0 rounded-md bg-violet-900/40" style={{ bottom: capBottom, height: capH }} />
+            <div className="pointer-events-none absolute inset-x-0 rounded-md bg-raised/70" style={{ bottom: audioBottom, height: audioH }} />
+            {music && (
+              <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={onSelectMusic}
+                      title={`${music.title}: click for the music's controls`}
+                      className="absolute flex items-center gap-2 overflow-hidden rounded-md px-2.5 font-serif text-[14px] text-[#1d5c46] hover:brightness-95"
+                      style={{ left: PAD, width: Math.max(40, geo.end), bottom: musicBottom, height: SOUND_H,
+                        background: 'repeating-linear-gradient(90deg, #bfe3d3 0 2px, #cdeadd 2px 5px)' }}>
+                <Icon name="music" size={16} />
+                <span className="truncate">{music.title}</span>
+              </button>
+            )}
+
             {overlays.map((o) => {
               const d = drag?.id === o.id ? drag : null
               const a = d ? d.start : o.start
@@ -332,9 +384,9 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                        if (d.mode === 'move') onOverlayEdit?.(o.id, { start: Math.round(d.start * 1000) / 1000 })
                        else onOverlayEdit?.(o.id, { dur: Math.round((d.end - o.start) * 1000) / 1000 })
                      }}
-                     className={`absolute flex cursor-grab items-center gap-1 overflow-hidden rounded px-1 text-[10px] leading-none text-stone-900 active:cursor-grabbing ${
+                     className={`absolute flex cursor-grab items-center gap-1 overflow-hidden rounded-md px-1.5 text-[12px] leading-none text-stone-900 active:cursor-grabbing ${
                        selectedOverlay === o.id ? 'ring-2 ring-accent' : ''} ${d?.moved ? 'opacity-80' : ''}`}
-                     style={{ left: x, width: w, top: 31 + (lanes.row.get(o.id) ?? 0) * LANE_ROW, height: LANE_ROW - 3, background: meta.color }}>
+                     style={{ left: x, width: w, bottom: capBottom + capH - 4 - ((lanes.row.get(o.id) ?? 0) + 1) * LANE_ROW + 3, height: LANE_ROW - 3, background: meta.color }}>
                   <span className="shrink-0 font-semibold">{meta.icon}</span>
                   <span className="truncate">{o.kind === 'chapters' ? 'Chapter bar' : o.text}</span>
                   {edge && <span className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize bg-black/20" />}
@@ -344,7 +396,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
 
             {items.map((it: SeqItem, k) => (k === 0 || items[k - 1].beat_id !== it.beat_id) && (
               <div key={`beat-${it.beat_id}-${k}`} className="pointer-events-none absolute top-8 truncate text-[10px] font-medium text-zinc-400"
-                   style={{ left: geo.left[k] + PAD, maxWidth: 220, top: 32 + laneH }}>
+                   style={{ left: geo.left[k] + PAD, maxWidth: 220, top: 31 }}>
                 {it.beat_title}
               </div>
             ))}
@@ -401,7 +453,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                     ? 'bg-[repeating-linear-gradient(45deg,#efebe4,#efebe4_6px,#e2ddd4_6px,#e2ddd4_12px)]' : 'bg-black'} ${
                     selected === it.key ? 'ring-2 ring-accent' : 'ring-1 ring-zinc-800 hover:ring-zinc-600'}`}
                   style={{
-                    top: 50 + laneH, bottom: shotsBottom, left: geo.left[k] + PAD, width: w, zIndex: ed ? 5 : undefined,
+                    top: VIDEO_TOP, bottom: shotsBottom, left: geo.left[k] + PAD, width: w, zIndex: ed ? 5 : undefined,
                     backgroundImage: thumb ? `url(${thumb})` : undefined,
                     backgroundSize: 'auto 100%', backgroundRepeat: 'repeat-x', backgroundPosition: 'center',
                   }}
@@ -433,7 +485,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                         className={`absolute z-20 flex size-[22px] -translate-x-1/2 items-center justify-center rounded-full border-2 text-[11px] leading-none shadow ${
                           on ? 'border-accent bg-accent text-accent-ink ring-4 ring-accent/30'
                             : styled ? 'border-accent bg-white text-accent' : 'border-stone-300 bg-white text-stone-400 hover:border-accent'}`}
-                        style={{ left: geo.left[k + 1] + PAD - GAP / 2, top: 50 + laneH + 4 }}>
+                        style={{ left: geo.left[k + 1] + PAD - GAP / 2, top: VIDEO_TOP + 4 }}>
                   {styled ? '✦' : '·'}
                 </button>
               )
@@ -468,7 +520,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                      className={`absolute flex cursor-grab items-center gap-1.5 overflow-hidden rounded-md px-1.5 font-serif text-[12px] leading-none active:cursor-grabbing ${
                        a.mute ? 'bg-stone-300 text-stone-600' : 'bg-teal-600 text-white'} ${
                        selectedAudio === a.id ? 'ring-2 ring-accent' : ''} ${m?.moved ? 'opacity-80' : ''}`}
-                     style={{ left: x, width: w, bottom: 12, height: SOUND_H,
+                     style={{ left: x, width: w, bottom: stripBottom, height: SOUND_H,
                        backgroundImage: a.mute ? undefined : 'repeating-linear-gradient(90deg, rgba(255,255,255,.18) 0 2px, transparent 2px 5px)' }}>
                   <span className="shrink-0">{a.mute ? '🔇' : '♪'}</span>
                   <span className="truncate">{label}{a.mute ? ' · muted' : a.gain !== 1 ? ` · ${Math.round(a.gain * 100)}%` : ''}</span>
@@ -478,7 +530,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
 
             {dropAt != null && (
               <div className="pointer-events-none absolute w-0.5 rounded bg-accent"
-                   style={{ top: 46 + laneH, bottom: shotsBottom - 4, left: (dropAt < items.length ? geo.left[dropAt] : geo.end + GAP) + PAD - 2 }} />
+                   style={{ top: VIDEO_TOP - 4, bottom: shotsBottom - 4, left: (dropAt < items.length ? geo.left[dropAt] : geo.end + GAP) + PAD - 2 }} />
             )}
 
             {/* the snapped / approaching target, named */}
@@ -499,14 +551,32 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
           </div>
         )}
       </div>
+      </div>
     </section>
+  )
+}
+
+function LaneLabel({ icon, style, children }: { icon: IconName; style: React.CSSProperties; children: React.ReactNode }) {
+  return (
+    <div className="absolute inset-x-0 flex items-center gap-2 px-3 font-serif text-[15px] text-zinc-200" style={style}>
+      <Icon name={icon} size={18} className="shrink-0 text-zinc-400" />{children}
+    </div>
+  )
+}
+
+function Tool({ icon, label, title, onClick, disabled }: { icon: IconName; label: string; title: string; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button type="button" onClick={onClick} title={title} disabled={disabled}
+            className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 font-serif text-[15px] text-zinc-100 hover:bg-raised disabled:opacity-35">
+      <Icon name={icon} size={18} />{label}
+    </button>
   )
 }
 
 function TB({ children, onClick, title, wide }: { children: React.ReactNode; onClick: () => void; title: string; wide?: boolean }) {
   return (
     <button type="button" onClick={onClick} title={title}
-            className={`grid h-7 place-items-center rounded-md bg-raised text-[11px] text-zinc-100 hover:bg-zinc-700 ${wide ? 'w-9' : 'w-7'}`}>
+            className={`grid h-8 place-items-center rounded-md bg-raised text-[11px] text-zinc-100 hover:bg-zinc-700 ${wide ? 'w-10' : 'w-8'}`}>
       {children}
     </button>
   )

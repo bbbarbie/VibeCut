@@ -3,14 +3,14 @@ import { blendLook } from '../joinView'
 import { drawOverlays } from '../overlayDraw'
 import type { CaptionEnter, CaptionTemplate, JoinInfo, Overlay, OverlayStyle } from '../types'
 import { cx } from '../ui'
-import { Chip, Slider } from './ShotBar'
+import { Chip, Slider } from './Inspector'
 
-// The bottom bar for a clicked caption (its Style and Animation) and for a
-// clicked cut between two shots (its Transition). Every choice is a tile
-// that moves the way the result will, drawn by the same code as the preview
-// and the export (overlayDraw.drawOverlays, joinView.blendLook), and one tap
-// is one undoable turn. Nothing here is on by default: a video keeps its
-// look's own captions and cuts until something is picked (sarah, 2026-10-14).
+// The captions' Style and Animation, and the Transition at a cut, as tiles
+// in the inspector's Captions and Effects tabs. Every choice is a tile that
+// moves the way the result will, drawn by the same code as the preview and
+// the export (overlayDraw.drawOverlays, joinView.blendLook), and one tap is
+// one undoable turn. Nothing here is on by default: a video keeps its look's
+// own captions and cuts until something is picked (sarah, 2026-10-14).
 
 const TEMPLATE_NAMES: Record<CaptionTemplate, string> = {
   outlined: 'Outlined', bold: 'Big & bold', label: 'Label', highlight: 'Highlighter',
@@ -65,58 +65,48 @@ function CaptionSample({ style, text, t, scale = 3 }: { style: OverlayStyle; tex
   return <canvas ref={ref} width={TILE_W * 2} height={TILE_H * 2} className="absolute inset-0 size-full" />
 }
 
-export function CaptionBar({ style, thumb, sample, tab, onTab, onPick }: {
-  style: OverlayStyle
-  /** which tab is open: kept by the caller, so a pick (a new session) doesn't flip it back */
-  tab: 'style' | 'anim'
-  onTab: (tab: 'style' | 'anim') => void
-  /** the picture under the caption, behind every tile */
-  thumb: string | null
-  sample: string
-  onPick: (patch: { template?: CaptionTemplate | null; enter?: CaptionEnter | null }, label: string) => void
-}) {
+const GRID = 'grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] justify-items-center gap-x-2 gap-y-3'
+
+type CaptionPick = (patch: { template?: CaptionTemplate | null; enter?: CaptionEnter | null }, label: string) => void
+
+/** One style for every caption in the video. */
+export function CaptionStyles({ style, thumb, onPick }: { style: OverlayStyle; thumb: string | null; onPick: CaptionPick }) {
+  const bg = thumb ? { backgroundImage: `url(${thumb})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined
+  const held = 2.0   // the caption fully in
+  return (
+    <div className={GRID}>
+      <Tile on={!style.template} label="The look's own" onClick={() => style.template && onPick({ template: null }, 'Captions back to the look\'s own')}>
+        <span className="absolute inset-0" style={bg} />
+        <CaptionSample style={{ ...style, template: null, enter: null }} text="Aa" t={held} />
+      </Tile>
+      {(Object.keys(TEMPLATE_NAMES) as CaptionTemplate[]).map((id) => (
+        <Tile key={id} on={style.template === id} label={TEMPLATE_NAMES[id]}
+              onClick={() => style.template !== id && onPick({ template: id }, `Every caption is now ${TEMPLATE_NAMES[id]}`)}>
+          <span className="absolute inset-0" style={bg} />
+          <CaptionSample style={{ ...style, template: id, enter: null }} text="Aa" t={held} />
+        </Tile>
+      ))}
+    </div>
+  )
+}
+
+/** How every caption comes in, each tile playing it round and round. */
+export function CaptionAnimations({ style, thumb, sample, onPick }: { style: OverlayStyle; thumb: string | null; sample: string; onPick: CaptionPick }) {
   const m = useLoop(2.2)
   const bg = thumb ? { backgroundImage: `url(${thumb})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined
-  const held = 2.0   // the caption fully in, for the Style tiles
-  const tabs = [{ id: 'style' as const, icon: 'Aa', label: 'Style' }, { id: 'anim' as const, icon: '✦', label: 'Animation' }]
   return (
-    <div className="shrink-0 border-t border-line bg-panel px-3 pb-3 pt-2">
-      <div className="flex gap-1.5">
-        {tabs.map((x) => (
-          <button key={x.id} type="button" onClick={() => onTab(x.id)}
-                  className={cx('flex flex-1 flex-col items-center gap-0.5 rounded-xl py-1.5 font-serif text-[15px]',
-                    tab === x.id ? 'bg-accent text-accent-ink' : 'text-zinc-100 hover:bg-raised')}>
-            <span className="text-[18px] leading-none">{x.icon}</span>{x.label}
-          </button>
-        ))}
-      </div>
-      <div className="mt-2 flex items-start gap-3 overflow-x-auto rounded-xl border border-line bg-raised/40 px-4 py-3">
-        {tab === 'style' ? <>
-          <Tile on={!style.template} label="The look's own" onClick={() => style.template && onPick({ template: null }, 'Captions back to the look\'s own')}>
-            <span className="absolute inset-0" style={bg} />
-            <CaptionSample style={{ ...style, template: null, enter: null }} text="Aa" t={held} />
-          </Tile>
-          {(Object.keys(TEMPLATE_NAMES) as CaptionTemplate[]).map((id) => (
-            <Tile key={id} on={style.template === id} label={TEMPLATE_NAMES[id]}
-                  onClick={() => style.template !== id && onPick({ template: id }, `Every caption is now ${TEMPLATE_NAMES[id]}`)}>
-              <span className="absolute inset-0" style={bg} />
-              <CaptionSample style={{ ...style, template: id, enter: null }} text="Aa" t={held} />
-            </Tile>
-          ))}
-        </> : <>
-          <Tile on={!style.enter} label="The look's own" onClick={() => style.enter && onPick({ enter: null }, 'Captions come in the look\'s own way')}>
-            <span className="absolute inset-0" style={bg} />
-            <CaptionSample style={{ ...style, enter: null }} text={sample} t={m * 2.2} scale={2} />
-          </Tile>
-          {(Object.keys(ENTER_NAMES) as CaptionEnter[]).map((id) => (
-            <Tile key={id} on={style.enter === id} label={ENTER_NAMES[id]}
-                  onClick={() => style.enter !== id && onPick({ enter: id }, `Captions now come in: ${ENTER_NAMES[id]}`)}>
-              <span className="absolute inset-0" style={bg} />
-              <CaptionSample style={{ ...style, enter: id }} text={sample} t={m * 2.2} scale={2} />
-            </Tile>
-          ))}
-        </>}
-      </div>
+    <div className={GRID}>
+      <Tile on={!style.enter} label="The look's own" onClick={() => style.enter && onPick({ enter: null }, 'Captions come in the look\'s own way')}>
+        <span className="absolute inset-0" style={bg} />
+        <CaptionSample style={{ ...style, enter: null }} text={sample} t={m * 2.2} scale={2} />
+      </Tile>
+      {(Object.keys(ENTER_NAMES) as CaptionEnter[]).map((id) => (
+        <Tile key={id} on={style.enter === id} label={ENTER_NAMES[id]}
+              onClick={() => style.enter !== id && onPick({ enter: id }, `Captions now come in: ${ENTER_NAMES[id]}`)}>
+          <span className="absolute inset-0" style={bg} />
+          <CaptionSample style={{ ...style, enter: id }} text={sample} t={m * 2.2} scale={2} />
+        </Tile>
+      ))}
     </div>
   )
 }
@@ -143,39 +133,41 @@ function JoinSample({ kind, from, to, m }: { kind: string; from: string | null; 
   </>
 }
 
-export function JoinBar({ join, before, after, from, to, onPick }: {
-  join: JoinInfo
-  before: number | null
-  after: number | null
-  from: string | null
-  to: string | null
-  onPick: (op: { kind: string; dur?: number; all?: boolean }, label: string) => void
+type JoinPick = (op: { kind: string; dur?: number; all?: boolean }, label: string) => void
+
+/**
+ * The transitions. With a cut picked (its dot on the timeline) a tile changes
+ * that cut; with none (no shot numbers), every cut, shown on the first two shots.
+ */
+export function Transitions({ join, before, after, from, to, onPick }: {
+  join: JoinInfo; before: number | null; after: number | null; from: string | null; to: string | null; onPick: JoinPick
 }) {
+  const one = before != null && after != null
   const m = useLoop(1.8)
   const picked = join.picked ?? null
   const dur = join.picked_dur ?? 0.5
-  const where = before != null && after != null ? `the cut from shot ${before} to shot ${after}` : 'this cut'
+  const where = one ? `the cut from shot ${before} to shot ${after}` : 'every cut'
+  const current = one ? (picked ?? join.picture) : (join.picked_all ? picked : null)
   // a blend picked here that the footage can't give (no film past the cut) plays as a cut
-  const short = !!picked && picked !== 'cut' && picked !== join.picture && !['dip_black', 'flash'].includes(picked)
+  const short = one && !!picked && picked !== 'cut' && picked !== join.picture && !['dip_black', 'flash'].includes(picked)
   return (
-    <div className="shrink-0 border-t border-line bg-panel px-3 pb-3 pt-2">
-      <div className="px-1 pb-1 font-serif text-[16px] text-zinc-100">✦ How the picture changes at {where}</div>
-      <div className="flex items-start gap-3 overflow-x-auto rounded-xl border border-line bg-raised/40 px-4 py-3">
+    <div className="flex flex-col gap-3">
+      <div className={GRID}>
         {Object.entries(TRANSITION_NAMES).map(([id, name]) => (
-          <Tile key={id} on={(picked ?? join.picture) === id} label={name}
-                onClick={() => onPick({ kind: id, dur }, `${name} at ${where}`)}>
+          <Tile key={id} on={current === id} label={name}
+                onClick={() => onPick({ kind: id, dur, ...(one ? {} : { all: true }) }, one ? `${name} at ${where}` : `Every cut is now a ${name.toLowerCase()}`)}>
             <JoinSample kind={id} from={from} to={to} m={m} />
           </Tile>
         ))}
       </div>
-      {short && <div className="px-1 pt-2 font-serif text-[15px] text-zinc-100">
-        These shots weren't filmed long enough past the cut to blend, so this one stays a cut.</div>}
-      <div className="mt-2 flex items-center gap-4 rounded-xl border border-line bg-raised/40 px-4 py-2.5">
-        <Slider label="Length" value={dur} min={0.2} max={1.5} step={0.1} unit=" s" disabled={!picked || picked === 'cut'}
-                onCommit={(v) => picked && onPick({ kind: picked, dur: v }, `The ${TRANSITION_NAMES[picked].toLowerCase()} now takes ${v} s`)} />
-        <Chip onClick={() => onPick({ kind: picked ?? join.picture, dur, all: true },
-          `Every cut is now a ${TRANSITION_NAMES[picked ?? join.picture].toLowerCase()}`)}>Use for every cut</Chip>
-        {picked && <Chip onClick={() => join.picked_all
+      {short && <p className="font-serif text-[15px] text-zinc-100">
+        These shots weren't filmed long enough past the cut to blend, so this one stays a cut.</p>}
+      <Slider label="Length" value={dur} min={0.2} max={1.5} step={0.1} unit=" s" disabled={!picked || picked === 'cut'}
+              onCommit={(v) => picked && onPick({ kind: picked, dur: v, ...(one ? {} : { all: true }) }, `The ${TRANSITION_NAMES[picked].toLowerCase()} now takes ${v} s`)} />
+      <div className="flex flex-wrap gap-2">
+        {one && <Chip onClick={() => onPick({ kind: picked ?? join.picture, dur, all: true },
+          `Every cut is now a ${TRANSITION_NAMES[picked ?? join.picture].toLowerCase()}`)}>Use for every cut</Chip>}
+        {picked && <Chip onClick={() => join.picked_all || !one
           ? onPick({ kind: 'auto', all: true }, 'Every cut is back to the look\'s own')
           : onPick({ kind: 'auto' }, `${where[0].toUpperCase()}${where.slice(1)} is back to the look's own`)}>
           Back to the look's own</Chip>}
