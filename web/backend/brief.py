@@ -19,6 +19,8 @@ import copy
 import re
 from collections import Counter
 
+from . import worth
+
 # Rough target lengths. "long" keeps every usable shot. Only for answers
 # saved before the slider; the slider sends `seconds` (length_marks).
 LENGTH_S = {"short": 60.0, "medium": 180.0, "long": None}
@@ -397,12 +399,20 @@ def spots(shots: list) -> dict[str, int]:
     return out
 
 
-def weakest(cands: list, ident, spot: dict[str, int], count) -> tuple:
+def weakest(cands: list, ident, spot: dict[str, int], count, imp: dict[int, float] | None = None) -> tuple:
     """Which of `cands` ((rank, part, shot) tuples) to let go first: from the
-    stop with the most shots still in, then the weakest there. A stop's last
-    shot goes only when every stop is down to one (sarah, 2026-10-14: "a lot
-    of material was left out ... different locations")."""
-    return min(cands, key=lambda c: (-count(spot.get(ident(c[2]), -1)), c[0]))
+    stop with the most shots for what it is worth (`imp`, worth.importance:
+    its best moment), then the weakest there. Screen time follows what
+    happened at a stop, not how much was filmed there. A stop's last shot
+    goes only when every stop is down to one (sarah, 2026-10-14: "a lot of
+    material was left out ... different locations")."""
+    imp = imp or {}
+
+    def key(c):
+        k = spot.get(ident(c[2]), -1)
+        n = count(k)
+        return (n == 1, -n / max(imp.get(k, 1.0), 0.05), c[0])
+    return min(cands, key=key)
 
 
 def cap_for(style: dict | None) -> float | None:
@@ -428,7 +438,7 @@ def shape(options: list, style: dict | None, best: dict[str, float], keep: set |
     style = clean_style(style)
     if not style:
         return
-    rank = lambda s: s.score + (0.15 if s.lean else 0.0)  # noqa: E731
+    rank = lambda s: worth.of(s) + (0.15 if s.lean else 0.0)  # noqa: E731
     for o in options:
         # Shots are shared between the proposals (and the voiceover one).
         for b in o.beats:
@@ -457,6 +467,7 @@ def shape(options: list, style: dict | None, best: dict[str, float], keep: set |
         if target:
             total = sum(s.end - s.start for b in o.beats for s in b.shots)
             where = spots([s for b in o.beats for s in b.shots])
+            imp = worth.importance([s for b in o.beats for s in b.shots], where)
             # Drop the weakest shot that isn't the last one left in its part,
             # from the stop of the day that has the most shots in.
             while total > target:
@@ -464,7 +475,7 @@ def shape(options: list, style: dict | None, best: dict[str, float], keep: set |
                 if not spare:
                     break
                 left = Counter(where.get(x.id, -1) for b in o.beats for x in b.shots)
-                _, bi, s = weakest(spare, lambda x: x.id, where, lambda k: left[k])
+                _, bi, s = weakest(spare, lambda x: x.id, where, lambda k: left[k], imp)
                 o.beats[bi].shots.remove(s)
                 total -= s.end - s.start
             # Still over: whole parts go, weakest first, never the opening.
@@ -494,7 +505,7 @@ def length_ops(board: dict | None, cat, pool: list, target: float, vision: bool)
     beats = [{"id": bt["id"], "title": bt.get("title", ""),
               "shots": [{"key": bd.key(e), "id": e.get("id"), "len": e["end"] - e["start"], "gap": bool(e.get("gap"))}
                         for e in bt["shots"]]} for bt in (board or {}).get("beats", [])]
-    rank = lambda sid: cat.shots[sid].score + (0.15 if cat.shots[sid].lean else 0.0)  # noqa: E731
+    rank = lambda sid: worth.of(cat.shots[sid]) + (0.15 if cat.shots[sid].lean else 0.0)  # noqa: E731
     total = sum(e["len"] for bt in beats for e in bt["shots"])
     was = total
     tol = max(2.0, 0.03 * target)
@@ -502,6 +513,7 @@ def length_ops(board: dict | None, cat, pool: list, target: float, vision: bool)
     hook = 1 if beats and beats[0]["title"] == "Opening" and len(beats) > 1 else 0
     where = spots([cat.shots[e["id"]] for bt in beats for e in bt["shots"] if e["id"] in cat.shots]
                   + [s for s in pool if s.id in cat.shots])
+    imp = worth.importance([cat.shots[e["id"]] for bt in beats for e in bt["shots"] if e["id"] in cat.shots], where)
     if total > target + tol:
         while total > target + tol:
             spare = [(rank(e["id"]), bi, e) for bi, bt in enumerate(beats) if len(bt["shots"]) > 1
@@ -509,7 +521,7 @@ def length_ops(board: dict | None, cat, pool: list, target: float, vision: bool)
             if not spare:
                 break
             left = Counter(where.get(x["id"], -1) for bt in beats for x in bt["shots"] if x["id"])
-            _, bi, e = weakest(spare, lambda x: x["id"], where, lambda k: left[k])
+            _, bi, e = weakest(spare, lambda x: x["id"], where, lambda k: left[k], imp)
             beats[bi]["shots"].remove(e)
             ops.append({"op": "drop_shot", "shot": e["key"]})
             total -= e["len"]
@@ -535,7 +547,7 @@ def length_ops(board: dict | None, cat, pool: list, target: float, vision: bool)
         left = list(pool)
         while left and total < target - tol:
             s = max(left, key=lambda s: (where.get(s.id, -1) not in shown,
-                                         rank(s.id) if s.id in cat.shots else s.score))
+                                         rank(s.id) if s.id in cat.shots else worth.of(s)))
             left.remove(s)
             d = s.end - s.start
             if s.id in on or s.id not in cat.shots or d <= 0 or total + d > target + max(tol, d / 2):

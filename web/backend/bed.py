@@ -185,8 +185,11 @@ def ops(board: dict, cat, mx: dict, talking: set[str]) -> tuple[list[dict], dict
               "style": {}, "grid": grid, "keep": sorted(talking)}
         report = restyle.retime(trial, cat, None, grid, talking)
         out.append(op)
+    # Levelled to social volume (-14 LUFS, audiomix.write_wav), preview and
+    # export alike: unlevelled, the Oct 14 school-day edit came out at -20
+    # LUFS against the creator's own -15, and phones play it quiet.
     out.append({"op": "set_music", "track": track.id, "in": mx["in"], "gain": MUSIC_GAIN, "original": 1.0,
-                "fade_out": FADE_OUT_S, "duck": ducks(trial, talking), "sfx": [], "level": False})
+                "fade_out": FADE_OUT_S, "duck": ducks(trial, talking), "sfx": [], "level": True})
     return out, report
 
 

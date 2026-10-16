@@ -252,6 +252,21 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   (xfade slideleft + sideways smear, `export.swipe_blur`; the player slides
   both pictures, `joinView.swipeAt`); needs a dissolve's handles, else a cut.
   All numbers are priors from one of her edits. Not yet run on her clips.
+- **What a moment is worth** (`web/backend/worth.py`; outside evaluation of
+  the Oct 16 demo, sarah: "implement"). Every Shot gets `worth` (0..1) and
+  `worth_why` in `shots_from_clips`: craft (`score`) plus feeling (laughter
+  ≥2 heard seconds, singing, talking to the lens, from sound.json, which
+  nothing used for picking before), label rarity across the shoot, the
+  first face-free shot at a new stop ("first look at a new place"), minus a
+  little for a face with nothing said. `shape` and `length_ops` rank by it
+  (hook = the strongest moment, not the best-exposed), and `weakest` drops
+  from the stop with the most shots *per its importance* (its best worth),
+  so screen time follows what happened at a stop, not how much was filmed;
+  a stop's last shot still goes last. Look-alike collapsing stays on craft.
+  Weights are priors. `tests/test_worth.py`.
+- **Music at social volume**: the bed's `set_music` asks for levelling
+  (-14 LUFS, `audiomix.write_wav`), preview and export alike; the Oct 14
+  school-day edit was -20 LUFS against her own -15. `tests/test_loudness.py`.
 - HDR (HLG/PQ) footage: thumbnails and samples are tone-mapped to SDR in
   `media.to_sdr` so they look like the phone showed them; measurement frames
   are untouched. `tests/test_hdr.py`.
