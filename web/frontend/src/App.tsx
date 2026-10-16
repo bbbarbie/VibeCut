@@ -24,10 +24,12 @@ import type { ClassifyReq } from './components/Remember'
 import { Shelf } from './components/Shelf'
 import { SmoothButton, Story, type PlayItem, type Selection } from './components/Story'
 import { Timeline, type Marks } from './components/Timeline'
+import { ShotBar, StripBar } from './components/ShotBar'
+import { CaptionBar, JoinBar } from './components/StyleBars'
 import { Footage, type Importing } from './components/Footage'
 import { fromDataTransfer, fromInput, takeHandoff, type Picked } from './drop'
 import { bytes, uid } from './format'
-import { clock, locate, toSource } from './sequence'
+import { clock, locate, toSource, type SeqItem } from './sequence'
 import { cutWhilePlaying, step } from './snap'
 import { byKey } from './joinView'
 import { go } from './router'
@@ -83,6 +85,9 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const [selected, setSelected] = useState<string | null>(null)   // Frames: timeline entry
   const [storySel, setStorySel] = useState<Selection>(null)
   const [menu, setMenu] = useState<{ kind: 'story-shot' | 'frames-shot' | 'gap'; key: string; anchor: DOMRect } | null>(null)
+  const [selAudio, setSelAudio] = useState<string | null>(null)   // Frames: a sound strip (extract audio)
+  const [selJoin, setSelJoin] = useState<string | null>(null)     // Frames: the cut after this entry (its transition)
+  const [capTab, setCapTab] = useState<'style' | 'anim'>('style') // Frames: a clicked caption's tab below
   const [swap, setSwap] = useState<{ key: string; thumb: string; id: string } | null>(null)
   const [undoable, setUndoable] = useState<{ turn: number; text: string } | null>(null)
   // The rough cut and its gate.
@@ -644,7 +649,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
         trimBy(units, mod ? 'beat' : e.shiftKey ? 'second' : 'frame')
       } else if (e.key === 'Delete' || e.key === 'Backspace') deleteSelection(e.altKey)
       else if (e.key === '?') setHelp((h) => !h)
-      else if (e.key === 'Escape') { setHelp(false); setSelected(null) }
+      else if (e.key === 'Escape') { setHelp(false); setSelected(null); setSelAudio(null); setSelJoin(null) }
       else handled = false
       if (handled) e.preventDefault()
     }
@@ -734,6 +739,9 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       { label: 'Start the shot here', hint: 'Q', onClick: () => trimToPlayhead('in', false) },
       { label: 'End the shot here', hint: 'W', onClick: () => trimToPlayhead('out', false) },
       { label: 'Swap for a different shot…', onClick: openSwap },
+      tl.audio?.off.includes(menu.key)
+        ? { label: 'Its sound is on its own strip below', disabled: true, onClick: () => {} }
+        : { label: 'Take the sound off (extract audio)', onClick: () => run([{ op: 'extract_audio', shot: menu.key }], `You took the sound off shot ${it?.n}`) },
       { label: 'Remove — the rest moves up', hint: 'Delete', danger: true, onClick: () => run([{ op: 'drop_shot', shot: menu.key }], `You removed shot ${it?.n}`) },
       { label: 'Remove — leave empty space', hint: '⌥ Delete', danger: true, onClick: () => run([{ op: 'drop_shot', shot: menu.key, leave_gap: true }], `You removed shot ${it?.n}, leaving the space`) },
     ] }
@@ -793,13 +801,14 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   }
   const selectOverlay = (id: string | null) => {
     setSelOverlay(id)
+    if (id) { setSelected(null); setSelAudio(null); setSelJoin(null) }   // its Style and Animation take the bar below
     const o = id ? ovData.items.find((x) => x.id === id) : null
     if (o && level === 'frames') { setFramesTab('words'); timelineOwns(); showOverlay(o) }
   }
   // Words dragged on the picture: one undoable edit per drop.
   const overlayEdit: OverlayEdit | undefined = session?.board ? {
     selected: selOverlay,
-    onSelect: (id) => setSelOverlay(id),
+    onSelect: (id) => { setSelOverlay(id); if (id) { setSelected(null); setSelAudio(null); setSelJoin(null) } },
     onPlace: (id, place) => {
       const o = ovData.items.find((x) => x.id === id)
       const name = o ? KIND_META[o.kind].label.toLowerCase() : 'words'
@@ -1103,12 +1112,64 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                         timelineOwns()
                         setSelected(key)
                         const it = tl.items.find((x) => x.key === key)
-                        if (key && anchor && it) setMenu({ kind: it.kind === 'gap' ? 'gap' : 'frames-shot', key, anchor })
+                        setSelAudio(null)
+                        setSelJoin(null)
+                        if (key) setSelOverlay(null)
+                        // a shot's tools are the bar below; only an empty space gets a menu
+                        if (key && anchor && it?.kind === 'gap') setMenu({ kind: 'gap', key, anchor })
                       }}
                       onReorder={reorder} onInsertShot={insertShot} onClear={clear} onHelp={() => setHelp(true)}
                       overlays={ovData.items} selectedOverlay={selOverlay} onSelectOverlay={selectOverlay}
-                      onOverlayEdit={editOverlayOnTimeline} />
-            {undoable && <UndoToast text={undoable.text} onUndo={() => { toggle(undoable.turn); setUndoable(null) }} />}
+                      onOverlayEdit={editOverlayOnTimeline}
+                      selectedAudio={selAudio}
+                      onSelectAudio={(id) => { timelineOwns(); setSelected(null); setSelJoin(null); setSelAudio(id) }}
+                      joins={session?.mix?.joins ?? []} selectedJoin={selJoin}
+                      onSelectJoin={(k) => { timelineOwns(); setSelected(null); setSelAudio(null); setSelOverlay(null); setSelJoin(k) }}
+                      onAudioMove={(id, at) => {
+                        const a = tl.audio?.strips.find((x) => x.id === id)
+                        run([{ op: 'edit_audio', audio: id, at }], `You moved the sound of shot ${a?.n ?? ''} to ${clock(at)}`)
+                      }} />
+            {(() => {
+              const strip = selAudio ? tl.audio?.strips.find((x) => x.id === selAudio) : undefined
+              if (strip) return (
+                <StripBar strip={strip}
+                          onEdit={(patch, label) => run([{ op: 'edit_audio', audio: strip.id, ...patch }], label)}
+                          onDelete={() => { run([{ op: 'drop_audio', audio: strip.id }], `You deleted the sound of shot ${strip.n ?? ''}`); setSelAudio(null) }} />
+              )
+              const join = selJoin ? session?.mix?.joins.find((j) => j.after === selJoin) : undefined
+              if (join) {
+                const k = tl.items.findIndex((x) => x.key === join.after)
+                const a = tl.items[k], b = tl.items[k + 1]
+                return (
+                  <JoinBar join={join} before={a?.n ?? null} after={b?.n ?? null} from={shotThumb(a)} to={shotThumb(b)}
+                           onPick={(op, label) => run([{ op: 'set_transition', ...(op.all ? {} : { shot: join.after }), ...op }], label)} />
+                )
+              }
+              const cap = selOverlay && !selected ? ovData.items.find((o) => o.id === selOverlay && o.kind === 'caption') : undefined
+              if (cap) {
+                const under = tl.items[locate(tl.items, Math.min(cap.start + 0.1, tl.total - 1e-3))]
+                return (
+                  <CaptionBar style={ovData.style} thumb={shotThumb(under)} tab={capTab} onTab={setCapTab} sample={cap.text.length > 20 ? cap.text.slice(0, Math.max(10, cap.text.lastIndexOf(' ', 20))) : cap.text}
+                              onPick={(patch, label) => run([{ op: 'overlay_style', ...patch }], label)} />
+                )
+              }
+              const it = selected ? tl.items.find((x) => x.key === selected) : undefined
+              if (!it || it.kind !== 'shot') return null
+              const e = entry(it.key)
+              return (
+                <ShotBar item={it} extracted={!!tl.audio?.off.includes(it.key)}
+                         onFix={(patch, label) => run([{ op: 'set_shot', shot: it.key, ...patch }], label)}
+                         onSplit={() => {
+                           const t = phStore.get()
+                           cutAt(t > it.seq_start + fr && t < it.seq_end - fr ? t : (it.seq_start + it.seq_end) / 2)
+                         }}
+                         onSwap={() => e && setSwap({ key: it.key, thumb: e.thumb, id: e.id })}
+                         onDelete={() => { run([{ op: 'drop_shot', shot: it.key }], `You removed shot ${it.n}`); setSelected(null) }}
+                         onExtract={() => run([{ op: 'extract_audio', shot: it.key }], `You took the sound off shot ${it.n}`)} />
+              )
+            })()}
+            {undoable && <UndoToast text={undoable.text} onUndo={() => { toggle(undoable.turn); setUndoable(null) }}
+                                    lift={selJoin ? 300 : selOverlay && !selected ? 230 : selAudio || tl.items.some((x) => x.key === selected && x.kind === 'shot') ? 168 : 0} />}
             {flash && level !== 'frames' && <Flash text={flash} />}
           </main>
         ) : (
@@ -1223,9 +1284,10 @@ function MoreMenu({ items, onClose }: { items: { label: string; hint?: string; o
   )
 }
 
-function UndoToast({ text, onUndo }: { text: string; onUndo: () => void }) {
+function UndoToast({ text, onUndo, lift }: { text: string; onUndo: () => void; lift?: number }) {
   return (
-    <div className="pointer-events-auto absolute bottom-4 left-1/2 z-30 flex max-w-[90%] -translate-x-1/2 items-center gap-3 rounded-xl border border-line bg-zinc-900 px-4 py-2 shadow-2xl shadow-black/60">
+    // lifted over the shot's tool bar, so it never covers a slider
+    <div style={lift ? { bottom: lift } : undefined} className="pointer-events-auto absolute bottom-4 left-1/2 z-30 flex max-w-[90%] -translate-x-1/2 items-center gap-3 rounded-xl border border-line bg-zinc-900 px-4 py-2 shadow-2xl shadow-black/60">
       <span className="truncate text-[12px] text-zinc-200">{text}</span>
       <button type="button" onClick={onUndo} className="shrink-0 rounded-md bg-zinc-700 px-2.5 py-1 text-[12px] text-zinc-100 hover:bg-zinc-600">Undo</button>
     </div>
@@ -1239,4 +1301,10 @@ function Flash({ text }: { text: string }) {
       {text}
     </div>
   )
+}
+
+/** A shot's picture for a tile (the timeline's own thumbnail). */
+function shotThumb(it: SeqItem | undefined): string | null {
+  if (!it || it.kind !== 'shot' || !it.clip_id || !it.shot_id) return null
+  return `/api/thumbs/${it.clip_id}/shot${String(Number(it.shot_id.split(':')[1])).padStart(3, '0')}.jpg`
 }

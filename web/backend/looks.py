@@ -229,25 +229,29 @@ def joins_of(look: dict | None) -> dict | None:
             "open": bool(j.get("open")), "close": bool(j.get("close"))}
 
 
-def picture(b: dict | None, px: np.ndarray | None, joins: dict | None = None) -> dict | None:
+def picture(b: dict | None, px: np.ndarray | None) -> dict | None:
+    """The look's picture, with the creator's own transition picks on top
+    (transitions.fold): those were chosen on this video, so they win."""
+    from . import transitions
+    return transitions.fold(b, _picture(b, px))
+
+
+def _picture(b: dict | None, px: np.ndarray | None) -> dict | None:
     """What the look adds to the board's `style` for rendering: a borrowed
     style's own look and transitions win (they were chosen on purpose);
     the look fills in whatever that left empty. `px` = the story's pixels
-    (see app._story_pixels); None skips the grade (preview needs joins only).
-    `joins` = the creator's own transitions (profile.py), in place of the look's."""
+    (see app._story_pixels); None skips the grade (preview needs joins only)."""
     b = b or {}
     look = get(b.get("look"))
     style = dict(b.get("style") or {})
     if not look:
-        if joins and not style.get("transitions"):
-            style = {"name": "plain", "traits": [], "ref": None, **style, "transitions": dict(joins)}
         return style or None
     if not (style.get("look") or style.get("transitions") or style.get("letterbox")):
         # nothing of its own to render (a style that only retimed, like the
         # bed's beat): the picture is the look's, so the export says so
         style["name"] = look["name"]
-    if not style.get("transitions") and (joins or look.get("joins")):
-        style["transitions"] = dict(joins) if joins else joins_of(look)
+    if not style.get("transitions") and look.get("joins"):
+        style["transitions"] = joins_of(look)
     if not style.get("look") and look.get("grade"):
         if px is not None and len(px):
             fit = fit_grade(look, px)

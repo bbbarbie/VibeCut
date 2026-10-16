@@ -139,6 +139,8 @@ class Job:
     mix: dict | None = None
     # How the sound crosses each cut ({entry key: {"sound"}}, board.set_join).
     joins: dict | None = None
+    # Sound taken off shots onto their own strips (audiomix.strips_of).
+    sound: dict | None = None
 
     @property
     def dir(self) -> Path:
@@ -163,7 +165,7 @@ def _safe_name(s: str) -> str:
 
 def create(items: list[dict], clips: dict[str, dict], name: str, music: str | None,
            style: dict | None = None, mix: dict | None = None, joins: dict | None = None,
-           want: str | None = None) -> Job:
+           want: str | None = None, sound: dict | None = None) -> Job:
     sp = spans(items)
     if not sp:
         raise ValueError("the timeline is empty — choose a story first")
@@ -177,7 +179,7 @@ def create(items: list[dict], clips: dict[str, dict], name: str, music: str | No
         raise ValueError("the borrowed look's file is gone — apply the style again")
     job = Job(id=uuid.uuid4().hex[:10], items=sp, clips=clips, size=frame_size(sp, clips, want),
               total=sum(s["frames"] for s in sp) / FPS, name=_safe_name(name), music=music, style=style,
-              mix=mix, joins=joins)
+              mix=mix, joins=joins, sound=sound)
     job.dir.mkdir(parents=True, exist_ok=True)
     (job.dir / "frames").mkdir(exist_ok=True)
     JOBS[job.id] = job
@@ -269,14 +271,18 @@ def _ff(args: list[str], job: Job, total_s: float | None = None, base: float = 0
         raise RuntimeError((err or "").strip().splitlines()[-1] if err and err.strip() else "ffmpeg failed")
 
 
-def _fit(size: dict, style: dict | None = None, fades: str = "") -> str:
+def _fit(size: dict, style: dict | None = None, fades: str = "", fill: bool = False) -> str:
     w, h = size["w"], size["h"]
     look = (style or {}).get("look")
     # The grade goes on the picture before padding, so bars stay black, and
     # after any fade, so a dip bottoms out at the grade's black -- a lifted
     # black stays lifted through a dip, as it does under a graded edit.
     grade = f"lut3d=file='{_esc(look['lut'])}':interp=tetrahedral," if look else ""
-    chain = (f"scale={w}:{h}:force_original_aspect_ratio=decrease:flags=bicubic,{fades}{grade}"
+    # `fill` (the shot menu's crop): cover the frame and cut the edges off,
+    # instead of showing the whole picture with bars
+    fit = (f"scale={w}:{h}:force_original_aspect_ratio=increase:flags=bicubic,crop={w}:{h}" if fill
+           else f"scale={w}:{h}:force_original_aspect_ratio=decrease:flags=bicubic")
+    chain = (f"{fit},{fades}{grade}"
              f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps={FPS}")
     bar = _bar(size, style)
     if bar:
@@ -305,32 +311,41 @@ def _bar(size: dict, style: dict | None) -> int:
 # --------------------------------------------------------------------------
 
 def plan_transitions(items: list[dict], clips: dict[str, dict], style: dict | None) -> tuple[list[dict], list[str]]:
-    """Per item: handles (dissolves) and fades (dips, flashes, open, close).
+    """Per item: handles (blends) and fades (dips, flashes, open, close).
 
     Returns (per-item dicts, notes). A boundary is "between parts" when the
-    two shots belong to different beats of the storyboard.
+    two shots belong to different beats of the storyboard. A join the
+    creator picked (`at`, transitions.py) wins over the policy. A blend --
+    a dissolve, or one of the creator's zoom / slide / blur / light leak --
+    needs footage past the cut on both sides; `blend` on the outgoing item
+    names the xfade it renders with.
     """
-    per = [{"head": 0, "tail": 0, "fade_in": None, "fade_out": None} for _ in items]
+    from .transitions import BLENDS, KINDS
+    per = [{"head": 0, "tail": 0, "fade_in": None, "fade_out": None, "blend": None} for _ in items]
     pol = (style or {}).get("transitions")
     notes: list[str] = []
     if not pol or not items:
         return per, notes
-    half = max(1, int(round(pol.get("dur", 0.5) / 2 * FPS)))
-    fell_back = 0
+    at = pol.get("at") or {}
+    fell_back: dict[str, int] = {}
     for k in range(len(items) - 1):
         a, b = items[k], items[k + 1]
-        kind = pol["between"] if a.get("beat_id") != b.get("beat_id") else pol["within"]
-        if kind == "cut":
+        pick = at.get(a.get("key") or "")
+        kind = pick["kind"] if pick else pol["between"] if a.get("beat_id") != b.get("beat_id") else pol["within"]
+        if kind == "cut" or kind not in KINDS:
             continue
+        dur = float(pick["dur"]) if pick else float(pol.get("dur", 0.5))
+        half = max(1, int(round(dur / 2 * FPS)))
         n = min(half, a["frames"] // 2, b["frames"] // 2)
         if n < 1:
             continue
-        if kind == "dissolve":
+        if kind in BLENDS:
             if a["kind"] == "shot" and b["kind"] == "shot" and _room(a, clips, "tail", n) and _room(b, clips, "head", n):
                 per[k]["tail"], per[k + 1]["head"] = n, n
+                per[k]["blend"] = kind
                 continue
             if a["kind"] == "shot" and b["kind"] == "shot":
-                fell_back += 1
+                fell_back[kind] = fell_back.get(kind, 0) + 1
                 continue
             kind = "dip_black"   # next to a gap (already black): fade the shot side
         color = "white" if kind == "flash" else "black"
@@ -342,17 +357,18 @@ def plan_transitions(items: list[dict], clips: dict[str, dict], style: dict | No
         per[0]["fade_in"] = (min(FPS, items[0]["frames"] // 2), "black")
     if pol.get("close") and items[-1]["kind"] == "shot" and not per[-1]["fade_out"]:
         per[-1]["fade_out"] = (min(int(1.5 * FPS), items[-1]["frames"] // 2), "black")
-    if fell_back:
-        notes.append(f"{fell_back} dissolve{'s' * (fell_back != 1)} became a cut: the shot wasn't "
-                     "filmed long enough past the cut to blend")
+    for kind, n in fell_back.items():
+        name = KINDS[kind]["name"].lower()
+        notes.append(f"{n} {name}{'s' * (n != 1 and not name.endswith('h'))}{'es' * (n != 1 and name.endswith('h'))} "
+                     f"became {'a cut' if n == 1 else 'cuts'}: the shot wasn't filmed long enough past the cut to blend")
     return per, notes
 
 
 def _room(it: dict, clips: dict[str, dict], side: str, n: int) -> bool:
     """Is there footage for n frames beyond this span's edge?"""
     c = clips.get(it.get("clip_id") or "")
-    if not c:
-        return False
+    if not c or float(it.get("speed") or 1) != 1:
+        return False   # a sped-up or slowed shot has no handle at the edit's speed: it cuts
     need = n / FPS
     if side == "head":
         return it["src_start"] - need >= 0
@@ -373,7 +389,13 @@ def _shot(job: Job, it: dict, out: Path, tr: dict | None = None) -> None:
         return
     c = job.clips[it["clip_id"]]
     info = _display(c["path"])
-    src = ["-ss", f"{it['src_start'] - tr['head'] / FPS:.4f}", "-t", f"{d + 0.5:.4f}", "-i", c["path"]]
+    speed = float(it.get("speed") or 1.0)
+    src = ["-ss", f"{it['src_start'] - tr['head'] / FPS:.4f}", "-t", f"{d * speed + 0.5:.4f}", "-i", c["path"]]
+    # the shot menu's fixes: a quarter turn, then its speed (frames retimed;
+    # its sound comes from the mix, stretched there)
+    turn = ("hflip," if it.get("mirror") else "") + \
+        {90: "transpose=1,", 180: "hflip,vflip,", 270: "transpose=2,"}.get(int(it.get("rotate") or 0), "")
+    retime = f"setpts=PTS/{speed:.6f}," if speed != 1 else ""
     vfade, afade = "", ""
     if tr["fade_in"]:
         k, color = tr["fade_in"]
@@ -403,7 +425,8 @@ def _shot(job: Job, it: dict, out: Path, tr: dict | None = None) -> None:
     # A span that runs to the very end of its file can decode a frame or two
     # short; hold the last frame so every shot is exactly its frame count.
     args = [*src, "-map", "0:v:0", *amap, "-vf",
-            _fit(size, job.style, vfade) + punch + ",tpad=stop_mode=clone:stop_duration=1", *common]
+            turn + retime + _fit(size, job.style, vfade, bool(it.get("fill"))) + punch
+            + ",tpad=stop_mode=clone:stop_duration=1", *common]
     hw = ["-hwaccel", "videotoolbox"] if sys.platform == "darwin" else []
     try:
         _ff(hw + args, job)
@@ -411,6 +434,15 @@ def _shot(job: Job, it: dict, out: Path, tr: dict | None = None) -> None:
         if not hw:
             raise
         _ff(args, job)   # a codec the hardware decoder won't take
+
+
+def _xfade(kind: str | None) -> str:
+    """The xfade a blend renders with (transitions.KINDS)."""
+    from .transitions import KINDS, LIGHT_LEAK
+    x = KINDS.get(kind or "dissolve", KINDS["dissolve"])["xfade"] or "fade"
+    if x == "custom":
+        return f"transition=custom:expr='{LIGHT_LEAK}'"
+    return f"transition={x}"
 
 
 def _dissolve_runs(job: Job, segs: list[Path], plan: list[dict], seg_dir: Path) -> list[Path]:
@@ -439,7 +471,8 @@ def _dissolve_runs(job: Job, segs: list[Path], plan: list[dict], seg_dir: Path) 
         length = lens[0]
         for n in range(1, len(run)):
             ov = plan[run[n - 1]]["tail"] + plan[run[n]]["head"]
-            parts.append(f"{v}[v{n}]xfade=transition=fade:duration={ov / FPS:.6f}:offset={(length - ov) / FPS:.6f}[x{n}]")
+            parts.append(f"{v}[v{n}]xfade={_xfade(plan[run[n - 1]].get('blend'))}:duration={ov / FPS:.6f}"
+                         f":offset={(length - ov) / FPS:.6f}[x{n}]")
             parts.append(f"{a}[a{n}]acrossfade=d={ov / FPS:.6f}:c1=tri:c2=tri[y{n}]")
             v, a = f"[x{n}]", f"[y{n}]"
             length += lens[n] - ov
@@ -554,7 +587,7 @@ def _run(job: Job) -> None:
         music = music_spec(job.music, job.mix)
         buf, sound_notes = audiomix.render(job.items, job.clips,
                                            joins=audiomix.joins_for(job.items, job.joins),
-                                           transitions=plan, music=music)
+                                           transitions=plan, music=music, sound=job.sound)
         job.notes += sound_notes
         wav = job.dir / "mix.wav"
         audiomix.write_wav(buf, wav, level=bool((music or {}).get("level")))
