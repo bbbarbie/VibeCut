@@ -340,18 +340,7 @@ def _style(b: dict | None, for_export: bool = False) -> dict | None:
     """The board's rendering style: a borrowed style, with the look filling
     in the joins and (at export, where pixels are touched) the grade.
     Preview and export both come through here so they can't disagree."""
-    return looks.picture(b, _story_pixels(b) if for_export else None, joins=_joins_pref(b))
-
-
-def _joins_pref(b: dict | None) -> dict | None:
-    """The joins the creator's profile asked for, kept on the brief when the
-    video was started (profile.py). Only while the look is still the one it
-    started with: picking another look in Frames brings that look's joins."""
-    pr = PROJECT["p"]
-    st = ((pr.brief or {}).get("style") or {}) if pr else {}
-    if not b or not st.get("joins") or (b.get("look") or None) != (st.get("look") or None):
-        return None
-    return creator.JOINS.get(st["joins"])
+    return looks.picture(b, _story_pixels(b) if for_export else None)
 
 
 def _music_public() -> dict | None:
@@ -957,8 +946,9 @@ def api_brief_auto(req: BriefAutoReq | None = None) -> dict:
             feel = {**feel, "pace": mine["pace"], "why": f"{tempo.NAMES[mine['pace']]}, as you like them."}
         fmt = req.format or brief.suggest_format(_portrait_share(), marks["max"])
         style = {"seconds": brief.length_for(fmt, marks), "captions": mine.get("captions", "describe"),
-                 "pace": feel["pace"], "format": fmt, "look": req.look or mine.get("look") or "cozy",
-                 "joins": mine.get("joins")}
+                 "pace": feel["pace"], "format": fmt, "look": req.look or mine.get("look") or "cozy"}
+        if req.look:
+            creator.learn("look", req.look, "picked up front")
         pr.brief = {"message": about, "style": brief.clean_style(style) or {}, "tempo": feel["why"],
                     "said": f"{brief.FORMATS[fmt].split(' ·')[0]} · about {brief.say_length(style['seconds'])} · "
                             f"{tempo.NAMES[feel['pace']].lower()} · {looks.get(style['look'])['name']} · captions",
@@ -1045,9 +1035,9 @@ def api_captions(req: CaptionsReq) -> dict:
             return _session()
         if not b.get("overlays"):
             _words_as_asked(force=True)
-        on = creator.captions_of((SESSION.board or {}).get("look"))
-        if on and creator.load()["captions"] == "none":
-            creator.learn("captions", on, "captions switched on")
+        if creator.load()["captions"] == "none":
+            creator.learn("captions", ((SESSION.board or {}).get("overlay_style") or {}).get("template"),
+                          "captions switched on")
         return _session()
 
 
@@ -1294,23 +1284,21 @@ def api_ops(req: OpsReq) -> dict:
         if [o.get("op") for o in req.ops] == ["choose_option"]:
             _drop_repeats()
             _words_as_asked()
+            _as_you_like_it()
             _bed_start()
-        _learn_look(req.ops)
+        else:
+            creator.learn_ops(req.ops)
         return _session()
 
 
-def _learn_look(ops: list[dict]) -> None:
-    """A look picked by hand in Frames: its captions and its joins are what
-    the next video starts with (profile.py; only if there's a profile)."""
-    lid = next((o.get("look") for o in reversed(ops) if o.get("op") == "set_look"), None)
-    look = looks.get(lid)
-    if not look:
-        return
-    if creator.captions_of(lid):
-        creator.learn("captions", creator.captions_of(lid), f"picked the {look['name']} look")
-    j = creator.joins_of(looks.joins_of(look))
-    if j:
-        creator.learn("joins", j, f"picked the {look['name']} look")
+def _as_you_like_it() -> None:
+    """A story was just chosen: the creator's own caption style and
+    transition from their profile (profile.py), as one turn Undo takes away."""
+    ops = creator.ops_for(SESSION.board, creator.defaults(creator.load()))
+    if ops:
+        SESSION.add({"kind": "direct", "text": "Your style", "ops": ops,
+                     "reply": "Your usual captions and transitions, from your profile. Undo puts them back."},
+                    CATALOG["cat"], _make_proposals)
 
 
 # --------------------------------------------------------------------------
@@ -1967,15 +1955,14 @@ class ProfileReq(BaseModel):
     email: str
     kind: str | None = None
     pace: str | None = None
-    joins: str | None = None
+    transition: str | None = None
     captions: str | None = None
 
 
 @app.post("/api/profile")
 def api_profile_save(req: ProfileReq) -> dict:
     try:
-        p = creator.create(req.email, {"kind": req.kind, "pace": req.pace, "joins": req.joins,
-                                       "captions": req.captions})
+        p = creator.create(req.email, req.model_dump(exclude={"email"}, exclude_none=True))
     except creator.ProfileError as e:
         raise HTTPException(422, str(e)) from e
     return creator.public(p)

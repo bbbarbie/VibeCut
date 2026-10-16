@@ -2,8 +2,9 @@
 
 Not asked before an export, asked after the first one, never again after a
 skip; the email is the only thing typed and must look like one. The answers
-start the next video (pace, captions, look, joins), and what's changed in
-Frames moves the profile -- but only when there is one.
+start the next video (pace, captions and their style, the transition at
+every cut, the look), and what's changed in Frames moves the profile -- but
+only when there is one.
 
     python tests/test_profile.py
 """
@@ -57,15 +58,23 @@ def main() -> int:
           and creator.load(tmp)["pace"] is None)
     tmp.write_text("{broken")
     check("a broken file is a blank profile", creator.load(tmp)["email"] is None)
-    p = creator.create("sam@example.com", {"kind": "lesson", "pace": "calm", "joins": "dip", "captions": "quiet"}, tmp)
+    p = creator.create("sam@example.com", {"kind": "lesson", "pace": "calm", "transition": "zoom",
+                                           "captions": "outlined"}, tmp)
     d = creator.defaults(p)
     check("a lesson is captioned with what's said", d["captions"] == "transcribe", json.dumps(d))
-    check("the rest start the next video", d["pace"] == "calm" and d["look"] == "quiet" and d["joins"] == "dip", json.dumps(d))
+    check("the rest start the next video", d["pace"] == "calm" and d["template"] == "outlined"
+          and d["transition"] == "zoom", json.dumps(d))
+    board = {"beats": [{"shots": [{}, {}]}], "overlays": [{"id": "o1"}]}
+    ops = creator.ops_for(board, d)
+    check("as one caption style and one transition for every cut",
+          ops == [{"op": "overlay_style", "template": "outlined"}, {"op": "set_transition", "all": True, "kind": "zoom"}],
+          json.dumps(ops))
+    check("no captions on the story: no caption style", creator.ops_for({**board, "overlays": []}, d)
+          == [{"op": "set_transition", "all": True, "kind": "zoom"}])
     p = creator.create("sam@example.com", {"kind": "vlog", "captions": "none"}, tmp)
     check("no captions wins over the kind", creator.defaults(p)["captions"] == "none")
-    check("every caption pick is a real look", all(v is None or looks.get(v) for v in creator.CAPTIONS.values()))
-    check("every look's joins read back as a pick",
-          all(creator.joins_of(looks.joins_of(l)) for l in looks.all_looks().values()))
+    check("picks not asked again are kept", p["transition"] == "zoom", json.dumps(p))
+    check("the looks it knows are the looks there are", set(creator.FIELDS["look"]) == set(looks.all_looks()))
     p = creator.forget(tmp)
     check("forget: gone, and not asked again", p["email"] is None and not creator.should_ask(p))
 
@@ -100,29 +109,37 @@ def main() -> int:
         check("after the first export: asked, once counted", r["ask"] is True and r["exports"] == 1, json.dumps(r))
         check("a bad email comes back as a message", c.post("/api/profile", json={"email": "sam"}).status_code == 422)
         r = c.post("/api/profile", json={"email": "sam@example.com", "kind": "vlog", "pace": "calm",
-                                         "joins": "dip", "captions": "quiet"}).json()
+                                         "transition": "dip_black", "captions": "outlined"}).json()
         check("made: not asked again", r["email"] == "sam@example.com" and r["ask"] is False, json.dumps(r))
         backend._close_project()
 
         c.post("/api/projects", json={"name": "Second"})
         wait(c, c.post("/api/import", json={"paths": [a, b]}).json())
+        creator.learn("look", "quiet", "a test")
         r = c.get("/api/brief/setup").json()
         check("the popup's look starts at the profile's", r["look"] == "quiet", r["look"])
         s = story(c)
         st = s["brief"]["style"]
         check("the next video starts at the profile's pace", st["pace"] == "calm" and "as you like" in s["brief"]["tempo"],
               json.dumps(st))
-        check("with its look and joins", st["look"] == "quiet" and st["joins"] == "dip", json.dumps(st))
+        check("with its look", st["look"] == "quiet", json.dumps(st))
+        check("the caption style is the profile's", s["overlays"]["style"].get("template") == "outlined",
+              json.dumps(s["overlays"]["style"])[:200])
         tr = (s["board"].get("style") or {}).get("transitions") or {}
-        check("the joins are the profile's, not the look's", tr.get("between") == "dip_black", json.dumps(tr))
+        check("every cut is the profile's transition", tr.get("between") == "dip_black" and tr.get("within") == "dip_black",
+              json.dumps(tr))
+        texts = [t["text"] for t in s["turns"]] if "turns" in s else []
+        check("one undoable turn says so", "Your style" in texts, json.dumps(texts))
 
         c.post("/api/pace", json={"pace": "fast"})
         check("pace changed in Frames: the profile follows", creator.load()["pace"] == "fast")
-        s = c.post("/api/ops", json={"ops": [{"op": "set_look", "look": "hype"}], "label": "Hype"}).json()
+        c.post("/api/ops", json={"ops": [{"op": "set_look", "look": "hype"}], "label": "Hype"})
+        c.post("/api/ops", json={"ops": [{"op": "overlay_style", "template": "pop", "enter": "stamp"}], "label": "Pop"})
+        s = c.post("/api/ops", json={"ops": [{"op": "set_transition", "all": True, "kind": "light_leak"}], "label": "Leak"}).json()
         p = creator.load()
-        check("a look picked in Frames: its captions and joins", p["captions"] == "bold" and p["joins"] == "cut", json.dumps(p))
-        tr = (s["board"].get("style") or {}).get("transitions") or {}
-        check("and this video's joins are that look's now", tr.get("between") == "cut", json.dumps(tr))
+        check("a look, a caption style and animation, a transition for every cut: learnt",
+              p["look"] == "hype" and p["captions"] == "pop" and p["enter"] == "stamp" and p["transition"] == "light_leak",
+              json.dumps(p)[:300])
         c.post("/api/captions", json={"on": False})
         check("captions off: remembered", creator.load()["captions"] == "none")
         check("what was learned is listed", len(c.get("/api/profile").json()["learned"]) >= 3)

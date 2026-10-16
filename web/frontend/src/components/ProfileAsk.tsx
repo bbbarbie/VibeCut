@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { api, type CreatorHabits } from '../api'
+import type { CaptionTemplate, OverlayStyle } from '../types'
+import { CaptionSample, JoinSample, TEMPLATE_NAMES, Tile, TRANSITION_NAMES, useLoop } from './StyleBars'
 import { Button, cx, Dialog, inputCls } from '../ui'
 
 // Asked once, right after the first export (profile.py): the email names
@@ -19,35 +21,24 @@ const PACES: Pick[] = [
   { key: 'balanced', label: 'Steady', art: <Beats n={5} /> },
   { key: 'calm', label: 'Calm', art: <Beats n={3} /> },
 ]
-const JOINS: Pick[] = [
-  { key: 'cut', label: 'Straight cut', art: <Join mid="none" /> },
-  { key: 'soft', label: 'Soft fade', art: <Join mid="blend" /> },
-  { key: 'dip', label: 'Fade to black', art: <Join mid="#111" /> },
-  { key: 'flash', label: 'Quick flash', art: <Join mid="#fff" /> },
-]
-const CAPTIONS: Pick[] = [
-  { key: 'bold', label: 'Big & bold', art: <Word font='"Anton", Impact, "Arial Narrow", sans-serif' weight={400} upper color="#fff" shadow /> },
-  { key: 'clean', label: 'Clean', art: <Word font='system-ui, -apple-system, "Helvetica Neue", sans-serif' weight={700} color="#fff" shadow /> },
-  { key: 'cozy', label: 'Cozy', art: <Word font='"EB Garamond", serif' weight={500} italic lower color="#f6ebd9" /> },
-  { key: 'quiet', label: 'Quiet', art: <Word font='"EB Garamond", serif' weight={500} italic color="#efe8dd" small /> },
-  { key: 'playful', label: 'Bright', art: <Word font='"Nunito", system-ui, sans-serif' weight={800} color="#ffd84d" box /> },
-  { key: 'none', label: 'No captions', art: <Word none /> },
-]
-
-// what this video used, so the popup opens on it (looks/*.json)
-const LOOK_CAPTIONS: Record<string, string> = { hype: 'bold', clean: 'clean', cozy: 'cozy', quiet: 'quiet', playful: 'playful' }
-const LOOK_JOINS: Record<string, string> = { cinematic: 'cut', clean: 'cut', hype: 'cut', cozy: 'soft', film: 'soft', quiet: 'dip', playful: 'flash' }
 const EMAIL = /^[^@\s]{1,64}@[^@\s]+\.[^@\s]{2,}$/
 
-export function ProfileAsk({ current, onDone }: {
-  current: { pace?: string; look?: string | null; joins?: string; captions?: boolean }
+export function ProfileAsk({ current, style, from, to, onDone }: {
+  /** what this video used, so most people only type their email */
+  current: { pace?: string; transition?: string | null; template?: string | null; captions: boolean }
+  /** the video's caption style and two of its shots, behind the tiles */
+  style: OverlayStyle
+  from: string | null
+  to: string | null
   onDone: (p: CreatorHabits | null) => void
 }) {
   const [email, setEmail] = useState('')
   const [kind, setKind] = useState<string | null>('vlog')
   const [pace, setPace] = useState<string | null>(current.pace ?? null)
-  const [joins, setJoins] = useState<string | null>(current.joins ?? (current.look ? LOOK_JOINS[current.look] ?? null : null))
-  const [captions, setCaptions] = useState<string | null>(current.captions === false ? 'none' : current.look ? LOOK_CAPTIONS[current.look] ?? null : null)
+  const [transition, setTransition] = useState<string | null>(current.transition ?? null)
+  const [captions, setCaptions] = useState<string | null>(!current.captions ? 'none' : current.template ?? null)
+  const m = useLoop(1.8)
+  const bg = from ? { backgroundImage: `url(${from})`, backgroundSize: 'cover', backgroundPosition: 'center' } : { background: '#555' }
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const field = useRef<HTMLInputElement>(null)
@@ -58,12 +49,12 @@ export function ProfileAsk({ current, onDone }: {
   const save = async () => {
     if (!ok) { setError('That doesn’t look like an email address yet.'); return }
     setBusy(true); setError(null)
-    try { onDone(await api.profileSave({ email: email.trim(), kind, pace, joins, captions })) }
+    try { onDone(await api.profileSave({ email: email.trim(), kind, pace, transition, captions })) }
     catch (e) { setError((e as Error).message); setBusy(false) }
   }
 
   return (
-    <Dialog title="Your first video is done! 🎉" width={640} busy={busy} onClose={skip} id="profile-title"
+    <Dialog title="Your first video is done! 🎉" width={720} busy={busy} onClose={skip} id="profile-title"
             sub={<span className="font-serif text-[15px] text-zinc-300">Tell VibeCut how you like your videos, and the next one starts that way. It stays on this Mac.</span>}
             footer={<>
               <Button variant="ghost" onClick={skip} disabled={busy}>Skip</Button>
@@ -79,11 +70,36 @@ export function ProfileAsk({ current, onDone }: {
         </label>
         <Row title="What do you make?" picks={KINDS} value={kind} onPick={setKind} />
         <Row title="How fast do you like the cuts?" picks={PACES} value={pace} onPick={setPace} />
-        <Row title="How should one shot flow into the next?" picks={JOINS} value={joins} onPick={setJoins} />
-        <Row title="Your captions" picks={CAPTIONS} value={captions} onPick={setCaptions} />
+        <TileRow title="How should one shot flow into the next?">
+          {Object.entries(TRANSITION_NAMES).map(([id, name]) => (
+            <Tile key={id} on={transition === id} label={name} onClick={() => setTransition(id)}>
+              <JoinSample kind={id} from={from} to={to} m={m} />
+            </Tile>
+          ))}
+        </TileRow>
+        <TileRow title="Your captions">
+          {(Object.keys(TEMPLATE_NAMES) as CaptionTemplate[]).map((id) => (
+            <Tile key={id} on={captions === id} label={TEMPLATE_NAMES[id]} onClick={() => setCaptions(id)}>
+              <span className="absolute inset-0" style={bg} />
+              <CaptionSample style={{ ...style, template: id, enter: null }} text="Lunch" t={2} />
+            </Tile>
+          ))}
+          <Tile on={captions === 'none'} label="No captions" onClick={() => setCaptions('none')}>
+            <span className="absolute inset-0" style={bg} />
+          </Tile>
+        </TileRow>
         <p className="font-serif text-[14px] text-zinc-300">We picked what this video used. Whatever you change in your next edits, VibeCut keeps up.</p>
       </form>
     </Dialog>
+  )
+}
+
+function TileRow({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div>
+      <div className="mb-1 font-serif text-[17px] text-zinc-100">{title}</div>
+      <div className="flex items-start gap-3 overflow-x-auto pb-1">{children}</div>
+    </div>
   )
 }
 
@@ -126,32 +142,6 @@ function Beats({ n }: { n: number }) {
   return (
     <span className="flex h-7 w-[72px] gap-[2px]">
       {Array.from({ length: n }, (_, i) => <i key={i} className="block h-full flex-1 rounded-[3px]" style={{ background: SKY[i % SKY.length] }} />)}
-    </span>
-  )
-}
-
-function Join({ mid }: { mid: string }) {
-  const a = SKY[0], b = SKY[1]
-  const bg = mid === 'none' ? `linear-gradient(90deg, ${a} 50%, ${b} 50%)`
-    : mid === 'blend' ? `linear-gradient(90deg, ${a} 25%, ${b} 75%)`
-      : `linear-gradient(90deg, ${a} 25%, ${mid} 45%, ${mid} 55%, ${b} 75%)`
-  return <span className="block h-7 w-[72px] rounded-[4px]" style={{ background: bg }} />
-}
-
-function Word({ font, weight, color, upper, lower, italic, shadow, box, small, none }: {
-  font?: string; weight?: number; color?: string; upper?: boolean; lower?: boolean; italic?: boolean
-  shadow?: boolean; box?: boolean; small?: boolean; none?: boolean
-}) {
-  return (
-    <span className="grid h-full w-full place-items-center" style={{ background: 'linear-gradient(160deg, #6b8fa8, #3a4a3f)' }}>
-      {!none && (
-        <span style={{
-          fontFamily: font, fontWeight: weight, color, fontStyle: italic ? 'italic' : undefined, fontSize: small ? 15 : 19, lineHeight: 1,
-          textTransform: upper ? 'uppercase' : lower ? 'lowercase' : undefined, letterSpacing: upper ? '0.02em' : undefined,
-          textShadow: shadow ? '0 1px 3px rgba(0,0,0,.7)' : undefined,
-          ...(box ? { background: '#ff6fa8', color: '#fff', padding: '2px 5px', borderRadius: 4 } : {}),
-        }}>Lunch</span>
-      )}
     </span>
   )
 }

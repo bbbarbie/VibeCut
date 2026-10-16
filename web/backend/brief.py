@@ -66,8 +66,7 @@ SHORT_MAX_S = 90.0                   # [prior] the long end of a short
 LOOK_IDS = ("clean", "cozy", "quiet", "cinematic", "film", "playful", "hype")
 STYLE_KEYS = {"length": tuple(LENGTH_S), "pace": tuple(PACE_CAP_S), "opening": OPENINGS,
               "captions": CAPTIONS + tuple(LEGACY), "caption_look": tuple(CAPTION_LOOKS),
-              "format": tuple(FORMATS), "look": LOOK_IDS,
-              "joins": ("cut", "soft", "dip", "flash")}   # profile.JOINS: the creator's own transitions
+              "format": tuple(FORMATS), "look": LOOK_IDS}
 
 
 def suggest_format(portrait_share: float, usable_s: float) -> str:

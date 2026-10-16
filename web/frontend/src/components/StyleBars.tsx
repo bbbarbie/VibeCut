@@ -12,20 +12,20 @@ import { Chip, Slider } from './ShotBar'
 // is one undoable turn. Nothing here is on by default: a video keeps its
 // look's own captions and cuts until something is picked (sarah, 2026-10-14).
 
-const TEMPLATE_NAMES: Record<CaptionTemplate, string> = {
+export const TEMPLATE_NAMES: Record<CaptionTemplate, string> = {
   outlined: 'Outlined', bold: 'Big & bold', label: 'Label', highlight: 'Highlighter',
   handwritten: 'Handwritten', tape: 'Typed tape', pop: 'Pop colour', quiet: 'Quiet',
 }
 const ENTER_NAMES: Record<CaptionEnter, string> = {
   fade: 'Fade up', pop: 'Pop', slide: 'Slide in', stamp: 'Stamp', type: 'Typewriter', word: 'Word by word',
 }
-const TRANSITION_NAMES: Record<string, string> = {
+export const TRANSITION_NAMES: Record<string, string> = {
   cut: 'Cut', dissolve: 'Fade', dip_black: 'Dip to black', flash: 'Flash',
   zoom: 'Zoom through', slide_up: 'Slide up', blur: 'Blur', light_leak: 'Light leak',
 }
 
 /** 0..1, round and round every `period` seconds while mounted. */
-function useLoop(period: number): number {
+export function useLoop(period: number): number {
   const [m, setM] = useState(0)
   useEffect(() => {
     let raf = 0
@@ -39,7 +39,7 @@ function useLoop(period: number): number {
 
 const TILE_W = 112, TILE_H = 76
 
-function Tile({ on, label, onClick, children }: { on: boolean; label: string; onClick: () => void; children: React.ReactNode }) {
+export function Tile({ on, label, onClick, children }: { on: boolean; label: string; onClick: () => void; children: React.ReactNode }) {
   return (
     <button type="button" onClick={onClick} className="flex shrink-0 flex-col items-center gap-1 font-serif text-[15px] text-zinc-100">
       <span className={cx('relative block overflow-hidden rounded-lg border-[3px] bg-black',
@@ -52,7 +52,7 @@ function Tile({ on, label, onClick, children }: { on: boolean; label: string; on
 }
 
 /** A caption drawn on a tile exactly as drawOverlays will draw it in the video. */
-function CaptionSample({ style, text, t, scale = 3 }: { style: OverlayStyle; text: string; t: number; scale?: number }) {
+export function CaptionSample({ style, text, t, scale = 3 }: { style: OverlayStyle; text: string; t: number; scale?: number }) {
   const ref = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     const c = ref.current
@@ -122,7 +122,7 @@ export function CaptionBar({ style, thumb, sample, tab, onTab, onPick }: {
 }
 
 /** Two pictures joined the way `kind` joins them, playing round and round. */
-function JoinSample({ kind, from, to, m }: { kind: string; from: string | null; to: string | null; m: number }) {
+export function JoinSample({ kind, from, to, m }: { kind: string; from: string | null; to: string | null; m: number }) {
   // hold the outgoing shot, run the join through the middle half, hold the next
   const k = Math.max(0, Math.min(1, (m - 0.25) / 0.5))
   const pic = (src: string | null) => src ? { backgroundImage: `url(${src})`, backgroundSize: 'cover', backgroundPosition: 'center' } : { background: '#444' }

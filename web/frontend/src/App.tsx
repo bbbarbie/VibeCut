@@ -1212,7 +1212,9 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                               // the first video out: ask, once, how they like their videos (profile.py)
                               api.profile().then((p) => setAskProfile(p.ask)).catch(() => {})
                             }} />}
-      {askProfile && <ProfileAsk current={{ pace: brief?.style?.pace, look: session?.overlays?.look?.id, joins: brief?.style?.joins, captions: (session?.overlays?.items?.length ?? 0) > 0 }}
+      {askProfile && <ProfileAsk current={{ pace: brief?.style?.pace, transition: session?.board?.picture_all?.kind,
+                                           template: ovData.style.template, captions: ovData.items.length > 0 }}
+                                 style={ovData.style} from={shotThumb(tl.items[0])} to={shotThumb(tl.items[1])}
                                  onDone={() => setAskProfile(false)} />}
       {remixing && <Remix onClose={() => setRemixing(false)} onDone={remixDone} canLinks={caps.links} />}
       {referencing && <BorrowStyle onClose={() => setReferencing(false)} onRemix={openRemix}

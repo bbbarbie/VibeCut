@@ -88,7 +88,9 @@ export type BoardShot = {
   thumb: string; lean: boolean; gap?: boolean
 }
 export type BoardBeat = { id: string; title: string; detail: string; shots: BoardShot[] }
-export type Board = { option: string; name: string; structure: string; beats: BoardBeat[]; style?: BoardStyle | null }
+export type Board = { option: string; name: string; structure: string; beats: BoardBeat[]; style?: BoardStyle | null
+  /** a transition picked for every cut (transitions.py) */
+  picture_all?: { kind: string; dur: number } | null }
 
 // A borrowed style (restyle.py): timing is already in the beats; the rest is rendered at export.
 export type TransitionPolicy = { between: string; within: string; dur: number; open: boolean; close: boolean }
@@ -259,7 +261,7 @@ export type StyleQuestion = { id: string; question: string; multi: boolean; hint
   /** asked only when an earlier answer is one of these: { captions: ['describe', 'transcribe'] } */
   when?: Record<string, string[]> }
 export type StyleAnswers = { length?: string; seconds?: number; pace?: string; opening?: string; captions?: string; caption_look?: string
-  format?: 'short' | 'tall' | 'wide'; look?: string; joins?: string }
+  format?: 'short' | 'tall' | 'wide'; look?: string }
 
 // How the sound crosses a cut: carried out (L cut), carried in (J cut), or a clean break.
 export type JoinSound = 'cut' | 'carry_out' | 'carry_in' | 'default'
