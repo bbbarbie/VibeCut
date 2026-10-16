@@ -252,6 +252,27 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   (xfade slideleft + sideways smear, `export.swipe_blur`; the player slides
   both pictures, `joinView.swipeAt`); needs a dissolve's handles, else a cut.
   All numbers are priors from one of her edits. Not yet run on her clips.
+- **What a moment is worth** (`web/backend/worth.py`; outside evaluation of
+  the Oct 16 demo, sarah: "implement"). Every Shot gets `worth` (0..1) and
+  `worth_why` in `shots_from_clips`: craft (`score`) plus feeling (laughter
+  ≥2 heard seconds, singing, talking to the lens, from sound.json, which
+  nothing used for picking before), label rarity across the shoot, the
+  first face-free shot at a new stop ("first look at a new place"), minus a
+  little for a face with nothing said. `shape` and `length_ops` rank by it
+  (hook = the strongest moment, not the best-exposed), and `weakest` drops
+  from the stop with the most shots *per its importance* (its best worth),
+  so screen time follows what happened at a stop, not how much was filmed;
+  a stop's last shot still goes last. Look-alike collapsing stays on craft.
+  Weights are priors. `tests/test_worth.py`.
+- **Scorecard** (`cutgrammar/scorecard.py`, CLI `python -m
+  cutgrammar.scorecard edit.mp4 --reference mine.mov`): pace, loudness and
+  agreement with a person's edit of the same shoot (shot-to-shot grey
+  48×27 correlation ≥ MATCH 0.8), from finished videos only; face time
+  `pending` off the Mac. On her Oct 14 pair: VibeCut 13 shots, longest
+  17.3 s, 38% over 4 s, -20.3 LUFS, shows 4 of her 16 moments; hers 16
+  shots, longest 3.9 s, -14.9 LUFS. The music bed now asks for levelling
+  (-14 LUFS, `audiomix.write_wav`), preview and export alike.
+  `tests/test_scorecard.py`.
 - HDR (HLG/PQ) footage: thumbnails and samples are tone-mapped to SDR in
   `media.to_sdr` so they look like the phone showed them; measurement frames
   are untouched. `tests/test_hdr.py`.

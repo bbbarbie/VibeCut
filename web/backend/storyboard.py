@@ -93,6 +93,8 @@ class Shot:
     order: int = 0          # position in plain file order
     lean: bool = False
     contrast: float = 0.0   # best frame's contrast part (bestframe), lights against the dark
+    worth: float | None = None  # what the moment is worth to the story (worth.py), craft included
+    worth_why: list[str] = field(default_factory=list)
 
     @property
     def duration(self) -> float:
@@ -186,6 +188,8 @@ def shots_from_clips(clips: list[dict], cut: tuple[set, dict] | None = None) -> 
             ))
     for i, s in enumerate(out):
         s.order = i
+    from . import worth
+    worth.annotate(out, {c["id"]: c for c in clips})
     return out
 
 
