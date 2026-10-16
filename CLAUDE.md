@@ -264,15 +264,9 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   so screen time follows what happened at a stop, not how much was filmed;
   a stop's last shot still goes last. Look-alike collapsing stays on craft.
   Weights are priors. `tests/test_worth.py`.
-- **Scorecard** (`cutgrammar/scorecard.py`, CLI `python -m
-  cutgrammar.scorecard edit.mp4 --reference mine.mov`): pace, loudness and
-  agreement with a person's edit of the same shoot (shot-to-shot grey
-  48×27 correlation ≥ MATCH 0.8), from finished videos only; face time
-  `pending` off the Mac. On her Oct 14 pair: VibeCut 13 shots, longest
-  17.3 s, 38% over 4 s, -20.3 LUFS, shows 4 of her 16 moments; hers 16
-  shots, longest 3.9 s, -14.9 LUFS. The music bed now asks for levelling
-  (-14 LUFS, `audiomix.write_wav`), preview and export alike.
-  `tests/test_scorecard.py`.
+- **Music at social volume**: the bed's `set_music` asks for levelling
+  (-14 LUFS, `audiomix.write_wav`), preview and export alike; the Oct 14
+  school-day edit was -20 LUFS against her own -15. `tests/test_loudness.py`.
 - HDR (HLG/PQ) footage: thumbnails and samples are tone-mapped to SDR in
   `media.to_sdr` so they look like the phone showed them; measurement frames
   are untouched. `tests/test_hdr.py`.
