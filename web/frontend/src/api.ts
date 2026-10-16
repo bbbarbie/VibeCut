@@ -32,8 +32,20 @@ async function j<T>(res: Promise<Response>): Promise<T> {
   return r.json()
 }
 
-const post = (url: string, body: unknown) =>
-  fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+// Every change is a POST, and the server saves the project after each one:
+// while none is in flight the draft is saved (the top bar says so).
+let inFlight = 0
+const savers = new Set<() => void>()
+export const saving = {
+  get: () => inFlight > 0,
+  subscribe: (f: () => void) => { savers.add(f); return () => { savers.delete(f) } },
+}
+const post = (url: string, body: unknown) => {
+  inFlight++
+  savers.forEach((f) => f())
+  return fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    .finally(() => { inFlight--; savers.forEach((f) => f()) })
+}
 
 export const api = {
   // projects: the dashboard's list, and which one is open

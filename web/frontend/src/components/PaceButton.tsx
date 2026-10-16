@@ -6,8 +6,8 @@ import type { Session } from '../types'
 // here, as one undoable turn. Says why it picked what it picked.
 const PACES = [['fast', 'Quick cuts'], ['balanced', 'Steady cuts'], ['calm', 'Calm cuts']] as const
 
-export function PaceButton({ pace, why, story, onDone }: {
-  pace?: string; why?: string; story?: string; onDone: (s: Session) => void
+export function PaceButton({ pace, why, story, onDone, wide }: {
+  pace?: string; why?: string; story?: string; onDone: (s: Session) => void; wide?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -37,8 +37,8 @@ export function PaceButton({ pace, why, story, onDone }: {
     <div ref={box} className="relative">
       <button ref={btn} type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
               title="How quick the cuts are, read from your clips"
-              className="whitespace-nowrap rounded-md border border-line px-2 py-1 text-[11px] text-zinc-300 hover:bg-raised">
-        {name}
+              className={wide ? 'w-full rounded-lg border border-line px-3 py-2 text-left font-serif text-[16px] text-zinc-100 hover:bg-raised' : 'whitespace-nowrap rounded-md border border-line px-2 py-1 text-[11px] tabular-nums text-zinc-300 hover:bg-raised'}>
+        {wide ? `Tempo · ${name}` : name}
       </button>
       {open && pos && (
         <div className="fixed z-40 w-[320px] rounded-xl border border-line bg-raised p-4 font-serif shadow-2xl" style={pos}>
