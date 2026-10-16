@@ -31,6 +31,9 @@ KINDS: dict[str, dict] = {
     "slide_up":   {"name": "Slide up",     "xfade": "slideup"},
     "blur":       {"name": "Blur",         "xfade": "hblur"},
     "light_leak": {"name": "Light leak",   "xfade": "custom"},
+    # a whip between two stops of the day: slides sideways, smeared over the
+    # middle of the move (export.SWIPE_BLUR); cozy and hype join parts with it
+    "swipe":      {"name": "Swipe",        "xfade": "slideleft"},
 }
 BLENDS = {k for k, v in KINDS.items() if v["xfade"]}
 DUR_DEFAULT = 0.5     # seconds the join takes [prior]

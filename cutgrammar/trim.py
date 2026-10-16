@@ -39,6 +39,12 @@ W_IN, W_OUT = 0.5, 0.25  # a good start matters twice as much as a good end
 MIN_BOUNDARY = 0.45      # windows that start worse than this are a last resort
 SNAP_S = 0.6             # how far a boundary may move to get out of a word
 RUNNER_UP = 0.1          # a runner-up window may score at most this far below the best [prior]
+# Talk the camera only overhears -- two friends chatting, someone turned to
+# the person beside them -- is a moment of the day, not the vlog speaking:
+# it gets a glimpse like any other shot. On her first auto edit such a chat
+# held for 14 s and she said it "wasn't worth 14 seconds at all". [prior]
+CHATTER_S = 3.0
+ADDRESSED = 0.6          # share of on-camera talking seconds spent looking into the lens [prior]
 
 
 @dataclass
@@ -68,6 +74,37 @@ def shake(motion: np.ndarray) -> np.ndarray:
 
 def is_talking(sig: ClipSignals) -> bool:
     return sig.n > 0 and float(np.mean(sig.speech)) > TALKING
+
+
+def addressed(sig: ClipSignals, faces: np.ndarray | None, lo: int = 0, hi: int | None = None) -> bool | None:
+    """Is the talking in [lo, hi) said to the audience?
+
+    True: the person in frame looks into the lens while talking -- a vlog's
+    spine, kept as long as it runs. False: the face is turned away, or (when
+    the face's direction wasn't read) two people share the shot -- a chat
+    the camera overhears. None: no face to read (narration from behind the
+    camera, a clip with no face reading), so nothing changes."""
+    if faces is None or faces.ndim != 2 or faces.shape[1] < 4 or len(faces) != sig.n:
+        return None
+    hi = sig.n if hi is None else min(hi, sig.n)
+    f = faces[lo:hi]
+    voiced = sig.arr("speech")[lo:hi] >= 0.5
+    if voiced.any():
+        f = f[voiced]
+    seen = f[f[:, 0] >= 0.5]
+    if len(seen) == 0 or len(seen) < 0.5 * len(f):
+        return None
+    known = seen[seen[:, 3] >= 0]
+    if len(known) >= 0.5 * len(seen):
+        return bool(known[:, 3].mean() >= ADDRESSED)
+    if (seen[:, 2] >= 2).mean() >= 0.5:
+        return False
+    return None
+
+
+def chatter(sig: ClipSignals, faces: np.ndarray | None, lo: int = 0, hi: int | None = None) -> bool:
+    """Someone is talking, but not to the audience."""
+    return is_talking(sig) and addressed(sig, faces, lo, hi) is False
 
 
 def second_scores(sig: ClipSignals, faces: np.ndarray | None = None) -> np.ndarray:
@@ -102,11 +139,15 @@ def boundary(sig: ClipSignals, t: int, kind: str, subj: np.ndarray, edge: np.nda
     return float(0.4 * steady + 0.3 * subj[k] + 0.3 * speech_ok - 0.4 * edge[k])
 
 
-def target_length(sig: ClipSignals, scores: np.ndarray, lo: int = 0, hi: int | None = None) -> float:
+def target_length(sig: ClipSignals, scores: np.ndarray, lo: int = 0, hi: int | None = None,
+                  faces: np.ndarray | None = None) -> float:
     """How much of this clip is worth keeping: its good seconds, within a
-    range that fits the kind of clip (someone talking holds longer)."""
+    range that fits the kind of clip (someone talking to the audience holds
+    longer; a chat the camera overhears doesn't)."""
     hi = sig.n if hi is None else hi
     good = int((scores[lo:hi] >= GOOD).sum())
+    if chatter(sig, faces, lo, hi):
+        return float(np.clip(good, 2, CHATTER_S))
     if is_talking(sig):
         # Which sentences matter can't be known without a transcript, so a
         # talking clip only loses what is unusable -- never a chosen amount
@@ -137,7 +178,7 @@ def candidates(sig: ClipSignals, target: float | None = None, faces: np.ndarray 
     subj, edge = _subject(sig, faces)
     a0, b0 = int(np.floor(lo)), min(int(np.ceil(hi - 1e-6)), sig.n)
     span = b0 - a0
-    L = int(round(target if target is not None else target_length(sig, s, a0, b0)))
+    L = int(round(target if target is not None else target_length(sig, s, a0, b0, faces)))
     L = max(1, min(L, span))
     if L >= span:
         return [_finish(sig, float(lo), float(hi), float(L), float(s[a0:b0].mean()) if span else 0.0,

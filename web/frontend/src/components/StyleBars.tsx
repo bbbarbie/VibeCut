@@ -21,7 +21,7 @@ const ENTER_NAMES: Record<CaptionEnter, string> = {
 }
 const TRANSITION_NAMES: Record<string, string> = {
   cut: 'Cut', dissolve: 'Fade', dip_black: 'Dip to black', flash: 'Flash',
-  zoom: 'Zoom through', slide_up: 'Slide up', blur: 'Blur', light_leak: 'Light leak',
+  zoom: 'Zoom through', slide_up: 'Slide up', blur: 'Blur', light_leak: 'Light leak', swipe: 'Swipe',
 }
 
 /** 0..1, round and round every `period` seconds while mounted. */

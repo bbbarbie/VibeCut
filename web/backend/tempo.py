@@ -15,9 +15,13 @@ Every threshold here is a prior, set on one real shoot, not calibrated.
 
 from __future__ import annotations
 
+import math
 import statistics
 
-from cutgrammar.signals import VOICE_HI
+import numpy as np
+
+from cutgrammar import trim
+from cutgrammar.signals import VOICE_HI, ClipSignals
 
 from . import storyboard as sb
 
@@ -45,13 +49,26 @@ def _secs(rec: dict, key: str, a: float, b: float) -> list[float]:
     return vals[int(a):max(int(a) + 1, int(b + 0.999))]
 
 
+def overheard(rec: dict, a: float, b: float) -> bool:
+    """Talk in [a, b) of this clip that isn't said to the audience: the
+    face turned to someone else, or two people chatting (trim.addressed)."""
+    faces = np.asarray(rec.get("faces") or [], dtype=np.float64)
+    if not rec.get("signals") or faces.ndim != 2 or faces.shape[1] < 4:
+        return False
+    sig = ClipSignals.from_json(rec["signals"])
+    return trim.addressed(sig, faces, int(a), int(math.ceil(b))) is False
+
+
 def talking(clips: list[dict], shots: list[sb.Shot]) -> set[str]:
-    """Shots where someone is talking for most of the window."""
+    """Shots where someone talks to the audience for most of the window:
+    those keep their whole sentence at any pace. A chat the camera only
+    overhears (sarah, 2026-10-14) is cut like any other moment."""
     by_id = {c["id"]: c for c in clips}
     out = set()
     for s in shots:
-        v = _secs(by_id.get(s.clip_id, {}), "voice", s.start, s.end)
-        if v and sum(v) / len(v) >= VOICE_HI:
+        rec = by_id.get(s.clip_id, {})
+        v = _secs(rec, "voice", s.start, s.end)
+        if v and sum(v) / len(v) >= VOICE_HI and not overheard(rec, s.start, s.end):
             out.add(s.id)
     return out
 
@@ -66,7 +83,10 @@ def read(clips: list[dict], cut: tuple[set, dict] | None = None) -> dict:
     moving = share(lambda s: s.activity >= MOVING)
     still = share(lambda s: s.activity <= STILL)
     by_id = {c["id"]: c for c in clips}
-    heard = [x for s in shots for x in _secs(by_id.get(s.clip_id, {}), "voice", s.start, s.end)]
+    # a chat the camera overhears is atmosphere, not talking that wants room
+    heard = [0.0 if chat else x for s in shots
+             for chat in [overheard(by_id.get(s.clip_id, {}), s.start, s.end)]
+             for x in _secs(by_id.get(s.clip_id, {}), "voice", s.start, s.end)]
     music = [x for s in shots for x in _secs(by_id.get(s.clip_id, {}), "music", s.start, s.end)]
     talk = sum(x >= VOICE_HI for x in heard) / len(heard) if heard else 0.0
     tune = sum(x >= VOICE_HI for x in music) / len(music) if music else 0.0
@@ -118,12 +138,13 @@ def pick_story(options: list[sb.Option], shots: list[sb.Shot]) -> tuple[str, str
     return "time", "It follows your day in the order it happened."
 
 
-def pace_ops(board: dict, cat, windows: dict, pace: str, talk: set[str]) -> list[dict]:
+def pace_ops(board: dict, cat, windows: dict, pace: str, talk: set[str], style: dict | None = None) -> list[dict]:
     """Every shot retimed to `pace`: its rough-trim window, at most the pace's
-    longest shot around its best frame. Talking keeps its whole window."""
+    longest shot around its best frame (and a short's, brief.cap_for).
+    Talking to the audience keeps its whole window."""
     from . import brief
     from .board import key, is_gap
-    cap = brief.PACE_CAP_S[pace]
+    cap = brief.cap_for({**(style or {}), "pace": pace})
     ops = []
     for bt in board.get("beats", []):
         for e in bt["shots"]:
