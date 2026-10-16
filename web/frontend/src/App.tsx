@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api } from './api'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { api, saving } from './api'
 import { Chat, type ChatItem } from './components/Chat'
 import { KIND_META, partsOf } from './overlayDraw'
 import { loadProfile } from './profile'
@@ -24,8 +24,10 @@ import type { ClassifyReq } from './components/Remember'
 import { Shelf } from './components/Shelf'
 import { SmoothButton, Story, type PlayItem, type Selection } from './components/Story'
 import { Timeline, type Marks } from './components/Timeline'
-import { ShotBar, StripBar } from './components/ShotBar'
-import { CaptionBar, JoinBar } from './components/StyleBars'
+import { Inspector, type InspectorTab, type JoinPick } from './components/Inspector'
+import { PreviewBar } from './components/PreviewBar'
+import { Handle, useLayout } from './components/Split'
+import { Icon, type IconName } from './components/icons'
 import { Footage, type Importing } from './components/Footage'
 import { fromDataTransfer, fromInput, takeHandoff, type Picked } from './drop'
 import { bytes, uid } from './format'
@@ -87,7 +89,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const [menu, setMenu] = useState<{ kind: 'story-shot' | 'frames-shot' | 'gap'; key: string; anchor: DOMRect } | null>(null)
   const [selAudio, setSelAudio] = useState<string | null>(null)   // Frames: a sound strip (extract audio)
   const [selJoin, setSelJoin] = useState<string | null>(null)     // Frames: the cut after this entry (its transition)
-  const [capTab, setCapTab] = useState<'style' | 'anim'>('style') // Frames: a clicked caption's tab below
+  const [insTab, setInsTab] = useState<InspectorTab>('edit')      // Frames: the inspector on the right
   const [swap, setSwap] = useState<{ key: string; thumb: string; id: string } | null>(null)
   const [undoable, setUndoable] = useState<{ turn: number; text: string } | null>(null)
   // The rough cut and its gate.
@@ -99,7 +101,11 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const [alt, setAlt] = useState(false)
   const [help, setHelp] = useState(false)
   const [selOverlay, setSelOverlay] = useState<string | null>(null)
-  const [framesTab, setFramesTab] = useState<'shots' | 'words'>('shots')
+  // Frames: the panel beside the rail on the left (closed by clicking its item again)
+  const [side, setSide] = useState<'media' | 'text' | 'music' | 'chat' | null>(() => (window.innerWidth < 1100 ? null : 'media'))
+  const [layout, setSize] = useLayout()
+  const stageRef = useRef<HTMLDivElement>(null)
+  const isSaving = useSyncExternalStore(saving.subscribe, saving.get)
   const [exporting, setExporting] = useState(false)
   const [askProfile, setAskProfile] = useState(false)
   const [remixing, setRemixing] = useState(false)
@@ -372,6 +378,12 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   }
 
   const toggle = async (turn: number) => { setSession(await api.toggle(turn)) }
+  const lastDone = [...(session?.turns ?? [])].reverse().find((x) => !x.undone && x.has_ops)
+  const lastUndone = [...(session?.turns ?? [])].reverse().find((x) => x.undone && x.has_ops)
+  const undoRedo = (redo: boolean) => {
+    const target = redo ? lastUndone : lastDone
+    if (target) toggle(target.id)
+  }
   const classify = async (req: ClassifyReq) => { setSession(await api.classify(req)) }
   const changeRule = async (id: string, action: 'forget' | 'narrow') => {
     try { setSession(await api.rule(id, action)) } catch (e) { note((e as Error).message) }
@@ -618,12 +630,8 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       const rate = transportStore.get().rate
       let handled = true
 
-      if (mod && k === 'z') {
-        const turns = session?.turns ?? []
-        const target = e.shiftKey ? [...turns].reverse().find((x) => x.undone && x.has_ops)
-          : [...turns].reverse().find((x) => !x.undone && x.has_ops)
-        if (target) toggle(target.id)
-      } else if ((mod && k === 'k') || (k === 'b' && !mod)) cut()
+      if (mod && k === 'z') undoRedo(e.shiftKey)
+      else if ((mod && k === 'k') || (k === 'b' && !mod)) cut()
       else if (e.code === 'Space') { timelineOwns(); if (playing) transport.stop(); else { snapStore.set(null); transport.play(1) } }
       else if (k === 'l' && !mod) { timelineOwns(); snapStore.set(null); transport.play(playing && rate > 0 ? Math.min(rate * 2, 8) : 1) }
       else if (k === 'j' && !mod) { timelineOwns(); snapStore.set(null); transport.play(playing && rate < 0 ? Math.max(rate * 2, -8) : -1) }
@@ -801,14 +809,14 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   }
   const selectOverlay = (id: string | null) => {
     setSelOverlay(id)
-    if (id) { setSelected(null); setSelAudio(null); setSelJoin(null) }   // its Style and Animation take the bar below
+    if (id) { setSelected(null); setSelAudio(null); setSelJoin(null); setInsTab('captions') }   // its Style and Animation are in the inspector
     const o = id ? ovData.items.find((x) => x.id === id) : null
-    if (o && level === 'frames') { setFramesTab('words'); timelineOwns(); showOverlay(o) }
+    if (o && level === 'frames') { timelineOwns(); showOverlay(o) }
   }
   // Words dragged on the picture: one undoable edit per drop.
   const overlayEdit: OverlayEdit | undefined = session?.board ? {
     selected: selOverlay,
-    onSelect: (id) => { setSelOverlay(id); if (id) { setSelected(null); setSelAudio(null); setSelJoin(null) } },
+    onSelect: (id) => { setSelOverlay(id); if (id) { setSelected(null); setSelAudio(null); setSelJoin(null); setInsTab('captions') } },
     onPlace: (id, place) => {
       const o = ovData.items.find((x) => x.id === id)
       const name = o ? KIND_META[o.kind].label.toLowerCase() : 'words'
@@ -902,11 +910,36 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     )
   }
 
+  const fmt = brief?.style?.format ?? (tl.frame && tl.frame.w > tl.frame.h ? 'wide' : 'tall')
+  const FRAMES: Record<string, { label: string; ratio: string; wide: boolean }> = {
+    short: { label: 'Short · vertical', ratio: 'Short 9:16', wide: false },
+    tall: { label: 'Vlog · vertical', ratio: '9:16', wide: false },
+    wide: { label: 'Wide · 16:9', ratio: '16:9', wide: true },
+  }
+  const nextFrame = async () => {
+    const order = ['short', 'tall', 'wide'] as const
+    const next = order[(order.indexOf(fmt as typeof order[number]) + 1) % order.length]
+    try { setSession(await api.format(next)); note(`The video is now ${FRAMES[next].label.toLowerCase()}`) } catch (e) { note((e as Error).message) }
+  }
   const player = (big: boolean) => (
     <Player videoRef={videoRef} backRef={backRef} veilRef={veilRef} bars={session?.mix?.bars} segment={segment}
             label={big ? label : tr.playing && !segment ? 'Your story, with its captions — click to pause' : storyLabel}
             gap={tr.gap && !segment} overlay={overlayView} frame={tl.frame} overlayEdit={overlayEdit}
-            onTime={() => {}} onEnd={() => { if (queue) playAt(queue, queue.index + 1) }} onPlayingChange={() => {}} />
+            onTime={() => {}} onEnd={() => { if (queue) playAt(queue, queue.index + 1) }} onPlayingChange={() => {}}
+            dark={big}
+            controls={big ? (
+              <PreviewBar total={tl.total} clip={segment ? (clips.find((c) => c.id === segment.clipId)?.name ?? 'from Media') : null}
+                          onPlay={() => {
+                            timelineOwns()
+                            if (transportStore.get().playing) { transport.stop(); return }
+                            if (phStore.get() >= tl.total - 0.05) transport.seek(0)
+                            snapStore.set(null)
+                            transport.play(1)
+                          }}
+                          onBack={() => { videoRef.current?.pause(); timelineOwns(); transport.seek(phStore.get()) }}
+                          frame={FRAMES[fmt] ?? FRAMES.tall} onFrame={nextFrame}
+                          onFull={() => { stageRef.current?.requestFullscreen?.().catch(() => {}) }} />
+            ) : undefined} />
   )
   // Chat on pause: only while the edit is stopped on a frame, about that frame.
   const pauseChat = session?.board && !tr.playing && !segment
@@ -919,6 +952,132 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
           prefs={session?.preferences ?? null} onClassify={classify} onRule={changeRule}
           review={session?.last ? { turn: session.last.turn, items: session.last.review ?? [] } : null} />
   )
+
+  // ---- the edit screen's pieces ------------------------------------------------
+  const toggleCaptions = async () => {
+    try { const r = await api.captions(!ovData.items.length); setSession(r); offerUndo(r) }
+    catch (e) { note((e as Error).message) }
+  }
+  const looking = session?.bed?.stage === 'looking'
+  const musicNode = session?.board ? (
+    <div className="space-y-3">
+      <p className="font-serif text-[16px] leading-snug text-zinc-100">
+        {looking ? `Finding a song${session.bed?.source ? ` from ${session.bed.source}` : ''}…${session.bed?.total ? ` ${session.bed.done}/${session.bed.total}` : ''}`
+          : session.music ? <>Playing under the video: <b className="font-medium">{session.music.title}</b></> : 'No music under this video.'}
+      </p>
+      {!session.music && !looking && session.bed?.why && <p className="font-serif text-[15px] leading-snug text-zinc-300">{session.bed.why}</p>}
+      <Button variant={session.music ? 'secondary' : 'primary'} disabled={looking}
+              title={session.music ? 'Take the music out' : 'Find a free song that fits this edit and put the cuts on its beat'}
+              onClick={async () => {
+                try { const r = await api.bed(!session.music); setSession(r); if (session.music) offerUndo(r) }
+                catch (e) { note((e as Error).message) }
+              }}>
+        {session.music ? 'Take the music out' : 'Find a song for it'}
+      </Button>
+    </div>
+  ) : null
+  const selItem = selected ? tl.items.find((x) => x.key === selected) ?? null : null
+  const selStrip = selAudio ? tl.audio?.strips.find((x) => x.id === selAudio) ?? null : null
+  const allJoins = session?.mix?.joins ?? []
+  const pickedJoin = selJoin ? allJoins.find((j) => j.after === selJoin) : undefined
+  const joinAt = (j: (typeof allJoins)[number]): JoinPick => {
+    const k = tl.items.findIndex((x) => x.key === j.after)
+    const a = tl.items[k], b = tl.items[k + 1]
+    return { join: j, before: a?.n ?? null, after: b?.n ?? null, from: shotThumb(a), to: shotThumb(b) }
+  }
+  const capSel = selOverlay ? ovData.items.find((o) => o.id === selOverlay && o.kind === 'caption') : undefined
+  const capFirst = capSel ?? ovData.items.find((o) => o.kind === 'caption')
+  const capUnder = capFirst ? tl.items[locate(tl.items, Math.min(capFirst.start + 0.1, tl.total - 1e-3))] : tl.items[0]
+  const capText = capFirst?.text ?? 'Coffee run'
+  const inspector = (
+    <Inspector tab={insTab} onTab={setInsTab}
+               item={selItem} itemThumb={shotThumb(selItem ?? undefined)}
+               clipName={selItem?.clip_id ? clips.find((c) => c.id === selItem.clip_id)?.name ?? '' : ''}
+               extracted={!!selItem && !!tl.audio?.off.includes(selItem.key)}
+               strip={selStrip}
+               join={pickedJoin ? joinAt(pickedJoin) : allJoins[0] ? joinAt(allJoins[0]) : null} joinPicked={!!pickedJoin}
+               style={ovData.style} captionsOn={!!ovData.items.length} captionThumb={shotThumb(capUnder)}
+               captionSample={capText.length > 20 ? capText.slice(0, Math.max(10, capText.lastIndexOf(' ', 20))) : capText}
+               looks={ovData.look ? { id: ovData.look.id, all: ovData.look.all } : null}
+               music={musicNode}
+               video={session?.board ? (
+                 <div className="space-y-2">
+                   <LengthButton wide total={tl.total} onDone={(r) => { setSession(r); offerUndo(r); note(r.length_note) }} />
+                   <PaceButton wide pace={brief?.style?.pace} why={brief?.tempo}
+                               story={session.board?.option === session.proposals?.recommended ? session.proposals?.why : undefined}
+                               onDone={(r) => { setSession(r); offerUndo(r) }} />
+                   <SmoothButton wide rough={(session.seams ?? []).filter((x) => x.verdict !== 'ok').length}
+                                 onSmooth={async (order, nudge) => { const r = await api.smooth(order, nudge); setSession(r); offerUndo(r) }} />
+                 </div>
+               ) : null}
+               onFix={(patch, label) => selItem && run([{ op: 'set_shot', shot: selItem.key, ...patch }], label)}
+               onTrim={(edge, to) => {
+                 if (!selItem) return
+                 const longer = edge === 'out' ? to > selItem.src_end : to < selItem.src_start
+                 run([{ op: 'trim', shot: selItem.key, edge, to: r3(to) }],
+                   `You made shot ${selItem.n ?? ''} ${longer ? 'longer' : 'shorter'} at the ${edge === 'in' ? 'start' : 'end'}`)
+               }}
+               onSplit={() => {
+                 if (!selItem) return
+                 const t = phStore.get()
+                 cutAt(t > selItem.seq_start + fr && t < selItem.seq_end - fr ? t : (selItem.seq_start + selItem.seq_end) / 2)
+               }}
+               onSwap={() => { const e = selItem && entry(selItem.key); if (selItem && e) setSwap({ key: selItem.key, thumb: e.thumb, id: e.id }) }}
+               onDelete={() => { if (!selItem) return; run([{ op: 'drop_shot', shot: selItem.key }], `You removed shot ${selItem.n}`); setSelected(null) }}
+               onCloseGap={() => { if (!selItem) return; run([{ op: 'drop_shot', shot: selItem.key }], 'You closed up an empty space'); setSelected(null) }}
+               onExtract={() => selItem && run([{ op: 'extract_audio', shot: selItem.key }], `You took the sound off shot ${selItem.n}`)}
+               onStrip={(patch, label) => selStrip && run([{ op: 'edit_audio', audio: selStrip.id, ...patch }], label)}
+               onStripDelete={() => { if (!selStrip) return; run([{ op: 'drop_audio', audio: selStrip.id }], `You deleted the sound of shot ${selStrip.n ?? ''}`); setSelAudio(null) }}
+               onCaptions={toggleCaptions}
+               onCaptionStyle={(patch, label) => run([{ op: 'overlay_style', ...patch }], label)}
+               onJoin={(op, label) => run([{ op: 'set_transition', ...(op.all || !pickedJoin ? {} : { shot: pickedJoin.after }), ...op }], label)}
+               onLook={(id, name) => run([{ op: 'set_look', look: id }], `The video now has the ${name} look`)} />
+  )
+  const RAIL: { id: NonNullable<typeof side>; icon: IconName; label: string }[] = [
+    { id: 'media', icon: 'media', label: 'Media' },
+    { id: 'text', icon: 'text', label: 'Text' },
+    { id: 'music', icon: 'music', label: 'Music' },
+    // the chat is the AI's way in; with the AI off it still holds every change, each with its Undo
+    { id: 'chat', icon: caps.llm ? 'spark' : 'history', label: caps.llm ? 'AI Edit' : 'History' },
+  ]
+  const panelHead = (title: string, extra?: React.ReactNode) => (
+    <header className="flex h-14 shrink-0 items-center gap-2 px-4">
+      <span className="font-serif text-[19px] text-zinc-100">{title}</span>
+      <div className="flex-1" />
+      {extra}
+    </header>
+  )
+  const sidePanel = side === 'media' ? (
+    <Shelf clips={clips} inEdit={inEdit} busy={!!importing}
+           onPick={(fl) => importPicked(fromInput(fl))}
+           onPreview={(c) => {
+             // what the video uses of it, else its first shot
+             const it = tl.items.find((x) => x.clip_id === c.id && x.shot_id)
+             const sh = c.shots[0]
+             if (it) preview(c.id, it.src_start, it.src_end, it.shot_id!)
+             else if (sh) preview(c.id, sh.start, sh.end, sh.id)
+           }}
+           onMove={async (c, into) => {
+             try {
+               const r = await api.pile(c.id, into)
+               setSession(r); offerUndo(r)
+               setClips((await api.project()).clips) // the rough cut's call moved with it
+             } catch (e) { note((e as Error).message) }
+           }} />
+  ) : side === 'text' ? <>
+    {panelHead('Text', <Button size="sm" aria-pressed={!!ovData.items.length} onClick={toggleCaptions}>{ovData.items.length ? 'Turn captions off' : 'Turn captions on'}</Button>)}
+    <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">{overlaysPanel}</div>
+  </> : side === 'music' ? <>
+    {panelHead('Music')}
+    <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 pb-4">
+      {musicNode}
+      {session?.board && <Music board={session.board} inUse={session.music?.id ?? null} onSession={setSession} />}
+    </div>
+  </> : side === 'chat' ? <>
+    {pauseChat && <div className="shrink-0 border-b border-line">{pauseChat}</div>}
+    <div className="flex min-h-0 flex-1 flex-col [&>aside]:min-h-0 [&>aside]:flex-1 [&>aside]:border-r-0">{chat}</div>
+  </> : null
+  const card = 'flex min-h-0 shrink-0 flex-col overflow-hidden rounded-2xl border border-line bg-panel'
 
   const centre = talkOpen && caps.speech
     ? <TalkCut onApply={applyTalk} onWatch={preview} onClose={() => setTalkOpen(false)} />
@@ -959,7 +1118,8 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     )
 
   const storyStage = shown === 'story' && !talkOpen
-  const cols = storyStage && level === 'frames' ? (narrow ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[320px_minmax(0,1fr)]')
+  const framesView = storyStage && level === 'frames'
+  const cols = framesView ? 'grid-cols-[minmax(0,1fr)]'
     : storyStage ? (narrow ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[320px_minmax(0,1fr)_420px]')
       : narrow || screen === 'footage' ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)_400px]'
 
@@ -968,208 +1128,137 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     {setup && <Setup data={setup.data} busy={setup.busy} onDone={makeIt} onCancel={() => { if (!setup.busy) setSetup(null) }} />}
     {asking && <StyleQuestions questions={asking.questions} tailored={asking.tailored}
                                onDone={answered} onCancel={() => setAsking(null)} />}
-    <div className="grid h-full grid-rows-[48px_1fr]">
-      <header className="flex items-center gap-2 border-b border-line bg-ink px-3">
+    <div className="grid h-full grid-rows-[56px_1fr] bg-ink">
+      <header className="flex items-center gap-2 border-b border-line bg-ink px-4">
         <button type="button" onClick={() => go({ kind: 'projects' })} title="All your videos" className="flex items-center gap-2 rounded-md px-1 py-0.5 hover:bg-raised">
           <Wordmark />
         </button>
-        <span className="text-zinc-700" aria-hidden>/</span>
+        <span className="mx-2 h-6 w-px shrink-0 bg-line" aria-hidden />
         {renaming ? (
           <input autoFocus defaultValue={session?.project?.name ?? ''} maxLength={80}
                  onBlur={(e) => rename(e.currentTarget.value)}
                  onKeyDown={(e) => { if (e.key === 'Enter') rename(e.currentTarget.value); if (e.key === 'Escape') setRenaming(false) }}
-                 className="min-w-0 max-w-[220px] rounded-md border border-accent/60 bg-panel px-2 py-0.5 text-[13px] text-zinc-100 outline-none" />
+                 className="min-w-0 max-w-[260px] rounded-md border border-accent/60 bg-panel px-2 py-1 font-serif text-[16px] text-zinc-100 outline-none" />
         ) : (
-          <button type="button" onClick={() => setRenaming(true)} title="Rename"
-                  className="min-w-0 max-w-[220px] truncate rounded-md px-1.5 py-0.5 text-[13px] text-zinc-200 hover:bg-raised">{session?.project?.name ?? '…'}</button>
+          <div className="relative min-w-0">
+            <button type="button" onClick={() => setMore((m) => !m)} aria-haspopup="menu" aria-expanded={more}
+                    title="Rename, look at your footage again, and more"
+                    className="flex max-w-[280px] items-center gap-1.5 rounded-lg px-2 py-1 font-serif text-[17px] text-zinc-200 hover:bg-raised">
+              <span className="truncate">{session?.project?.name ?? '…'}</span><span className="text-[13px] text-zinc-400">▾</span>
+            </button>
+            {more && (
+              <MoreMenu onClose={() => setMore(false)} items={[
+                { label: 'Rename this video', onClick: () => setRenaming(true) },
+                { label: 'Look at your footage again', hint: 'Every clip, kept and left out', disabled: !framesView, onClick: () => showStep('footage') },
+                { label: 'Other stories…', hint: 'The same clips told another way', disabled: !session?.proposals || !session?.board || shown !== 'story', onClick: () => { transport.stop(); setOthersOpen(true); setLevel('story') } },
+                { label: 'Feel like a video you love…', hint: 'Its pace, cuts and colour, never its frames', disabled: !clips.length || shown !== 'story', onClick: () => { transport.stop(); setMenu(null); setReferencing(true) } },
+                { label: 'Talking to camera…', hint: caps.speech ? 'Transcribe on this Mac, cut pauses and retakes' : 'Needs macOS 26 with the Xcode command-line tools', disabled: !caps.speech || !clips.length, onClick: openTalk },
+                { label: 'Build a short from reference reels…', hint: caps.links ? 'Their pace and length, your clips, free music' : 'Links need yt-dlp; files work', disabled: !clips.length, onClick: openRemix },
+                { label: 'Keyboard shortcuts', onClick: () => setHelp(true) },
+                { label: 'Polish a finished video', hint: 'A separate tool for a video you already cut', onClick: () => go({ kind: 'polish' }) },
+                { label: 'All your videos', onClick: () => go({ kind: 'projects' }) },
+                { label: 'Start this video over…', hint: 'Clears the footage list and the story; files stay', danger: true, disabled: !clips.length, onClick: () => setRestart(true) },
+              ]} />
+            )}
+          </div>
         )}
-        {importing && <span className="hidden truncate text-[11px] text-accent md:inline" title={importing.text}>reading clips…</span>}
+        {importing && <span className="hidden truncate font-serif text-[15px] text-accent md:inline" title={importing.text}>reading clips…</span>}
 
         <div className="flex-1" />
-        <Stepper current={shown} derived={stage} done={done} onGo={showStep} compact={narrow} />
+        {!framesView && <Stepper current={shown} derived={stage} done={done} onGo={showStep} compact={narrow} />}
         <div className="flex-1" />
 
-        {narrow && storyStage && <Button size="sm" onClick={() => setChatOpen((o) => !o)} aria-pressed={chatOpen}>Chat</Button>}
-        {clips.length > 0 && shown === 'story' && (
-          <Button size="sm" onClick={() => { transport.stop(); setMenu(null); setReferencing(true) }}
-                  title="Make yours feel like a video you love — its pace, cuts and colour, never its frames">Reference</Button>
-        )}
-        <div className="relative">
-          <Button size="sm" variant="ghost" onClick={() => setMore((m) => !m)} aria-haspopup="menu" aria-expanded={more}>More ▾</Button>
-          {more && (
-            <MoreMenu onClose={() => setMore(false)} items={[
-              { label: 'Other stories…', hint: 'The same clips told another way', disabled: !session?.proposals || !session?.board || shown !== 'story', onClick: () => { transport.stop(); setOthersOpen(true); setLevel('story') } },
-              { label: 'Talking to camera…', hint: caps.speech ? 'Transcribe on this Mac, cut pauses and retakes' : 'Needs macOS 26 with the Xcode command-line tools', disabled: !caps.speech || !clips.length, onClick: openTalk },
-              { label: 'Build a short from reference reels…', hint: caps.links ? 'Their pace and length, your clips, free music' : 'Links need yt-dlp; files work', disabled: !clips.length, onClick: openRemix },
-              { label: 'Keyboard shortcuts', hint: 'Frames view', onClick: () => setHelp(true) },
-              { label: 'Polish a finished video', hint: 'A separate tool for a video you already cut', onClick: () => go({ kind: 'polish' }) },
-              { label: 'Start this video over…', hint: 'Clears the footage list and the story; files stay', danger: true, disabled: !clips.length, onClick: () => setRestart(true) },
-            ]} />
-          )}
-        </div>
-        <span className="mx-1 h-5 w-px shrink-0 bg-line" aria-hidden />
+        {narrow && storyStage && !framesView && <Button size="sm" onClick={() => setChatOpen((o) => !o)} aria-pressed={chatOpen}>Chat</Button>}
+        {session?.board && <>
+          <button type="button" onClick={() => undoRedo(false)} disabled={!lastDone} aria-label="Undo" title={lastDone ? `Undo: ${lastDone.lines.map((l) => l.text).join(' · ') || 'the last change'} (⌘Z)` : 'Nothing to undo'}
+                  className="grid size-9 place-items-center rounded-lg text-zinc-200 hover:bg-raised disabled:opacity-30"><Icon name="undo" /></button>
+          <button type="button" onClick={() => undoRedo(true)} disabled={!lastUndone} aria-label="Redo" title={lastUndone ? 'Redo (⇧⌘Z)' : 'Nothing to redo'}
+                  className="grid size-9 place-items-center rounded-lg text-zinc-200 hover:bg-raised disabled:opacity-30"><Icon name="redo" /></button>
+          <span className="mx-1 h-6 w-px shrink-0 bg-line" aria-hidden />
+          <span className="hidden shrink-0 items-center gap-1.5 font-serif text-[15px] text-zinc-300 md:flex" role="status">
+            {isSaving ? 'Saving…' : <><span className="grid size-5 place-items-center rounded-full bg-emerald-400/15 text-emerald-400"><Icon name="check" size={14} /></span>Draft saved</>}
+          </span>
+        </>}
         <button type="button" title="Your profile" aria-label="Your profile" onClick={() => { transport.stop(); go({ kind: 'profile' }) }}
-                className="grid size-8 shrink-0 place-items-center rounded-full bg-zinc-700 font-serif text-[15px] font-semibold text-zinc-100 ring-1 ring-zinc-500/40 hover:ring-accent">
+                className="ml-1 grid size-9 shrink-0 place-items-center rounded-full bg-zinc-700 font-serif text-[15px] font-semibold text-zinc-100 ring-1 ring-zinc-500/40 hover:ring-accent">
           {profileInitial}
         </button>
-        <Button variant="primary" size="sm" disabled={!session?.board} onClick={openExport}
+        <Button variant="primary" disabled={!session?.board} onClick={openExport} className="ml-1 px-4"
                 title={session?.board ? 'Render the edit, its captions and its music to one video file' : 'Your edit is still being made'}>
-          Export{session?.exports.length ? ` · ${session.exports.length}` : ''}
+          <Icon name="export" size={18} />Export{session?.exports.length ? ` · ${session.exports.length}` : ''}
         </Button>
       </header>
 
       <div className={cx('relative grid min-h-0', cols)}>
-        {storyStage && (narrow ? (chatOpen && (
+        {storyStage && !framesView && (narrow ? (chatOpen && (
           <div className="absolute inset-y-0 left-0 z-30 w-[min(360px,90vw)] shadow-2xl shadow-black/60" onKeyDown={(e) => { if (e.key === 'Escape') setChatOpen(false) }}>{chat}</div>
         )) : chat)}
 
-        {storyStage && level === 'frames' ? (
-          <main className="relative flex min-h-0 min-w-0 flex-col">
-            <div className="flex min-h-0 flex-1">
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-panel">
-                {session?.board && (
-                  <div className="flex min-h-8 shrink-0 flex-wrap items-end gap-1 border-b border-line px-3" role="tablist">
-                    {([['shots', 'Shots'], ['words', `Captions${ovData.items.length ? ` · ${ovData.items.length}` : ''}`]] as const).map(([k, name]) => (
-                      <button key={k} type="button" role="tab" aria-selected={framesTab === k} onClick={() => setFramesTab(k)}
-                              className={`shrink-0 whitespace-nowrap rounded-t-md px-2.5 py-1 text-[11px] ${framesTab === k ? 'bg-raised text-zinc-100' : 'text-muted hover:text-zinc-200'}`}>{name}</button>
-                    ))}
-                    {/* what used to live only on the Story page */}
-                    <div className="ml-auto flex flex-wrap items-center justify-end gap-1 self-center py-1 [&>*]:shrink-0 [&>button]:whitespace-nowrap [&>div>button]:whitespace-nowrap">
-                      <button type="button" onClick={() => playSource('board', [])}
-                              className="rounded-md bg-zinc-800 px-2 py-1 text-[11px] text-zinc-100 hover:bg-zinc-700">
-                        {boardPlay ? 'Stop' : 'Play all'}
-                      </button>
-                      <LengthButton total={tl.total} onDone={(r) => { setSession(r); offerUndo(r); note(r.length_note) }} />
-                      <button type="button" aria-pressed={!!ovData.items.length}
-                              title="Captions on the video: the time and place of each moment"
-                              onClick={async () => {
-                                try { const r = await api.captions(!ovData.items.length); setSession(r); offerUndo(r) }
-                                catch (e) { note((e as Error).message) }
-                              }}
-                              className="whitespace-nowrap rounded-md border border-line px-2 py-1 text-[11px] text-zinc-300 hover:bg-raised">
-                        Captions {ovData.items.length ? 'on' : 'off'}
-                      </button>
-                      <button type="button" aria-pressed={!!session.music} disabled={session.bed?.stage === 'looking'}
-                              title={session.music ? `${session.music.title} — click to take the music out`
-                                : session.bed?.stage === 'looking' ? `Finding a track${session.bed.source ? ` from ${session.bed.source}` : ''}…`
-                                : session.bed?.why || 'Find a free track that fits this edit and put the cuts on its beat'}
-                              onClick={async () => {
-                                try { const r = await api.bed(!session.music); setSession(r); if (session.music) offerUndo(r) }
-                                catch (e) { note((e as Error).message) }
-                              }}
-                              className="max-w-[16rem] truncate whitespace-nowrap rounded-md border border-line px-2 py-1 text-[11px] text-zinc-300 hover:bg-raised disabled:opacity-60">
-                        {session.bed?.stage === 'looking' ? `Finding music…${session.bed.total ? ` ${session.bed.done}/${session.bed.total}` : ''}` : session.music ? `Music · ${session.music.title}` : 'Music off'}
-                      </button>
-                      <button type="button" title="The frame the video is for: vertical (short or vlog) or wide 16:9. The export follows it."
-                              onClick={async () => {
-                                const order = ['short', 'tall', 'wide'] as const
-                                const cur = brief?.style?.format ?? (tl.frame && tl.frame.w > tl.frame.h ? 'wide' : 'tall')
-                                const next = order[(order.indexOf(cur as typeof order[number]) + 1) % order.length]
-                                try { setSession(await api.format(next)) } catch (e) { note((e as Error).message) }
-                              }}
-                              className="whitespace-nowrap rounded-md border border-line px-2 py-1 text-[11px] text-zinc-300 hover:bg-raised">
-                        {({ short: 'Short · vertical', tall: 'Vlog · vertical', wide: 'Wide · 16:9' } as Record<string, string>)[brief?.style?.format ?? (tl.frame && tl.frame.w > tl.frame.h ? 'wide' : 'tall')]}
-                      </button>
-                      <PaceButton pace={brief?.style?.pace} why={brief?.tempo}
-                                  story={session.board?.option === session.proposals?.recommended ? session.proposals?.why : undefined}
-                                  onDone={(r) => { setSession(r); offerUndo(r) }} />
-                      <SmoothButton small rough={(session.seams ?? []).filter((x) => x.verdict !== 'ok').length}
-                                    onSmooth={async (order, nudge) => { const r = await api.smooth(order, nudge); setSession(r); offerUndo(r) }} />
-                    </div>
-                  </div>
-                )}
-                {framesTab === 'words' && overlaysPanel ? (
-                  <div className="min-h-0 flex-1 overflow-y-auto p-3">{overlaysPanel}</div>
-                ) : (
-                  <Shelf clips={clips} inEdit={inEdit} busy={!!importing}
-                         onPick={(fl) => importPicked(fromInput(fl))}
-                         onPreview={(c) => {
-                           // what the video uses of it, else its first shot
-                           const it = tl.items.find((x) => x.clip_id === c.id && x.shot_id)
-                           const sh = c.shots[0]
-                           if (it) preview(c.id, it.src_start, it.src_end, it.shot_id!)
-                           else if (sh) preview(c.id, sh.start, sh.end, sh.id)
-                         }}
-                         onMove={async (c, into) => {
-                           try {
-                             const r = await api.pile(c.id, into)
-                             setSession(r); offerUndo(r)
-                             setClips((await api.project()).clips) // the rough cut's call moved with it
-                           } catch (e) { note((e as Error).message) }
-                         }} />
-                )}
+        {framesView ? (
+          <main className="relative flex min-h-0 min-w-0 flex-col px-3 pb-3">
+            <div className="relative flex min-h-0 flex-1 pt-3">
+              <nav aria-label="Panels" className="flex w-[80px] shrink-0 flex-col gap-1 pr-2">
+                {RAIL.map((r) => (
+                  <button key={r.id} type="button" aria-pressed={side === r.id} onClick={() => setSide(side === r.id ? null : r.id)}
+                          title={side === r.id ? `Close ${r.label}` : r.label}
+                          className={cx('flex flex-col items-center gap-1 rounded-xl py-2.5 font-serif text-[15px]',
+                            side === r.id ? 'bg-panel text-accent shadow-sm ring-1 ring-line' : 'text-zinc-300 hover:bg-raised hover:text-zinc-100')}>
+                    <Icon name={r.icon} size={22} />{r.label}
+                  </button>
+                ))}
+              </nav>
+              {side && (
+                <div className={cx(card, narrow && 'absolute bottom-0 left-[80px] top-3 z-30 shadow-2xl')} style={{ width: narrow ? Math.min(layout.side, 340) : layout.side }}>
+                  {sidePanel}
+                </div>
+              )}
+              {side && !narrow
+                ? <Handle axis="x" size={layout.side} onSize={(v, save) => setSize('side', v, save)}
+                          max={() => window.innerWidth - layout.inspector - 560} label="Drag to make the left panel wider or narrower" />
+                : <div className="w-2 shrink-0" />}
+              <div ref={stageRef} className="flex min-h-0 min-w-[280px] flex-1 flex-col overflow-hidden rounded-2xl bg-[#121212]">
+                {player(true)}
               </div>
-              <div className="flex w-[44%] min-w-[320px] flex-col">{player(true)}{pauseChat}</div>
+              <Handle axis="x" size={layout.inspector} grow={-1} onSize={(v, save) => setSize('inspector', v, save)}
+                      max={() => window.innerWidth - (side && !narrow ? layout.side : 0) - 480} label="Drag to make the right panel wider or narrower" />
+              <div className={card} style={{ width: narrow ? Math.min(layout.inspector, 320) : layout.inspector }}>{inspector}</div>
             </div>
-            <Timeline tl={tl} marks={marks} marksOf={marksOf} selected={selected} flash={flash} alt={alt}
-                      onTrimEdge={(key, edge, to) => {
-                        const it = tl.items.find((x) => x.key === key)
-                        const longer = edge === 'out' ? to > (it?.src_end ?? to) : to < (it?.src_start ?? to)
-                        run([{ op: 'trim', shot: key, edge, to: r3(to) }],
-                          `You made shot ${it?.n ?? ''} ${longer ? 'longer' : 'shorter'} at the ${edge === 'in' ? 'start' : 'end'}`)
-                      }}
-                      onSelect={(key, anchor) => {
-                        timelineOwns()
-                        setSelected(key)
-                        const it = tl.items.find((x) => x.key === key)
-                        setSelAudio(null)
-                        setSelJoin(null)
-                        if (key) setSelOverlay(null)
-                        // a shot's tools are the bar below; only an empty space gets a menu
-                        if (key && anchor && it?.kind === 'gap') setMenu({ kind: 'gap', key, anchor })
-                      }}
-                      onReorder={reorder} onInsertShot={insertShot} onClear={clear} onHelp={() => setHelp(true)}
-                      overlays={ovData.items} selectedOverlay={selOverlay} onSelectOverlay={selectOverlay}
-                      onOverlayEdit={editOverlayOnTimeline}
-                      selectedAudio={selAudio}
-                      onSelectAudio={(id) => { timelineOwns(); setSelected(null); setSelJoin(null); setSelAudio(id) }}
-                      joins={session?.mix?.joins ?? []} selectedJoin={selJoin}
-                      onSelectJoin={(k) => { timelineOwns(); setSelected(null); setSelAudio(null); setSelOverlay(null); setSelJoin(k) }}
-                      onAudioMove={(id, at) => {
-                        const a = tl.audio?.strips.find((x) => x.id === id)
-                        run([{ op: 'edit_audio', audio: id, at }], `You moved the sound of shot ${a?.n ?? ''} to ${clock(at)}`)
-                      }} />
-            {(() => {
-              const strip = selAudio ? tl.audio?.strips.find((x) => x.id === selAudio) : undefined
-              if (strip) return (
-                <StripBar strip={strip}
-                          onEdit={(patch, label) => run([{ op: 'edit_audio', audio: strip.id, ...patch }], label)}
-                          onDelete={() => { run([{ op: 'drop_audio', audio: strip.id }], `You deleted the sound of shot ${strip.n ?? ''}`); setSelAudio(null) }} />
-              )
-              const join = selJoin ? session?.mix?.joins.find((j) => j.after === selJoin) : undefined
-              if (join) {
-                const k = tl.items.findIndex((x) => x.key === join.after)
-                const a = tl.items[k], b = tl.items[k + 1]
-                return (
-                  <JoinBar join={join} before={a?.n ?? null} after={b?.n ?? null} from={shotThumb(a)} to={shotThumb(b)}
-                           onPick={(op, label) => run([{ op: 'set_transition', ...(op.all ? {} : { shot: join.after }), ...op }], label)} />
-                )
-              }
-              const cap = selOverlay && !selected ? ovData.items.find((o) => o.id === selOverlay && o.kind === 'caption') : undefined
-              if (cap) {
-                const under = tl.items[locate(tl.items, Math.min(cap.start + 0.1, tl.total - 1e-3))]
-                return (
-                  <CaptionBar style={ovData.style} thumb={shotThumb(under)} tab={capTab} onTab={setCapTab} sample={cap.text.length > 20 ? cap.text.slice(0, Math.max(10, cap.text.lastIndexOf(' ', 20))) : cap.text}
-                              onPick={(patch, label) => run([{ op: 'overlay_style', ...patch }], label)} />
-                )
-              }
-              const it = selected ? tl.items.find((x) => x.key === selected) : undefined
-              if (!it || it.kind !== 'shot') return null
-              const e = entry(it.key)
-              return (
-                <ShotBar item={it} extracted={!!tl.audio?.off.includes(it.key)}
-                         onFix={(patch, label) => run([{ op: 'set_shot', shot: it.key, ...patch }], label)}
-                         onSplit={() => {
-                           const t = phStore.get()
-                           cutAt(t > it.seq_start + fr && t < it.seq_end - fr ? t : (it.seq_start + it.seq_end) / 2)
-                         }}
-                         onSwap={() => e && setSwap({ key: it.key, thumb: e.thumb, id: e.id })}
-                         onDelete={() => { run([{ op: 'drop_shot', shot: it.key }], `You removed shot ${it.n}`); setSelected(null) }}
-                         onExtract={() => run([{ op: 'extract_audio', shot: it.key }], `You took the sound off shot ${it.n}`)} />
-              )
-            })()}
-            {undoable && <UndoToast text={undoable.text} onUndo={() => { toggle(undoable.turn); setUndoable(null) }}
-                                    lift={selJoin ? 300 : selOverlay && !selected ? 230 : selAudio || tl.items.some((x) => x.key === selected && x.kind === 'shot') ? 168 : 0} />}
+            <Handle axis="y" size={layout.timeline} grow={-1} onSize={(v, save) => setSize('timeline', v, save)}
+                    max={() => window.innerHeight - 56 - 300} label="Drag to make the timeline taller or shorter" />
+            <div className={card}>
+              <Timeline tl={tl} marks={marks} marksOf={marksOf} selected={selected} flash={flash} alt={alt} height={layout.timeline}
+                        onTrimEdge={(key, edge, to) => {
+                          const it = tl.items.find((x) => x.key === key)
+                          const longer = edge === 'out' ? to > (it?.src_end ?? to) : to < (it?.src_start ?? to)
+                          run([{ op: 'trim', shot: key, edge, to: r3(to) }],
+                            `You made shot ${it?.n ?? ''} ${longer ? 'longer' : 'shorter'} at the ${edge === 'in' ? 'start' : 'end'}`)
+                        }}
+                        onSelect={(key, anchor) => {
+                          timelineOwns()
+                          setSelected(key)
+                          const it = tl.items.find((x) => x.key === key)
+                          setSelAudio(null)
+                          setSelJoin(null)
+                          if (key) { setSelOverlay(null); setInsTab((t) => (t === 'audio' && it?.kind === 'shot' ? t : 'edit')) }
+                          // a shot's tools are the inspector; only an empty space gets a menu too
+                          if (key && anchor && it?.kind === 'gap') setMenu({ kind: 'gap', key, anchor })
+                        }}
+                        onReorder={reorder} onInsertShot={insertShot} onClear={clear} onHelp={() => setHelp(true)}
+                        onSplit={cut} onDelete={() => deleteSelection(false)}
+                        overlays={ovData.items} selectedOverlay={selOverlay} onSelectOverlay={selectOverlay}
+                        onOverlayEdit={editOverlayOnTimeline}
+                        selectedAudio={selAudio}
+                        onSelectAudio={(id) => { timelineOwns(); setSelected(null); setSelJoin(null); setSelAudio(id); setInsTab('audio') }}
+                        joins={allJoins} selectedJoin={selJoin}
+                        onSelectJoin={(k) => { timelineOwns(); setSelected(null); setSelAudio(null); setSelOverlay(null); setSelJoin(k); setInsTab('effects') }}
+                        music={session?.music ?? null}
+                        onSelectMusic={() => { setSelected(null); setSelAudio(null); setSelJoin(null); setInsTab('audio') }}
+                        onAudioMove={(id, at) => {
+                          const a = tl.audio?.strips.find((x) => x.id === id)
+                          run([{ op: 'edit_audio', audio: id, at }], `You moved the sound of shot ${a?.n ?? ''} to ${clock(at)}`)
+                        }} />
+            </div>
+            {undoable && <UndoToast text={undoable.text} lift={layout.timeline + 28} onUndo={() => { toggle(undoable.turn); setUndoable(null) }} />}
             {flash && level !== 'frames' && <Flash text={flash} />}
           </main>
         ) : (
@@ -1273,13 +1362,13 @@ function MoreMenu({ items, onClose }: { items: { label: string; hint?: string; o
     return () => { clearTimeout(t); window.removeEventListener('mousedown', away); window.removeEventListener('keydown', esc) }
   }, [onClose])
   return (
-    <div ref={box} role="menu" className="absolute right-0 top-9 z-40 w-72 rounded-xl border border-line bg-panel p-1.5 shadow-2xl shadow-black/60">
+    <div ref={box} role="menu" className="absolute left-0 top-10 z-40 w-80 rounded-xl border border-line bg-panel p-1.5 shadow-2xl shadow-black/60">
       {items.map((it) => (
         <button key={it.label} type="button" role="menuitem" disabled={it.disabled} onClick={() => { onClose(); it.onClick() }}
-                className={cx('block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] disabled:opacity-40',
+                className={cx('block w-full rounded-lg px-3 py-1.5 text-left font-serif text-[16px] disabled:opacity-40',
                   it.danger ? 'text-rose-200 hover:bg-rose-500/10' : 'text-zinc-100 hover:bg-zinc-800')}>
           {it.label}
-          {it.hint && <span className="block text-[10px] leading-snug text-muted">{it.hint}</span>}
+          {it.hint && <span className="block text-[14px] leading-snug text-zinc-300">{it.hint}</span>}
         </button>
       ))}
     </div>
@@ -1288,7 +1377,7 @@ function MoreMenu({ items, onClose }: { items: { label: string; hint?: string; o
 
 function UndoToast({ text, onUndo, lift }: { text: string; onUndo: () => void; lift?: number }) {
   return (
-    // lifted over the shot's tool bar, so it never covers a slider
+    // lifted over the timeline, so it never covers a shot
     <div style={lift ? { bottom: lift } : undefined} className="pointer-events-auto absolute bottom-4 left-1/2 z-30 flex max-w-[90%] -translate-x-1/2 items-center gap-3 rounded-xl border border-line bg-zinc-900 px-4 py-2 shadow-2xl shadow-black/60">
       <span className="truncate text-[12px] text-zinc-200">{text}</span>
       <button type="button" onClick={onUndo} className="shrink-0 rounded-md bg-zinc-700 px-2.5 py-1 text-[12px] text-zinc-100 hover:bg-zinc-600">Undo</button>

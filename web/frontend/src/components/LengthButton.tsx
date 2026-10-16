@@ -7,7 +7,7 @@ import { LengthSlider } from './LengthSlider'
 // The length slider again, in Frames: change how long the video is without
 // redoing the brief. Letting go makes it so, as one undoable turn (shorter:
 // the weakest shots go; longer: good shots come back where they happened).
-export function LengthButton({ total, onDone }: { total: number; onDone: (s: Session & { length_note: string }) => void }) {
+export function LengthButton({ total, onDone, wide }: { total: number; onDone: (s: Session & { length_note: string }) => void; wide?: boolean }) {
   const [open, setOpen] = useState(false)
   const [slider, setSlider] = useState<Slider | null>(null)
   const [value, setValue] = useState(total)
@@ -40,7 +40,7 @@ export function LengthButton({ total, onDone }: { total: number; onDone: (s: Ses
     <div ref={box} className="relative">
       <button ref={btn} type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
               title="How long the video is. Drag to make it shorter or longer."
-              className="whitespace-nowrap rounded-md border border-line px-2 py-1 text-[11px] tabular-nums text-zinc-300 hover:bg-raised">
+              className={wide ? 'w-full rounded-lg border border-line px-3 py-2 text-left font-serif text-[16px] text-zinc-100 hover:bg-raised' : 'whitespace-nowrap rounded-md border border-line px-2 py-1 text-[11px] tabular-nums text-zinc-300 hover:bg-raised'}>
         Length {lengthLabel(total)}
       </button>
       {open && pos && (

@@ -2,15 +2,17 @@ import { useRef, useState } from 'react'
 import type { Clip } from '../types'
 import { dur } from '../format'
 import { Button, cx } from '../ui'
-import { Stack, type Side } from './Footage'
 
 export const SHOT_MIME = 'application/x-vibecut-shot'
 
-// Media in Frames: two piles, as on Footage (sarah, 2026-10-13: "just the two
-// piles of kept and left out"). Here Kept means in the video, Left out means
-// not. Opening a pile shows its clips; clicking one plays it and offers the
-// move, and only then says why a clip was left out. A move changes the video
-// as one undoable turn.
+type Tab = 'all' | 'kept' | 'out'
+
+// Media on the edit screen: every clip as a grid, with All / Kept / Left out
+// tabs (sarah, 2026-10-16: the layout of her reference picture; before that
+// two piles, 2026-10-13). Kept means in the video and wears a tick; Left out
+// is the dark red of Footage. Clicking a clip plays it and offers the move,
+// and only then says why a clip was left out. A move changes the video as
+// one undoable turn. A clip can also be dragged onto the timeline.
 export function Shelf({ clips, inEdit, onPreview, onMove, onPick, busy }: {
   clips: Clip[]
   /** ids of the clips the edit uses */
@@ -22,24 +24,33 @@ export function Shelf({ clips, inEdit, onPreview, onMove, onPick, busy }: {
 }) {
   const folderInput = useRef<HTMLInputElement>(null)
   const fileInput = useRef<HTMLInputElement>(null)
-  const [open, setOpen] = useState<Side | null>(null)
+  const [tab, setTab] = useState<Tab>('all')
+  const [chosen, setChosen] = useState<string | null>(null)
+  const [moving, setMoving] = useState(false)
+  const [menu, setMenu] = useState(false)
   const kept = clips.filter((c) => inEdit.has(c.id))
   const out = clips.filter((c) => !inEdit.has(c.id))
+  const shown = tab === 'kept' ? kept : tab === 'out' ? out : clips
+  const pick = clips.find((c) => c.id === chosen) ?? null
+
+  const tabs: [Tab, string, number | null][] = [['all', 'All', null], ['kept', 'Kept', kept.length], ['out', 'Left out', out.length]]
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col border-r border-line bg-panel">
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line px-4">
-        {open
-          ? <>
-              <Button size="sm" onClick={() => setOpen(null)}>‹ Both piles</Button>
-              <span className={cx('font-serif text-[18px]', open === 'out' ? 'text-rose-200' : 'text-zinc-100')}>
-                {open === 'kept' ? 'Kept' : 'Left out'} · {(open === 'kept' ? kept : out).length}
-              </span>
-            </>
-          : <span className="font-serif text-[18px] text-zinc-100">Media</span>}
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <header className="flex h-14 shrink-0 items-center gap-2 px-4">
+        <span className="font-serif text-[19px] text-zinc-100">All clips</span>
+        <span className="rounded-md bg-raised px-1.5 text-[13px] tabular-nums text-zinc-300">{clips.length}</span>
         <div className="flex-1" />
-        <Button size="sm" disabled={busy} onClick={() => fileInput.current?.click()}>Add clips</Button>
-        <Button size="sm" disabled={busy} onClick={() => folderInput.current?.click()}>Add folder</Button>
+        <Button size="sm" disabled={busy} onClick={() => fileInput.current?.click()}>+ Add more</Button>
+        <div className="relative">
+          <Button size="sm" aria-label="More ways to add" aria-expanded={menu} onClick={() => setMenu((m) => !m)}>···</Button>
+          {menu && (
+            <div className="absolute right-0 top-9 z-30 w-48 rounded-xl border border-line bg-panel p-1.5 shadow-xl">
+              <button type="button" disabled={busy} onClick={() => { setMenu(false); folderInput.current?.click() }}
+                      className="block w-full rounded-md px-2.5 py-1.5 text-left font-serif text-[15px] text-zinc-100 hover:bg-raised">Add a folder…</button>
+            </div>
+          )}
+        </div>
         <input ref={fileInput} type="file" className="hidden" multiple accept=".mp4,.mov,video/mp4,video/quicktime"
                onChange={(e) => { if (e.target.files) onPick(e.target.files); e.target.value = '' }} />
         {/* @ts-expect-error -- non-standard but supported everywhere that matters */}
@@ -55,81 +66,68 @@ export function Shelf({ clips, inEdit, onPreview, onMove, onPick, busy }: {
             <div className="mt-1 font-serif text-[16px] text-zinc-300">.mp4 and .mov · they stay on this Mac, nothing is uploaded</div>
           </div>
         </button>
-      ) : open ? (
-        <Pile key={open} side={open} clips={open === 'kept' ? kept : out} others={open === 'kept' ? out : kept}
-              onSwitch={() => setOpen(open === 'kept' ? 'out' : 'kept')}
-              onPreview={onPreview} onMove={onMove} />
-      ) : (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-5 overflow-y-auto p-6">
-          <div className="flex flex-wrap items-center justify-center gap-x-14 gap-y-8">
-            <Stack side="kept" clips={kept} onOpen={() => setOpen('kept')} />
-            <Stack side="out" clips={out} onOpen={() => setOpen('out')} />
-          </div>
-          <p className="text-center font-serif text-[17px] text-zinc-200">Click a pile to look through it</p>
+      ) : <>
+        <div role="tablist" className="mx-4 flex shrink-0 rounded-xl bg-raised p-1">
+          {tabs.map(([id, name, n]) => (
+            <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)}
+                    className={cx('flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 font-serif text-[15px]',
+                      tab === id ? 'bg-panel text-accent shadow-sm' : id === 'out' ? 'text-rose-200 hover:bg-panel/60' : 'text-zinc-300 hover:bg-panel/60')}>
+              {name}
+              {n != null && <span className="rounded bg-zinc-800 px-1 text-[12px] tabular-nums text-zinc-300">{n}</span>}
+            </button>
+          ))}
         </div>
-      )}
-    </section>
-  )
-}
 
-function Pile({ side, clips, others, onSwitch, onPreview, onMove }: {
-  side: Side; clips: Clip[]; others: Clip[]
-  onSwitch: () => void
-  onPreview: (clip: Clip) => void
-  onMove: (clip: Clip, into: boolean) => Promise<void>
-}) {
-  const [chosen, setChosen] = useState<string | null>(null)
-  const [moving, setMoving] = useState(false)
-  const red = side === 'out'
-  const there = red ? 'Kept' : 'Left out'
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          {!shown.length
+            ? <p className="mt-10 text-center font-serif text-[17px] text-zinc-200">{tab === 'out' ? 'Every clip is in the video.' : 'Nothing in the video yet.'}</p>
+            : (
+              <div className="grid auto-rows-min grid-cols-[repeat(auto-fill,minmax(92px,1fr))] gap-2.5">
+                {shown.map((c) => {
+                  const on = chosen === c.id
+                  const used = inEdit.has(c.id)
+                  const first = c.shots[0]
+                  return (
+                    <button key={c.id} type="button"
+                            draggable={!!first}
+                            onDragStart={(e) => { if (first) { e.dataTransfer.setData(SHOT_MIME, first.id); e.dataTransfer.effectAllowed = 'copy' } }}
+                            onClick={() => { setChosen(on ? null : c.id); if (!on) onPreview(c) }}
+                            title={c.name}
+                            className={cx('relative aspect-square select-none overflow-hidden rounded-lg bg-black outline-none',
+                              on ? 'ring-[3px] ring-accent' : used ? 'ring-1 ring-zinc-800 hover:ring-2 hover:ring-zinc-600' : 'ring-2 ring-rose-200/70 hover:ring-rose-300')}>
+                      {first && <img src={first.thumb} alt="" loading="lazy" draggable={false} className="size-full object-cover" />}
+                      {used
+                        ? <span aria-label="In the video" className="absolute left-1.5 top-1.5 grid size-5 place-items-center rounded-full bg-accent text-[12px] text-white ring-2 ring-white">✓</span>
+                        : <span className="absolute inset-0 bg-rose-50/25" />}
+                      <span className="absolute bottom-1.5 left-1.5 rounded bg-black/70 px-1 text-[12px] tabular-nums text-white">{dur(c.duration)}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+        </div>
 
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        {!clips.length
-          ? <p className="mt-10 text-center font-serif text-[17px] text-zinc-200">{red ? 'Every clip is in the video.' : 'Nothing in the video yet.'}</p>
-          : (
-            <div className="grid auto-rows-min grid-cols-[repeat(auto-fill,minmax(148px,1fr))] gap-3">
-              {clips.map((c) => {
-                const on = chosen === c.id
-                const first = c.shots[0]
-                return (
-                  <div key={c.id}
-                       draggable={!!first}
-                       onDragStart={(e) => { if (first) { e.dataTransfer.setData(SHOT_MIME, first.id); e.dataTransfer.effectAllowed = 'copy' } }}
-                       onClick={() => { setChosen(on ? null : c.id); if (!on) onPreview(c) }}
-                       className={cx('cursor-pointer select-none rounded-lg border p-1 transition-colors',
-                         red ? 'border-rose-900/70 bg-rose-950/60 hover:bg-rose-950' : 'border-transparent hover:bg-raised',
-                         on && (red ? 'border-rose-500' : 'border-accent bg-raised'))}>
-                    <div className="relative aspect-video overflow-hidden rounded-md bg-black">
-                      {first && <img src={first.thumb} alt="" loading="lazy" draggable={false}
-                                     className={cx('size-full', c.height > c.width ? 'object-contain' : 'object-cover')} />}
-                      <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 text-[12px] tabular-nums text-zinc-200">{dur(c.duration)}</span>
-                    </div>
-                    {on && (
-                      <div className="mt-2 flex flex-col gap-2 px-0.5 pb-1">
-                        {red && <p className="font-serif text-[15px] leading-snug text-rose-200">{why(c)}</p>}
-                        <Button size="sm" variant="primary" disabled={moving}
-                                onClick={async (e) => {
-                                  e.stopPropagation()
-                                  setMoving(true)
-                                  try { await onMove(c, red); setChosen(null) } finally { setMoving(false) }
-                                }}>
-                          {moving ? 'Moving…' : `Move to ${there}`}
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+        {pick ? (
+          <div className="flex shrink-0 flex-col gap-2 border-t border-line px-4 py-3">
+            <div className="flex items-baseline gap-2">
+              <span className="min-w-0 flex-1 truncate font-serif text-[16px] text-zinc-100">{pick.name}</span>
+              <span className={cx('shrink-0 font-serif text-[15px]', inEdit.has(pick.id) ? 'text-accent' : 'text-rose-200')}>
+                {inEdit.has(pick.id) ? 'In the video' : 'Left out'}</span>
             </div>
-          )}
-      </div>
-      <div className="flex shrink-0 items-center justify-center gap-3 border-t border-line px-4 py-2">
-        <span className="font-serif text-[16px] text-zinc-200">Click a clip to play it.</span>
-        <Button size="sm" onClick={onSwitch}>Open {there} · {others.length}</Button>
-      </div>
-    </div>
+            {!inEdit.has(pick.id) && <p className="font-serif text-[15px] leading-snug text-rose-200">{why(pick)}</p>}
+            <Button variant="primary" disabled={moving}
+                    onClick={async () => {
+                      setMoving(true)
+                      try { await onMove(pick, !inEdit.has(pick.id)); setChosen(null) } finally { setMoving(false) }
+                    }}>
+              {moving ? 'Moving…' : `Move to ${inEdit.has(pick.id) ? 'Left out' : 'Kept'}`}
+            </Button>
+          </div>
+        ) : (
+          <p className="shrink-0 border-t border-line px-4 py-3 text-center font-serif text-[16px] text-zinc-200">Click a clip to play it.</p>
+        )}
+      </>}
+    </section>
   )
 }
 

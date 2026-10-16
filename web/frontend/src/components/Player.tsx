@@ -12,7 +12,7 @@ import { OverlayCanvas, type OverlayEdit, type OverlayView } from './OverlayCanv
 // When the transport drives it, the picture sits in a stage with the
 // export's shape (scaled to fit and padded, as the export does) and the
 // words on screen are drawn over it -- so the preview is the export.
-export function Player({ videoRef, backRef, veilRef, bars, segment, label, gap, onTime, onEnd, onPlayingChange, overlay, frame, overlayEdit }: {
+export function Player({ videoRef, backRef, veilRef, bars, segment, label, gap, onTime, onEnd, onPlayingChange, overlay, frame, overlayEdit, dark, controls }: {
   videoRef: RefObject<HTMLVideoElement | null>
   // the next shot, waiting (transport.ts), and the dip/flash veil -- the join as the export renders it
   backRef?: RefObject<HTMLVideoElement | null>
@@ -27,6 +27,9 @@ export function Player({ videoRef, backRef, veilRef, bars, segment, label, gap, 
   overlay?: OverlayView | null
   overlayEdit?: OverlayEdit
   frame?: { w: number; h: number } | null
+  /** the edit screen: the picture on black, with `controls` under it instead of the label */
+  dark?: boolean
+  controls?: React.ReactNode
 }) {
   const seg = useRef<Segment | null>(null)
   const box = useRef<HTMLDivElement>(null)
@@ -83,8 +86,8 @@ export function Player({ videoRef, backRef, veilRef, bars, segment, label, gap, 
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-raised">
-      <div ref={box} className="relative min-h-0 flex-1">
+    <div className={`flex min-h-0 flex-1 flex-col ${dark ? 'bg-[#121212]' : 'bg-raised'}`}>
+      <div ref={box} className={`relative min-h-0 flex-1 ${dark ? 'm-4 mb-2' : ''}`}>
         <div className="absolute overflow-hidden bg-black" style={staged
           ? { left: stage.left, top: stage.top, width: stage.w, height: stage.h }
           : { inset: 0 }}>
@@ -121,10 +124,12 @@ export function Player({ videoRef, backRef, veilRef, bars, segment, label, gap, 
           {staged && overlay && overlay.items.length > 0 && <OverlayCanvas view={overlay} width={stage.w} height={stage.h} edit={overlayEdit} />}
         </div>
       </div>
-      <div className="flex h-7 shrink-0 items-center justify-between border-t border-line bg-panel px-3 text-[11px] text-muted">
-        <span className="truncate">{label}</span>
-        {segment && <span className="tabular-nums">{dur(segment.end - segment.start)}</span>}
-      </div>
+      {controls ?? (
+        <div className="flex h-7 shrink-0 items-center justify-between border-t border-line bg-panel px-3 text-[11px] text-muted">
+          <span className="truncate">{label}</span>
+          {segment && <span className="tabular-nums">{dur(segment.end - segment.start)}</span>}
+        </div>
+      )}
     </div>
   )
 }

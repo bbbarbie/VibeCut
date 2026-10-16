@@ -59,6 +59,21 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   "Start with your clips", "Drag clips / folder here", Add clips + Add folder (a
   browser picker can't take both; a phone version only needs Add clips).
   Footage has no preview panel: an opened stack is a vertical column on its own side (Kept left, Left out right), the other stack shrinks opposite as the drop target; a clicked clip plays in place with a "Move to …" button (no double-click). See `web/README.md`.
+  **The edit screen** (sarah, 2026-10-16: "change the layout to this
+  reference photo", same colours; `App.tsx` frames view, `Inspector.tsx`,
+  `Shelf.tsx`, `PreviewBar.tsx`, `Split.tsx`): top bar = name ▾ (rename, back
+  to Footage, Other stories, Reference, Remix, Start over…), undo / redo,
+  "Draft saved", Export. Left: a rail (Media · Text · Music · AI Edit, called
+  History while the AI is off) opening one panel; Media is the clip grid with
+  All / Kept / Left out tabs. Middle: the preview on black with play, time,
+  a scrub bar, the frame (cycles short / vlog / wide) and full screen. Right:
+  an inspector with Edit (trim bar, speed, rotate, mirror, fit / fill; with
+  nothing clicked, Length / Tempo / Smoother cuts), Captions (style +
+  animation for every caption), Effects (transition at the clicked cut, else
+  every cut), Audio (shot / strip sound, else music), Adjust (the look).
+  Bottom: the timeline with Video / Captions / Audio lanes (music drawn as a
+  strip). Clicking something opens its tab. Every border drags (sizes saved
+  in this browser). The old bottom tool bar (ShotBar) is gone.
 - Chat editing rule: a turn applies operations to the working storyboard
   (`web/backend/board.py`), never regenerates it. The LLM only emits ops;
   the diff is computed, not reported by the model. Keep it that way.

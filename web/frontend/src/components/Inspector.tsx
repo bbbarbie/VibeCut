@@ -1,0 +1,367 @@
+import { useRef, useState, type ReactNode } from 'react'
+import type { SeqItem } from '../sequence'
+import type { CaptionEnter, CaptionTemplate, JoinInfo, LookInfo, OverlayStyle, SoundStrip } from '../types'
+import { Button, cx } from '../ui'
+import { Icon, type IconName } from './icons'
+import { CaptionAnimations, CaptionStyles, Transitions } from './StyleBars'
+
+// The right-hand inspector of the edit screen (sarah, 2026-10-16: the layout
+// of her reference picture). Five tabs: Edit (the clicked shot: trim, speed,
+// turn, fit or fill; with nothing clicked, the whole video), Captions (one
+// style and entrance for every caption), Effects (the transition at a cut),
+// Audio (the shot's or a sound strip's volume and fades, and the music) and
+// Adjust (the look). Clicking something on the timeline opens its tab.
+// Every change is one undoable turn, sent when a slider is let go.
+
+export type InspectorTab = 'edit' | 'captions' | 'effects' | 'audio' | 'adjust'
+type Patch = Record<string, unknown>
+
+const TABS: { id: InspectorTab; icon: IconName; label: string }[] = [
+  { id: 'edit', icon: 'scissors', label: 'Edit' },
+  { id: 'captions', icon: 'cc', label: 'Captions' },
+  { id: 'effects', icon: 'spark', label: 'Effects' },
+  { id: 'audio', icon: 'music', label: 'Audio' },
+  { id: 'adjust', icon: 'adjust', label: 'Adjust' },
+]
+
+export type JoinPick = { join: JoinInfo; before: number | null; after: number | null; from: string | null; to: string | null }
+
+export function Inspector(p: {
+  tab: InspectorTab
+  onTab: (t: InspectorTab) => void
+  /** the clicked shot or empty space */
+  item: SeqItem | null
+  itemThumb: string | null
+  clipName: string
+  extracted: boolean
+  strip: SoundStrip | null
+  /** the clicked cut, else every cut shown on the first one; null when there are none */
+  join: JoinPick | null
+  joinPicked: boolean
+  style: OverlayStyle
+  captionsOn: boolean
+  captionThumb: string | null
+  captionSample: string
+  looks: { id: string | null; all: LookInfo[] } | null
+  music: ReactNode
+  /** Length, tempo, frame, smoother cuts: the whole video's own controls */
+  video: ReactNode
+  onFix: (patch: Patch, label: string) => void
+  onTrim: (edge: 'in' | 'out', to: number) => void
+  onSplit: () => void
+  onSwap: () => void
+  onDelete: () => void
+  onCloseGap: () => void
+  onExtract: () => void
+  onStrip: (patch: Patch, label: string) => void
+  onStripDelete: () => void
+  onCaptions: () => void
+  onCaptionStyle: (patch: { template?: CaptionTemplate | null; enter?: CaptionEnter | null }, label: string) => void
+  onJoin: (op: { kind: string; dur?: number; all?: boolean }, label: string) => void
+  onLook: (id: string, name: string) => void
+}) {
+  const it = p.item
+  const shot = it && it.kind === 'shot' ? it : null
+  return (
+    <aside className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <nav className="flex shrink-0 gap-0.5 border-b border-line px-2 pt-2" role="tablist">
+        {TABS.filter((t) => t.id !== 'adjust' || p.looks?.all.length).map((t) => (
+          <button key={t.id} type="button" role="tab" aria-selected={p.tab === t.id} onClick={() => p.onTab(t.id)}
+                  className={cx('-mb-px flex min-w-0 flex-1 flex-col items-center gap-1 rounded-t-lg border-b-2 px-1 pb-2 pt-2 font-serif text-[15px]',
+                    p.tab === t.id ? 'border-accent bg-accent/8 text-accent' : 'border-transparent text-zinc-300 hover:text-zinc-100')}>
+            <Icon name={t.icon} size={22} />
+            {t.label}
+          </button>
+        ))}
+      </nav>
+
+      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5">
+        {p.tab === 'edit' && (shot ? <>
+          <Section title="Clip">
+            <div className="flex items-center gap-3">
+              <span className="h-14 w-20 shrink-0 overflow-hidden rounded-lg bg-black">
+                {p.itemThumb && <img src={p.itemThumb} alt="" className="size-full object-cover" />}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-serif text-[16px] text-zinc-100">Shot {shot.n} · {p.clipName}</div>
+                <div className="font-serif text-[15px] tabular-nums text-zinc-300">
+                  {mmss(shot.src_start)} – {mmss(shot.src_end)} ({(shot.seq_end - shot.seq_start).toFixed(1)}s)</div>
+              </div>
+              <Button size="sm" onClick={p.onSwap} title="Put a different shot in its place">Replace</Button>
+            </div>
+          </Section>
+          <Section title="Trim"><TrimBar item={shot} thumb={p.itemThumb} onTrim={p.onTrim} /></Section>
+          <SpeedLine speed={shot.speed ?? 1} onFix={(x) => p.onFix({ speed: x }, x === 1 ? `You put shot ${shot.n} back to normal speed` : `You set shot ${shot.n} to ${x}×`)} />
+          <Line label="Rotate">
+            <IconChip label="Turn left" icon="turnL" onClick={() => p.onFix({ rotate: ((shot.rotate ?? 0) + 270) % 360 }, `You turned shot ${shot.n} left`)} />
+            <IconChip label="Turn right" icon="turnR" onClick={() => p.onFix({ rotate: ((shot.rotate ?? 0) + 90) % 360 }, `You turned shot ${shot.n} right`)} />
+            <span className="flex-1" />
+            <Value>{shot.rotate ?? 0}°</Value>
+          </Line>
+          <Line label="Mirror">
+            <Segmented options={[['off', 'Off'], ['on', 'Mirrored']]} value={shot.mirror ? 'on' : 'off'}
+                       onPick={(v) => (v === 'on') !== !!shot.mirror && p.onFix({ mirror: v === 'on' }, `You ${v === 'on' ? 'mirrored' : 'unmirrored'} shot ${shot.n}`)} />
+          </Line>
+          <Line label="Crop & zoom">
+            <Segmented options={[['fit', 'Fit'], ['fill', 'Fill']]} value={shot.fill ? 'fill' : 'fit'}
+                       onPick={(v) => (v === 'fill') !== !!shot.fill && p.onFix({ fill: v === 'fill' }, v === 'fill' ? `Shot ${shot.n} fills the frame` : `Shot ${shot.n} shows its whole picture`)} />
+          </Line>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Chip onClick={p.onSplit}><Icon name="split" size={17} /> Split at the playhead</Chip>
+            <Chip danger onClick={p.onDelete}><Icon name="trash" size={17} /> Delete</Chip>
+            {!!(shot.rotate || shot.fill || shot.mirror) && <Chip onClick={() => p.onFix({ rotate: 0, fill: false, mirror: false }, `You put shot ${shot.n} back as filmed`)}>Back to as filmed</Chip>}
+          </div>
+        </> : it ? (
+          <Section title={`Empty space · ${(it.seq_end - it.seq_start).toFixed(1)}s`}>
+            <Button variant="primary" onClick={p.onCloseGap}>Close up this empty space</Button>
+          </Section>
+        ) : <>
+          <Section title="Your video">{p.video}</Section>
+          <Hint>Click a shot on the timeline to trim it, change its speed, turn it or crop it.</Hint>
+        </>)}
+
+        {p.tab === 'captions' && <>
+          <Line label="Captions">
+            <Segmented options={[['off', 'Off'], ['on', 'On']]} value={p.captionsOn ? 'on' : 'off'}
+                       onPick={(v) => (v === 'on') !== p.captionsOn && p.onCaptions()} />
+          </Line>
+          {p.captionsOn ? <>
+            <Section title="Style"><CaptionStyles style={p.style} thumb={p.captionThumb} onPick={p.onCaptionStyle} /></Section>
+            <Section title="Animation"><CaptionAnimations style={p.style} thumb={p.captionThumb} sample={p.captionSample} onPick={p.onCaptionStyle} /></Section>
+            <Hint>One style for every caption. Click a caption on the picture to move it or change its words.</Hint>
+          </> : <Hint>Turn captions on to put the time and place of each moment on the video.</Hint>}
+        </>}
+
+        {p.tab === 'effects' && (p.join ? (
+          <Section title={p.joinPicked ? `The cut from shot ${p.join.before} to shot ${p.join.after}` : 'Every cut'}>
+            {!p.joinPicked && <Hint>Or click the dot between two shots on the timeline to change just that cut.</Hint>}
+            <Transitions {...p.join} before={p.joinPicked ? p.join.before : null} after={p.joinPicked ? p.join.after : null} onPick={p.onJoin} />
+          </Section>
+        ) : <Hint>Transitions go between two shots. Your edit has no cuts yet.</Hint>)}
+
+        {p.tab === 'audio' && (p.strip ? (
+          <Section title={`Sound of shot ${p.strip.n ?? ''}`}>
+            <Hint>It sits on its own strip under the picture. Drag the strip on the timeline to move it.</Hint>
+            <SoundLines gain={p.strip.gain} mute={p.strip.mute} fadeIn={p.strip.fade_in ?? 0} fadeOut={p.strip.fade_out ?? 0}
+                        onFix={(x, what) => p.onStrip(x, `You ${what} on the sound of shot ${p.strip!.n ?? ''}`)} />
+            <div className="pt-1"><Chip danger onClick={p.onStripDelete}><Icon name="trash" size={17} /> Delete this sound</Chip></div>
+          </Section>
+        ) : shot ? (
+          <Section title={`Sound of shot ${shot.n}`}>
+            {p.extracted
+              ? <Hint>This shot's sound is on its own strip under the picture. Click the strip to change it.</Hint>
+              : <>
+                <SoundLines gain={shot.gain ?? 1} mute={!!shot.mute} fadeIn={shot.fade_in ?? 0} fadeOut={shot.fade_out ?? 0}
+                            onFix={(x, what) => p.onFix(x, `You ${what} on shot ${shot.n}`)} />
+                <div className="pt-1"><Chip onClick={p.onExtract}>Take the sound off</Chip></div>
+              </>}
+          </Section>
+        ) : <Section title="Music">{p.music}<Hint>Click a shot on the timeline to change its own sound.</Hint></Section>)}
+
+        {p.tab === 'adjust' && p.looks && (
+          <Section title="Look">
+            <div className="flex flex-col gap-2">
+              {p.looks.all.map((l) => (
+                <button key={l.id} type="button" onClick={() => l.id !== p.looks!.id && p.onLook(l.id, l.name)}
+                        className={cx('flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left',
+                          l.id === p.looks!.id ? 'border-accent bg-accent/8' : 'border-line hover:bg-raised')}>
+                  <span className="flex shrink-0 overflow-hidden rounded-md ring-1 ring-zinc-800">
+                    {l.palette.slice(0, 4).map((c) => <span key={c} className="h-8 w-3" style={{ background: c }} />)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className={cx('block font-serif text-[16px]', l.id === p.looks!.id ? 'text-accent' : 'text-zinc-100')}>{l.name}</span>
+                    <span className="block truncate font-serif text-[15px] text-zinc-300">{l.line}</span>
+                  </span>
+                  {l.id === p.looks!.id && <Icon name="check" className="shrink-0 text-accent" />}
+                </button>
+              ))}
+            </div>
+            <Hint>The look sets the colour, the captions' type and how cuts move. Colour shows in the export.</Hint>
+          </Section>
+        )}
+      </div>
+    </aside>
+  )
+}
+
+const mmss = (t: number) => {
+  const m = Math.floor(t / 60)
+  return `${String(m).padStart(2, '0')}:${(t - m * 60).toFixed(1).padStart(4, '0')}`
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="space-y-3">
+      <h3 className="font-serif text-[18px] font-medium text-zinc-100">{title}</h3>
+      {children}
+    </section>
+  )
+}
+
+function Hint({ children }: { children: ReactNode }) {
+  return <p className="font-serif text-[15px] leading-snug text-zinc-300">{children}</p>
+}
+
+function Line({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="w-24 shrink-0 font-serif text-[16px] text-zinc-100">{label}</span>
+      <div className="flex min-w-0 flex-1 items-center gap-2">{children}</div>
+    </div>
+  )
+}
+
+function Value({ children }: { children: ReactNode }) {
+  return <span className="min-w-[4rem] shrink-0 rounded-lg border border-line bg-panel px-2.5 py-1.5 text-center font-serif text-[15px] tabular-nums text-zinc-100">{children}</span>
+}
+
+function Segmented({ options, value, onPick }: { options: [string, string][]; value: string; onPick: (v: string) => void }) {
+  return (
+    <div className="flex flex-1 rounded-lg bg-raised p-0.5">
+      {options.map(([id, name]) => (
+        <button key={id} type="button" aria-pressed={value === id} onClick={() => onPick(id)}
+                className={cx('flex-1 rounded-md px-3 py-1.5 font-serif text-[15px]',
+                  value === id ? 'bg-panel text-accent shadow-sm' : 'text-zinc-300 hover:text-zinc-100')}>{name}</button>
+      ))}
+    </div>
+  )
+}
+
+function IconChip({ icon, label, onClick }: { icon: IconName; label: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} title={label} aria-label={label}
+            className="grid size-9 shrink-0 place-items-center rounded-lg border border-line bg-panel text-zinc-100 hover:bg-raised">
+      <Icon name={icon} size={18} />
+    </button>
+  )
+}
+
+/** A labelled slider with its value beside it; one turn when let go. */
+export function Slider({ label, value, min, max, step, unit, disabled, onCommit }: {
+  label: string; value: number; min: number; max: number; step: number; unit: string; disabled?: boolean
+  onCommit: (v: number) => void
+}) {
+  const [drag, setDrag] = useState<number | null>(null)
+  const v = drag ?? value
+  const commit = () => {
+    setDrag(null)
+    const r = Math.round(v / step) * step
+    const x = Math.round(r * 100) / 100
+    if (Math.abs(x - value) > 1e-6) onCommit(x)
+  }
+  return (
+    <label className={cx('flex items-center gap-3', disabled && 'opacity-40')}>
+      <span className="w-24 shrink-0 font-serif text-[16px] text-zinc-100">{label}</span>
+      <input type="range" min={min} max={max} step={step} value={v} disabled={disabled} className="min-w-0 flex-1 accent-[#1f5f8b]"
+             onChange={(e) => setDrag(Number(e.target.value))} onPointerUp={commit} onKeyUp={commit} />
+      <Value>{Math.round(v * 100) / 100}{unit}</Value>
+    </label>
+  )
+}
+
+// Speed on a doubling scale: the middle of the slider is 1×, each quarter
+// of the way doubles or halves it.
+function SpeedLine({ speed, onFix }: { speed: number; onFix: (x: number) => void }) {
+  const [drag, setDrag] = useState<number | null>(null)
+  const v = drag ?? Math.log2(speed)
+  const shown = Math.round(2 ** v * 100) / 100
+  const commit = () => { setDrag(null); if (Math.abs(shown - speed) > 1e-3) onFix(shown) }
+  return (
+    <div className="space-y-2">
+      <label className="flex items-center gap-3">
+        <span className="w-24 shrink-0 font-serif text-[16px] text-zinc-100">Speed</span>
+        <input type="range" min={-2} max={2} step={0.05} value={v} className="min-w-0 flex-1 accent-[#1f5f8b]"
+               onChange={(e) => setDrag(Number(e.target.value))} onPointerUp={commit} onKeyUp={commit} />
+        <Value>{shown}×</Value>
+      </label>
+      <div className="flex gap-1.5 pl-[6.75rem]">
+        {[0.5, 1, 2, 4].map((x) => <Chip key={x} on={Math.abs(speed - x) < 1e-3} onClick={() => onFix(x)}>{x}×</Chip>)}
+      </div>
+    </div>
+  )
+}
+
+function SoundLines({ gain, mute, fadeIn, fadeOut, onFix }: {
+  gain: number; mute: boolean; fadeIn: number; fadeOut: number
+  onFix: (patch: Patch, what: string) => void
+}) {
+  return (
+    <div className="space-y-3">
+      <Slider label="Volume" value={Math.round(gain * 100)} min={0} max={200} step={5} unit="%" disabled={mute}
+              onCommit={(v) => onFix({ gain: v / 100 }, `set the volume to ${v}%`)} />
+      <Slider label="Fade in" value={fadeIn} min={0} max={3} step={0.1} unit=" s"
+              onCommit={(v) => onFix({ fade_in: v }, v ? `faded the sound in over ${v}s` : 'took the fade in off')} />
+      <Slider label="Fade out" value={fadeOut} min={0} max={3} step={0.1} unit=" s"
+              onCommit={(v) => onFix({ fade_out: v }, v ? `faded the sound out over ${v}s` : 'took the fade out off')} />
+      <Line label="Mute">
+        <Segmented options={[['off', 'Sound on'], ['on', 'Muted']]} value={mute ? 'on' : 'off'}
+                   onPick={(x) => (x === 'on') !== mute && onFix({ mute: !mute }, mute ? 'unmuted the sound' : 'muted the sound')} />
+      </Line>
+    </div>
+  )
+}
+
+/**
+ * The shot as filmed, with the part the edit uses between two handles. Drag
+ * a handle to start or end the shot elsewhere: shorter, or longer up to the
+ * whole shot as filmed. One turn when let go.
+ */
+function TrimBar({ item, thumb, onTrim }: { item: SeqItem; thumb: string | null; onTrim: (edge: 'in' | 'out', to: number) => void }) {
+  const box = useRef<HTMLDivElement>(null)
+  const [drag, setDrag] = useState<{ edge: 'in' | 'out'; to: number } | null>(null)
+  const lo = item.src_min ?? item.src_start
+  const hi = Math.max(item.src_max ?? item.src_end, lo + 0.01)
+  const a = drag?.edge === 'in' ? drag.to : item.src_start
+  const b = drag?.edge === 'out' ? drag.to : item.src_end
+  const pct = (t: number) => `${((t - lo) / (hi - lo)) * 100}%`
+  const at = (clientX: number) => {
+    const r = box.current!.getBoundingClientRect()
+    return lo + Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * (hi - lo)
+  }
+  const handle = (edge: 'in' | 'out') => (
+    <div role="slider" aria-label={edge === 'in' ? 'Where the shot starts' : 'Where the shot ends'} aria-valuenow={edge === 'in' ? a : b}
+         className="absolute inset-y-0 z-10 flex w-4 -translate-x-1/2 cursor-ew-resize touch-none items-center justify-center rounded-md bg-accent"
+         style={{ left: pct(edge === 'in' ? a : b) }}
+         onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); setDrag({ edge, to: edge === 'in' ? a : b }) }}
+         onPointerMove={(e) => {
+           if (drag?.edge !== edge) return
+           const t = at(e.clientX)
+           setDrag({ edge, to: edge === 'in' ? Math.min(t, item.src_end - 0.2) : Math.max(t, item.src_start + 0.2) })
+         }}
+         onPointerUp={() => {
+           const d = drag
+           setDrag(null)
+           if (d && Math.abs(d.to - (edge === 'in' ? item.src_start : item.src_end)) > 1 / 30) onTrim(edge, Math.round(d.to * 1000) / 1000)
+         }}>
+      <span className="h-4 w-0.5 rounded bg-white" />
+    </div>
+  )
+  return (
+    <div className="space-y-2">
+      <div ref={box} className="relative h-12 rounded-lg bg-black"
+           style={thumb ? { backgroundImage: `url(${thumb})`, backgroundSize: 'auto 100%', backgroundRepeat: 'repeat-x' } : undefined}>
+        <span className="absolute inset-y-0 left-0 rounded-l-lg bg-white/65" style={{ width: pct(a) }} />
+        <span className="absolute inset-y-0 right-0 rounded-r-lg bg-white/65" style={{ left: pct(b) }} />
+        <span className="absolute inset-y-0 border-y-[3px] border-accent" style={{ left: pct(a), right: `calc(100% - ${pct(b)})` }} />
+        {handle('in')}
+        {handle('out')}
+      </div>
+      <div className="flex justify-between">
+        <Value>{mmss(a)}</Value>
+        <span className="self-center font-serif text-[15px] text-zinc-300">{((b - a) / (item.speed ?? 1)).toFixed(1)}s in the video</span>
+        <Value>{mmss(b)}</Value>
+      </div>
+    </div>
+  )
+}
+
+export function Chip({ children, onClick, on, danger }: { children: ReactNode; onClick: () => void; on?: boolean; danger?: boolean }) {
+  return (
+    <button type="button" onClick={onClick}
+            className={cx('inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 py-1.5 font-serif text-[15px]',
+              on ? 'border-accent bg-accent text-accent-ink' : danger ? 'border-rose-200/40 text-rose-200 hover:bg-rose-500/10'
+                : 'border-line bg-panel text-zinc-100 hover:bg-raised')}>
+      {children}
+    </button>
+  )
+}
