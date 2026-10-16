@@ -361,7 +361,7 @@ def _mix_spec(b: dict | None, items: list[dict]) -> dict | None:
     sp = export.spans(items)
     plan, _ = export.plan_transitions(sp, CLIPS, _style(b))
     music = export.music_spec(t.path if t else None, b.get("music"))
-    return audiomix.spec(sp, CLIPS, b.get("joins"), plan, music)
+    return audiomix.spec(sp, CLIPS, b.get("joins"), plan, music, audiomix.strips_of(b))
 
 
 def _mix_public(b: dict | None, tl: dict) -> dict | None:
@@ -377,7 +377,7 @@ def _mix_public(b: dict | None, tl: dict) -> dict | None:
     # The picture side of the same plan export renders (plan_transitions):
     # per shot, frames of handle for a dissolve and any dip or flash, so the
     # player can show the join the file will have. Only non-trivial entries.
-    trans = [{"key": it["key"], "head": p["head"], "tail": p["tail"],
+    trans = [{"key": it["key"], "head": p["head"], "tail": p["tail"], "blend": p.get("blend"),
               "fade_in": list(p["fade_in"]) if p["fade_in"] else None,
               "fade_out": list(p["fade_out"]) if p["fade_out"] else None,
               "swipe": bool(p.get("swipe"))}
@@ -390,8 +390,25 @@ def _mix_public(b: dict | None, tl: dict) -> dict | None:
             # `fits`: False where a carry was asked for but the shot wasn't
             # filmed long enough past the cut -- it plays as a clean break, and says so
             "joins": [{"after": it["key"], "at": sp["items"][i + 1]["seq_start"], **j,
-                       "fits": audiomix.fits(sp["items"], CLIPS, i, j["sound"])}
+                       "fits": audiomix.fits(sp["items"], CLIPS, i, j["sound"]),
+                       **_picture_at(b, sp["transitions"] or [], i, it["key"])}
                       for i, (it, j) in enumerate(zip(sp["items"], joins))]}
+
+
+def _picture_at(b: dict, plan: list[dict], i: int, k: str) -> dict:
+    """What the picture does at the cut after item i (what will play), and
+    what the creator picked there, if anything (transitions.py)."""
+    p, q = (plan[i] if i < len(plan) else {}), (plan[i + 1] if i + 1 < len(plan) else {})
+    if p.get("blend"):
+        shown = p["blend"]
+    elif p.get("fade_out") and q.get("fade_in"):
+        shown = "flash" if p["fade_out"][1] == "white" else "dip_black"
+    else:
+        shown = "cut"
+    one = (b.get("picture_joins") or {}).get(k)
+    pick = one or b.get("picture_all") or {}
+    return {"picture": shown, "picked": pick.get("kind"), "picked_dur": pick.get("dur"),
+            "picked_all": bool(pick) and not one}
 
 
 @app.get("/api/mix/{name}")
@@ -1066,7 +1083,7 @@ def api_length() -> dict:
     how long the edit is now. Free; nothing leaves the Mac."""
     with LOCK:
         b = SESSION.board
-        now = sum(e["end"] - e["start"] for bt in (b or {}).get("beats", []) for e in bt["shots"])
+        now = sum(bd.seq_dur(e) for bt in (b or {}).get("beats", []) for e in bt["shots"])
         return {**brief.length_marks(_usable_s(), _about()), "current": round(now, 1)}
 
 
@@ -1538,7 +1555,8 @@ def api_export(req: ExportReq) -> dict:
             title = next((o["text"] for o in SESSION.board.get("overlays", []) if o["kind"] == "title"), None)
             job = export.create(looks.camera(tl["items"], SESSION.board), dict(CLIPS), title or SESSION.board.get("name", ""),
                                 track.path if track else None, _style(SESSION.board, for_export=True),
-                                mix=SESSION.board.get("music"), joins=SESSION.board.get("joins"), want=_want())
+                                mix=SESSION.board.get("music"), joins=SESSION.board.get("joins"), want=_want(),
+                                sound=audiomix.strips_of(SESSION.board))
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
         return job.public()
