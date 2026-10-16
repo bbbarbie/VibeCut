@@ -64,9 +64,9 @@
     "black_floor": 18.0
   },
   "joins": {
-    "between": "dissolve",
+    "between": "swipe",
     "within": "cut",
-    "dur": 0.6,
+    "dur": 0.3,
     "open": true,
     "close": true
   }

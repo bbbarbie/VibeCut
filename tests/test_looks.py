@@ -155,12 +155,13 @@ def main() -> int:
           all(abs(c) <= grade.MAX_SHIFT + 0.5 for st in (cozy, hype, quiet, cine) for c in np.asarray(st["cast"]) - np.asarray(before["cast"])))
 
     print("the picture: joins, and what wins")
-    check("the soft looks dissolve between parts, the loud ones cut",
-          looks.joins_of(recs["cozy"])["between"] == "dissolve" and looks.joins_of(recs["hype"])["between"] == "cut"
+    check("film dissolves between parts, cozy and hype swipe, clean cuts",
+          looks.joins_of(recs["film"])["between"] == "dissolve" and looks.joins_of(recs["cozy"])["between"] == "swipe"
+          and looks.joins_of(recs["hype"])["between"] == "swipe" and looks.joins_of(recs["clean"])["between"] == "cut"
           and looks.joins_of(recs["cozy"])["within"] == "cut")
     plain = looks.picture({"look": "cozy"}, None)
     check("a look alone gives the board its joins and promises the grade",
-          plain["transitions"]["between"] == "dissolve" and plain["look"]["pending"] and plain["name"] == "Cozy", str(plain))
+          plain["transitions"]["between"] == "swipe" and plain["look"]["pending"] and plain["name"] == "Cozy", str(plain))
     borrowed = {"ref": "r", "name": "Ref", "traits": ["look", "transitions"],
                 "transitions": {"between": "flash", "within": "cut", "dur": 0.2, "open": False, "close": False},
                 "look": {"lut": "/x.cube", "strength": 1.0, "words": []}, "letterbox": None, "report": None}

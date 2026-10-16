@@ -232,7 +232,7 @@ def api() -> None:
         plain = export("plain")
         s = c.post("/api/ops", json={"ops": [{"op": "set_look", "look": "cozy"}], "label": "cozy"}).json()
         check("Cozy: the board's style promises its grade and its joins",
-              s["board"]["style"]["look"]["pending"] and s["board"]["style"]["transitions"]["between"] == "dissolve",
+              s["board"]["style"]["look"]["pending"] and s["board"]["style"]["transitions"]["between"] == "swipe",
               json.dumps(s["board"]["style"]))
         cozy = export("cozy")
         check("the export names the look", cozy["style"] == "Cozy", str(cozy["style"]))

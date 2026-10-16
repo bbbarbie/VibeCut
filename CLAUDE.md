@@ -231,6 +231,42 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   morning→night, themes, faces, talking, rough GPS; `guess` = the first
   template line, so `kind_of` sees day / weekend / days away).
   `tests/test_pitch.py`.
+- **About the day, not the face** (sarah, 2026-10-14, after comparing
+  VibeCut's edit of her school day with her own: half of it was her face,
+  one chat with a friend held 14 s, food / stairs / night campus were left
+  out). `tests/test_day_picking.py`. **Talk said to the audience vs talk
+  overheard** (`trim.addressed`): faces.json rows are now `[presence, edge,
+  people, facing]` (`vision.face_track`; the Swift helper adds each face's
+  yaw, looking in = |yaw| ≤ 25°; older 2-column caches are re-read once on
+  project open, `indexer.refresh_faces`, Mac only). Talking while looking
+  into the lens keeps its sentence; talking turned away, or two people with
+  no direction read, is chatter: `CHATTER_S` 3 s in the rough cut, cut by the
+  pace like any shot, not counted as talking by `tempo.read`. No face at all
+  (narration from behind the camera) changes nothing. **Every stop first**
+  (`brief.spots`, `weakest`): a new stop when GPS moves > 150 m or 20 min
+  pass; shortening (`shape`, `length_ops`) drops from the stop with the most
+  shots, lengthening brings back stops not shown yet. **Shorts** hold no
+  moment over `SHORT_CAP_S` 3.5 s (`brief.cap_for`, also `/api/pace`). **Lit
+  night** shots (after 6 pm, contrast ≥ 0.4) are never left out for quality
+  (`storyboard.lit_night`). **Swipe**: cozy and hype join parts with a whip
+  (xfade slideleft + sideways smear, `export.swipe_blur`; the player slides
+  both pictures, `joinView.swipeAt`); needs a dissolve's handles, else a cut.
+  All numbers are priors from one of her edits. Not yet run on her clips.
+- **What a moment is worth** (`web/backend/worth.py`; outside evaluation of
+  the Oct 16 demo, sarah: "implement"). Every Shot gets `worth` (0..1) and
+  `worth_why` in `shots_from_clips`: craft (`score`) plus feeling (laughter
+  ≥2 heard seconds, singing, talking to the lens, from sound.json, which
+  nothing used for picking before), label rarity across the shoot, the
+  first face-free shot at a new stop ("first look at a new place"), minus a
+  little for a face with nothing said. `shape` and `length_ops` rank by it
+  (hook = the strongest moment, not the best-exposed), and `weakest` drops
+  from the stop with the most shots *per its importance* (its best worth),
+  so screen time follows what happened at a stop, not how much was filmed;
+  a stop's last shot still goes last. Look-alike collapsing stays on craft.
+  Weights are priors. `tests/test_worth.py`.
+- **Music at social volume**: the bed's `set_music` asks for levelling
+  (-14 LUFS, `audiomix.write_wav`), preview and export alike; the Oct 14
+  school-day edit was -20 LUFS against her own -15. `tests/test_loudness.py`.
 - HDR (HLG/PQ) footage: thumbnails and samples are tone-mapped to SDR in
   `media.to_sdr` so they look like the phone showed them; measurement frames
   are untouched. `tests/test_hdr.py`.

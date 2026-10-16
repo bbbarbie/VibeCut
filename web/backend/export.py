@@ -343,10 +343,14 @@ def plan_transitions(items: list[dict], clips: dict[str, dict], style: dict | No
             if a["kind"] == "shot" and b["kind"] == "shot" and _room(a, clips, "tail", n) and _room(b, clips, "head", n):
                 per[k]["tail"], per[k + 1]["head"] = n, n
                 per[k]["blend"] = kind
+                if kind == "swipe":
+                    per[k]["swipe"] = True
                 continue
             if a["kind"] == "shot" and b["kind"] == "shot":
                 fell_back[kind] = fell_back.get(kind, 0) + 1
                 continue
+            if kind == "swipe":
+                continue         # next to a gap a swipe is just the cut
             kind = "dip_black"   # next to a gap (already black): fade the shot side
         color = "white" if kind == "flash" else "black"
         if a["kind"] == "shot":
@@ -436,6 +440,21 @@ def _shot(job: Job, it: dict, out: Path, tr: dict | None = None) -> None:
         _ff(args, job)   # a codec the hardware decoder won't take
 
 
+# A swipe is a whip pan between two stops of the day: the outgoing shot
+# slides off, the incoming one slides in, smeared sideways over the middle
+# of the move (her own edit used two of these). The preview draws the same
+# move and smear (joinView.swipeAt). [prior]
+SWIPE_BLUR = 0.03    # sideways smear, share of the frame width
+SWIPE_SMEAR = (0.2, 0.8)   # the part of the move that is smeared
+
+
+def swipe_blur(start_frame: int, frames: int) -> tuple[float, float]:
+    """Seconds (inside a run) when a swipe starting at `start_frame` and
+    lasting `frames` is smeared."""
+    a, b = SWIPE_SMEAR
+    return ((start_frame + a * frames) / FPS, (start_frame + b * frames) / FPS)
+
+
 def _xfade(kind: str | None) -> str:
     """The xfade a blend renders with (transitions.KINDS)."""
     from .transitions import KINDS, LIGHT_LEAK
@@ -469,13 +488,22 @@ def _dissolve_runs(job: Job, segs: list[Path], plan: list[dict], seg_dir: Path) 
             args += ["-i", str(segs[i])]
             parts.append(f"[{n}:v]settb=AVTB,setpts=PTS-STARTPTS[v{n}];[{n}:a]asetpts=PTS-STARTPTS[a{n}]")
         length = lens[0]
+        blurs = []
         for n in range(1, len(run)):
             ov = plan[run[n - 1]]["tail"] + plan[run[n]]["head"]
+            swipe = plan[run[n - 1]].get("blend") == "swipe"
             parts.append(f"{v}[v{n}]xfade={_xfade(plan[run[n - 1]].get('blend'))}:duration={ov / FPS:.6f}"
                          f":offset={(length - ov) / FPS:.6f}[x{n}]")
             parts.append(f"{a}[a{n}]acrossfade=d={ov / FPS:.6f}:c1=tri:c2=tri[y{n}]")
             v, a = f"[x{n}]", f"[y{n}]"
+            if swipe:
+                blurs.append(swipe_blur(length - ov, ov))
             length += lens[n] - ov
+        for i, (t0, t1) in enumerate(blurs):
+            # the whip's smear: sideways only, over the middle of the move
+            w = max(2, int(job.size["w"] * SWIPE_BLUR))
+            parts.append(f"{v}avgblur=sizeX={w}:sizeY=1:enable='between(t,{t0:.4f},{t1:.4f})'[b{i}]")
+            v = f"[b{i}]"
         dest = seg_dir / f"run{k:04d}.mov"
         _ff([*args, "-filter_complex", ";".join(parts), "-map", v, "-map", a,
              "-frames:v", str(length), *_venc(True, job.size),

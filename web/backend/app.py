@@ -83,6 +83,8 @@ def _open_project(pid: str) -> pj.Project:
         # Clips indexed before the voice reading existed get it once, here.
         sound.add_sound(list(clips.values()))
         ink.fill(list(clips.values()))
+        # and which way faces look (talking to the lens vs chatting), once
+        indexer.refresh_faces(list(clips.values()))
         CLIPS.clear()
         CLIPS.update(clips)
         VISION_USED["value"] = vision.status() == "ready" and any(
@@ -379,7 +381,8 @@ def _mix_public(b: dict | None, tl: dict) -> dict | None:
     # player can show the join the file will have. Only non-trivial entries.
     trans = [{"key": it["key"], "head": p["head"], "tail": p["tail"], "blend": p.get("blend"),
               "fade_in": list(p["fade_in"]) if p["fade_in"] else None,
-              "fade_out": list(p["fade_out"]) if p["fade_out"] else None}
+              "fade_out": list(p["fade_out"]) if p["fade_out"] else None,
+              "swipe": bool(p.get("swipe"))}
              for it, p in zip(sp["items"], sp["transitions"] or [])
              if p["head"] or p["tail"] or p["fade_in"] or p["fade_out"]]
     size = tl.get("frame") or {"w": 1920, "h": 1080}
@@ -999,7 +1002,9 @@ def api_pace(req: PaceReq) -> dict:
         cat = CATALOG["cat"]
         _, windows = cut.for_story(PLAN["plan"])
         talk = tempo.talking(list(CLIPS.values()), _pool())
-        ops = tempo.pace_ops(SESSION.board, cat, windows, req.pace, talk)
+        pr = PROJECT["p"]
+        ops = tempo.pace_ops(SESSION.board, cat, windows, req.pace, talk,
+                             ((pr.brief or {}).get("style") if pr is not None else None))
         name = tempo.NAMES[req.pace]
         if ops:
             SESSION.add({"kind": "direct", "text": name, "ops": ops,

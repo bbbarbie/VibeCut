@@ -8,7 +8,9 @@ import type { SeqItem } from './sequence'
 
 export type Trans = { key: string; head: number; tail: number; fade_in: [number, string] | null; fade_out: [number, string] | null
   /** on the outgoing shot: how the two pictures blend (transitions.py); null = a dissolve */
-  blend?: string | null }
+  blend?: string | null
+  /** the blend is a swipe (kept for older callers; same as blend === 'swipe') */
+  swipe?: boolean }
 export type TransMap = Map<string, Trans>
 
 export const byKey = (list: Trans[] | undefined | null): TransMap => new Map((list ?? []).map((t) => [t.key, t]))
@@ -36,13 +38,27 @@ export function veilAt(items: SeqItem[], k: number, tr: TransMap, t: number, fps
  *  Export overlaps the two shots over [cut - head, cut + tail], mixing
  *  linearly; null when that cut is a plain cut. */
 export function dissolveAfter(items: SeqItem[], k: number, tr: TransMap, fps: number):
-  { from: number; cut: number; to: number; inFrom: number; blend: string } | null {
+  { from: number; cut: number; to: number; inFrom: number; blend: string; swipe: boolean } | null {
   const a = items[k], b = items[k + 1]
   if (!a || !b || a.kind !== 'shot' || b.kind !== 'shot') return null
   const tail = (tr.get(a.key)?.tail ?? 0) / fps, head = (tr.get(b.key)?.head ?? 0) / fps
   if (tail <= 0 && head <= 0) return null
   const cut = a.seq_end
-  return { from: cut - head, cut, to: cut + tail, inFrom: b.src_start - head, blend: tr.get(a.key)?.blend ?? 'dissolve' }
+  const blend = tr.get(a.key)?.blend ?? (tr.get(a.key)?.swipe ? 'swipe' : 'dissolve')
+  return { from: cut - head, cut, to: cut + tail, inFrom: b.src_start - head, blend, swipe: blend === 'swipe' }
+}
+
+// The export's swipe (export.SWIPE_BLUR / SWIPE_SMEAR): xfade's slideleft,
+// smeared sideways over the middle of the move.
+export const SWIPE_BLUR = 0.03
+export const SWIPE_SMEAR: [number, number] = [0.2, 0.8]
+
+/** Where the two pictures sit at t inside a swipe window: the incoming one
+ *  slides in from the right as the outgoing one leaves to the left (shares
+ *  of the frame width), and whether the move is smeared. */
+export function swipeAt(d: { from: number; to: number }, t: number): { outX: number; inX: number; smear: boolean } {
+  const p = mixAt(d, t)
+  return { outX: -p, inX: 1 - p, smear: p > SWIPE_SMEAR[0] && p < SWIPE_SMEAR[1] }
 }
 
 /** How much of the incoming shot shows at t inside a dissolve window (0..1). */
@@ -75,6 +91,12 @@ export function blendLook(kind: string, m: number): { out: Pic; in: Pic; glow: {
     case 'slide_up':  // the next shot pushes this one up, like scrolling
       return { out: { ...plain, translate: `0 ${(-100 * m).toFixed(2)}%` },
                in: { ...plain, translate: `0 ${(100 * (1 - m)).toFixed(2)}%` }, glow: null }
+    case 'swipe': {   // a whip: out to the left, in from the right, smeared mid-move (swipeAt)
+      const sw = swipeAt({ from: 0, to: 1 }, m)
+      const f = sw.smear ? `blur(${(SWIPE_BLUR * 100).toFixed(1)}px)` : ''
+      return { out: { ...plain, translate: `${(100 * sw.outX).toFixed(2)}% 0`, filter: f },
+               in: { ...plain, translate: `${(100 * sw.inX).toFixed(2)}% 0`, filter: f }, glow: null }
+    }
     case 'blur':      // goes soft, comes back sharp on the next
       return { out: { ...plain, filter: `blur(${(14 * m).toFixed(1)}px)` },
                in: { ...plain, opacity: m, filter: `blur(${(14 * (1 - m)).toFixed(1)}px)` }, glow: null }
