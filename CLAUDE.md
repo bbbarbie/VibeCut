@@ -441,6 +441,13 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   length kept, all different), `test_caption_templates.py`,
   `overlayTemplates.test.ts` (safe area every intro frame, every template ×
   entrance). Sizes, durations and the glow are priors.
+  **Caption words and colour in the Captions tab** (sarah, 2026-10-17): a
+  clicked caption shows its words (and place line) to edit, See it play,
+  Delete; with none clicked, Off/On and "Add a caption at the playhead".
+  **Colour** is `overlay_style.text_color` (None = automatic, ink.py picks
+  one that reads; never set by a look): a picked colour is kept as picked,
+  ink.py only adds a glow where it would blend in; a template takes it as
+  its letters (edge flips white under dark ones) or as its box / band.
 - **polish/** (`polish/`, `web/backend/polish_api.py`, `Polish.tsx`,
   `polishDraw.ts`; page `#polish`). Assisting an edit that is already cut:
   input is one finished video, never raw clips; no auto-editing, no
