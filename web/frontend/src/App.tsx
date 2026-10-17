@@ -15,6 +15,7 @@ import { Player } from './components/Player'
 import { PauseChat } from './components/PauseChat'
 import { PaceButton } from './components/PaceButton'
 import { Setup, type SetupData } from './components/Setup'
+import { ProfileAsk } from './components/ProfileAsk'
 import { LengthButton } from './components/LengthButton'
 import type { OverlayEdit } from './components/OverlayCanvas'
 import { Menu, SwapPicker, type MenuItem } from './components/Menus'
@@ -106,6 +107,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const stageRef = useRef<HTMLDivElement>(null)
   const isSaving = useSyncExternalStore(saving.subscribe, saving.get)
   const [exporting, setExporting] = useState(false)
+  const [askProfile, setAskProfile] = useState(false)
   const [remixing, setRemixing] = useState(false)
   const [referencing, setReferencing] = useState(false)
   const [talkOpen, setTalkOpen] = useState(false)
@@ -1294,7 +1296,15 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                               onError={() => { transport.mixBroken = true }} />}
       {help && <Keys onClose={() => setHelp(false)} />}
       {exporting && <Export tl={tl} overlays={ovData} parts={parts} music={session?.music?.title ?? null} style={session?.board?.style}
-                            history={session?.exports ?? []} onClose={() => { setExporting(false); api.session().then(setSession).catch(() => {}) }} />}
+                            history={session?.exports ?? []} onClose={() => {
+                              setExporting(false); api.session().then(setSession).catch(() => {})
+                              // the first video out: ask, once, how they like their videos (profile.py)
+                              api.profile().then((p) => setAskProfile(p.ask)).catch(() => {})
+                            }} />}
+      {askProfile && <ProfileAsk current={{ pace: brief?.style?.pace, transition: session?.board?.picture_all?.kind,
+                                           template: ovData.style.template, captions: ovData.items.length > 0 }}
+                                 style={ovData.style} from={shotThumb(tl.items[0])} to={shotThumb(tl.items[1])}
+                                 onDone={() => setAskProfile(false)} />}
       {remixing && <Remix onClose={() => setRemixing(false)} onDone={remixDone} canLinks={caps.links} />}
       {referencing && <BorrowStyle onClose={() => setReferencing(false)} onRemix={openRemix}
                                    onApplied={(s) => { setSession(s); offerUndo(s); setReferencing(false); setPeek(null); setLevel('frames') }} />}

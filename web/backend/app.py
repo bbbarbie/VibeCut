@@ -33,6 +33,8 @@ from . import projects as pj
 from . import audiomix, bed, brief, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import Workflow, WorkflowError
+from . import profile as creator
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -912,7 +914,8 @@ def api_brief_setup() -> dict:
         share = _portrait_share()
         return {"format": brief.suggest_format(share, marks["max"]), "portrait_share": round(share, 2),
                 "formats": [{"key": k, "label": v, "seconds": round(brief.length_for(k, marks))} for k, v in brief.FORMATS.items()],
-                "look": (_direction() or {}).get("style", {}).get("look") or "cozy",
+                "look": (_direction() or {}).get("style", {}).get("look")
+                        or creator.defaults(creator.load()).get("look") or "cozy",
                 "looks": looks.public(), "about": about}
 
 
@@ -940,9 +943,15 @@ def api_brief_auto(req: BriefAutoReq | None = None) -> dict:
         marks = brief.length_marks(_usable_s(), about)
         # the tempo the footage asks for (sarah, 2026-10-07), not a question
         feel = tempo.read(list(CLIPS.values()), cut.for_story(PLAN["plan"]))
+        # the creator's profile, if they made one, is where a new video starts
+        mine = creator.defaults(creator.load())
+        if mine.get("pace"):
+            feel = {**feel, "pace": mine["pace"], "why": f"{tempo.NAMES[mine['pace']]}, as you like them."}
         fmt = req.format or brief.suggest_format(_portrait_share(), marks["max"])
-        style = {"seconds": brief.length_for(fmt, marks), "captions": "describe", "pace": feel["pace"],
-                 "format": fmt, "look": req.look or "cozy"}
+        style = {"seconds": brief.length_for(fmt, marks), "captions": mine.get("captions", "describe"),
+                 "pace": feel["pace"], "format": fmt, "look": req.look or mine.get("look") or "cozy"}
+        if req.look:
+            creator.learn("look", req.look, "picked up front")
         pr.brief = {"message": about, "style": brief.clean_style(style) or {}, "tempo": feel["why"],
                     "said": f"{brief.FORMATS[fmt].split(' ·')[0]} · about {brief.say_length(style['seconds'])} · "
                             f"{tempo.NAMES[feel['pace']].lower()} · {looks.get(style['look'])['name']} · captions",
@@ -951,6 +960,8 @@ def api_brief_auto(req: BriefAutoReq | None = None) -> dict:
         # bed under the story lands in seconds rather than minutes (bed.py)
         if musiclib.STATE["status"] != "ready" and os.environ.get("VIBECUT_BED", "1") != "0":
             bed.prefetch(feel["pace"])
+        if style["captions"] == "transcribe":
+            subtitles.prefetch(list(CLIPS.values()), about)
         return _session()
 
 
@@ -1003,6 +1014,7 @@ def api_pace(req: PaceReq) -> dict:
         if pr is not None and pr.brief:
             pr.brief = {**pr.brief, "style": {**(pr.brief.get("style") or {}), "pace": req.pace},
                         "tempo": f"{name}, as you chose."}
+        creator.learn("pace", req.pace, "changed in Frames")
         return _session()
 
 
@@ -1024,9 +1036,13 @@ def api_captions(req: CaptionsReq) -> dict:
             if ops:
                 SESSION.add({"kind": "direct", "text": "Captions off", "ops": ops,
                              "reply": "Captions off. Undo puts them back."}, CATALOG["cat"], _make_proposals)
+            creator.learn("captions", "none", "captions switched off")
             return _session()
         if not b.get("overlays"):
             _words_as_asked(force=True)
+        if creator.load()["captions"] == "none":
+            creator.learn("captions", ((SESSION.board or {}).get("overlay_style") or {}).get("template"),
+                          "captions switched on")
         return _session()
 
 
@@ -1273,8 +1289,21 @@ def api_ops(req: OpsReq) -> dict:
         if [o.get("op") for o in req.ops] == ["choose_option"]:
             _drop_repeats()
             _words_as_asked()
+            _as_you_like_it()
             _bed_start()
+        else:
+            creator.learn_ops(req.ops)
         return _session()
+
+
+def _as_you_like_it() -> None:
+    """A story was just chosen: the creator's own caption style and
+    transition from their profile (profile.py), as one turn Undo takes away."""
+    ops = creator.ops_for(SESSION.board, creator.defaults(creator.load()))
+    if ops:
+        SESSION.add({"kind": "direct", "text": "Your style", "ops": ops,
+                     "reply": "Your usual captions and transitions, from your profile. Undo puts them back."},
+                    CATALOG["cat"], _make_proposals)
 
 
 # --------------------------------------------------------------------------
@@ -1605,6 +1634,7 @@ def api_export_status(jid: str) -> dict:
                            "seconds": pub["total"], "size": pub["size"], "music": pub["music"],
                            "overlays": pub["overlays"], "bytes": os.path.getsize(pub["path"]) if pub["path"] and os.path.isfile(pub["path"]) else None})
         _save()
+        creator.exported()
     return pub
 
 
@@ -1916,6 +1946,43 @@ def api_sample(clip_id: str, i: int) -> FileResponse:
                         headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
+# --------------------------------------------------------------------------
+# your profile (profile.py): asked once after the first export, kept on
+# this Mac, the start of every next video
+# --------------------------------------------------------------------------
+
+@app.get("/api/profile")
+def api_profile() -> dict:
+    return creator.public(creator.load())
+
+
+class ProfileReq(BaseModel):
+    email: str
+    kind: str | None = None
+    pace: str | None = None
+    transition: str | None = None
+    captions: str | None = None
+
+
+@app.post("/api/profile")
+def api_profile_save(req: ProfileReq) -> dict:
+    try:
+        p = creator.create(req.email, req.model_dump(exclude={"email"}, exclude_none=True))
+    except creator.ProfileError as e:
+        raise HTTPException(422, str(e)) from e
+    return creator.public(p)
+
+
+@app.post("/api/profile/skip")
+def api_profile_skip() -> dict:
+    return creator.public(creator.skip())
+
+
+@app.post("/api/profile/forget")
+def api_profile_forget() -> dict:
+    return creator.public(creator.forget())
+
+
 # polish: a finished video, the creator pointing at it (polish_api.py)
 from . import polish_api  # noqa: E402
 
@@ -1937,3 +2004,4 @@ class _UI(StaticFiles):
 
 if DIST.exists():
     app.mount("/", _UI(directory=DIST, html=True), name="ui")
+

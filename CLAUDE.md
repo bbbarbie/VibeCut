@@ -463,6 +463,20 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   `tests/test_polish.py`, `test_polish_api.py` (face in the lower third vs
   the top, through the API), `polishDraw.test.ts`. Windows and margins are
   priors.
+- **Your profile** (`web/backend/profile.py`, `/api/profile`, `ProfileAsk.tsx`;
+  sarah, 2026-10-14). Asked once, after the first export (any project): the
+  email (the only typing; names the profile, never sent anywhere, no account)
+  plus taps, preset to what that video used: vlogs / lessons, quick / steady
+  / calm, the transition for every cut (`transitions.KINDS`) and the caption
+  style (`overlays.TEMPLATES`) or none, tiles drawn by StyleBars' own
+  samples. Skip = never asked again. Kept in `$VIBECUT_CACHE/profile.json`.
+  The next video starts from it: `/api/brief/auto` takes its pace (instead
+  of the footage's), its look and its captions (lessons get subtitles of
+  what's said); choosing a story adds one undoable "Your style" turn
+  (`overlay_style` template + entrance, `set_transition` all). Pace, look,
+  caption style / animation, a transition used for every cut and Captions
+  off, changed in Frames, move the profile (`learned`), only once one
+  exists. Not a settings panel (sarah disliked one). `tests/test_profile.py`.
 - **Fonts: only what's already on the creator's machine.** A system family,
   or a font file the creator points at (served back only if a saved recipe
   names it). Never bundle or ship a font. **Recognising a font in a
