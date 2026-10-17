@@ -1,14 +1,16 @@
 import { useRef, useState, type ReactNode } from 'react'
 import type { SeqItem } from '../sequence'
-import type { CaptionEnter, CaptionTemplate, JoinInfo, LookInfo, OverlayStyle, SoundStrip } from '../types'
+import { KIND_META } from '../overlayDraw'
+import type { CaptionEnter, CaptionTemplate, JoinInfo, LookInfo, Overlay, OverlayStyle, SoundStrip } from '../types'
 import { Button, cx } from '../ui'
 import { Icon, type IconName } from './icons'
 import { CaptionAnimations, CaptionStyles, Transitions } from './StyleBars'
 
 // The right-hand inspector of the edit screen (sarah, 2026-10-16: the layout
 // of her reference picture). Five tabs: Edit (the clicked shot: trim, speed,
-// turn, fit or fill; with nothing clicked, the whole video), Captions (one
-// style and entrance for every caption), Effects (the transition at a cut),
+// turn, fit or fill; with nothing clicked, the whole video), Captions (the
+// clicked caption's words, then one style and entrance for every caption),
+// Effects (the transition at a cut),
 // Audio (the shot's or a sound strip's volume and fades, and the music) and
 // Adjust (the look). Clicking something on the timeline opens its tab.
 // Every change is one undoable turn, sent when a slider is let go.
@@ -42,6 +44,13 @@ export function Inspector(p: {
   captionsOn: boolean
   captionThumb: string | null
   captionSample: string
+  /** the caption clicked on the picture or the timeline */
+  caption: Overlay | null
+  onCaptionEdit: (patch: { text?: string; sub?: string }, label: string) => void
+  onCaptionDelete: () => void
+  onCaptionAdd: () => void
+  onCaptionWatch: () => void
+  onCaptionDone: () => void
   looks: { id: string | null; all: LookInfo[] } | null
   music: ReactNode
   /** Length, tempo, frame, smoother cuts: the whole video's own controls */
@@ -121,14 +130,19 @@ export function Inspector(p: {
         </>)}
 
         {p.tab === 'captions' && <>
-          <Line label="Captions">
-            <Segmented options={[['off', 'Off'], ['on', 'On']]} value={p.captionsOn ? 'on' : 'off'}
-                       onPick={(v) => (v === 'on') !== p.captionsOn && p.onCaptions()} />
-          </Line>
+          {p.caption && <CaptionWords key={p.caption.id} o={p.caption} onEdit={p.onCaptionEdit} onDelete={p.onCaptionDelete}
+                                      onWatch={p.onCaptionWatch} onDone={p.onCaptionDone} />}
+          {!p.caption && <>
+            <Line label="Captions">
+              <Segmented options={[['off', 'Off'], ['on', 'On']]} value={p.captionsOn ? 'on' : 'off'}
+                         onPick={(v) => (v === 'on') !== p.captionsOn && p.onCaptions()} />
+            </Line>
+            <Button onClick={p.onCaptionAdd}>+ Add a caption at the playhead</Button>
+          </>}
           {p.captionsOn ? <>
-            <Section title="Style"><CaptionStyles style={p.style} thumb={p.captionThumb} onPick={p.onCaptionStyle} /></Section>
-            <Section title="Animation"><CaptionAnimations style={p.style} thumb={p.captionThumb} sample={p.captionSample} onPick={p.onCaptionStyle} /></Section>
-            <Hint>One style for every caption. Click a caption on the picture to move it or change its words.</Hint>
+            <Section title={p.caption ? 'Style of every caption' : 'Style'}><CaptionStyles style={p.style} thumb={p.captionThumb} onPick={p.onCaptionStyle} /></Section>
+            <Section title={p.caption ? 'Animation of every caption' : 'Animation'}><CaptionAnimations style={p.style} thumb={p.captionThumb} sample={p.captionSample} onPick={p.onCaptionStyle} /></Section>
+            {!p.caption && <Hint>One style for every caption. Click a caption on the picture or the timeline to change its words.</Hint>}
           </> : <Hint>Turn captions on to put the time and place of each moment on the video.</Hint>}
         </>}
 
@@ -181,6 +195,54 @@ export function Inspector(p: {
         )}
       </div>
     </aside>
+  )
+}
+
+// The clicked caption's own words. One undoable turn when the box is left
+// or Enter is pressed; Escape puts the words back.
+function CaptionWords({ o, onEdit, onDelete, onWatch, onDone }: {
+  o: Overlay
+  onEdit: (patch: { text?: string; sub?: string }, label: string) => void
+  onDelete: () => void; onWatch: () => void; onDone: () => void
+}) {
+  const name = KIND_META[o.kind].label
+  // a described moment's place name sits above its line; other kinds have a second line of their own
+  const subLabel = o.kind === 'caption' ? (o.sub ? 'Place above it' : null)
+    : o.kind === 'date' || o.kind === 'chapters' ? null
+      : o.kind === 'part' ? 'Small line above' : o.kind === 'name' ? 'Handle or role' : 'Second line'
+  return (
+    <Section title={`This ${name.toLowerCase()} · ${mmss(o.start)}`}>
+      {o.kind !== 'chapters' && (
+        <WordsBox key={'t' + o.text} label="Words" value={o.text} big
+                  onCommit={(v) => v.trim() && onEdit({ text: v.trim() }, `You changed the words of the ${name.toLowerCase()}`)} />
+      )}
+      {subLabel && (
+        <WordsBox key={'s' + o.sub} label={subLabel} value={o.sub}
+                  onCommit={(v) => onEdit({ sub: v.trim() }, `You changed the ${subLabel.toLowerCase()} of the ${name.toLowerCase()}`)} />
+      )}
+      <div className="flex flex-wrap gap-2 pt-1">
+        <Chip onClick={onWatch}><Icon name="play" size={17} /> See it play</Chip>
+        <Chip danger onClick={onDelete}><Icon name="trash" size={17} /> Delete</Chip>
+        <Chip onClick={onDone}>Done</Chip>
+      </div>
+    </Section>
+  )
+}
+
+function WordsBox({ label, value, big, onCommit }: { label: string; value: string; big?: boolean; onCommit: (v: string) => void }) {
+  const [v, setV] = useState(value)   // keyed on value by the caller: a new value remounts
+  return (
+    <label className="block space-y-1.5">
+      <span className="font-serif text-[16px] text-zinc-100">{label}</span>
+      <textarea value={v} maxLength={140} rows={big ? 2 : 1} onChange={(e) => setV(e.target.value)}
+                onBlur={() => v !== value && onCommit(v)}
+                onKeyDown={(e) => {
+                  e.stopPropagation()   // typing must not split shots or play the video
+                  if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLTextAreaElement).blur() }
+                  if (e.key === 'Escape') { setV(value); setTimeout(() => (e.target as HTMLTextAreaElement).blur()) }
+                }}
+                className="block w-full resize-none rounded-lg border border-line bg-panel px-3 py-2 font-serif text-[17px] leading-snug text-zinc-100 outline-none focus:border-accent" />
+    </label>
   )
 }
 

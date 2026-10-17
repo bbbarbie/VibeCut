@@ -983,6 +983,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     const a = tl.items[k], b = tl.items[k + 1]
     return { join: j, before: a?.n ?? null, after: b?.n ?? null, from: shotThumb(a), to: shotThumb(b) }
   }
+  const ovSel = selOverlay ? ovData.items.find((o) => o.id === selOverlay) : undefined
   const capSel = selOverlay ? ovData.items.find((o) => o.id === selOverlay && o.kind === 'caption') : undefined
   const capFirst = capSel ?? ovData.items.find((o) => o.kind === 'caption')
   const capUnder = capFirst ? tl.items[locate(tl.items, Math.min(capFirst.start + 0.1, tl.total - 1e-3))] : tl.items[0]
@@ -996,6 +997,12 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                join={pickedJoin ? joinAt(pickedJoin) : allJoins[0] ? joinAt(allJoins[0]) : null} joinPicked={!!pickedJoin}
                style={ovData.style} captionsOn={!!ovData.items.length} captionThumb={shotThumb(capUnder)}
                captionSample={capText.length > 20 ? capText.slice(0, Math.max(10, capText.lastIndexOf(' ', 20))) : capText}
+               caption={ovSel ?? null}
+               onCaptionEdit={(patch, label) => ovSel && run([{ op: 'edit_overlay', overlay: ovSel.id, ...patch }], label)}
+               onCaptionDelete={() => { if (ovSel) { run([{ op: 'drop_overlay', overlay: ovSel.id }], `You removed the ${KIND_META[ovSel.kind].label.toLowerCase()}`); setSelOverlay(null) } }}
+               onCaptionAdd={() => runOverlay([{ op: 'add_overlay', kind: 'caption', ...newOverlayAt('caption') }], 'You added a caption')}
+               onCaptionWatch={() => ovSel && watchOverlay(ovSel)}
+               onCaptionDone={() => setSelOverlay(null)}
                looks={ovData.look ? { id: ovData.look.id, all: ovData.look.all } : null}
                music={musicNode}
                video={session?.board ? (
