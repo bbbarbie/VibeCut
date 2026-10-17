@@ -5,7 +5,7 @@
 // words in colour for Pop, a typed caption written out letter by letter.
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { drawOverlays, frameKey, safe, TEMPLATES } from './overlayDraw.ts'
+import { drawOverlays, frameKey, safe, TEMPLATES, tinted } from './overlayDraw.ts'
 import type { CaptionEnter, CaptionTemplate, Overlay, OverlayStyle } from './types'
 
 const BASE: OverlayStyle = { font: 'Clean', color: '#ffffff', accent: '#b9d9eb', captions: 'bottom', backing: 'shadow' }
@@ -110,4 +110,20 @@ test('an entrance is part of the export frame key: picking one changes the intro
   const keys = (s: OverlayStyle) => Array.from({ length: 20 }, (_, f) => frameKey([o], [], f / 30, s.motion, s)).join(',')
   assert.notEqual(keys({ ...BASE, enter: 'stamp' }), keys({ ...BASE, enter: 'type' }))
   assert.equal(keys(BASE), keys({ ...BASE, motion: null }))
+})
+
+test('a colour picked by hand is the colour drawn, and still reads', () => {
+  const o = cap('so much rice today')
+  const fills = (style: OverlayStyle) => draw(style, o, 2).drawn.map((d) => d.fill)
+  assert.ok(fills({ ...BASE, text_color: '#ffd84d' }).every((f) => f === '#ffd84d'), 'no template: the words are yellow')
+  assert.ok(fills({ ...BASE, template: 'outlined', text_color: '#ff9eb5' }).every((f) => f === '#ff9eb5'), 'outlined: the letters are pink')
+  assert.ok(fills({ ...BASE, template: 'outlined' }).every((f) => f === '#ffffff'), 'nothing picked: the template\'s own white')
+  // a boxed template takes the colour as its backing; the words go black or white, whichever reads
+  assert.ok(fills({ ...BASE, template: 'label', text_color: '#ffd84d' }).every((f) => f === '#141414'))
+  assert.ok(fills({ ...BASE, template: 'label', text_color: '#141414' }).every((f) => f === '#ffffff'))
+  // dark letters on an edged or bare template get a white edge
+  assert.equal(tinted(TEMPLATES.outlined, '#141414').stroke?.color, '#ffffff')
+  assert.equal(tinted(TEMPLATES.outlined, '#ffd84d').stroke?.color, '#000000')
+  assert.equal(tinted(TEMPLATES.handwritten, '#141414').stroke?.color, '#ffffff')
+  assert.ok(draw({ ...BASE, template: 'quiet', text_color: '#141414' }, o, 2).drawn.every((d) => d.stroked), 'a dark pick on a bare template is edged')
 })

@@ -158,7 +158,7 @@ const lineFont = (style: OverlayStyle, ln: Line, px = ln.px) =>
 /** Web fonts must be loaded before a canvas can draw them. */
 export async function ensureFonts(style: OverlayStyle): Promise<void> {
   if (typeof document === 'undefined' || !document.fonts) return
-  const tpl = style.template ? TEMPLATES[style.template] : null
+  const tpl = tplFor(style)
   const fonts = [fontCss(style, 40, true), fontCss(style, 40, false), ...(tpl ? [`${tpl.weight} 40px ${tpl.family}`] : [])]
   await Promise.all(fonts.map((f) => document.fonts.load(f).catch(() => [])))
 }
@@ -198,6 +198,27 @@ export const TEMPLATES: Record<CaptionTemplate, Tpl> = {
          stroke: { color: '#1a1a1a', w: 0.18 }, pop: ['#ffd84d', '#7fe0ff'], split: true },
   quiet: { family: SANS, weight: 400, size: 0.03, color: '#ffffff', case: 'upper', track: 0.3, shadow: true, rule: true },
 }
+
+// A colour picked by hand dresses the template: the letters of an edged or
+// bare one, the backing or band of a boxed or marked one (its words then go
+// black or white, whichever reads). The edge flips to white under dark
+// letters, and a bare template gains one, so a dark pick still reads over
+// dark footage (sarah: captions must contrast with the footage).
+const dark = (hex: string) => {
+  const n = parseInt(hex.slice(1), 16)
+  const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4 })
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] < 0.35
+}
+export function tinted(tpl: Tpl, c: string | null | undefined): Tpl {
+  if (!c) return tpl
+  const on = dark(c) ? '#ffffff' : '#141414'
+  if (tpl.box) return { ...tpl, color: on, box: { ...tpl.box, fill: c, ink: on } }
+  if (tpl.marker) return { ...tpl, color: on, marker: { band: c, ink: on } }
+  const edge = dark(c) ? '#ffffff' : '#000000'
+  if (tpl.stroke) return { ...tpl, color: c, stroke: { ...tpl.stroke, color: edge } }
+  return dark(c) ? { ...tpl, color: c, stroke: { color: edge, w: 0.1 }, shadow: false } : { ...tpl, color: c }
+}
+const tplFor = (style: OverlayStyle): Tpl | null => style.template ? tinted(TEMPLATES[style.template], style.text_color) : null
 
 // The time at the head of a describing caption, "7:42 am · coffee run".
 const TIME_HEAD = /^(\d{1,2}[:.]\d{2}\s*(?:[ap]\.?m\.?)?)\s*[·•\-–—|]\s*(.+)$/i
@@ -294,7 +315,7 @@ export function wrap(measure: (s: string) => number, text: string, maxW: number,
 
 function linesFor(o: Overlay, style: OverlayStyle, u: number, chars: number): Line[] {
   if (o.kind === 'caption' && style.template) {
-    return templateLines(o, TEMPLATES[style.template], u, chars)
+    return templateLines(o, tplFor(style)!, u, chars)
   }
   const lines = baseLines(o, style, u, chars)
   const m = style.motion
@@ -311,7 +332,7 @@ function linesFor(o: Overlay, style: OverlayStyle, u: number, chars: number): Li
 function baseLines(o: Overlay, style: OverlayStyle, u: number, chars: number): Line[] {
   const s = SIZE[o.size]
   const text = chars < o.text.length ? o.text.slice(0, chars) : o.text
-  const ink = o.ink ?? style.color
+  const ink = (o.kind === 'caption' && style.text_color) || o.ink || style.color
   style = o.ink2 ? { ...style, accent: o.ink2 } : style
   switch (o.kind) {
     case 'title':

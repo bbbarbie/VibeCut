@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { SeqItem } from '../sequence'
 import { KIND_META } from '../overlayDraw'
 import type { CaptionEnter, CaptionTemplate, JoinInfo, LookInfo, Overlay, OverlayStyle, SoundStrip } from '../types'
@@ -65,7 +65,7 @@ export function Inspector(p: {
   onStrip: (patch: Patch, label: string) => void
   onStripDelete: () => void
   onCaptions: () => void
-  onCaptionStyle: (patch: { template?: CaptionTemplate | null; enter?: CaptionEnter | null }, label: string) => void
+  onCaptionStyle: (patch: { template?: CaptionTemplate | null; enter?: CaptionEnter | null; text_color?: string | null }, label: string) => void
   onJoin: (op: { kind: string; dur?: number; all?: boolean }, label: string) => void
   onLook: (id: string, name: string) => void
 }) {
@@ -141,6 +141,10 @@ export function Inspector(p: {
           </>}
           {p.captionsOn ? <>
             <Section title={p.caption ? 'Style of every caption' : 'Style'}><CaptionStyles style={p.style} thumb={p.captionThumb} onPick={p.onCaptionStyle} /></Section>
+            <Section title={p.caption ? 'Colour of every caption' : 'Colour'}>
+              <CaptionColours value={p.style.text_color ?? null}
+                              onPick={(c) => p.onCaptionStyle({ text_color: c }, c ? 'You changed the colour of the captions' : 'The captions are back to their automatic colour')} />
+            </Section>
             <Section title={p.caption ? 'Animation of every caption' : 'Animation'}><CaptionAnimations style={p.style} thumb={p.captionThumb} sample={p.captionSample} onPick={p.onCaptionStyle} /></Section>
             {!p.caption && <Hint>One style for every caption. Click a caption on the picture or the timeline to change its words.</Hint>}
           </> : <Hint>Turn captions on to put the time and place of each moment on the video.</Hint>}
@@ -226,6 +230,46 @@ function CaptionWords({ o, onEdit, onDelete, onWatch, onDone }: {
         <Chip onClick={onDone}>Done</Chip>
       </div>
     </Section>
+  )
+}
+
+// The captions' colour. Automatic reads the footage behind each caption and
+// picks what stands out; a picked colour is kept, with an edge or glow so it
+// still reads. One undoable turn per pick.
+const COLOURS: [string, string][] = [['#ffffff', 'White'], ['#fff3d6', 'Cream'], ['#ffd84d', 'Yellow'], ['#ff9eb5', 'Pink'],
+  ['#7fd0ff', 'Sky blue'], ['#8fe3b0', 'Mint'], ['#ff7a59', 'Coral'], ['#141414', 'Black']]
+
+function CaptionColours({ value, onPick }: { value: string | null; onPick: (c: string | null) => void }) {
+  const [own, setOwn] = useState(value ?? '#ffffff')
+  // the picker's native change fires once, when it closes; React's onChange fires on every drag
+  const ref = useRef<HTMLInputElement>(null)
+  const pick = useRef(onPick)
+  pick.current = onPick
+  useEffect(() => {
+    const el = ref.current
+    const done = () => el && el.value !== value && pick.current(el.value)
+    el?.addEventListener('change', done)
+    return () => el?.removeEventListener('change', done)
+  }, [value])
+  const custom = !!value && !COLOURS.some(([c]) => c === value)
+  return (
+    <div className="flex flex-wrap items-center gap-2.5">
+      <button type="button" aria-pressed={!value} onClick={() => value && onPick(null)}
+              className={cx('rounded-lg border px-3 py-1.5 font-serif text-[15px]',
+                !value ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-panel text-zinc-100 hover:bg-raised')}>Automatic</button>
+      {COLOURS.map(([c, name]) => (
+        <button key={c} type="button" title={name} aria-label={name} aria-pressed={value === c} onClick={() => value !== c && onPick(c)}
+                className={cx('size-9 shrink-0 rounded-full border border-black/15', value === c && 'ring-2 ring-accent ring-offset-2 ring-offset-panel')}
+                style={{ background: c }} />
+      ))}
+      <label title="Any colour" className={cx('relative inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 font-serif text-[15px]',
+        custom ? 'border-accent text-accent' : 'border-line bg-panel text-zinc-100 hover:bg-raised')}>
+        <span className="size-5 rounded-full border border-black/15" style={{ background: custom ? value! : 'conic-gradient(#ff6b6b, #ffd84d, #8fe3b0, #7fd0ff, #c49bff, #ff6b6b)' }} />
+        Other…
+        <input ref={ref} type="color" value={custom ? value! : own} onChange={(e) => setOwn(e.target.value)}
+               className="absolute inset-0 cursor-pointer opacity-0" />
+      </label>
+    </div>
   )
 }
 
