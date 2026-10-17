@@ -1003,6 +1003,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                onCaptionAdd={() => runOverlay([{ op: 'add_overlay', kind: 'caption', ...newOverlayAt('caption') }], 'You added a caption')}
                onCaptionWatch={() => ovSel && watchOverlay(ovSel)}
                onCaptionDone={() => setSelOverlay(null)}
+               onCaptionPlace={(place, label) => ovSel && run([{ op: 'edit_overlay', overlay: ovSel.id, place }], label)}
                looks={ovData.look ? { id: ovData.look.id, all: ovData.look.all } : null}
                music={musicNode}
                video={session?.board ? (

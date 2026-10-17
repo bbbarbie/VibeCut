@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { SeqItem } from '../sequence'
 import { KIND_META } from '../overlayDraw'
-import type { CaptionEnter, CaptionTemplate, JoinInfo, LookInfo, Overlay, OverlayStyle, SoundStrip } from '../types'
+import type { CaptionEnter, CaptionTemplate, JoinInfo, LookInfo, Overlay, OverlayPlace, OverlayStyle, SoundStrip } from '../types'
 import { Button, cx } from '../ui'
 import { Icon, type IconName } from './icons'
 import { CaptionAnimations, CaptionStyles, Transitions } from './StyleBars'
@@ -51,6 +51,7 @@ export function Inspector(p: {
   onCaptionAdd: () => void
   onCaptionWatch: () => void
   onCaptionDone: () => void
+  onCaptionPlace: (place: OverlayPlace | null, label: string) => void
   looks: { id: string | null; all: LookInfo[] } | null
   music: ReactNode
   /** Length, tempo, frame, smoother cuts: the whole video's own controls */
@@ -131,7 +132,7 @@ export function Inspector(p: {
 
         {p.tab === 'captions' && <>
           {p.caption && <CaptionWords key={p.caption.id} o={p.caption} onEdit={p.onCaptionEdit} onDelete={p.onCaptionDelete}
-                                      onWatch={p.onCaptionWatch} onDone={p.onCaptionDone} />}
+                                      onWatch={p.onCaptionWatch} onDone={p.onCaptionDone} onPlace={p.onCaptionPlace} />}
           {!p.caption && <>
             <Line label="Captions">
               <Segmented options={[['off', 'Off'], ['on', 'On']]} value={p.captionsOn ? 'on' : 'off'}
@@ -204,11 +205,16 @@ export function Inspector(p: {
 
 // The clicked caption's own words. One undoable turn when the box is left
 // or Enter is pressed; Escape puts the words back.
-function CaptionWords({ o, onEdit, onDelete, onWatch, onDone }: {
+function CaptionWords({ o, onEdit, onDelete, onWatch, onDone, onPlace }: {
   o: Overlay
   onEdit: (patch: { text?: string; sub?: string }, label: string) => void
   onDelete: () => void; onWatch: () => void; onDone: () => void
+  onPlace: (place: OverlayPlace | null, label: string) => void
 }) {
+  // where it sits now: dragged by hand, else its usual spot (the drawing
+  // still pulls it inside the safe area)
+  const here: OverlayPlace = o.place ?? { x: 0.5, y: o.pos.startsWith('top') ? 0.2 : o.pos === 'center' ? 0.5 : 0.8, scale: 1 }
+  const row = here.y < 0.35 ? 'top' : here.y > 0.65 ? 'bottom' : 'middle'
   const name = KIND_META[o.kind].label
   // a described moment's place name sits above its line; other kinds have a second line of their own
   const subLabel = o.kind === 'caption' ? (o.sub ? 'Place above it' : null)
@@ -229,6 +235,15 @@ function CaptionWords({ o, onEdit, onDelete, onWatch, onDone }: {
         <Chip danger onClick={onDelete}><Icon name="trash" size={17} /> Delete</Chip>
         <Chip onClick={onDone}>Done</Chip>
       </div>
+      <Line label="Place">
+        <Segmented options={[['top', 'Top'], ['middle', 'Middle'], ['bottom', 'Bottom']]} value={row}
+                   onPick={(v) => v !== row && onPlace({ x: 0.5, y: v === 'top' ? 0.2 : v === 'middle' ? 0.5 : 0.8, scale: here.scale },
+                     `You moved the ${name.toLowerCase()} to the ${v}`)} />
+      </Line>
+      <Slider label="Size" value={Math.round(here.scale * 100)} min={40} max={300} step={10} unit="%"
+              onCommit={(v) => onPlace({ ...here, scale: v / 100 }, `You made the ${name.toLowerCase()} ${v > here.scale * 100 ? 'bigger' : 'smaller'}`)} />
+      <Hint>Or drag it on the picture to put it anywhere, and drag a corner to size it.</Hint>
+      {o.place && <Chip onClick={() => onPlace(null, `You put the ${name.toLowerCase()} back in its usual place`)}>Put it back in its usual place</Chip>}
     </Section>
   )
 }

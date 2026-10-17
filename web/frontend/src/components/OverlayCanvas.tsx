@@ -64,7 +64,12 @@ export function OverlayCanvas({ view, width, height, edit }: { view: OverlayView
     return () => { alive = false; off(); cancelAnimationFrame(raf) }
   }, [width, height, shown, edit?.selected]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { setLive(null) }, [view])
+  // A fresh edit from the server (the music being picked polls the session
+  // every 1.5 s) must not snap a caption back from under the pointer, nor
+  // lose the drop: only a finished drag lets the server's place take over.
+  const dragging = useRef(false)
+  const lastPlace = useRef<OverlayPlace | null>(null)
+  useEffect(() => { if (!dragging.current) setLive(null) }, [view])
 
   const placeOf = (id: string): OverlayPlace => {
     const o = view.items.find((x) => x.id === id)
@@ -98,6 +103,8 @@ export function OverlayCanvas({ view, width, height, edit }: { view: OverlayView
     const start = placeOf(b.id)
     const cx = start.x * width, cy = start.y * height
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    dragging.current = true
+    lastPlace.current = null
     setDrag({ id: b.id, mode: scaling ? 'scale' : 'move', x0: p.x, y0: p.y, start, d0: Math.max(8, Math.hypot(p.x - cx, p.y - cy)), moved: false })
   }
   const move = (e: React.PointerEvent) => {
@@ -126,10 +133,12 @@ export function OverlayCanvas({ view, width, height, edit }: { view: OverlayView
       setGuides(null)
     }
     if (!drag.moved && Math.hypot(p.x - drag.x0, p.y - drag.y0) > 3) setDrag({ ...drag, moved: true })
+    lastPlace.current = place
     setLive({ id: drag.id, place })
   }
   const up = () => {
-    if (drag?.moved && live) edit.onPlace(drag.id, live.place)
+    dragging.current = false
+    if (drag?.moved && lastPlace.current) edit.onPlace(drag.id, lastPlace.current)
     setDrag(null)
     setGuides(null)
     // keep showing the dropped place until the edit comes back
@@ -159,7 +168,7 @@ export function OverlayCanvas({ view, width, height, edit }: { view: OverlayView
         )}
         {selBox && sel && !drag && (
           <div className="absolute flex gap-1 text-[10px]"
-               style={{ left: Math.min(Math.max(4, selBox.x), width - 230), top: selBox.y > 34 ? selBox.y - 30 : selBox.y + selBox.h + 8 }}
+               style={{ left: Math.max(4, Math.min(selBox.x, width - 230)), top: selBox.y > 34 ? selBox.y - 30 : selBox.y + selBox.h + 8 }}
                onPointerDown={(e) => e.stopPropagation()}>
             {sel.kind === 'caption' && (
               <button type="button" onClick={(e) => { e.stopPropagation(); edit.onPlaceAll(placeOf(sel.id)) }}
