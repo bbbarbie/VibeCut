@@ -157,8 +157,21 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   Everything else is a guess. The reference's frames and audio never reach an export.
 
 - **Remix** (`web/backend/remix.py`, `select.py`; `cutgrammar/openverse.py`;
-  CLI only so far: `python -m web.backend.remix --ref <link|file>… --footage
-  <folder>`). Reference reels + the shoot → one finished short, server-side,
+  CLI: `python -m web.backend.remix --ref <link|file>… --footage <folder>`;
+  since 2026-10-11 (plan step 4) also the **front door**: the home page's
+  start box has "Make it like a reel you love" under the picked clips —
+  links ride with the clips (`drop.handOffRefs`), the project starts a
+  Remix the moment the clips are read (`Remix.tsx` `autoStart`), and when
+  it lands `api_remix_start.on_done` passes the gate in the creator's name
+  and writes a brief from the fingerprint (frame, length), so the stage
+  reads story and the two-pick popup stays shut. **Judged picks**
+  (`select.judge`, `llm.rank_shots`): with a key, Claude sees one index
+  frame per candidate — the rules' picks plus `RUNNERS_UP` per session —
+  and names which to keep; the rules still set the pool, quota and
+  windows; no key / error → the rules' picks, and the plan's notes say
+  when it was judged. `VIBECUT_REMIX_JUDGE=0` turns it off. Not tried
+  against the live model. `select.time_windows` no longer indexes an
+  empty target list (tiny shoots). `tests/test_frontdoor.py`.) Reference reels + the shoot → one finished short, server-side,
   no browser. The references' styles (Borrow a feeling) are merged into a
   fingerprint (median shot length + arc, hook hold, tempo range, energy arc,
   length); `select.py` picks that many moments — distinctive labels (IDF
@@ -175,6 +188,24 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   judged on one real shoot (42 clips, 3 references). Every weight is a
   guess; the selector has no model behind it (no key on this Mac).
 
+- **The one pipeline** (`web/backend/make.py`, `/api/make`, 2026-10-17;
+  after rendering the app headless on sarah's shoot: "Make my video" gave a
+  13-shot chronological timeline with clock captions and no music, while the
+  engine that makes the video she asked for lived under "Build a short from
+  reference reels"). Make = the brief from the two picks → gate passed in
+  the creator's name → a job: fingerprint (references', else `PRIOR` by
+  frame and pace: a short 0.7–1.2 s a shot, hook 1.5 s, ≤ 60 s; a vlog
+  1.8–3.2 s, hook 2.5 s) → `remix.plan_shots` (worth-ranked, judged with a
+  key) → music from `bed.candidates` (own folder / Openverse / pack,
+  prefetched at import now) with shots quantised to its beat and the drop
+  at the end of the hook → one turn: `choose_option` (option `made`),
+  `set_music` at the frame's levels (`LEVELS`: a short rides on the music,
+  a vlog keeps its sound and ducks under talking), `set_look`, a title and
+  a line per stop (`remix.captions`). Lands in Frames and plays. The
+  three stories still exist under Other stories (the direction turn is
+  added first). On her 42 clips: 27 moments, 25 s, hook first, cuts on the
+  beat, music under it — see `design/eval/` screenshots 23–25. Every number
+  in `PRIOR` / `LEVELS` is a guess. `tests/test_make.py`.
 - **Two picks up front** (plan of 2026-10-10, step 2; `Setup.tsx`,
   `/api/brief/setup`, `/api/brief/auto {format, look}`, `/api/format`):
   after Footage's "Looks good" one popup asks the **frame** (short ·
@@ -305,6 +336,14 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   - **Voiceover mode** (`web/backend/voiceover.py`): opt-in fourth proposal
     from the creator's SRT or script. See the amended non-goal below.
 
+- **Launch log** (`web/backend/launchlog.py`, `/api/exports/{n}/verdict`,
+  the question in `Export.tsx`; launch checklist, 2026-10-11): the one
+  workflow is drop → two picks → watch → export; completion = an export
+  without a chat edit (`default_path` on the record), success = "would you
+  post this?" answered yes. Bed outcomes and verdicts are `Project.events`;
+  the CLI sums completions, failures, costs and feedback from the records.
+  `tests/test_launchlog.py`. Eval of 2026-10-11 (20 real cases from the
+  index, 20 pass) and the launch plan: `design/eval/`.
 - **The bed** (`web/backend/bed.py`, `/api/bed`, the Music switch in
   Frames; plan of 2026-10-10, step 1): choosing a story puts music under
   it and moves the cuts onto its beat, one undoable turn that lands when
@@ -492,6 +531,15 @@ will be hard to tell that it has.
 Calibration means: run the analyser over ~20 videos known to be well cut
 and ~20 that aren't, and derive each threshold from that distribution.
 
+The harness for that exists since 2026-10-11: `python calibrate.py --good …
+--bad …` (files, folders, path lists, or links through yt-dlp;
+`cutgrammar/calibrate.py`). It measures the first 90 s of each with
+`grammar.analyze`, lays the two distributions side by side per finding,
+proposes the cut point with the best balanced accuracy, shows the current
+guess beside it, and writes `design/research/calibration/<date>.{json,md}`.
+It changes nothing: a person moves the constant in `grammar.py` and cites
+the record. Under 8 videos a side it says *thin*. `tests/test_calibrate.py`.
+
 ## Architecture
 
 Pixels are touched exactly once. `media.load()` decodes to 48×27 RGB at
@@ -565,7 +613,11 @@ Every new rule ships with a discrimination test or it does not ship.
 
 ## Known limits (upgrade path, in order)
 
-1. Thresholds are guesses — calibrate first.
+1. Thresholds are guesses — calibrate first. First record 2026-10-11
+   (`design/research/calibration/2026-10-11.md`, 18 vs 18): rhythm_cv,
+   cut_on_motion and jl_cuts moved; the bad side was one shoot's exports,
+   so it counts as "better than a guess", not done. Everything else
+   (joins, trim, reject, looks, bed, tempo) is still a prior.
 2. Motion is frame-differencing, not optical flow: no direction, so the
    180° rule can't be checked.
 3. No face detection: shot size and subtitle-over-face unmeasured.

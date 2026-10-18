@@ -520,3 +520,55 @@ def best_moment(options: list[dict]) -> tuple[int, str]:
     if not 0 <= best < len(options):
         raise LLMError(f"choice {best + 1} is not one of the options")
     return best, " ".join(str(d.get("why", "")).split())[:80]
+
+
+# --------------------------------------------------------------------------
+# the remix's shot picker, judged (plan step 4): which of these moments
+# would a short like the references keep? One index frame per candidate.
+# --------------------------------------------------------------------------
+
+RANK_SYSTEM = (
+    "You are choosing shots for a short-form vlog cut in the style of reference reels. "
+    "You see one frame per candidate moment from one filming session, with the rules' score. "
+    "Keep the moments that are distinctive, well made (sharp, framed, lit), varied, and tell "
+    "the session as a viewer would want it: a place, a person, a thing happening. Prefer faces "
+    "and action over empty views; never keep two near-identical frames. Answer with the "
+    "numbers of exactly the moments to keep, in the order they should play (filming order unless "
+    "a swap clearly helps), and ten words on why."
+)
+RANK_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["keep", "why"],
+               "properties": {"keep": {"type": "array", "items": {"type": "integer"}}, "why": {"type": "string"}}}
+
+
+def rank_shots(options: list[dict], keep: int) -> tuple[list[int], str]:
+    """[{label, frame: jpeg bytes}] -> (0-based indices to keep, in play order; why)."""
+    import anthropic
+    import base64
+
+    content: list[dict] = []
+    for i, o in enumerate(options):
+        content.append({"type": "text", "text": f"Moment {i + 1}: {o['label']}"})
+        content.append({"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
+                                                    "data": base64.standard_b64encode(o["frame"]).decode()}})
+    content.append({"type": "text", "text": f"Keep exactly {keep} of these {len(options)} moments."})
+    try:
+        resp = client().messages.create(
+            model=MOMENT_MODEL, max_tokens=1500, system=RANK_SYSTEM,
+            messages=[{"role": "user", "content": content}],
+            output_config={"effort": "low", "format": {"type": "json_schema", "schema": RANK_SCHEMA}},
+        )
+    except anthropic.APIError as e:
+        raise LLMError(str(e)) from e
+    text = next((b.text for b in resp.content if b.type == "text"), "")
+    try:
+        d = json.loads(text)
+        idx = [int(k) - 1 for k in d["keep"]]
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+        raise LLMError("unreadable choice") from e
+    seen: list[int] = []
+    for i in idx:
+        if 0 <= i < len(options) and i not in seen:
+            seen.append(i)
+    if len(seen) != keep:
+        raise LLMError(f"kept {len(seen)} moments, asked for {keep}")
+    return seen, " ".join(str(d.get("why", "")).split())[:80]
