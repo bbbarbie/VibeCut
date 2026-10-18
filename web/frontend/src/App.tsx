@@ -1184,7 +1184,8 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
 
   return (
     <>
-    {setup && <Setup data={setup.data} busy={setup.busy} progress={setup.progress} onDone={makeIt} onCancel={() => { if (!setup.busy) setSetup(null) }} />}
+    {setup && <Setup data={setup.data} busy={setup.busy} progress={setup.progress} onDone={makeIt} onCancel={() => { if (!setup.busy) setSetup(null) }}
+                     onReload={async () => { const d = await api.setup(); setSetup((x) => x && { ...x, data: d }) }} />}
     {asking && <StyleQuestions questions={asking.questions} tailored={asking.tailored}
                                onDone={answered} onCancel={() => setAsking(null)} />}
     <div className="grid h-full grid-rows-[56px_1fr] bg-ink">

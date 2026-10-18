@@ -242,8 +242,8 @@ def _capabilities() -> dict:
 # they succeed the project is written to disk. Uploads, the finished-video
 # tool and the reference library stand apart: they are not project state.
 _NO_PROJECT_OK = ("/api/projects", "/api/upload", "/api/locate", "/api/polish", "/api/music/folder",
-                  "/api/references", "/api/profile")
-_NOT_SAVED = ("/api/projects", "/api/upload", "/api/locate", "/api/polish", "/api/music/folder", "/api/profile")
+                  "/api/references", "/api/profile", "/api/vibes")
+_NOT_SAVED = ("/api/projects", "/api/upload", "/api/locate", "/api/polish", "/api/music/folder", "/api/profile", "/api/vibes")
 
 
 @app.middleware("http")
@@ -1119,6 +1119,31 @@ def api_make(req: BriefAutoReq | None = None) -> dict:
 def api_vibes() -> dict:
     """The library's vibes and the creator's own learnt reels, for "Cut it like"."""
     return {"vibes": vibes.choices()}
+
+
+class VibeReq(BaseModel):
+    niche: str
+    name: str | None = None
+    links: list[str]
+
+
+@app.post("/api/vibes")
+def api_vibe_start(req: VibeReq) -> dict:
+    """Learn a vibe from reels (links or files on this Mac), as a job."""
+    srcs = [x.strip() for x in req.links if x.strip()]
+    if len(srcs) < vibes.MIN_REELS:
+        raise HTTPException(400, f"A vibe needs at least {vibes.MIN_REELS} reels.")
+    if not req.niche.strip():
+        raise HTTPException(400, "Say what these reels have in common.")
+    return vibes.start(req.niche.strip(), (req.name or "").strip() or None, srcs).public()
+
+
+@app.get("/api/vibes/jobs/{jid}")
+def api_vibe_status(jid: str) -> dict:
+    job = vibes.JOBS.get(jid)
+    if not job:
+        raise HTTPException(404, "no such job")
+    return job.public()
 
 
 @app.get("/api/make/{jid}")

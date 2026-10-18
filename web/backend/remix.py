@@ -114,7 +114,9 @@ def fingerprint(styles: list[dict]) -> dict:
                 "samples": [x for w in ws for x in (w.get("samples") or [])][:12],
                 "first_s": round(float(np.median([w["first_s"] for w in ws if w.get("first_s") is not None])), 2) if any(w.get("first_s") is not None for w in ws) else None}
     ends = [s["ending"]["last_s"] for s in styles if (s.get("ending") or {}).get("last_s")]
+    brights = [float(s["music"]["bright"]) for s in styles if (s.get("music") or {}).get("bright")]
     return {
+        "bright": round(float(np.median(brights)), 1) if brights else None,
         "text": text, "last_s": round(float(np.median(ends)), 2) if ends else None,
         "median_s": round(med, 3), "curve": [round(float(c), 3) for c in curve],
         "spread": (round(p10 / med, 2), round(p90 / med, 2)),
@@ -287,7 +289,15 @@ def pick_from(pool: list[mu.Track], fp: dict, need_s: float, hook_s: float) -> d
         tempo = float(np.clip(1 - abs(np.log2(t.bpm / mid)) / 0.5, 0, 1))
         shape = max(mu.shape_score(t.energy[s:s + int(need_s)], want)
                     for s in range(0, max(1, int(t.duration - need_s)), 4))
-        scored.append((0.4 * tempo + 0.25 * shape + 0.25 * vibe(t) + 0.1 * continuity(t.path), t))
+        # timbre: how far the track's weight sits from the references' (an
+        # octave off is a different kind of music); only when both are known
+        tb, fb = t.meta.get("bright"), fp.get("bright")
+        if tb and fb:
+            timbre = float(np.clip(1 - abs(np.log2(float(tb) / float(fb))), 0, 1))
+            score = 0.35 * tempo + 0.2 * shape + 0.2 * vibe(t) + 0.1 * continuity(t.path) + 0.15 * timbre
+        else:
+            score = 0.4 * tempo + 0.25 * shape + 0.25 * vibe(t) + 0.1 * continuity(t.path)
+        scored.append((score, t))
     if not scored:
         return None
     scored.sort(key=lambda x: -x[0])

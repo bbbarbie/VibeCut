@@ -447,7 +447,10 @@ def music_feel(media: Media) -> dict | None:
                  + (" (upbeat)" if bpm >= 115 else " (relaxed)" if bpm < 90 else ""))
     else:
         w.append("no steady beat")
-    return {"bpm": bpm, "energy": [round(float(x), 3) for x in curve], "arc": arc, "words": w}
+    bright = music.brightness(media)
+    if bright:
+        w.append("a bright, airy sound" if bright > 2500 else "a warm, low sound" if bright < 1200 else "a full, even sound")
+    return {"bpm": bpm, "energy": [round(float(x), 3) for x in curve], "arc": arc, "bright": bright, "words": w}
 
 
 # --------------------------------------------------------------------------

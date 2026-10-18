@@ -227,6 +227,17 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   describe the cut (`make.pace_of`), so the Frames chips tell the truth.
   Cuts sit on the half-beat grid (filler) with the hook and heroes on whole
   beats — `remix.quantise`'s rule, now pinned in `test_make`. All priors.
+- **Music that matches a reel's feel** (2026-10-18): `music.brightness`
+  (median spectral centroid over the middle minute, Hz) joins every track's
+  features (`FEATURE_VERSION` 3: cached folders re-analyse once) and the
+  reel's `music.bright` (`style.music_feel`, "a bright, airy sound" /
+  "a warm, low sound"); `remix.fingerprint` carries the median as
+  `bright`; `remix.pick_from` scores timbre (an octave off = 0) at 0.15
+  when both are known, else the old weights. Priors. `tests/test_feel.py`.
+  **Learn a vibe in the app**: `POST /api/vibes {niche, name, links}` runs
+  `vibes.learn_set` as a job (`vibes.start`, `/api/vibes/jobs/{id}`); the
+  Setup dialog has "+ Learn a vibe from reels you love…" under Cut it
+  like, polls it, reloads the choices and selects the new vibe.
 - **What you undo and refuse** (layer 3, 2026-10-18; `Preferences.
   suggestions` / `take`, `/api/preferences/suggest`, "From what you did"
   in `Chat.tsx`): an undone turn of the machine's own (`MACHINE`: the bed,

@@ -76,7 +76,7 @@ def fingerprint(fmt: str, pace: str, seconds: float, styles: list[dict] | None =
         dur = min(dur, p["max_s"])
     med = p["median"][pace]
     return {"median_s": med, "curve": list(CURVE), "spread": SPREAD, "hook_s": p["hook_s"],
-            "bpm": bed.PACE_BPM[pace], "arc": "builds", "energy": None,
+            "bpm": bed.PACE_BPM[pace], "arc": "builds", "energy": None, "bright": None,
             "duration": round(max(15.0, dur), 1), "vertical": fmt != "wide", "refs": 0, "refs_used": False}
 
 

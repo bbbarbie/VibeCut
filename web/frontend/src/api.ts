@@ -8,6 +8,8 @@ export type MomentAnswer = { reply: string; choices: string[]; ops: Record<strin
 export type ProjectList = { projects: ProjectMeta[]; open: string | null; capabilities: Capabilities }
 export type Opened = { project: ProjectMeta; session: Session }
 
+export type VibeJob = { id: string; stage: 'learning' | 'done' | 'error'; lines: string[]; error: string | null; done: number; total: number; vibe: string | null; elapsed: number }
+
 export type MakeJob = { id: string; stage: string; line: string; done: number; total: number; error: string | null; elapsed: number }
 
 export type RemixJob = {
@@ -79,6 +81,8 @@ export const api = {
   chat: (message: string, style?: StyleAnswers) => j<Session>(post('/api/chat', { message, style: style ?? null })),
   autoBrief: (picks?: { format: string; look: string }) => j<Session>(post('/api/brief/auto', picks ?? {})),
   setup: () => j<SetupData>(fetch('/api/brief/setup')),
+  vibeStart: (req: { niche: string; name?: string; links: string[] }) => j<VibeJob>(post('/api/vibes', req)),
+  vibeStatus: (id: string) => j<VibeJob>(fetch(`/api/vibes/jobs/${id}`)),
   profileGet: () => j<{ profile: Record<string, unknown> | null; at: number | null; cloud: { on: boolean } }>(fetch('/api/profile')),
   profilePut: (profile: Record<string, unknown>) => j<{ profile: Record<string, unknown>; at: number }>(post('/api/profile', { profile })),
   make: (picks: { format: string; look: string; music?: boolean; vibe?: string | null }) => j<MakeJob>(post('/api/make', picks)),
