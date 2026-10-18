@@ -227,6 +227,14 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   describe the cut (`make.pace_of`), so the Frames chips tell the truth.
   Cuts sit on the half-beat grid (filler) with the hook and heroes on whole
   beats — `remix.quantise`'s rule, now pinned in `test_make`. All priors.
+- **Watch, then Fine-tune** (2026-10-18, `App.tsx` `watching`): a made or
+  remixed video opens as the video, full-size, with four chips under it —
+  music (the bed switch), length (`LengthButton`), look (cycles the looks
+  as one `set_look` turn), words (the captions switch) — plus Download
+  (the export dialog) and one Fine-tune link that reveals the editor
+  (rail, inspector, timeline). A hand-cut video opens in the editor as
+  before. Same player wiring (`player(true)`), so nothing is duplicated.
+  `design/eval/2026-10-18-watch.png`.
 - **Music that matches a reel's feel** (2026-10-18): `music.brightness`
   (median spectral centroid over the middle minute, Hz) joins every track's
   features (`FEATURE_VERSION` 3: cached folders re-analyse once) and the

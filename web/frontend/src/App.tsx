@@ -324,6 +324,13 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const autoBrief = useRef(false)
   const [setup, setSetup] = useState<{ data: SetupData | null; busy: boolean; progress?: MakeJob | null } | null>(null)
   const playOnLand = useRef(false)   // the first thing after Make my video is the video, playing
+  // Watch: the video full-size with four chips and Download; the editor
+  // (rail, inspector, timeline) waits behind one Fine-tune link. A made
+  // video opens here; a hand-cut one opens in the editor.
+  const [watching, setWatching] = useState<boolean | null>(null)
+  useEffect(() => {
+    if (watching === null && session?.board) setWatching(session.board.option === 'made' || session.board.option === 'remix')
+  }, [session?.board, watching])
   const startQuestions = () => {
     if (asking || autoBrief.current || setup || frontDoor.current || remixing) return
     setSetup({ data: null, busy: false })
@@ -347,6 +354,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       playOnLand.current = true
       setSession(await api.session())
       setSetup(null)
+      setWatching(true)
       setLevel('frames')
     } catch (e) {
       note((e as Error).message)
@@ -884,7 +892,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const openTalk = () => { transport.stop(); stopQueue(); setMenu(null); setLevel('story'); setTalkOpen(true) }
   const openExport = () => { transport.stop(); videoRef.current?.pause(); stopQueue(); setMenu(null); setExporting(true) }
   const openRemix = () => { transport.stop(); videoRef.current?.pause(); stopQueue(); setMenu(null); setReferencing(false); setRemixing(true) }
-  const remixDone = async () => { await refresh(); setPeek(null); setLevel('frames') }
+  const remixDone = async () => { await refresh(); setPeek(null); setWatching(true); setLevel('frames') }
   const startOver = async () => {
     setRestart(false)
     try { await api.clear(); await refresh(); setLocal([hello]); setPeek(null); setLevel('story') }
@@ -1252,7 +1260,42 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
           <div className="absolute inset-y-0 left-0 z-30 w-[min(360px,90vw)] shadow-2xl shadow-black/60" onKeyDown={(e) => { if (e.key === 'Escape') setChatOpen(false) }}>{chat}</div>
         )) : chat)}
 
-        {framesView ? (
+        {framesView && watching ? (
+          <main className="relative flex min-h-0 min-w-0 flex-col items-center px-3 pb-3">
+            <div ref={stageRef} className="mt-3 flex min-h-0 w-full max-w-[1100px] flex-1 flex-col overflow-hidden rounded-2xl bg-[#121212]">
+              {player(true)}
+            </div>
+            <div className="mt-3 flex w-full max-w-[1100px] flex-wrap items-center justify-center gap-2">
+              <button type="button" disabled={session?.bed?.stage === 'looking'}
+                      title={session?.music ? 'Take the music out' : 'Find a track that fits and put the cuts on its beat'}
+                      onClick={async () => { try { const r = await api.bed(!session?.music); setSession(r); if (session?.music) offerUndo(r) } catch (e) { note((e as Error).message) } }}
+                      className="max-w-[18rem] truncate rounded-full border border-line bg-panel px-3 py-1.5 text-[13px] text-zinc-200 hover:bg-raised disabled:opacity-60">
+                ♪ {session?.bed?.stage === 'looking' ? 'Finding music…' : session?.music ? session.music.title : 'Music off'}
+              </button>
+              <LengthButton total={tl.total} onDone={(r) => { setSession(r); offerUndo(r); note(r.length_note) }} />
+              <button type="button" title="The look: the words, the colour, how parts join. Click for the next one."
+                      onClick={() => {
+                        const lk = session?.overlays?.look
+                        if (!lk?.all?.length) return
+                        const i = lk.all.findIndex((l) => l.id === lk.id)
+                        const next = lk.all[(i + 1) % lk.all.length]
+                        run([{ op: 'set_look', look: next.id }], `You chose the ${next.name} look`)
+                      }}
+                      className="rounded-full border border-line bg-panel px-3 py-1.5 text-[13px] text-zinc-200 hover:bg-raised">
+                ◐ {session?.overlays?.look?.all?.find((l) => l.id === session?.overlays?.look?.id)?.name ?? 'No look'}
+              </button>
+              <button type="button" title="Words on the video: a title and a line per stop"
+                      onClick={async () => { try { const r = await api.captions(!ovData.items.length); setSession(r); offerUndo(r) } catch (e) { note((e as Error).message) } }}
+                      className="rounded-full border border-line bg-panel px-3 py-1.5 text-[13px] text-zinc-200 hover:bg-raised">
+                ¶ Words {ovData.items.length ? 'on' : 'off'}
+              </button>
+              <span className="mx-1 h-6 w-px bg-line" aria-hidden />
+              <Button variant="primary" size="md" onClick={() => { transport.stop(); setExporting(true) }}>Download</Button>
+              <Button variant="ghost" size="md" onClick={() => setWatching(false)} title="The editor: every shot, caption, join and sound">Fine-tune</Button>
+            </div>
+            {undoable && <p className="mt-2 text-[12px] text-muted">{undoable.text} · <button type="button" className="underline" onClick={() => toggle(undoable.turn)}>Undo</button></p>}
+          </main>
+        ) : framesView ? (
           <main className="relative flex min-h-0 min-w-0 flex-col px-3 pb-3">
             <div className="relative flex min-h-0 flex-1 pt-3">
               <nav aria-label="Panels" className="flex w-[80px] shrink-0 flex-col gap-1 pr-2">
