@@ -188,6 +188,20 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   judged on one real shoot (42 clips, 3 references). Every weight is a
   guess; the selector has no model behind it (no key on this Mac).
 
+- **Motion on the beat and a deliberate ending** (`make.py`, 2026-10-18):
+  `punch` is a shot fix like speed or mirror (`board.SHOT_FX`, ±`PUNCH_MAX`
+  0.25; `timeline.layout` carries it, `export._shot` renders it as zoompan,
+  `transport.dress` plays it as a CSS `scale` animation over the shot —
+  preview and export agree). `make.punches`: the hook pushes in
+  (`PUSH_HOOK` 0.08), the first body shot after the drop hits (`PUSH_HIT`
+  0.14), every bar's first shot pushes ±`PUSH_BAR` 0.05 alternating; no
+  beat known → hook and hit only. `make.end_strong`: the last stop ends on
+  its strongest moment (only that stop reordered); `hold_ending`: ≥
+  `END_BEATS` 2 beats. The hook is lifted out of its stop, not copied (a
+  Remix played it twice). After Make the brief's pace / seconds / tempo
+  describe the cut (`make.pace_of`), so the Frames chips tell the truth.
+  Cuts sit on the half-beat grid (filler) with the hook and heroes on whole
+  beats — `remix.quantise`'s rule, now pinned in `test_make`. All priors.
 - **Defaults that follow the creator** (`web/backend/defaults.py`, layer 1
   of preserving preference, 2026-10-18): the frame, look and Music switch
   from Make, the frame chip, a look picked under Captions and a caption

@@ -61,14 +61,39 @@ def main() -> int:
     check("already strongest last: nothing moves", not make.end_strong(plan))
     check("the cut's own tempo word", make.pace_of({"median_s": 0.7}) == "fast" and make.pace_of({"median_s": 2.5}) == "balanced" and make.pace_of({"median_s": 3.5}) == "calm")
 
+    print("hits on the beat")
+    body = [pick(f"s{i}", 0.5, 0.5) for i in range(12)]       # 0.5 s shots on a 0.5 s beat: a bar every 4
+    plan = sel.Plan(hook=[pick("h", 0.9, 1.0)], sessions=[body], titles=["Stop"])
+    ops = make.punches(plan, {"period": 0.5})
+    by = {o["shot"]: o["punch"] for o in ops}
+    check("the hook pushes in, the first body shot hits harder", by["h"] == make.PUSH_HOOK and by["s0"] == make.PUSH_HIT, json.dumps(by))
+    check("every bar's first shot pushes, alternating", by.get("s4") == make.PUSH_BAR and by.get("s8") == -make.PUSH_BAR and "s1" not in by and "s5" not in by, json.dumps(by))
+    check("no beat known: only the hook and the hit", {o["shot"] for o in make.punches(plan, None)} == {"h", "s0"})
+    from web.backend import board as bd
+    e = {"id": "a:0", "start": 0.0, "end": 2.0}
+    b = {"beats": [{"id": "b1", "title": "", "shots": [e]}]}
+    bd._shot_fx(b, {"shot": "a:0", "punch": 0.9})
+    check("a push is clamped", e["punch"] == bd.PUNCH_MAX)
+    bd._shot_fx(b, {"shot": "a:0", "punch": 0})
+    check("a push of nothing leaves a plain shot", "punch" not in e)
+
     print("through the API")
     from fastapi.testclient import TestClient
     from tests.test_projects import TMP as PTMP, clip, wait
     from web.backend import app as backend, bed
-    cols = ["0xff8a1e", "0x1ec8ff", "0xd0ff1e", "0xff1e8a", "0x1effa0", "0xffe01e", "0x8a1eff", "0xff4d1e"]
-    bgs = ["0x2a3440", "0x203028", "0x302028", "0x282030", "0x203030", "0x303020", "0x202838", "0x382820"]
-    xs = ["'325+40*sin(t)'", "'120+30*t'", "'200+20*sin(2*t)'", "'60+50*t'", "'400-30*t'", "'250+60*sin(t/2)'", "'90+25*t'", "'300-40*sin(t)'"]
-    clips = [clip(PTMP / f"mk-{i}.mp4", 7 + i % 3, cols[i], bgs[i], xs[i], f"2026-09-20T{8 + (16 * i) // 60:02d}:{(16 * i) % 60:02d}:00") for i in range(8)]
+    # eight clips that look like eight different things (the selector drops
+    # look-alikes, and Vision's embeddings of near-identical frames are near-identical)
+    import subprocess
+    SRCS = ["testsrc2=size=640x360:rate=30", "mandelbrot=size=640x360:rate=30", "life=size=640x360:rate=30:mold=10:ratio=0.1",
+            "smptebars=size=640x360:rate=30", "rgbtestsrc=size=640x360:rate=30", "gradients=size=640x360:rate=30:speed=0.05",
+            "cellauto=size=640x360:rate=30:rule=110", "testsrc=size=640x360:rate=30"]
+
+    def clip2(path, d, src, when):
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", src, "-f", "lavfi", "-i", f"anoisesrc=d={d}:c=pink:r=16000:a=0.02",
+                        "-t", str(d), "-metadata", f"creation_time={when}", "-c:v", "libx264", "-preset", "ultrafast", "-g", "15",
+                        "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(path)], check=True)
+        return str(path)
+    clips = [clip2(PTMP / f"mk-{i}.mp4", 7 + i % 3, SRCS[i], f"2026-09-20T{8 + (16 * i) // 60:02d}:{(16 * i) % 60:02d}:00") for i in range(8)]
     d = Path(tempfile.mkdtemp(prefix="vibecut-make-music-"))
     _track(str(d / "beat.wav"), 240.0, BPM, loud_from=24.0)
     pool = mu.LocalFolderSource(str(d)).list()
@@ -95,21 +120,32 @@ def main() -> int:
             b = s["board"]
             check("the board is the made video, opening on a hook", b and b["option"] == "made" and b["beats"][0]["title"] == "Hook",
                   str(b and [x["title"] for x in b["beats"]]))
+            ids = [e["id"] for bt in b["beats"] for e in bt["shots"]]
+            check("no shot plays twice (the hook is lifted out, not copied)", len(ids) == len(set(ids)), str(len(ids) - len(set(ids))))
             check("one turn, with a plain reply", s["turns"][-1]["text"] == backend.MAKE_TEXT and "Made your video" in s["turns"][-1]["reply"],
                   s["turns"][-1]["reply"][:120])
             check("music under it, starting at its drop", s["music"] and s["music"]["title"] == "beat" and s["timeline"]["grid"], json.dumps(s["music"]))
             grid = s["timeline"]["grid"]
             period = 60.0 / grid["bpm"]
             cuts = [it["seq_end"] for it in s["timeline"]["items"][:-1]]
-            on = sum(abs(((t - grid["phase"]) / period) - round((t - grid["phase"]) / period)) * period <= 0.05 for t in cuts)
-            check("every cut sits on the beat", cuts and on == len(cuts), f"{on} of {len(cuts)}")
+            # heroes and the hook end on whole beats; filler may end on the half beat
+            # (remix.quantise: the grid without the march of equal shots)
+            def on_grid(t, unit):
+                x = (t - grid["phase"]) / unit
+                return abs(x - round(x)) * unit <= 0.05
+            half = sum(on_grid(t, period / 2) for t in cuts)
+            check("every cut sits on the beat grid (whole or half beat)", cuts and half == len(cuts), f"{half} of {len(cuts)}")
+            check("the hook ends on a whole beat", on_grid(cuts[0], period), f"{cuts[0]:.3f} / {period:.3f}")
             check("it is a short", s["timeline"]["total"] <= 60.5 and s["timeline"]["frame"] == {"w": 1080, "h": 1920}, str(s["timeline"]["total"]))
             kinds = [o["kind"] for o in s["overlays"]["items"]]
             check("a title and a line per stop", "title" in kinds and "part" in kinds, str(kinds))
             check("the look is on", s["overlays"]["look"]["id"] == "hype")
             check("the chips describe the cut, not the guess", s["brief"]["style"]["pace"] == "fast" and abs(s["brief"]["style"]["seconds"] - s["timeline"]["total"]) < 1.0
                   and "a shot" in s["brief"]["tempo"], json.dumps({"pace": s["brief"]["style"]["pace"], "seconds": s["brief"]["style"]["seconds"], "tempo": s["brief"]["tempo"]}))
-            last_item = [it for it in s["timeline"]["items"] if it["kind"] == "shot"][-1]
+            shots_ = [it for it in s["timeline"]["items"] if it["kind"] == "shot"]
+            check("the push travels to the timeline (and so to the player and export)",
+                  shots_[0].get("punch") == make.PUSH_HOOK and shots_[1].get("punch") == make.PUSH_HIT, json.dumps([x.get("punch") for x in shots_[:6]]))
+            last_item = shots_[-1]
             check("the last shot holds at least two beats", last_item["seq_end"] - last_item["seq_start"] >= 2 * period - 0.05,
                   f"{last_item['seq_end'] - last_item['seq_start']:.2f} s vs {2 * period:.2f}")
             check("the project knows it was made", any(e.get("kind") == "make" for e in c.get("/api/project").json().get("events", [])) or True)

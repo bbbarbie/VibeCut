@@ -79,7 +79,14 @@ def fingerprint(fmt: str, pace: str, seconds: float, styles: list[dict] | None =
 
 
 def moments(clips: dict[str, dict], cut, fp: dict, judge=None) -> sel.Plan:
-    return remix.plan_shots(clips, fp, length=fp["duration"], cut=cut, judge=judge)
+    plan = remix.plan_shots(clips, fp, length=fp["duration"], cut=cut, judge=judge)
+    # The hook is lifted out of its stop, not copied: a Remix played the hook
+    # shot again in its place (sarah: never the same shot twice). A stop that
+    # was only its hook is not lost: it opens the video.
+    hooked = {p.shot.id for p in plan.hook}
+    for sess in plan.sessions:
+        sess[:] = [p for p in sess if p.shot.id not in hooked]
+    return plan
 
 
 END_BEATS = 2            # the last shot holds at least this many beats, so the end lands [prior]
@@ -153,6 +160,7 @@ def ops(plan: sel.Plan, fp: dict, mx: dict | None, fmt: str, look: str | None, a
         out.append(m)
     if look:
         out.append({"op": "set_look", "look": look})
+    out.extend(punches(plan, mx))
     title = (about or "").split(",")[0].strip()[:40] or None
     for c in remix.captions(plan, title, None):
         if c["kind"] == "title":
@@ -164,11 +172,51 @@ def ops(plan: sel.Plan, fp: dict, mx: dict | None, fmt: str, look: str | None, a
     return out
 
 
+# Motion on the beat [priors]: the hook pushes in, the first shot after the
+# drop hits (a harder push), every bar's first shot pushes a little,
+# alternating in and out so nothing sits still. The reels the creator
+# brought are built on this; before 2026-10-18 only text moved.
+PUSH_HOOK, PUSH_HIT, PUSH_BAR = 0.08, 0.14, 0.05
+BAR_BEATS = 4
+
+
+def punches(plan: sel.Plan, mx: dict | None) -> list[dict]:
+    """set_shot ops with a push per shot: the hook, the hit on the drop, the
+    bars. With no beat known, only the hook and the first body shot move."""
+    out: list[dict] = []
+    seen: set[str] = set()
+
+    def push(pick: sel.Pick, z: float) -> None:
+        k = pick.shot.id
+        if k in seen:
+            return
+        seen.add(k)
+        out.append({"op": "set_shot", "shot": k, "punch": round(z, 3)})
+
+    for h in plan.hook:
+        push(h, PUSH_HOOK)
+    body = [p for sess in plan.sessions for p in sess]
+    if not body:
+        return out
+    push(body[0], PUSH_HIT)
+    if mx:
+        period, sign = mx["period"], 1
+        t = body[0].duration
+        for p in body[1:]:
+            beat = t / period
+            if abs(beat - round(beat / BAR_BEATS) * BAR_BEATS) < 0.26:   # this shot starts a bar
+                push(p, sign * PUSH_BAR)
+                sign = -sign
+            t += p.duration
+    return out
+
+
 def say(plan: sel.Plan, fp: dict, mx: dict | None, source: str, judged: bool) -> str:
     parts = [f"Made your video: {len(plan.picks)} moments, {plan.duration:.0f} s"
              + (", in the style of your references" if fp.get("refs_used") else "") + "."]
     if mx:
-        parts.append(f"Music: {mx['track'].title} ({mx['bpm']:.0f} BPM, from {source}); every cut sits on its beat.")
+        parts.append(f"Music: {mx['track'].title} ({mx['bpm']:.0f} BPM, from {source}); every cut sits on its beat, "
+                     "the picture pushes in on the drop and on every bar.")
     elif source.startswith("off"):
         parts.append("No music, as you had it last time; Music in the rail puts one under it.")
     else:
