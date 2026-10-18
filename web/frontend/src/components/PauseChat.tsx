@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
-import { api, type MomentAnswer, type MomentInfo } from '../api'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { api, type ChatProvider, type MomentAnswer, type MomentInfo } from '../api'
+import { cents, centsRange } from '../format'
 import { locate, type SeqItem } from '../sequence'
 import { phStore, useStore } from '../transport'
 import { Button, cx } from '../ui'
@@ -8,23 +9,23 @@ import { Button, cx } from '../ui'
 // (sarah, 2026-10-05). So the chat lives on the pause: it opens pinned to the
 // paused moment, the AI is told exactly what's on screen there, and an edit
 // it proposes changes nothing until Apply -- one undoable step, like any
-// other. Nothing is sent to the AI until Send; the cost of one message is
-// shown before it is.
+// other. Nothing is sent to the AI until Send, and Send shows what one
+// message costs before it goes (on the course key nothing is answered
+// without that). Who answers is the same as the AI Edit chat's.
 
 type Line = { who: 'you' | 'ai'; text: string; answer?: MomentAnswer; applied?: boolean }
 
-const money = ([lo, hi]: [number, number]) => {
-  const c = (x: number) => (x < 0.01 ? '<1¢' : `${Math.round(x * 100)}¢`)
-  return c(lo) === c(hi) ? c(lo) : `${c(lo)}–${c(hi)}`
-}
-
 const clock = (t: number) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`
 
-export function PauseChat({ onApply, busy, items, clipName }: {
+export function PauseChat({ onApply, busy, items, clipName, who, aiSwitch, aiKey, onAnswered }: {
   onApply: (ops: Record<string, unknown>[], label: string) => Promise<unknown>
   busy: boolean
   items: SeqItem[]
   clipName: (clipId: string) => string
+  who: ChatProvider               // who answers now; a change re-reads the moment's price
+  aiSwitch?: ReactNode            // shown where the box says AI is off
+  aiKey?: boolean                 // the course key is on this Mac (the switch can turn AI on)
+  onAnswered?: () => void         // an answer was paid for: the running total moved
 }) {
   const t = useStore(phStore)
   // The header is read off the timeline already here, so it follows the
@@ -49,7 +50,7 @@ export function PauseChat({ onApply, busy, items, clipName }: {
       }).catch(() => { if (live) setInfo(null) })
     }, 200)
     return () => { live = false; clearTimeout(id) }
-  }, [t])
+  }, [t, who])
 
   useEffect(() => {
     if (it && it.key !== key.current) { key.current = it.key; setLines([]); setError(null) }
@@ -66,10 +67,12 @@ export function PauseChat({ onApply, busy, items, clipName }: {
     setLines((ls) => [...ls, { who: 'you', text: msg }])
     setSending(true)
     try {
-      const a = await api.momentChat(t, msg, history)
+      const a = await api.momentChat(t, msg, history, info?.provider === 'openai' ? info.estimate.usd[1] : null)
       setLines((ls) => [...ls, { who: 'ai', text: a.reply || (a.ops.length ? 'Here’s a change for this moment.' : 'Done.'), answer: a }])
+      if (a.cost) onAnswered?.()
     } catch (e) {
       setError((e as Error).message)
+      onAnswered?.()   // a failed answer can still have been paid for
     } finally {
       setSending(false)
     }
@@ -87,13 +90,13 @@ export function PauseChat({ onApply, busy, items, clipName }: {
       <div className="flex items-center gap-2 px-3 pt-2 text-[11px]">
         <span className="size-1.5 rounded-full bg-accent" aria-hidden />
         <span className="truncate font-medium text-zinc-200">{here}</span>
-        <span className="ml-auto shrink-0 text-muted">{!info ? '' : llm ? `about ${money(info.estimate.usd)} a message` : 'AI off'}</span>
+        <span className="ml-auto shrink-0 text-muted">{!info || llm ? '' : 'AI off'}</span>
       </div>
       {lines.length > 0 && (
         <div className="max-h-56 min-h-0 space-y-2 overflow-y-auto px-3 pt-2 text-[12px]">
           {lines.map((l, i) => (
             <div key={i} className={cx('rounded-lg px-2.5 py-1.5', l.who === 'you' ? 'ml-6 bg-zinc-800 text-zinc-100' : 'mr-6 bg-raised text-zinc-200')}>
-              <p className="whitespace-pre-wrap">{l.text}</p>
+              <p className="whitespace-pre-wrap">{l.text}{l.answer?.cost ? <span className="ml-1.5 text-[11px] text-zinc-400" title="What this answer cost">{cents(l.answer.cost)}</span> : null}</p>
               {l.answer?.preview && l.answer.ops.length > 0 && (
                 <div className="mt-1.5 border-t border-line pt-1.5">
                   {l.answer.preview.lines.map((x, k) => <p key={k} className="text-[11px] text-zinc-400">· {x}</p>)}
@@ -124,12 +127,17 @@ export function PauseChat({ onApply, busy, items, clipName }: {
           <input value={draft} onChange={(e) => setDraft(e.target.value)} disabled={sending}
                  placeholder="What’s wrong here, or what should change?"
                  className="min-w-0 flex-1 rounded-lg border border-line bg-zinc-900 px-2.5 py-1.5 text-[12px] text-zinc-100 placeholder:text-zinc-500 focus:border-accent focus:outline-none" />
-          <Button size="sm" variant="primary" type="submit" disabled={!draft.trim() || sending}>Send</Button>
+          <Button size="sm" variant="primary" type="submit" disabled={!draft.trim() || sending}
+                  title="What this message will cost, before it’s sent">Send · {centsRange(info.estimate.usd)}</Button>
         </form>
       ) : (
-        <p className="p-3 text-[12px] text-zinc-400">
-          Chatting about this moment needs the AI turned on (the Anthropic key). It’s off, so nothing is sent and nothing is spent.
-        </p>
+        <div className="flex items-center gap-3 p-3">
+          <p className="min-w-0 flex-1 font-serif text-[15px] text-zinc-300">
+            {aiKey ? 'Turn AI on to ask about this moment. Each message shows what it costs before it’s sent.'
+              : 'There’s no AI key on this Mac, so asking about this moment is off.'}
+          </p>
+          {aiKey && aiSwitch}
+        </div>
       )}
     </div>
   )

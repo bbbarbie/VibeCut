@@ -1,9 +1,18 @@
 import type { SetupData } from './components/Setup'
 import type { Capabilities, CutData, ExportJob, Job, LengthSlider, LookFit, PrefClass, Project, ProjectMeta, RefCard, RefJob, RefSummary, Session, StyleAnswers, StyleQuestion, TalkState } from './types'
 
-export type MomentInfo = { header: string; key: string; llm: boolean; estimate: { tokens_in: number; usd: [number, number] } }
+export type MomentInfo = { header: string; key: string; llm: boolean; provider: ChatProvider
+  estimate: { tokens_in: number; usd: [number, number] } }
 export type MomentAnswer = { reply: string; choices: string[]; ops: Record<string, unknown>[]
-  preview: { lines: string[]; skipped: string[] } | null; header: string }
+  preview: { lines: string[]; skipped: string[] } | null; header: string; cost: number | null; spent: number }
+// Who answers the chat: OpenAI on the course key (AI switch on), Claude (its own key), or nobody.
+export type ChatProvider = 'openai' | 'claude' | null
+// What one chat message would cost before it's sent, and what AI has cost on this video.
+// per_char: what each typed character adds (the estimate already counts base_chars of them).
+export type ChatEstimate = { on: boolean; provider: ChatProvider; model: string | null; tokens_in: number
+  usd: [number, number]; spent: number; per_char?: number; base_chars?: number }
+// A chat answer: the session, or (after Stop) the session unchanged and what the dropped answer cost.
+export type ChatResult = Session & { stopped?: boolean; stop_cost?: number | null }
 
 export type ProjectList = { projects: ProjectMeta[]; open: string | null; capabilities: Capabilities }
 export type Opened = { project: ProjectMeta; session: Session }
@@ -32,7 +41,7 @@ async function j<T>(res: Promise<Response>): Promise<T> {
   if (!r.ok) {
     let detail = r.statusText
     try { detail = (await r.json()).detail ?? detail } catch { /* not json */ }
-    throw new Error(detail)
+    throw Object.assign(new Error(detail), { status: r.status })
   }
   return r.json()
 }
@@ -79,7 +88,12 @@ export const api = {
   override: (target: string, action: string, range?: [number, number]) =>
     j<CutData>(post('/api/cut/override', { target, action, start: range?.[0] ?? null, end: range?.[1] ?? null })),
   approve: () => j<Session>(post('/api/cut/approve', {})),
-  chat: (message: string, style?: StyleAnswers) => j<Session>(post('/api/chat', { message, style: style ?? null })),
+  // ai_ok: the cost the box showed for this message; on the course key nothing is sent without it
+  // t: the moment it's about (edit seconds); rid: names the request so Stop can drop its answer
+  chat: (message: string, style?: StyleAnswers, ai_ok?: number | null, t?: number | null, rid?: string) =>
+    j<ChatResult>(post('/api/chat', { message, style: style ?? null, ai_ok: ai_ok ?? null, t: t ?? null, rid: rid ?? null })),
+  chatStop: (rid: string) => j<{ ok: boolean }>(post('/api/chat/stop', { rid })),
+  chatEstimate: (t?: number | null) => j<ChatEstimate>(fetch(t == null ? '/api/chat/estimate' : `/api/chat/estimate?t=${t.toFixed(3)}`)),
   autoBrief: (picks?: { format: string; look: string }) => j<Session>(post('/api/brief/auto', picks ?? {})),
   setup: () => j<SetupData>(fetch('/api/brief/setup')),
   make: (picks: { format: string; look: string; ai_ok?: number | null }) => j<MakeJob>(post('/api/make', picks)),
@@ -101,8 +115,8 @@ export const api = {
   smooth: (order: boolean, nudge: boolean) => j<Session>(post('/api/smooth', { order, nudge })),
   // chat on pause: what the paused moment is (free), then one message about it (calls the model)
   moment: (t: number) => j<MomentInfo>(post('/api/moment', { t })),
-  momentChat: (t: number, message: string, history: { who: 'you' | 'ai'; text: string }[]) =>
-    j<MomentAnswer>(post('/api/moment/chat', { t, message, history })),
+  momentChat: (t: number, message: string, history: { who: 'you' | 'ai'; text: string }[], ai_ok?: number | null) =>
+    j<MomentAnswer>(post('/api/moment/chat', { t, message, history, ai_ok: ai_ok ?? null })),
   toggle: (turn: number) => j<Session>(post(`/api/turns/${turn}/toggle`, {})),
   voiceover: (text: string) => j<Session>(post('/api/voiceover', { text })),
   classify: (req: { turn: number; klass: PrefClass; rule?: string; scope?: string; counter?: string; reason?: string }) =>

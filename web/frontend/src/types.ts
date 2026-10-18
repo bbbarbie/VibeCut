@@ -45,7 +45,8 @@ export type ExportRecord = { job: string; file: string; path: string; at: number
   verdict?: { post: boolean; note: string; at: number }; elapsed?: number; default_path?: boolean; undone?: number }
 export type Brief = { message: string; style: StyleAnswers; said: string; at: number; tempo?: string }
 // What this machine can do -- shown, so nothing is offered that then fails.
-export type Capabilities = { llm: boolean; speech: boolean; vision: string; links: boolean; music_folder: string | null; platform: string }
+export type Capabilities = { llm: boolean; speech: boolean; vision: string; links: boolean; music_folder: string | null; platform: string
+  chat?: 'openai' | 'claude' | null }
 export type ImportError = { path: string | null; error: string }
 
 export type Job = {
@@ -125,6 +126,7 @@ export type Turn = {
   id: number; kind: 'chat' | 'direct'; text: string; reply: string
   question: string | null; choices: string[]; lines: DiffLine[]; skipped: string[]
   undone: boolean; at: number; has_ops: boolean; direction: { themes: string[] } | null
+  cost?: number | null    // dollars, when an AI answered this turn
 }
 import type { SeqItem } from './sequence'
 import type { Trans } from './joinView'
@@ -208,6 +210,7 @@ export type Session = {
   turns: Turn[]
   proposals: Proposals | null
   llm: boolean
+  ai_spent?: number       // dollars AI has cost on this video (chat answers + AI-planned Makes)
   preferences: Preferences
   voiceover: { source: string; timing: 'estimated' | 'text_only'; lines: number; total: number } | null
   overlays: Overlays
@@ -240,7 +243,8 @@ export type Preferences = { candidates: PrefCandidate[]; rules: PrefRule[] }
 export type TimelineItem = { uid: string; shotId: string; clipId: string; start: number; end: number; thumb: string; beatId: string; beatTitle: string; mark?: Mark }
 export type Mark = 'added' | 'moved' | 'trimmed'
 
-export type Msg = { id: string; role: 'user' | 'app'; text: string; busy?: boolean; at: number }
+export type Msg = { id: string; role: 'user' | 'app'; text: string; busy?: boolean; at: number
+  retry?: string }   // a message that didn't go through: Try again sends this
 
 // What the player is showing: one span of one file.
 export type Segment = { key: string; clipId: string; start: number; end: number; autoplay: boolean }

@@ -139,7 +139,8 @@ def say(plan: sel.Plan, fp: dict, mx: dict | None, source: str, judged: bool, ai
     if ai and ai.get("chapters"):
         parts.append(f"{ai['model']} planned it as {ai['chapters']} chapters (cost ${ai['cost']:.3f}).")
     elif ai and ai.get("error"):
-        parts.append(f"The story plan didn't work ({ai['error']}), so the usual rules picked the moments.")
+        parts.append(f"The story plan didn't work ({ai['error']}), so the usual rules picked the moments."
+                     + (f" That try cost ${ai['cost']:.3f}." if ai.get("cost") else ""))
     if mx:
         parts.append(f"Music: {mx['track'].title} ({mx['bpm']:.0f} BPM, from {source}); every cut sits on its beat.")
     else:
@@ -196,7 +197,8 @@ def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, ab
                     ai = {"model": usage.get("model"), "cost": usage.get("cost", 0.0), "chapters": len(chapters),
                           "tokens_in": usage.get("prompt_tokens"), "tokens_out": usage.get("completion_tokens")}
                 except Exception as e:  # noqa: BLE001 -- the rules make the edit instead, and say so
-                    plan, chapters, ai = None, None, {"error": str(e)[:160], "cost": 0.0}
+                    paid = (getattr(e, "usage", None) or {}).get("cost", 0.0)
+                    plan, chapters, ai = None, None, {"error": str(e)[:160], "cost": paid}
                 job.line = ""
             if plan is None:
                 plan = moments(clips, cut, fp, judge)

@@ -86,8 +86,9 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   are only previewed (diff computed on a copy of the log) until Apply sends
   them to `/api/ops` as one undoable turn. `/api/moment` never calls the model
   and returns a per-message cost estimate (Opus 5 list price, output 600–2500
-  tokens, priors). No key: the box says so and sends nothing.
-  `tests/test_moment.py` (mocked model).
+  tokens, priors; since 2026-10-18 priced for whoever answers, see AI Edit on
+  the course key, and shown on Send). No AI: the box says so, offers the
+  switch and sends nothing. `tests/test_moment.py` (mocked model).
 
 - `cutgrammar/music.py` — energy-shape matching of the user's own tracks to
   the storyboard. Built, synthetic-tested; **not yet judged on a real music
@@ -227,6 +228,30 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   `Project.events`. Any failure → the rules' edit, and the reply says so.
   urllib only (no SDK on her Mac). `tests/test_story.py` (stand-in replies).
   Not yet run against the live model.
+- **AI Edit on the course key** (sarah, 2026-10-18: "Build it" on putting the
+  chat on the course key so it shows when AI is on). `llm.chat_provider()`:
+  OpenAI (`oai.enabled()`: key + AI switch) else Claude (its key) else
+  nobody; only the chat moves (`interpret`, so the left-rail chat and Chat on
+  pause), every other call in llm.py stays on Claude's key. Same SYSTEM,
+  state text, history and SCHEMA (strict) on OpenAI, the paused frame at low
+  detail. Before sending: `/api/chat/estimate` (free; `llm.estimate`, priced
+  for whoever answers, output 600–2500 tokens, priors) puts "Send · 1–3¢" on
+  the button, and on the course key a message is answered only when it
+  carries that estimate (`ai_ok`, `_chat_gate`). After: the cost is on the
+  turn (`Turn.cost`, persisted), in `Project.events` (kind `chat`, also for a
+  paid answer that failed) and in the panel's "6¢ spent" (`_ai_spent`: chat
+  + AI-planned Makes). The rail reads AI Edit whenever someone answers, else
+  History, which then offers the switch (no key: says so, no switch). Idea
+  chips above the box fill it, never send. Like other editors' assistants: an
+  "About [Shot 3 · 0:12] / Whole video" chip (the clicked shot, else the one
+  under the paused playhead) sends that moment's text + frame with the
+  message (`ChatReq.t`, `_target`; never a `choose_option`); the AI is asked
+  outside LOCK (`llm.prepare` → `llm.ask` → apply), so the app keeps
+  working; Stop (`/api/chat/stop`, by the box's `rid`) frees the box at once
+  and the answer changes nothing when it lands, its cost still counted; an
+  answer landing on another video changes nothing; a failed one offers Try
+  again. The app's own first story (no board, no `ai_ok`) is the free rules'.
+  `tests/test_chat_ai.py` (stand-in replies). Not yet run live.
 - **Two picks up front** (plan of 2026-10-10, step 2; `Setup.tsx`,
   `/api/brief/setup`, `/api/brief/auto {format, look}`, `/api/format`):
   after Footage's "Looks good" one popup asks the **frame** (short ·

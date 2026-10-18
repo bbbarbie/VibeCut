@@ -881,6 +881,7 @@ class Turn:
     direction: dict | None = None   # {"text", "themes", "labels"} when this turn set one
     undone: bool = False
     at: float = field(default_factory=time.time)
+    cost: float | None = None       # dollars, when an AI answered this turn
     # filled by replay
     skipped: list[str] = field(default_factory=list)
     diff: dict | None = None

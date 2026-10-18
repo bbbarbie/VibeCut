@@ -21,6 +21,7 @@ Plain urllib, no SDK: pip installs are blocked on her Mac.
 from __future__ import annotations
 
 import base64
+import http.client
 import json
 import os
 import urllib.error
@@ -41,7 +42,9 @@ TIMEOUT_S = 180
 
 
 class OAIError(Exception):
-    pass
+    def __init__(self, msg: str, usage: dict | None = None) -> None:
+        super().__init__(msg)
+        self.usage = usage    # what a failed answer still cost, when it got that far
 
 
 def _env(name: str) -> str | None:
@@ -97,20 +100,25 @@ def cost(usage: dict, name: str | None = None) -> float:
 
 
 def image(jpeg: bytes) -> dict:
-    return {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + base64.b64encode(jpeg).decode(),
-                                               "detail": "low"}}
+    return image_b64(base64.b64encode(jpeg).decode())
+
+
+def image_b64(b64: str) -> dict:
+    return {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + b64, "detail": "low"}}
 
 
 def ask_json(system: str, content: list[dict], schema: dict, name: str, max_tokens: int = 12000,
-             post=None) -> tuple[dict, dict]:
+             post=None, history: list[dict] | None = None) -> tuple[dict, dict]:
     """One request whose answer must match `schema`. -> (answer, usage with
-    `cost` and `model` added). `post(url, body, headers) -> dict` stands in
-    for the network in tests."""
+    `cost` and `model` added). `history`: earlier {role, content} messages,
+    oldest first, between the system prompt and this one. `post(url, body,
+    headers) -> dict` stands in for the network in tests."""
     key = _env("OPENAI_API_KEY")
     if not key:
         raise OAIError("no OpenAI key in web/.env")
     body = {"model": model(), "max_completion_tokens": max_tokens,
-            "messages": [{"role": "system", "content": system}, {"role": "user", "content": content}],
+            "messages": [{"role": "system", "content": system}, *(history or []),
+                         {"role": "user", "content": content}],
             "response_format": {"type": "json_schema", "json_schema": {"name": name, "strict": True, "schema": schema}}}
     headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
     resp = (post or _post)(URL, body, headers)
@@ -120,13 +128,13 @@ def ask_json(system: str, content: list[dict], schema: dict, name: str, max_toke
     choice = (resp.get("choices") or [{}])[0]
     msg = choice.get("message") or {}
     if msg.get("refusal"):
-        raise OAIError("the model declined: " + str(msg["refusal"])[:120])
+        raise OAIError("the model declined: " + str(msg["refusal"])[:120], usage)
     if choice.get("finish_reason") == "length":
-        raise OAIError("the model's answer was cut off")
+        raise OAIError("the model's answer was cut off", usage)
     try:
         return json.loads(msg.get("content") or ""), usage
     except json.JSONDecodeError as e:
-        raise OAIError("the model's answer wasn't valid JSON") from e
+        raise OAIError("the model's answer wasn't valid JSON", usage) from e
 
 
 def _post(url: str, body: dict, headers: dict) -> dict:
@@ -144,5 +152,9 @@ def _post(url: str, body: dict, headers: dict) -> dict:
         if e.code == 429:
             raise OAIError("OpenAI says the key is out of budget or rate-limited" + (f": {why[:120]}" if why else "")) from e
         raise OAIError(f"OpenAI error {e.code}" + (f": {why[:160]}" if why else "")) from e
-    except (urllib.error.URLError, TimeoutError) as e:
-        raise OAIError("couldn't reach OpenAI") from e
+    except (urllib.error.URLError, TimeoutError, http.client.HTTPException, OSError) as e:
+        # urllib wraps only the request's own errors; a connection dropped
+        # mid-answer (RemoteDisconnected, IncompleteRead, a reset) comes as is
+        raise OAIError("couldn't reach OpenAI, or the answer was cut off on the way") from e
+    except ValueError as e:     # a proxy's HTML page, not OpenAI's JSON
+        raise OAIError("OpenAI's answer wasn't readable") from e

@@ -9,7 +9,8 @@ the same storyboard as every other edit (board.py); nothing is applied until
 the creator presses Apply, as one undoable turn.
 
 Nothing here calls the model. `estimate` says what one message would cost
-before it is sent.
+before it is sent, priced for whoever answers the chat now (llm.estimate:
+OpenAI on the course key while the AI switch is on, else Claude).
 """
 
 from __future__ import annotations
@@ -18,13 +19,6 @@ import base64
 from pathlib import Path
 
 from . import timeline
-
-# Claude Opus 5 list prices, $ per million tokens (llm.MODEL); see llm.py.
-PRICE_IN, PRICE_OUT = 5.0, 25.0
-# What one answer costs to write, with its thinking: JSON ops + a sentence
-# or two. A range, because thinking length varies. [prior]
-OUT_TOKENS = (600, 2500)
-CHARS_PER_TOKEN = 3.5
 
 
 def _clock(t: float) -> str:
@@ -130,6 +124,5 @@ def image(m: dict) -> str | None:
 
 def estimate(prompt_chars: int, with_image: bool) -> dict:
     """Dollars for one message: input from its size, output as a range."""
-    tin = prompt_chars / CHARS_PER_TOKEN + (384 * 216 / 750 if with_image else 0)
-    lo, hi = (tin * PRICE_IN + o * PRICE_OUT for o in OUT_TOKENS)
-    return {"tokens_in": int(tin), "usd": [round(lo / 1e6, 3), round(hi / 1e6, 3)]}
+    from . import llm
+    return llm.estimate(prompt_chars, with_image)

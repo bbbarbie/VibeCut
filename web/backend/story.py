@@ -231,5 +231,9 @@ def plan(clips: dict[str, dict], cut, fmt: str, seconds: float, about: str, post
     talking = tempo.talking(list(clips.values()), cands)
     answer, usage = oai.ask_json(SYSTEM, content(cands, frames, stops, talking, fmt, seconds, about),
                                  SCHEMA, "story_plan", post=post)
-    p, chapters, title = plan_from(answer, cands, clips, fmt)
+    try:
+        p, chapters, title = plan_from(answer, cands, clips, fmt)
+    except StoryError as e:
+        e.usage = usage     # a useless answer was still paid for
+        raise
     return p, chapters, title, usage

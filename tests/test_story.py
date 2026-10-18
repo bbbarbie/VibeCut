@@ -23,8 +23,13 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-os.environ.setdefault("VIBECUT_CACHE", tempfile.mkdtemp(prefix="vibecut-story-"))
-os.environ.setdefault("VIBECUT_EXPORTS", os.path.join(os.environ["VIBECUT_CACHE"], "out"))
+# Its own cache, always: the test flips the AI switch (ai.json), which must
+# never be a real one. Empty keys, so web/.env on a dev Mac is never read.
+if __name__ == "__main__":   # the indexer's worker processes re-run this file: they keep this cache
+    os.environ["VIBECUT_CACHE"] = tempfile.mkdtemp(prefix="vibecut-story-")
+os.environ["VIBECUT_EXPORTS"] = os.path.join(os.environ["VIBECUT_CACHE"], "out")
+os.environ["ANTHROPIC_API_KEY"] = ""
+os.environ["OPENAI_API_KEY"] = ""
 os.environ.setdefault("VIBECUT_BED", "0")
 os.environ["VIBECUT_REMIX_JUDGE"] = "0"
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -68,9 +73,8 @@ def unit() -> None:
     from web.backend import oai, overlays as ov, story
 
     print("the AI switch")
-    for k in ("OPENAI_API_KEY", "OPENAI_MODEL"):
-        os.environ.pop(k, None)
-    real_env = oai.ENV_FILE
+    os.environ["OPENAI_API_KEY"] = ""
+    os.environ.pop("OPENAI_MODEL", None)
     oai.ENV_FILE = Path(tempfile.mkdtemp()) / ".env"
     oai.switch(True)
     check("no key: off, whatever the switch says", not oai.enabled())
@@ -81,7 +85,7 @@ def unit() -> None:
     check("key + switch on: on", oai.enabled())
     oai.switch(False)
     check("switched off again", not oai.enabled())
-    oai.ENV_FILE = real_env
+    oai.ENV_FILE.unlink()     # and stays a file that isn't there: never the real web/.env
 
     print("what a call costs")
     c = oai.cost({"prompt_tokens": 10_000, "completion_tokens": 3000}, "gpt-6.1-sol")
@@ -146,7 +150,7 @@ def unit() -> None:
         check("a cut-off answer is an error", False)
     except oai.OAIError:
         check("a cut-off answer is an error", True)
-    os.environ.pop("OPENAI_API_KEY")
+    os.environ["OPENAI_API_KEY"] = ""
 
 
 def api() -> None:
@@ -229,7 +233,7 @@ def api() -> None:
                   job["stage"] == "done" and "story plan didn't work" in json.dumps(s), job.get("error") or "")
     finally:
         bed.candidates, oai._post = real_cand, real_post
-        os.environ.pop("OPENAI_API_KEY", None)
+        os.environ["OPENAI_API_KEY"] = ""
         oai.switch(False)
 
 

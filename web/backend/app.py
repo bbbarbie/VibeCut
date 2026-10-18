@@ -167,6 +167,8 @@ def _capabilities() -> dict:
     """What this machine can do, so the UI says so instead of failing later."""
     return {
         "llm": llm.available(),
+        # who answers the chat now: "openai" (the course key, AI switch on), "claude", or None
+        "chat": llm.chat_provider(),
         "speech": sys.platform == "darwin" and shutil.which("swiftc") is not None,
         "vision": vision.status(),
         "sound": sound.status(),
@@ -266,11 +268,12 @@ def _session() -> dict:
         "turns": [{
             "id": t.id, "kind": t.kind, "text": t.text, "reply": t.reply, "question": t.question,
             "choices": t.choices, "lines": _with_thumbs(t.lines, cat), "skipped": t.skipped,
-            "undone": t.undone, "at": t.at, "has_ops": bool(t.ops) or t.direction is not None,
+            "undone": t.undone, "at": t.at, "has_ops": bool(t.ops) or t.direction is not None, "cost": t.cost,
             "direction": {k: t.direction[k] for k in ("themes",) if k in t.direction} if t.direction else None,
         } for t in SESSION.turns],
         "proposals": SESSION.proposals,
         "llm": llm.available(),
+        "ai_spent": _ai_spent(),
         "timeline": tl,
         "overlays": _overlays_public(b, cat, tl),
         "workflow": WORKFLOW.public(),
@@ -760,6 +763,44 @@ class ChatReq(BaseModel):
     message: str
     # Answers to the style questions (brief.py), sent with the first description.
     style: dict | None = None
+    # The cost the chat box showed for this message (/api/chat/estimate). On
+    # the course key only a message sent with its cost shown is answered.
+    ai_ok: float | None = None
+    # The moment it's about (edit seconds: a clicked shot or the paused
+    # frame), or None for the whole video.
+    t: float | None = None
+    # The box's id for this message, so Stop can find it.
+    rid: str | None = None
+
+
+def _chat_gate(ai_ok: float | None) -> str | None:
+    """Who answers this message, or a refusal. On OpenAI's course key ($25
+    for the whole team) a message goes only when the box showed its cost."""
+    who = llm.chat_provider()
+    if who == "openai" and ai_ok is None:
+        raise HTTPException(409, "Send it from the chat box, which shows what a message costs before it goes.")
+    return who
+
+
+def _chat_spent(out: dict, where: str) -> float | None:
+    """Keep what an answer cost with the project; -> dollars."""
+    u = out.get("usage") or {}
+    if "cost" not in u:
+        return None
+    if PROJECT["p"] is not None:
+        PROJECT["p"].events.append({"kind": "chat", "at": time.time(), "where": where, "model": u.get("model"),
+                                    "cost": u["cost"], "tokens_in": u.get("prompt_tokens"),
+                                    "tokens_out": u.get("completion_tokens")})
+    return u["cost"]
+
+
+def _ai_spent() -> float:
+    """Dollars AI has cost on this video: every chat answer and AI-planned Make."""
+    pr = PROJECT["p"]
+    if pr is None:
+        return 0.0
+    return round(sum(float(e.get("cost") or (e.get("ai") or {}).get("cost") or 0) for e in pr.events
+                     if e.get("kind") in ("chat", "make")), 4)
 
 
 class QuestionsReq(BaseModel):
@@ -774,7 +815,9 @@ def api_session() -> dict:
 
 @app.post("/api/chat")
 def api_chat(req: ChatReq) -> dict:
-    """One conversational turn: message -> operations -> applied, diffed, undoable."""
+    """One conversational turn: message -> operations -> applied, diffed, undoable.
+    The AI is asked outside the lock, so the app keeps playing and answering
+    while it thinks; the answer is applied to the edit as it is when it lands."""
     msg = req.message.strip()
     if not msg:
         raise HTTPException(400, "empty message")
@@ -785,13 +828,38 @@ def api_chat(req: ChatReq) -> dict:
         raise HTTPException(409, "Look over what was cut first — approve it, then we’ll build the story.")
     with LOCK:
         cat = CATALOG["cat"]
+        if llm.chat_provider() == "openai" and req.ai_ok is None and SESSION.board is None:
+            # The first story built from the brief, by the app, not a message
+            # someone priced and sent: by keywords, free, as with no AI.
+            who = None
+        else:
+            who = _chat_gate(req.ai_ok)
+        if who:
+            context, image = _target(req.t)
+            asked, asked_on = llm.prepare(msg, cat, SESSION, PREFS.for_model(), moment=context), SESSION
+        else:
+            out = llm.interpret_offline(msg, cat, SESSION, PREFS.for_model())
+    if who:
+        rid = req.rid or ""
         try:
-            out = (llm.interpret if llm.available() else llm.interpret_offline)(
-                msg, cat, SESSION, PREFS.for_model())
+            out = llm.ask(asked, image, who)
         except llm.LLMError as e:
-            raise HTTPException(502, str(e)) from e
+            with LOCK:
+                paid = _chat_spent({"usage": e.usage}, "chat")
+                if paid:
+                    _save()     # a failed request isn't saved by the middleware; what it cost must be
+            STOPPED.discard(rid)
+            raise HTTPException(502, str(e) + (f" That try cost {_cents(paid)}." if paid else "")) from e
+    with LOCK:
         if out.get("error"):
             raise HTTPException(409, out["error"])
+        cost = _chat_spent(out, "chat") if who else None
+        if who and rid in STOPPED:
+            # Stop was pressed while it thought: the answer is dropped, its cost is kept
+            STOPPED.discard(rid)
+            return {**_session(), "stopped": True, "stop_cost": cost}
+        if who and asked_on is not SESSION:
+            raise HTTPException(409, "Another video was opened while the AI answered, so nothing was changed.")
         direction = out.get("direction")
         if direction is not None:
             direction = {**direction, "text": msg}
@@ -803,11 +871,81 @@ def api_chat(req: ChatReq) -> dict:
             style = brief.clean_style(req.style) or (_direction() or {}).get("style")
             if style:
                 direction["style"] = style
-        SESSION.add({"kind": "chat", "text": msg, "ops": out.get("ops", []),
+        ops = out.get("ops", [])
+        if req.t is not None:
+            ops = [o for o in ops if o.get("op") != "choose_option"]   # about a moment of this edit, never a new one
+        SESSION.add({"kind": "chat", "text": msg, "ops": ops,
                      "reply": out.get("reply", ""), "question": out.get("question"),
                      "choices": out.get("choices", []) if out.get("question") else [],
-                     "direction": direction}, cat, _make_proposals)
+                     "direction": direction, "cost": cost}, CATALOG["cat"], _make_proposals)
         return _session()
+
+
+# Chat requests whose Stop was pressed while the AI thought (by the id the box gave them).
+STOPPED: set[str] = set()
+
+
+class StopReq(BaseModel):
+    rid: str
+
+
+@app.post("/api/chat/stop")
+def api_chat_stop(req: StopReq) -> dict:
+    """Stop: the answer, when it comes, changes nothing. What it cost is still
+    counted (the AI has already been asked). Needs no lock: the chat that is
+    waiting holds none."""
+    if req.rid:
+        STOPPED.add(req.rid)
+    return {"ok": True}
+
+
+def _cents(usd: float) -> str:
+    return "under 1¢" if usd < 0.01 else f"{round(usd * 100)}¢" if usd < 1 else f"${usd:.2f}"
+
+
+def _target(t: float | None) -> tuple[str, str | None]:
+    """The moment a chat message is about (a clicked shot or the paused
+    frame), as text for the model and its frame; nothing when it's about the
+    whole video or there's nothing there."""
+    if t is None or not SESSION.board:
+        return "", None
+    try:
+        m = _moment(t)
+    except HTTPException:
+        return "", None
+    return moment.describe(m), moment.image(m)
+
+
+@app.get("/api/chat/estimate")
+def api_chat_estimate(t: float | None = None) -> dict:
+    """What one chat message would cost now, before it is sent (about the
+    moment at `t`, if given), and what AI has cost on this video so far.
+    Never calls a model."""
+    with LOCK:
+        who = llm.chat_provider()
+        if not who:
+            return {"provider": None, "model": None, "tokens_in": 0, "usd": [0.0, 0.0], "on": False,
+                    "spent": _ai_spent()}
+        extra, frame = 300, False
+        if t is not None and SESSION.board:
+            try:
+                m = _moment(t, words=False)
+                extra, frame = extra + 400 + len(moment.describe(m)), bool(m.get("frame"))
+            except HTTPException:
+                pass
+        est = llm.estimate(_prompt_chars() + extra, frame)
+        # what each typed character adds, so a long message's price moves as it's typed
+        per_char = llm.chat_prices()[1] / llm.CHARS_PER_TOKEN / 1e6
+        return {**est, "on": True, "spent": _ai_spent(), "per_char": per_char, "base_chars": 300}
+
+
+def _prompt_chars() -> int:
+    """The chat prompt's length before the creator's words. It hardly moves
+    between messages, so it is measured once per state of the edit."""
+    state = (id(SESSION), len(SESSION.turns), sum(1 for x in SESSION.turns if x.undone), id(CATALOG["cat"]))
+    if _ESTIMATE.get("state") != state:
+        _ESTIMATE.update(state=state, chars=llm.prompt_chars(CATALOG["cat"], SESSION, PREFS.for_model()))
+    return _ESTIMATE["chars"]
 
 
 class MomentReq(BaseModel):
@@ -815,6 +953,8 @@ class MomentReq(BaseModel):
     message: str = ""
     # earlier exchanges in this pause's chat box, oldest first: {"who": "you"|"ai", "text"}
     history: list[dict] = []
+    # the cost the box showed (see ChatReq.ai_ok)
+    ai_ok: float | None = None
 
 
 def _moment(t: float, words: bool = True) -> dict:
@@ -836,14 +976,10 @@ def api_moment(req: MomentReq) -> dict:
     about it would cost. Never calls the model."""
     with LOCK:
         m = _moment(req.t, words=False)
-        # the prompt's size hardly moves along the edit, so it is measured
-        # once per state of the edit, not on every pause
-        state = (id(SESSION), len(SESSION.turns), sum(1 for x in SESSION.turns if x.undone))
-        if _ESTIMATE.get("state") != state:
-            _ESTIMATE.update(state=state, chars=len(llm.render_state(CATALOG["cat"], SESSION, PREFS.for_model()))
-                             + len(llm.SYSTEM) + 400)   # + the moment's own lines and words, roughly
-        return {"header": moment.header(m), "key": m["key"], "llm": llm.available(),
-                "estimate": moment.estimate(_ESTIMATE["chars"] + len(moment.describe(m)), bool(m.get("frame")))}
+        who = llm.chat_provider()
+        # + the moment's own lines and words, roughly
+        return {"header": moment.header(m), "key": m["key"], "llm": who is not None, "provider": who,
+                "estimate": moment.estimate(_prompt_chars() + 400 + len(moment.describe(m)), bool(m.get("frame")))}
 
 
 _ESTIMATE: dict = {}
@@ -857,18 +993,25 @@ def api_moment_chat(req: MomentReq) -> dict:
     msg = req.message.strip()
     if not msg:
         raise HTTPException(400, "empty message")
-    if not llm.available():
-        raise HTTPException(409, "Chatting about a moment needs the AI turned on (the Anthropic key in web/.env).")
+    if llm.chat_provider() is None:
+        raise HTTPException(409, "Chatting about a moment needs AI: turn AI on in the top bar. Each message shows "
+                                 "what it costs before it's sent." if oai.has_key() else
+                                 "Chatting about a moment needs AI, and there's no AI key on this Mac.")
     with LOCK:
+        who = _chat_gate(req.ai_ok)
         m = _moment(req.t)
         said = "\n".join(f"{'CREATOR' if h.get('who') == 'you' else 'YOU (earlier)'}: {h.get('text', '')}"
                          for h in req.history[-6:] if isinstance(h, dict))
         context = moment.describe(m) + (f"\nEarlier in this conversation about this moment:\n{said}" if said else "")
         try:
             out = llm.interpret(msg, CATALOG["cat"], SESSION, PREFS.for_model(), moment=context,
-                                image_b64=moment.image(m))
+                                image_b64=moment.image(m), who=who)
         except llm.LLMError as e:
-            raise HTTPException(502, str(e)) from e
+            paid = _chat_spent({"usage": e.usage}, "moment")
+            if paid:
+                _save()     # a failed request isn't saved by the middleware; what it cost must be
+            raise HTTPException(502, str(e) + (f" That try cost {_cents(paid)}." if paid else "")) from e
+        cost = _chat_spent(out, "moment")
         ops = [o for o in out.get("ops") or [] if o.get("op") != "choose_option"]
         preview = None
         if ops:
@@ -883,7 +1026,7 @@ def api_moment_chat(req: MomentReq) -> dict:
             except Exception as e:  # noqa: BLE001 -- a proposal that can't apply is shown as such
                 preview = {"lines": [], "skipped": [str(e)]}
         return {"reply": out.get("question") or out.get("reply") or "", "choices": out.get("choices", []),
-                "ops": ops, "preview": preview, "header": moment.header(m)}
+                "ops": ops, "preview": preview, "header": moment.header(m), "cost": cost, "spent": _ai_spent()}
 
 
 SUGGESTED: dict = {}     # clip ids -> suggestions, so a revisit doesn't ask again

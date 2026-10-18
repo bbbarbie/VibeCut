@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { api, type AIEstimate, type AIState, type MakeJob, saving } from './api'
+import { api, type AIEstimate, type AIState, type ChatProvider, type MakeJob, saving } from './api'
 import { AISwitch } from './components/AISwitch'
-import { Chat, type ChatItem } from './components/Chat'
+import { Chat, type ChatItem, type SendExtra } from './components/Chat'
 import { KIND_META, partsOf } from './overlayDraw'
 import { loadProfile } from './profile'
 import { StyleQuestions } from './components/StyleQuestions'
@@ -30,7 +30,7 @@ import { Handle, useLayout } from './components/Split'
 import { Icon, type IconName } from './components/icons'
 import { Footage, type Importing } from './components/Footage'
 import { fromDataTransfer, fromInput, takeHandoff, takeRefs, type Picked } from './drop'
-import { bytes, uid } from './format'
+import { bytes, cents, uid } from './format'
 import { clock, locate, toSource, type SeqItem } from './sequence'
 import { cutWhilePlaying, step } from './snap'
 import { byKey } from './joinView'
@@ -290,7 +290,12 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     return out.sort((a, b) => a.at - b.at)
   }, [local, session])
 
-  const send = async (text: string, style?: StyleAnswers) => {
+  // extra comes only from the chat box: the moment a message is about and the
+  // cost Send showed. The app's own sends (the first story) carry neither, so
+  // on the course key they're built by the free rules, never the AI.
+  const chatRid = useRef<string | null>(null)
+  const stopped = useRef<Set<string>>(new Set())
+  const send = async (text: string, style?: StyleAnswers, extra?: SendExtra) => {
     if (!clips.length) {
       setLocal((ms) => [...ms, { id: uid(), role: 'user', text, at: Date.now() }])
       say('Add some clips first — then there’s something to arrange.')
@@ -298,16 +303,46 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     }
     // The first description: ask a few style questions before anything is built.
     if (!style && !session?.board && !session?.proposals && !brief) { askStyle(text); return }
+    const rid = uid()
+    chatRid.current = rid
     setPending(text)
+    const mine = { id: uid(), role: 'user' as const, text, at: Date.now() }
     try {
-      setSession(await api.chat(text, style))
-      setPeek(null)
+      const r = await api.chat(text, style, extra?.ai_ok ?? null, extra?.t ?? null, rid)
+      setSession(r)
+      if (stopped.current.has(rid)) {
+        stopped.current.delete(rid)
+        // Stop came too late: the answer had already changed the edit
+        if (!r.stopped) say('It had already made that change when you pressed Stop. Its Undo is right above.')
+        else if (r.stop_cost) say(`The stopped answer cost ${cents(r.stop_cost)}.`)
+      } else {
+        setPeek(null)
+      }
     } catch (e) {
-      setLocal((ms) => [...ms, { id: uid(), role: 'user', text, at: Date.now() }])
-      say((e as Error).message)
+      const err = e as Error & { status?: number }
+      if (stopped.current.delete(rid)) { if (extra) api.session().then(setSession, () => {}); return }
+      setLocal((ms) => [...ms, mine, {
+        id: uid(), role: 'app', at: Date.now(),
+        text: extra ? `That didn’t work: ${err.message} Nothing in your edit changed.` : err.message,
+        // the AI was out of reach or its answer was unusable: worth one more go (409s aren't)
+        retry: extra && (err.status == null || err.status >= 500) ? text : undefined,
+      }])
+      // a failed answer can still have been paid for: the total moves
+      if (extra) api.session().then(setSession, () => {})
     } finally {
-      setPending(null)
+      if (chatRid.current === rid) { chatRid.current = null; setPending(null) }
     }
+  }
+  // Stop: the box is free again at once; the answer, when it lands, changes nothing.
+  const stopChat = () => {
+    const rid = chatRid.current
+    if (!rid || !pending) return
+    stopped.current.add(rid)
+    chatRid.current = null
+    setLocal((ms) => [...ms, { id: uid(), role: 'user', text: pending, at: Date.now() },
+      { id: uid(), role: 'app', text: 'Stopped. Nothing in your edit changed.', at: Date.now() }])
+    setPending(null)
+    api.chatStop(rid).catch(() => {})
   }
 
   const askStyle = (text: string) => {
@@ -336,10 +371,22 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   // only a Make carrying that estimate lets the AI plan it (backend oai.py).
   const [ai, setAI] = useState<AIState | null>(null)
   const [estimate, setEstimate] = useState<AIEstimate | null>(null)
-  useEffect(() => { api.ai().then(setAI, () => setAI(null)) }, [])
+  useEffect(() => {
+    // read again when the window comes back: the switch may have changed elsewhere
+    const read = () => { api.ai().then(setAI, () => setAI(null)) }
+    read()
+    window.addEventListener('focus', read)
+    return () => window.removeEventListener('focus', read)
+  }, [])
   const toggleAI = async (on: boolean) => {
     try { setAI(await api.setAI(on)) } catch (e) { note((e as Error).message) }
   }
+  // Who answers the chat (backend llm.chat_provider): OpenAI on the course
+  // key while the switch is on, else Claude if its key is set. The chat box
+  // reads what one message costs before anything is sent, again whenever the
+  // edit changes (the prompt carries the edit).
+  const chatWho: ChatProvider = ai?.available && ai.on ? 'openai' : caps.llm ? 'claude' : null
+  const turnsKey = `${session?.turns.length ?? 0}/${session?.turns.filter((x) => x.undone).length ?? 0}`
   useEffect(() => {
     setEstimate(null)
     if (!setup || !ai?.on || setup.busy) return
@@ -998,14 +1045,21 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                           onFull={() => { stageRef.current?.requestFullscreen?.().catch(() => {}) }} />
             ) : undefined} />
   )
+  const selItem = selected ? tl.items.find((x) => x.key === selected) ?? null : null
   // Chat on pause: only while the edit is stopped on a frame, about that frame.
   const pauseChat = session?.board && !tr.playing && !segment
     ? <PauseChat busy={!!pending} onApply={(ops, label) => run(ops, label)} items={tl.items}
-                 clipName={(id) => clips.find((c) => c.id === id)?.name ?? id} />
+                 clipName={(id) => clips.find((c) => c.id === id)?.name ?? id}
+                 who={chatWho} aiSwitch={<AISwitch ai={ai} onToggle={toggleAI} />} aiKey={!!ai?.available}
+                 onAnswered={() => { api.session().then(setSession, () => {}) }} />
     : null
   const chat = (
-    <Chat items={chatItems} pending={pending} onSend={send} onToggle={toggle}
-          disabled={!!pending} llm={caps.llm} hasBoard={!!session?.board || !!session?.proposals}
+    <Chat items={chatItems} pending={pending} onSend={(text, extra) => send(text, undefined, extra)}
+          onStop={stopChat} onToggle={toggle}
+          disabled={!!pending} who={chatWho} turnsKey={turnsKey} spent={session?.ai_spent ?? 0}
+          aiSwitch={chatWho ? undefined : <AISwitch ai={ai} onToggle={toggleAI} />} aiKey={!!ai?.available}
+          hasBoard={!!session?.board || !!session?.proposals}
+          timeline={session?.board ? tl.items : undefined} paused={!tr.playing && !segment} selected={selItem}
           prefs={session?.preferences ?? null} onClassify={classify} onRule={changeRule}
           review={session?.last ? { turn: session.last.turn, items: session.last.review ?? [] } : null} />
   )
@@ -1033,7 +1087,6 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       </Button>
     </div>
   ) : null
-  const selItem = selected ? tl.items.find((x) => x.key === selected) ?? null : null
   const selStrip = selAudio ? tl.audio?.strips.find((x) => x.id === selAudio) ?? null : null
   const allJoins = session?.mix?.joins ?? []
   const pickedJoin = selJoin ? allJoins.find((j) => j.after === selJoin) : undefined
@@ -1114,7 +1167,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     { id: 'text', icon: 'text', label: 'Text' },
     { id: 'music', icon: 'music', label: 'Music' },
     // the chat is the AI's way in; with the AI off it still holds every change, each with its Undo
-    { id: 'chat', icon: caps.llm ? 'spark' : 'history', label: caps.llm ? 'AI Edit' : 'History' },
+    { id: 'chat', icon: chatWho ? 'spark' : 'history', label: chatWho ? 'AI Edit' : 'History' },
   ]
   const panelHead = (title: string, extra?: React.ReactNode) => (
     <header className="flex h-14 shrink-0 items-center gap-2 px-4">
@@ -1150,7 +1203,6 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       {session?.board && <Music board={session.board} inUse={session.music?.id ?? null} onSession={setSession} />}
     </div>
   </> : side === 'chat' ? <>
-    {pauseChat && <div className="shrink-0 border-b border-line">{pauseChat}</div>}
     <div className="flex min-h-0 flex-1 flex-col [&>aside]:min-h-0 [&>aside]:flex-1 [&>aside]:border-r-0">{chat}</div>
   </> : null
   const card = 'flex min-h-0 shrink-0 flex-col overflow-hidden rounded-2xl border border-line bg-panel'
