@@ -23,6 +23,8 @@ export type SeqItem = {
   mirror?: boolean   // flipped left to right
   fade_in?: number   // its own sound fading in / out, seconds
   fade_out?: number
+  effect?: string | null   // Shake, VHS... (backend effects.py), drawn by effectView
+  effect_amount?: number   // its Strength, 1 = 100%
 }
 
 /** Index of the item under t (binary search). The very end belongs to the

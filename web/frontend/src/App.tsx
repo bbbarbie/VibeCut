@@ -1030,6 +1030,12 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const capFirst = capSel ?? ovData.items.find((o) => o.kind === 'caption')
   const capUnder = capFirst ? tl.items[locate(tl.items, Math.min(capFirst.start + 0.1, tl.total - 1e-3))] : tl.items[0]
   const capText = capFirst?.text ?? 'Coffee run'
+  // with no shot clicked the Effects tab shows every shot's effect, if they all share one
+  const shotItems = tl.items.filter((x) => x.kind === 'shot')
+  const same = shotItems.length > 0 && shotItems.every((x) => (x.effect ?? null) === (shotItems[0].effect ?? null)
+    && (x.effect_amount ?? 1) === (shotItems[0].effect_amount ?? 1))
+  const allEffect = { effect: same ? shotItems[0].effect ?? null : null, amount: same ? shotItems[0].effect_amount ?? 1 : 1,
+                      thumb: shotThumb(shotItems[0]) }
   const inspector = (
     <Inspector tab={insTab} onTab={setInsTab}
                item={selItem} itemThumb={shotThumb(selItem ?? undefined)}
@@ -1079,7 +1085,12 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                onCaptions={toggleCaptions}
                onCaptionStyle={(patch, label) => run([{ op: 'overlay_style', ...patch }], label)}
                onJoin={(op, label) => run([{ op: 'set_transition', ...(op.all || !pickedJoin ? {} : { shot: pickedJoin.after }), ...op }], label)}
-               onLook={(id, name) => run([{ op: 'set_look', look: id }], `The video now has the ${name} look`)} />
+               onLook={(id, name) => run([{ op: 'set_look', look: id }], `The video now has the ${name} look`)}
+               allEffect={allEffect}
+               onEffect={(patch, all, label) => {
+                 const keys = all ? tl.items.filter((x) => x.kind === 'shot').map((x) => x.key) : selItem ? [selItem.key] : []
+                 if (keys.length) run(keys.map((k) => ({ op: 'set_shot', shot: k, ...patch })), label)
+               }} />
   )
   const RAIL: { id: NonNullable<typeof side>; icon: IconName; label: string }[] = [
     { id: 'media', icon: 'media', label: 'Media' },
