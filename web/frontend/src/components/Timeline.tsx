@@ -116,7 +116,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   // A shot whose end is being dragged is drawn at its new length while the
   // drag lasts: dragging the end pushes the later shots along, dragging the
   // start moves that edge with the pointer.
-  const geo = useMemo(() => {
+  const layout = (edge: { key: string; edge: 'in' | 'out'; to: number } | null) => {
     const dur = (it: SeqItem) => {
       const d = it.seq_end - it.seq_start
       if (edge?.key !== it.key) return d
@@ -134,15 +134,21 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
     }
     const end = Math.max(...w.map((x, j) => left[j] + x), 0)
     return { w, left, end }
-  }, [items, pps, edge])
+  }
+  const geo = useMemo(() => layout(edge), [items, pps, edge]) // eslint-disable-line react-hooks/exhaustive-deps
+  // The timeline as it was before the drag: captions and sound strips keep
+  // their real times while a shot is being trimmed, instead of stretching
+  // with it and jumping back when it's let go (sarah, 2026-10-18).
+  const still = useMemo(() => (edge ? layout(null) : geo), [items, pps, edge == null, geo]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const xOf = (t: number) => {
+  const xOf = (t: number, g = geo) => {
     const k = locate(items, t)
     if (k < 0) return PAD
     const it = items[k]
     const d = Math.max(it.seq_end - it.seq_start, 1e-6)
-    return PAD + geo.left[k] + Math.min(1, (t - it.seq_start) / d) * geo.w[k]
+    return PAD + g.left[k] + Math.min(1, (t - it.seq_start) / d) * g.w[k]
   }
+  const xAt = (t: number) => xOf(t, still)
   const tOf = (x: number): { t: number; localPps: number } => {
     x -= PAD
     let lo = 0
@@ -372,7 +378,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
               <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={onSelectMusic}
                       title={`${music.title}: click for the music's controls`}
                       className="absolute flex items-center gap-2 overflow-hidden rounded-md px-2.5 font-serif text-[14px] text-[#1d5c46] hover:brightness-95"
-                      style={{ left: PAD, width: Math.max(40, geo.end), bottom: musicBottom, height: SOUND_H,
+                      style={{ left: PAD, width: Math.max(40, still.end), bottom: musicBottom, height: SOUND_H,
                         background: 'repeating-linear-gradient(90deg, #bfe3d3 0 2px, #cdeadd 2px 5px)' }}>
                 <Icon name="music" size={16} />
                 <span className="truncate">{music.title}</span>
@@ -383,8 +389,8 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
               const d = drag?.id === o.id ? drag : null
               const a = d ? d.start : o.start
               const z = d ? d.end : o.shown_end
-              const x = xOf(a)
-              const w = Math.max(12, xOf(Math.min(z, tl.total)) - x)
+              const x = xAt(a)
+              const w = Math.max(12, xAt(Math.min(z, tl.total)) - x)
               const meta = KIND_META[o.kind]
               const edge = o.dur != null || o.anchor.to === 'edit'
               return (
@@ -530,8 +536,8 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
             {strips.map((a) => {
               const m = moving?.id === a.id ? moving : null
               const at = m ? m.at : a.at
-              const x = xOf(Math.min(at, tl.total))
-              const w = Math.max(28, Math.min(geo.end + PAD, xOf(Math.min(at + a.dur, tl.total))) - x)
+              const x = xAt(Math.min(at, tl.total))
+              const w = Math.max(28, Math.min(still.end + PAD, xAt(Math.min(at + a.dur, tl.total))) - x)
               const label = `Sound of shot ${a.n ?? ''}`.trim()
               return (
                 <div key={a.id}
