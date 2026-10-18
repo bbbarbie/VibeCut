@@ -168,6 +168,31 @@ def _fetch(job: Job, d: Path) -> tuple[str, dict]:
                            "url": info.get("webpage_url") or job.source}
 
 
+TEXT_FPS = 2            # frames a second read for words on screen; a caption holds longer than that
+TEXT_HEIGHT = 540
+
+
+def text_events(source: str, workdir: Path, limit_s: float) -> list[dict] | None:
+    """Frames of the reference at TEXT_FPS, 540p, through the Mac's Vision:
+    [{t, items}] or None when Vision isn't here. The frames are deleted
+    after; nothing of the reference stays but numbers."""
+    from . import vision
+    if vision.ensure_built() is None:
+        return None
+    workdir.mkdir(parents=True, exist_ok=True)
+    try:
+        p = subprocess.run(["ffmpeg", "-v", "error", "-y", "-t", str(limit_s), "-i", source,
+                            "-vf", f"fps={TEXT_FPS},scale=-2:{TEXT_HEIGHT}", "-q:v", "4", str(workdir / "%05d.jpg")],
+                           capture_output=True, text=True)
+        if p.returncode != 0:
+            return None
+        paths = sorted(str(x) for x in workdir.glob("*.jpg"))
+        found = vision.text(paths)
+        return [{"t": round(i / TEXT_FPS, 3), "items": found.get(x, [])} for i, x in enumerate(paths)]
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
 def _run(job: Job) -> None:
     d = ROOT / job.rid
     tmp = ROOT / f".{job.rid}.{job.id}"
@@ -181,7 +206,8 @@ def _run(job: Job) -> None:
         job.stage, job.progress = "reading", max(job.progress, 0.5)
         m = media.load(str(tmp / Path(path).name) if is_url(job.source) else path, limit_s=LIMIT_S)
         job.stage, job.progress = "learning", 0.85
-        style = st.learn(m)
+        src_now = str(tmp / Path(path).name) if is_url(job.source) else path
+        style = st.learn(m, text=text_events(src_now, tmp / "text", min(m.duration, LIMIT_S)))
         (tmp / "style.json").write_text(json.dumps(style))
         meta = {"rid": job.rid, "title": info.get("title") or "Reference", "uploader": info.get("uploader"),
                 "url": info.get("url"), "path": path, "downloaded": is_url(job.source),
@@ -191,6 +217,9 @@ def _run(job: Job) -> None:
         shutil.rmtree(d, ignore_errors=True)
         tmp.rename(d)
         job.stage, job.progress = "done", 1.0
+        from . import cloud
+        slim = {k: v for k, v in style.items() if k != "transitions"} | {"transitions": {k: v for k, v in (style.get("transitions") or {}).items() if k != "list"}}
+        cloud.push("vibe", job.rid, {"title": meta["title"], "url": meta.get("url"), "duration": meta["duration"], "style": slim}, meta["learnt_at"])
     except Exception as e:  # noqa: BLE001 -- surfaced to the creator verbatim
         job.stage, job.error = "error", str(e)[:400]
         shutil.rmtree(tmp, ignore_errors=True)

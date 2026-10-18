@@ -79,8 +79,49 @@ func faces(_ path: String) async -> FaceOut {
     })
 }
 
+// `vibevision --text a.jpg b.jpg ...`: the words on screen in each frame and
+// where they sit, so a reference reel can teach when its text appears, how
+// long it holds and where (research 06 / spec P16). Fast recognition is
+// enough: the words themselves matter less than their timing and place.
+struct TextItem: Encodable {
+    let text: String
+    let box: [Double]        // x, y, w, h, normalised, origin bottom-left
+    let conf: Double
+}
+struct TextOut: Encodable {
+    let path: String
+    let items: [TextItem]
+}
+
+func words(_ path: String) async -> TextOut {
+    let url = URL(fileURLWithPath: path)
+    var req = RecognizeTextRequest()
+    req.recognitionLevel = .fast
+    req.usesLanguageCorrection = false
+    let found = (try? await req.perform(on: url)) ?? []
+    return TextOut(path: path, items: found.compactMap { obs in
+        guard let top = obs.topCandidates(1).first else { return nil }
+        let b = obs.boundingBox
+        return TextItem(text: top.string,
+                        box: [Double(b.origin.x), Double(b.origin.y), Double(b.width), Double(b.height)],
+                        conf: Double(top.confidence))
+    })
+}
+
 var args = Array(CommandLine.arguments.dropFirst())
 let enc = JSONEncoder()
+if args.first == "--text" {
+    args.removeFirst()
+    // One frame at a time: text recognition deadlocked when a task group
+    // ran 18 requests at once (2026-10-18, 0% CPU, never returned); the
+    // Python side chunks and parallelises across processes instead.
+    for p in args {
+        let r = await words(p)
+        if let d = try? enc.encode(r), let s = String(data: d, encoding: .utf8) { print(s) }
+        fflush(stdout)
+    }
+    exit(0)
+}
 if args.first == "--faces" {
     args.removeFirst()
     let found = await withTaskGroup(of: (Int, FaceOut).self) { group in

@@ -105,6 +105,17 @@ so Undo takes it all back, and the three stories are still there under
 Other stories. Music is fetched the moment the clips are read, so by the
 time you press Make it's usually waiting.
 
+## Cut it like: the viral library
+
+A vibe is what a set of reels has in common: twenty day-in-my-life shorts
+that did well give one record (shot length and arc, hook, tempo, where the
+words sit and how long, how the ending lands), built with
+`python -m web.backend.vibes --niche "day in my life" --links links.txt`.
+The Setup dialog lists the library's vibes and your own learnt reels under
+*Cut it like*; pick one and Make cuts to its fingerprint instead of the
+frame's own pace. Only numbers are kept from a reel, and the record names
+its sources.
+
 ## The front door: a short like a reel you love
 
 On the home page, under the clips you picked, there is one more line:
@@ -129,6 +140,14 @@ white flash / fades), whether it **cuts on the beat**, its **colour** (tone
 curve, white balance, split toning, saturation), its **frame** (cinematic
 bars) and its **music feel** (energy arc, tempo). Each trait says what it
 was measured from.
+
+Since 2026-10-18 a reference also teaches its **ideas**: where it puts
+words and for how long (read from its frames by the Mac's Vision; "not
+checked" elsewhere), how it opens (first cut, on action or still) and how
+it ends (last shot held, fade). Make my video with a reel puts your
+captions where the reel's were, holds them as long, skips the title when
+the reel's words start late, makes a wordless video from a wordless reel,
+and holds your ending as many beats as the reel's last shot.
 
 Tick what to borrow. Pacing and beat retime your shots (a shot is never
 held longer than it was filmed; voiceover parts keep their timing). The
@@ -276,6 +295,21 @@ The voiceover is a turn in the log like any other: Undo removes it. A new
 description of the video keeps it. Once chosen, the story is edited by
 chat and timeline exactly as before. The narration itself is not played or
 mixed — there's no audio track for it yet.
+
+## What follows you to the next video
+
+The frame, the look and the music switch you picked last time are
+preselected next time, marked *as last time*, with the footage's own
+suggestion still shown. A look you choose under Captions, a caption style
+or entrance, and the frame chip follow too. Nothing is applied without the
+dialog showing it; everything is one file in the cache
+(`settings.json`). Taste and rules reaching the edit itself come later.
+
+With `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `web/.env`, those defaults,
+your confirmed rules, your profile and the styles you've learnt from reels
+are mirrored to Supabase (`supabase/migrations/0001_preferences.sql`), so
+they're there on your next Mac. Footage, the index and exports never are.
+Offline, nothing changes; the next change catches up.
 
 ## What your edits teach — only when you say so
 

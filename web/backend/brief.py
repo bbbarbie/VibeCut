@@ -234,6 +234,8 @@ def clean_style(style: dict | None) -> dict | None:
     if not style:
         return None
     out = {k: style[k] for k, allowed in STYLE_KEYS.items() if style.get(k) in allowed}
+    if isinstance(style.get("vibe"), str) and style["vibe"]:
+        out["vibe"] = style["vibe"][:80]      # "Cut it like": a library vibe id or ref:<rid> (vibes.py)
     try:
         sec = float(style.get("seconds") or 0)
     except (TypeError, ValueError):

@@ -101,7 +101,20 @@ def fingerprint(styles: list[dict]) -> dict:
     energy = np.mean(curves, axis=0) if curves else None     # a reference may know its arc but not its curve
     durs = [float(s["duration"]) for s in styles if s.get("duration")]
     dur = float(np.clip(np.median(durs) if durs else 30.0, *DEFAULT_LEN))
+    # the reels' ideas (style.words / ending): where words sit, how long they
+    # hold, whether there are any; how long the last shot is held
+    ws = [s["words"] for s in styles if (s.get("words") or {}).get("share") is not None]
+    text = None
+    if ws:
+        bands = [w["band"] for w in ws if w.get("band")]
+        text = {"share": round(float(np.median([w["share"] for w in ws])), 3),
+                "band": max(set(bands), key=bands.count) if bands else None,
+                "hold_s": round(float(np.median([w["hold_s"] for w in ws if w.get("hold_s")])), 2) if any(w.get("hold_s") for w in ws) else None,
+                "upper": bool(np.median([w.get("upper") or 0 for w in ws]) > 0.8),
+                "first_s": round(float(np.median([w["first_s"] for w in ws if w.get("first_s") is not None])), 2) if any(w.get("first_s") is not None for w in ws) else None}
+    ends = [s["ending"]["last_s"] for s in styles if (s.get("ending") or {}).get("last_s")]
     return {
+        "text": text, "last_s": round(float(np.median(ends)), 2) if ends else None,
         "median_s": round(med, 3), "curve": [round(float(c), 3) for c in curve],
         "spread": (round(p10 / med, 2), round(p90 / med, 2)),
         "hook_s": round(float(np.clip(first, *HOOK_HOLD)), 2),
@@ -131,7 +144,7 @@ def load_shoot(folder: str) -> dict[str, dict]:
 
 
 def plan_shots(clips: dict[str, dict], fp: dict, length: float | None = None, hook_n: int = 1,
-               cut: tuple[set, dict] | None = None, judge=None) -> sel.Plan:
+               cut: tuple[set, dict] | None = None, judge=None, taste: str = "") -> sel.Plan:
     """Pick the moments and give each its window, before any beat is known.
     `judge`: None = Claude when there is a key (select.judge), False = the
     rules alone, or a stand-in `ask(options, keep)` for tests."""
@@ -143,7 +156,7 @@ def plan_shots(clips: dict[str, dict], fp: dict, length: float | None = None, ho
     n = max(4, int(round(body / fp["median_s"])))
     plan = sel.choose(shots, clips, n, hook_n)
     if judge is not False and os.environ.get("VIBECUT_REMIX_JUDGE", "1") != "0":
-        plan = sel.judge(plan, shots, clips, ask=judge if callable(judge) else None)
+        plan = sel.judge(plan, shots, clips, ask=judge if callable(judge) else None, taste=taste)
     plan.notes = notes + plan.notes
     n_body = sum(len(s) for s in plan.sessions)
     targets = [fp["median_s"] * _curve_at(fp["curve"], (k + 0.5) / max(n_body, 1)) * _spread(fp, k)
@@ -338,13 +351,16 @@ def _clock(dt: datetime) -> str:
     return f"{h}:{dt.minute:02d} {'a.m.' if dt.hour < 12 else 'p.m.'}"
 
 
-def captions(plan: sel.Plan, title: str | None, sub: str | None) -> list[dict]:
-    """What goes on screen, in sequence seconds. Built only from what the edit knows."""
+def captions(plan: sel.Plan, title: str | None, sub: str | None, hold_s: float | None = None,
+             with_title: bool = True, phrases: list[str] | None = None) -> list[dict]:
+    """What goes on screen, in sequence seconds. Built only from what the edit
+    knows. `hold_s`: how long a stop's line stays (a reference's own hold);
+    `with_title`: a reel with no words at the top gets no title."""
     out = []
     t = 0.0
     hook_end = sum(p.duration for p in plan.hook)
     first = next((p.shot.when for p in plan.picks if p.shot.when), None)
-    if plan.hook:
+    if plan.hook and with_title:
         out.append({"kind": "title", "text": title or TAG_TEXT,
                     "sub": sub or (first.strftime("%A, %B %-d") if first else ""),
                     "start": 0.0, "end": hook_end, "anim": "pop"})
@@ -352,16 +368,18 @@ def captions(plan: sel.Plan, title: str | None, sub: str | None) -> list[dict]:
     total = plan.duration
     if total > hook_end + 1:
         out.append({"kind": "tag", "text": title or TAG_TEXT, "start": hook_end, "end": total, "anim": "fade"})
-    for picks in plan.sessions:
+    for n_, picks in enumerate(plan.sessions):
         if not picks:
             continue
         p0 = picks[0]
         words = _clock(p0.shot.when) if p0.shot.when else ""
-        phrase = _phrase(picks)
+        # a written line for this stop (make.words, the model with the creator's taste) beats the label table
+        phrase = (phrases[n_] if phrases and n_ < len(phrases) and phrases[n_] else None) or _phrase(picks)
         if phrase:
             words = f"{words} · {phrase}" if words else phrase
         if words:
-            hold = min(2.2, max(1.2, sum(p.duration for p in picks[:3])))
+            hold = hold_s if hold_s else min(2.2, max(1.2, sum(p.duration for p in picks[:3])))
+            hold = min(hold, max(0.8, sum(p.duration for p in picks)))   # never past the stop itself
             out.append({"kind": "scene", "text": words, "start": round(t, 3), "end": round(t + hold, 3),
                         "anim": "pop"})
         t += sum(p.duration for p in picks)

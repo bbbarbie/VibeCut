@@ -7,6 +7,7 @@ the storyboard *text* goes to the chat model (see llm.py).
 from __future__ import annotations
 
 import copy
+import json
 import os
 import shutil
 import subprocess
@@ -30,7 +31,7 @@ from cutgrammar import grade
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, bed, brief, make, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, bed, brief, cloud, defaults, make, vibes, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import GATE, Workflow, WorkflowError
 
@@ -42,6 +43,9 @@ async def lifespan(_: FastAPI):
     indexer.pool()
     if musiclib.load_setting() and os.path.isdir(musiclib.load_setting()):
         musiclib.set_folder(musiclib.load_setting())
+    # What the mirror knows that this Mac doesn't yet (cloud.py): defaults and
+    # rules newer than the local copies. In a thread: start must not wait on the net.
+    threading.Thread(target=_cloud_pull, daemon=True).start()
     # The project that was open last time is open again, as it was left.
     last = pj.open_id()
     if last:
@@ -163,9 +167,67 @@ def _meta() -> dict | None:
     return None if pr is None else pr.summary(CLIPS, SESSION.board)
 
 
+def _cloud_pull() -> None:
+    if not cloud.available():
+        return
+    rows = cloud.pull()
+    local_at = float((defaults._read().get("defaults") or {}).get("at") or 0)
+    picks = {r["key"]: r["value"] for r in cloud.newer([r for r in rows if r.get("kind") == "default"], local_at)}
+    if picks:
+        defaults.note(_sync=False, **picks)
+    with LOCK:
+        PREFS.absorb([r for r in rows if r.get("kind") == "rule"])
+    prof = [r for r in rows if r.get("kind") == "profile" and r.get("key") == "me"]
+    if prof:
+        _profile_store(prof[-1]["value"], prof[-1].get("at") or 0, sync=False)
+
+
+def _profile_store(profile: dict, at: float, sync: bool = True) -> dict:
+    """The creator's profile, kept beside the defaults so it can be mirrored
+    (the browser keeps its own copy in localStorage; this one follows them)."""
+    with cloud._lock:
+        try:
+            data = json.loads(defaults.SETTINGS.read_text())
+        except (OSError, ValueError):
+            data = {}
+        have = data.get("profile") or {}
+        # a save by hand always wins; only a copy *from* the mirror defers to a newer local one
+        if not sync and have and float(have.get("at") or 0) >= at:
+            return have
+        data["profile"] = {"at": at, "value": profile}
+        defaults.SETTINGS.parent.mkdir(parents=True, exist_ok=True)
+        tmp = defaults.SETTINGS.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data))
+        tmp.replace(defaults.SETTINGS)
+    if sync:
+        cloud.push("profile", "me", profile, at)
+    return data["profile"]
+
+
+class ProfileReq(BaseModel):
+    profile: dict
+
+
+@app.get("/api/profile")
+def api_profile_get() -> dict:
+    try:
+        data = json.loads(defaults.SETTINGS.read_text())
+    except (OSError, ValueError):
+        data = {}
+    return {"profile": (data.get("profile") or {}).get("value"), "at": (data.get("profile") or {}).get("at"),
+            "cloud": cloud.status()}
+
+
+@app.post("/api/profile")
+def api_profile_put(req: ProfileReq) -> dict:
+    rec = _profile_store(req.profile, time.time())
+    return {"profile": rec["value"], "at": rec["at"], "cloud": cloud.status()}
+
+
 def _capabilities() -> dict:
     """What this machine can do, so the UI says so instead of failing later."""
     return {
+        "cloud": cloud.available(),
         "llm": llm.available(),
         "speech": sys.platform == "darwin" and shutil.which("swiftc") is not None,
         "vision": vision.status(),
@@ -180,8 +242,8 @@ def _capabilities() -> dict:
 # they succeed the project is written to disk. Uploads, the finished-video
 # tool and the reference library stand apart: they are not project state.
 _NO_PROJECT_OK = ("/api/projects", "/api/upload", "/api/locate", "/api/polish", "/api/music/folder",
-                  "/api/references")
-_NOT_SAVED = ("/api/projects", "/api/upload", "/api/locate", "/api/polish", "/api/music/folder")
+                  "/api/references", "/api/profile")
+_NOT_SAVED = ("/api/projects", "/api/upload", "/api/locate", "/api/polish", "/api/music/folder", "/api/profile")
 
 
 @app.middleware("http")
@@ -917,15 +979,21 @@ def api_brief_setup() -> dict:
         about = pitch.guess(list(CLIPS.values())) or "My video"
         marks = brief.length_marks(_usable_s(), about)
         share = _portrait_share()
-        return {"format": brief.suggest_format(share, marks["max"]), "portrait_share": round(share, 2),
+        remembered = defaults.get()
+        return {"format": remembered.get("format") or brief.suggest_format(share, marks["max"]),
+                "suggested": brief.suggest_format(share, marks["max"]), "remembered": remembered,
+                "music": remembered.get("music", "on") != "off", "portrait_share": round(share, 2),
                 "formats": [{"key": k, "label": v, "seconds": round(brief.length_for(k, marks))} for k, v in brief.FORMATS.items()],
-                "look": (_direction() or {}).get("style", {}).get("look") or "cozy",
+                "look": (_direction() or {}).get("style", {}).get("look") or remembered.get("look") or "cozy",
+                "vibes": vibes.choices(), "vibe": remembered.get("vibe"),
                 "looks": looks.public(), "about": about}
 
 
 class BriefAutoReq(BaseModel):
     format: str | None = None
     look: str | None = None
+    music: bool | None = None       # None = as last time (defaults.py), else this time's switch
+    vibe: str | None = None         # "Cut it like": a library vibe id or ref:<rid> (vibes.py); None = the frame's prior
 
 
 @app.post("/api/brief/auto")
@@ -949,7 +1017,7 @@ def api_brief_auto(req: BriefAutoReq | None = None) -> dict:
         feel = tempo.read(list(CLIPS.values()), cut.for_story(PLAN["plan"]))
         fmt = req.format or brief.suggest_format(_portrait_share(), marks["max"])
         style = {"seconds": brief.length_for(fmt, marks), "captions": "describe", "pace": feel["pace"],
-                 "format": fmt, "look": req.look or "cozy"}
+                 "format": fmt, "look": req.look or "cozy", "vibe": req.vibe or None}
         pr.brief = {"message": about, "style": brief.clean_style(style) or {}, "tempo": feel["why"],
                     "said": f"{brief.FORMATS[fmt].split(' ·')[0]} · about {brief.say_length(style['seconds'])} · "
                             f"{tempo.NAMES[feel['pace']].lower()} · {looks.get(style['look'])['name']} · captions",
@@ -994,6 +1062,18 @@ def api_make(req: BriefAutoReq | None = None) -> dict:
         own = musiclib.STATE["tracks"] if musiclib.STATE["status"] == "ready" else None
         clips = dict(CLIPS)
         cut_now = cut.for_story(PLAN["plan"])
+        remembered = defaults.get()
+        want_music = req.music if (req and req.music is not None) else remembered.get("music", "on") != "off"
+        # the creator's own picks follow them to the next video (defaults.py, layer 1)
+        defaults.note(format=style.get("format"), look=style.get("look"), music="on" if want_music else "off",
+                      vibe=style.get("vibe") or None)
+        vibe_fp = vibes.fingerprint_for(style.get("vibe"))
+        try:
+            prof = (json.loads(defaults.SETTINGS.read_text()).get("profile") or {}).get("value")
+        except (OSError, ValueError):
+            prof = None
+        taste = make.taste_text(prof, PREFS.for_model())
+        caption_style = {k: remembered[f"caption_{k}"] for k in ("template", "enter") if remembered.get(f"caption_{k}")}
 
     def on_done(job: make.Job) -> None:
         with LOCK:
@@ -1005,17 +1085,40 @@ def api_make(req: BriefAutoReq | None = None) -> dict:
                 if not any(x.id == t.id for x in musiclib.STATE["tracks"]):
                     musiclib.STATE["tracks"].append(t)
                 musiclib.use(t.id)
-            SESSION.add({"kind": "direct", "text": MAKE_TEXT, "ops": job.result["ops"], "reply": job.result["reply"]},
+            ops_ = list(job.result["ops"])
+            if caption_style:
+                ops_.append({"op": "overlay_style", **caption_style, "source": "defaults"})   # as last time
+            SESSION.add({"kind": "direct", "text": MAKE_TEXT, "ops": ops_, "reply": job.result["reply"]},
                         CATALOG["cat"], _make_proposals)
+            pr_ = PROJECT["p"]
+            if pr_ is not None and pr_.brief:
+                # the chips read the brief: after Make it must describe the cut, not the guess
+                fp_ = job.result["fp"]
+                pace_ = make.pace_of(fp_)
+                pr_.brief = {**pr_.brief,
+                             "style": {**(pr_.brief.get("style") or {}), "pace": pace_,
+                                       "seconds": round(job.result["plan"].duration, 1)},
+                             "tempo": f"{tempo.NAMES[pace_]}: about {fp_['median_s']:.1f} s a shot, "
+                                      + ("from your reels." if fp_.get("refs_used") else "the way a short is cut." if fp_["median_s"] < 1.3 else "the way a vlog breathes.")}
             if PROJECT["p"] is not None:
                 PROJECT["p"].events.append({"kind": "make", "at": time.time(), "music": bool(mx),
                                             "seconds": round(job.result["plan"].duration, 1),
                                             "elapsed": round(time.time() - job.started, 1)})
         _save()
 
-    MAKE["job"] = make.start(clips, cut_now, style.get("format", "tall"), style.get("pace", "balanced"),
-                             style.get("look"), about, float(style.get("seconds") or 60.0), own, None, None, on_done)
-    return MAKE["job"].public()
+    def register(job: make.Job) -> None:
+        MAKE["job"] = job     # before the thread runs: a fast job must not land as "not mine"
+
+    job = make.start(clips, cut_now, style.get("format", "tall"), style.get("pace", "balanced"),
+                     style.get("look"), about, float(style.get("seconds") or 60.0), own, None, None, on_done,
+                     want_music=want_music, register=register, vibe=vibe_fp, taste=taste)
+    return job.public()
+
+
+@app.get("/api/vibes")
+def api_vibes() -> dict:
+    """The library's vibes and the creator's own learnt reels, for "Cut it like"."""
+    return {"vibes": vibes.choices()}
 
 
 @app.get("/api/make/{jid}")
@@ -1043,6 +1146,7 @@ def api_format(req: FormatReq) -> dict:
     with LOCK:
         pr.brief = {**(pr.brief or {"message": "", "said": "", "at": time.time()}),
                     "style": {**((pr.brief or {}).get("style") or {}), "format": req.format}}
+        defaults.note(format=req.format)
         return _session()
 
 
@@ -1342,6 +1446,11 @@ def api_ops(req: OpsReq) -> dict:
     with LOCK:
         SESSION.add({"kind": "direct", "text": req.label, "ops": req.ops},
                     CATALOG["cat"], _make_proposals)
+        for o in req.ops:   # picks made by hand follow the creator to the next video
+            if o.get("op") == "set_look" and o.get("look"):
+                defaults.note(look=o["look"])
+            if o.get("op") == "overlay_style" and o.get("source") != "defaults":
+                defaults.note(**{f"caption_{k}": o[k] for k in ("template", "enter") if k in o})
         if [o.get("op") for o in req.ops] == ["choose_option"]:
             _drop_repeats()
             _words_as_asked()
@@ -1418,6 +1527,7 @@ def api_bed(req: BedReq) -> dict:
     with LOCK:
         if not SESSION.board:
             raise HTTPException(409, "Choose a story first.")
+        defaults.note(music="on" if req.on else "off")
         if req.on:
             _bed_start(force=True)
         else:

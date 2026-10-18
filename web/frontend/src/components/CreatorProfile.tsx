@@ -1,3 +1,4 @@
+import { api } from '../api'
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { emptyProfile, FONTS, loadProfile, PACES, PLATFORMS, safeReference, saveProfile, VIBES, type CreatorProfile as Profile } from '../profile'
 import { Button, Confirm, Field, inputCls, Notice, Pills, Wordmark } from '../ui'
@@ -48,6 +49,8 @@ export function CreatorProfile({ onClose }: { onClose: () => void }) {
     try {
       const next = saveProfile(window.localStorage, profile)
       setProfile(next); setSaved(next); setError(null); setMessage('Saved in this browser.'); setLeaving(false)
+      // and beside the defaults on the server, so it follows you (cloud.py when configured)
+      api.profilePut(next as unknown as Record<string, unknown>).then((r) => { if (r && (r as { cloud?: { on: boolean } }).cloud?.on) setMessage('Saved, and it follows you.') }).catch(() => {})
     } catch { setError('Could not save. Your changes are still here. Check browser storage permissions and try again.') }
   }
   const addReference = () => {
