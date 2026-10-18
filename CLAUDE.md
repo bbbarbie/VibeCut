@@ -189,6 +189,101 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   judged on one real shoot (42 clips, 3 references). Every weight is a
   guess; the selector has no model behind it (no key on this Mac).
 
+- **A reel's ideas, not only its rhythm** (2026-10-18, the user's vision
+  restated: "analyse the aesthetics, get a similar version"). `style.learn`
+  gained three traits: **words** (`text_style`: share of time with text,
+  first words at, band bottom / middle / top, hold, cards, caps, size; from
+  `vibevision --text` = Vision `RecognizeTextRequest` at `.fast`, spec P16,
+  over the source's frames at 2 fps 540p, `reference.text_events`; frames
+  deleted after; `pending: ["vision"]` elsewhere), **opening** (first cut,
+  motion in the first 2 s vs the rest) and **ending** (last shot held,
+  fade out, motion in the last 2 s). `VERSION` 2. `remix.fingerprint`
+  carries `text` and `last_s`; `make.ops` puts captions where the reel's
+  words were (`overlay_style captions`, `template: bold` for caps), holds
+  them as long (`remix.captions(hold_s=…)`), gives no title when the reel's
+  words start late, no words at all for a wordless reel, and `end_beats`
+  holds the ending as many beats as the reel's last shot (1–4). Verified
+  OCR end to end on this Mac (`tests/test_ideas.py`); references learnt
+  before this have no `words` and fall back to the priors.
+- **Into the drop** (`make.ramp_hook`, 2026-10-18; built from `split`,
+  `set_shot speed` and `set_transition`, nothing new on the board): for a
+  short with a beat, the hook grows by one beat of footage and its last
+  sequence beat runs at `RAMP_SPEED` 2× (two beats of footage in one, so the
+  drop doesn't move); Hype and Playful (`FLASH_LOOKS`) get a `FLASH_S` 0.2 s
+  white flash on that cut. The split's second key is `{id}~{ms}` as
+  `board._split` names it. A shot may now appear twice on a made board only
+  as the two touching halves of that split. Preview plays the ramp by rate
+  and the flash by veil; export by atempo and fade. Priors.
+- **Motion on the beat and a deliberate ending** (`make.py`, 2026-10-18):
+  `punch` is a shot fix like speed or mirror (`board.SHOT_FX`, ±`PUNCH_MAX`
+  0.25; `timeline.layout` carries it, `export._shot` renders it as zoompan,
+  `transport.dress` plays it as a CSS `scale` animation over the shot —
+  preview and export agree). `make.punches`: the hook pushes in
+  (`PUSH_HOOK` 0.08), the first body shot after the drop hits (`PUSH_HIT`
+  0.14), every bar's first shot pushes ±`PUSH_BAR` 0.05 alternating; no
+  beat known → hook and hit only. `make.end_strong`: the last stop ends on
+  its strongest moment (only that stop reordered); `hold_ending`: ≥
+  `END_BEATS` 2 beats. The hook is lifted out of its stop, not copied (a
+  Remix played it twice). After Make the brief's pace / seconds / tempo
+  describe the cut (`make.pace_of`), so the Frames chips tell the truth.
+  Cuts sit on the half-beat grid (filler) with the hook and heroes on whole
+  beats — `remix.quantise`'s rule, now pinned in `test_make`. All priors.
+- **Taste in the loop** (layer 2 of preserving preference, 2026-10-18;
+  key only). `make.taste_text(profile, PREFS.for_model())` renders the
+  creator in their own words (name, what they make, the feeling, pace,
+  never…) plus the confirmed rules; it rides on the system prompt of the
+  two calls that choose and write: `llm.rank_shots(…, taste)` through
+  `select.judge(taste=)` / `remix.plan_shots(taste=)`, and
+  `llm.day_phrases(…, taste)` through `make.words`, which writes one line
+  per stop from its time and labels (the same writer as the describe
+  captions) and hands them to `remix.captions(phrases=)`; caps when the
+  reel's words were caps; a failed call leaves the label table's phrase;
+  the job records `taste` and `written`. The profile the server knows is
+  the one mirrored from the profile page (`/api/profile`). Not tried
+  against the live model (no key on this Mac). `tests/test_taste.py`.
+  Layer 3 (undo and verdicts as candidate rules) is not built.
+- **The viral library** (`web/backend/vibes.py`, `/api/vibes`, "Cut it
+  like" in `Setup.tsx`; the user's vision, 2026-10-18: learn from viral
+  vlogs). A vibe = `remix.fingerprint` over a *set* of reels learnt through
+  `reference.start` (so each has words / opening / ending too), saved as a
+  dated record under `$VIBECUT_CACHE/vibes/` naming its sources, mirrored
+  as kind `vibe` (`lib:<id>`). `MIN_REELS` 3. CLI: `python -m
+  web.backend.vibes --niche … --links file | --files …` (`--limit` 120 s of
+  each reel). The Setup dialog offers the library's vibes, then the
+  creator's own learnt reels as one-reel vibes (`ref:<rid>`); the pick
+  travels as `style.vibe`, is remembered (`defaults`), and
+  `make.fingerprint(vibe=…)` takes it over the frame's prior (duration
+  still capped by the frame). Popularity stands in for "well cut"; the
+  record names its reels so that can be judged. `tests/test_vibes.py`.
+  First real vibe, 2026-10-18: `day-in-my-life-popular-reels-20261018`
+  from the 19 vlogs and reels on this Mac (the calibration set): 1.20 s a
+  shot, hook 2.1 s, 69–144 BPM, builds; 90 s learnt of each.
+- **The Supabase mirror** (`web/backend/cloud.py`, `supabase/migrations/
+  0001_preferences.sql`; the user's decision, 2026-10-18: preferences in a
+  backend connected to Supabase). One table, `preferences(device, kind,
+  key, value, updated_at)`, kinds default / rule / profile / vibe. Local
+  JSON stays the source of truth; every change pushes an upsert in a thread
+  through PostgREST over urllib (no SDK), failures are logged and retried
+  on the next push, nothing raises into a request. On start `_cloud_pull`
+  applies rows newer than the local copy (`CLOCK_SLOP` 5 s): defaults
+  (`defaults.note(_sync=False)`), rules (`Preferences.absorb`), the profile
+  (`/api/profile`, also mirrored from the profile page's Save). A learnt
+  reel pushes its numbers (`style` minus the transition list), never a
+  frame. Identity is a `device` id in settings.json until sign-in. Config:
+  `SUPABASE_URL` + `SUPABASE_ANON_KEY` in `web/.env`; off otherwise
+  (`capabilities.cloud`). `tests/test_cloud.py` against a fake endpoint.
+- **Defaults that follow the creator** (`web/backend/defaults.py`, layer 1
+  of preserving preference, 2026-10-18): the frame, look and Music switch
+  from Make, the frame chip, a look picked under Captions and a caption
+  template / entrance are remembered in `$VIBECUT_CACHE/settings.json`
+  and offered next time as the *preselected* answer ("as last time"; the
+  footage's own frame suggestion still shown), never applied silently; the
+  remembered caption style rides on the Make turn as its own `overlay_style`
+  op (`source: "defaults"`, which is not re-remembered). `BriefAutoReq.music`
+  None = as last time. Layer 2 (taste + confirmed rules into the judge's
+  prompt, key only) and layer 3 (undo / verdicts as candidate rules) are
+  not built. `tests/test_defaults.py`. `make.start(register=…)` sets the
+  job before its thread runs — a fast job landed as "not mine" before.
 - **The one pipeline** (`web/backend/make.py`, `/api/make`, 2026-10-17;
   after rendering the app headless on sarah's shoot: "Make my video" gave a
   13-shot chronological timeline with clock captions and no music, while the

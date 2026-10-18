@@ -517,15 +517,17 @@ DAY_SCHEMA = {
 }
 
 
-def day_phrases(items: list[dict], about: str = "") -> list[str]:
+def day_phrases(items: list[dict], about: str = "", taste: str = "") -> list[str]:
     """[{time, labels}] -> one short phrase per item ('' = time only).
-    Only times and label words leave the machine -- never a frame."""
+    Only times and label words leave the machine -- never a frame. `taste`:
+    the creator's own words about their videos and their confirmed rules
+    (make.taste_text), appended to the system prompt."""
     import anthropic
 
     lines = [f"{i + 1}. {it['time']} — labels: {', '.join(it['labels']) or 'none'}" for i, it in enumerate(items)]
     try:
         resp = client().messages.create(
-            model=MODEL, max_tokens=1500, system=DAY_SYSTEM,
+            model=MODEL, max_tokens=1500, system=DAY_SYSTEM + (f"\n\n{taste}" if taste else ""),
             messages=[{"role": "user", "content": f"The video: {about[:300] or '(no description)'}\n\n"
                                                   + "\n".join(lines)
                                                   + f"\n\nReturn exactly {len(items)} phrases, in order."}],
@@ -633,8 +635,10 @@ RANK_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["ke
                "properties": {"keep": {"type": "array", "items": {"type": "integer"}}, "why": {"type": "string"}}}
 
 
-def rank_shots(options: list[dict], keep: int) -> tuple[list[int], str]:
-    """[{label, frame: jpeg bytes}] -> (0-based indices to keep, in play order; why)."""
+def rank_shots(options: list[dict], keep: int, taste: str = "") -> tuple[list[int], str]:
+    """[{label, frame: jpeg bytes}] -> (0-based indices to keep, in play order; why).
+    `taste` (make.taste_text) rides on the system prompt: who this creator is
+    and what they've said they want, so the pick is theirs, not generic."""
     import anthropic
     import base64
 
@@ -646,7 +650,7 @@ def rank_shots(options: list[dict], keep: int) -> tuple[list[int], str]:
     content.append({"type": "text", "text": f"Keep exactly {keep} of these {len(options)} moments."})
     try:
         resp = client().messages.create(
-            model=MOMENT_MODEL, max_tokens=1500, system=RANK_SYSTEM,
+            model=MOMENT_MODEL, max_tokens=1500, system=RANK_SYSTEM + (f"\n\n{taste}" if taste else ""),
             messages=[{"role": "user", "content": content}],
             output_config={"effort": "low", "format": {"type": "json_schema", "schema": RANK_SCHEMA}},
         )

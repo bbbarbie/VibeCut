@@ -57,13 +57,15 @@ STAGES = {"choosing": "Choosing the moments…", "music": "Finding music and its
           "words": "Writing the words…", "done": "Done", "error": "Failed"}
 
 
-def fingerprint(fmt: str, pace: str, seconds: float, styles: list[dict] | None = None) -> dict:
-    """The shape the edit should take: the references' when there are any,
-    else the frame's prior. `seconds` is the length the brief asked for."""
+def fingerprint(fmt: str, pace: str, seconds: float, styles: list[dict] | None = None,
+                vibe: dict | None = None) -> dict:
+    """The shape the edit should take: a chosen vibe's (vibes.py), else the
+    references' when there are any, else the frame's prior. `seconds` is
+    the length the brief asked for."""
     fmt = fmt if fmt in PRIOR else "tall"
     pace = pace if pace in bed.PACE_BPM else "balanced"
-    if styles:
-        fp = remix.fingerprint(styles)
+    if styles or vibe:
+        fp = dict(vibe) if vibe else remix.fingerprint(styles)
         if PRIOR[fmt]["max_s"]:
             fp["duration"] = round(min(fp["duration"], PRIOR[fmt]["max_s"]), 1)
         fp["refs_used"] = True
@@ -78,8 +80,86 @@ def fingerprint(fmt: str, pace: str, seconds: float, styles: list[dict] | None =
             "duration": round(max(15.0, dur), 1), "vertical": fmt != "wide", "refs": 0, "refs_used": False}
 
 
-def moments(clips: dict[str, dict], cut, fp: dict, judge=None) -> sel.Plan:
-    return remix.plan_shots(clips, fp, length=fp["duration"], cut=cut, judge=judge)
+def taste_text(profile: dict | None, rules: str = "") -> str:
+    """The creator, in their own words, for the prompts that choose and
+    write (llm.rank_shots, llm.day_phrases): what they make, the feeling
+    and pace they want, what to avoid, then the rules they confirmed
+    (preferences.for_model). Empty when nothing was said."""
+    p = profile or {}
+    lines = []
+    if p.get("name") or p.get("handle"):
+        lines.append(f"The creator: {p.get('name') or p.get('handle')}" + (f" ({p['handle']})" if p.get("handle") and p.get("name") else ""))
+    if p.get("about"):
+        lines.append(f"What they make: {str(p['about'])[:200]}")
+    if p.get("goal"):
+        lines.append(f"What they want from their videos: {str(p['goal'])[:200]}")
+    if p.get("vibes"):
+        lines.append("The feeling they want: " + ", ".join(str(v) for v in p["vibes"][:6]))
+    if p.get("pace"):
+        lines.append(f"Their pace: {p['pace']}")
+    if p.get("avoid"):
+        lines.append(f"Never: {str(p['avoid'])[:200]}")
+    out = ("CREATOR TASTE (their own words; let it shape what you keep and what you write):\n" + "\n".join(lines)) if lines else ""
+    if rules:
+        out = (out + "\n\n" if out else "") + rules
+    return out
+
+
+def moments(clips: dict[str, dict], cut, fp: dict, judge=None, taste: str = "") -> sel.Plan:
+    plan = remix.plan_shots(clips, fp, length=fp["duration"], cut=cut, judge=judge, taste=taste)
+    # The hook is lifted out of its stop, not copied: a Remix played the hook
+    # shot again in its place (sarah: never the same shot twice). A stop that
+    # was only its hook is not lost: it opens the video.
+    hooked = {p.shot.id for p in plan.hook}
+    for sess in plan.sessions:
+        sess[:] = [p for p in sess if p.shot.id not in hooked]
+    return plan
+
+
+END_BEATS = 2            # the last shot holds at least this many beats, so the end lands [prior]
+
+
+def end_strong(plan: sel.Plan) -> bool:
+    """A short lands on something: the last stop's strongest moment goes
+    last. The hook is deliberate; before this the ending was whatever came
+    last in the day (eval 2026-10-11: a day that winds down ended on its
+    quietest footage). Only the last stop is reordered, and only if its
+    strongest isn't already last. Returns whether anything moved."""
+    if not plan.sessions or not plan.sessions[-1]:
+        return False
+    last = plan.sessions[-1]
+    best = max(last, key=lambda p: p.score)
+    if last[-1] is best:
+        return False
+    last.remove(best)
+    last.append(best)
+    best.why = (best.why + "; ends the video").strip("; ")
+    return True
+
+
+def end_beats(fp: dict, period: float) -> int:
+    """How many beats the ending holds: the references' last shot in beats
+    (1–4), else END_BEATS."""
+    last = fp.get("last_s")
+    if last:
+        return int(min(4, max(1, round(float(last) / period))))
+    return END_BEATS
+
+
+def hold_ending(clips: dict[str, dict], plan: sel.Plan, period: float, beats: int = END_BEATS) -> None:
+    """The last shot gets `beats` beats if it was filmed long enough."""
+    if not plan.sessions or not plan.sessions[-1]:
+        return
+    p = plan.sessions[-1][-1]
+    want = beats * period
+    if p.duration + 1e-3 < want:
+        p.start, p.end, p.short = sel.window(clips, p.shot, want)
+
+
+def pace_of(fp: dict) -> str:
+    """The cut's own tempo word, from the shots it was made of."""
+    med = float(fp.get("median_s") or 2.0)
+    return "fast" if med < 1.3 else "calm" if med > 3.0 else "balanced"
 
 
 def music(clips: dict[str, dict], plan: sel.Plan, fp: dict, pace: str, own: list[mu.Track] | None,
@@ -93,17 +173,49 @@ def music(clips: dict[str, dict], plan: sel.Plan, fp: dict, pace: str, own: list
     mx = remix.pick_from(pool, fp, plan.duration + 4.0, hook_s)
     if mx:
         remix.quantise(plan, clips, mx["period"])
+        hold_ending(clips, plan, mx["period"], end_beats(fp, mx["period"]))
         hook_s = sum(p.duration for p in plan.hook) or hook_s
         mx["in"] = round(max(0.0, mx["drop"] - hook_s), 3)
     return mx, source
 
 
+def words(plan: sel.Plan, about: str, taste: str = "", ask=None) -> list[str] | None:
+    """One written line per stop (the clock stays in front of it): Claude,
+    with the creator's taste, from each stop's time and labels -- the same
+    writer the describe captions use (llm.day_phrases). None without a key
+    or when it fails: the label table's phrase stands. `ask(items, about,
+    taste)` stands in for tests."""
+    if ask is None:
+        from . import llm
+        if not llm.available():
+            return None
+        ask = llm.day_phrases
+    items = []
+    for picks in plan.sessions:
+        if not picks:
+            items.append({"time": "", "labels": []})
+            continue
+        labels: dict[str, float] = {}
+        for p in picks[:4]:
+            for k, v in (getattr(p.shot, "labels", None) or {}).items():
+                labels[k] = max(labels.get(k, 0.0), float(v))
+        top = [k for k, _ in sorted(labels.items(), key=lambda kv: -kv[1])[:6]]
+        items.append({"time": remix._clock(picks[0].shot.when) if picks[0].shot.when else "", "labels": top})
+    try:
+        lines = ask(items, about, taste)
+    except Exception:  # noqa: BLE001 -- the label table's phrase stands
+        return None
+    return [str(x).strip() for x in lines][:len(items)] + [""] * max(0, len(items) - len(lines))
+
+
 def ops(plan: sel.Plan, fp: dict, mx: dict | None, fmt: str, look: str | None, about: str,
-        talking: set[str], name: str = "Your video", chapters: list[dict] | None = None) -> list[dict]:
+        talking: set[str], name: str = "Your video", lines: list[str] | None = None,
+        chapters: list[dict] | None = None) -> list[dict]:
     """Everything the turn applies: the board, the bed, the look, the words.
     `chapters` (story.py): the plan's chapters, which then carry the words --
     a designed title and a plain line under it each -- instead of a clock
     time per stop."""
+    ramp = ramp_hook(plan, mx, fmt)
     board = remix.board_of(plan, fp, name)
     board["option"] = "made"
     board["structure"] = ("Made from your clips in the style of your references — " if fp.get("refs_used")
@@ -120,10 +232,37 @@ def ops(plan: sel.Plan, fp: dict, mx: dict | None, fmt: str, look: str | None, a
         out.append(m)
     if look:
         out.append({"op": "set_look", "look": look})
+    out.extend(punches(plan, mx))
+    if ramp:
+        hook_key, cut_at, second = ramp
+        out.append({"op": "split", "shot": hook_key, "at": cut_at})
+        out.append({"op": "set_shot", "shot": second, "speed": RAMP_SPEED})
+        if look in FLASH_LOOKS:
+            out.append({"op": "set_transition", "shot": second, "kind": "flash", "dur": FLASH_S})
+    elif look in FLASH_LOOKS and plan.hook and mx:
+        out.append({"op": "set_transition", "shot": plan.hook[-1].shot.id, "kind": "flash", "dur": FLASH_S})
     if chapters:
-        return out + story.heading_ops(plan, chapters)
+        return out + story.heading_ops(plan, chapters)    # beat-anchored, so the ramp moves nothing
+    # the references' words: where they sit, how long they hold, whether a
+    # reel that opens on its footage gets a title at all, caps or not
+    text = fp.get("text")
+    with_title, hold = True, None
+    if text:
+        if text["share"] < 0.05:
+            return out                      # a wordless reel makes a wordless video
+        style_op: dict = {"op": "overlay_style", "source": "reference"}
+        if text.get("band") in ("bottom", "middle"):
+            style_op["captions"] = text["band"]
+        if text.get("upper"):
+            style_op["template"] = "bold"
+        if len(style_op) > 2:
+            out.append(style_op)
+        hold = text.get("hold_s")
+        with_title = text.get("first_s") is None or text["first_s"] <= fp.get("hook_s", 1.5) + 0.5
     title = (about or "").split(",")[0].strip()[:40] or None
-    for c in remix.captions(plan, title, None):
+    if lines and text and text.get("upper"):
+        lines = [l.upper() for l in lines]
+    for c in remix.captions(plan, title, None, hold_s=hold, with_title=with_title, phrases=lines):
         if c["kind"] == "title":
             out.append({"op": "add_overlay", "kind": "title", "text": c["text"], "sub": c.get("sub", ""),
                         "anchor": {"to": "edit"}, "at": 0.0, "dur": round(c["end"] - c["start"], 2), "anim": "rise"})
@@ -131,6 +270,69 @@ def ops(plan: sel.Plan, fp: dict, mx: dict | None, fmt: str, look: str | None, a
             out.append({"op": "add_overlay", "kind": "part", "text": c["text"], "pos": "top", "size": "S",
                         "start": c["start"], "dur": round(c["end"] - c["start"], 2), "anim": "rise"})
     return out
+
+
+# Motion on the beat [priors]: the hook pushes in, the first shot after the
+# drop hits (a harder push), every bar's first shot pushes a little,
+# alternating in and out so nothing sits still. The reels the creator
+# brought are built on this; before 2026-10-18 only text moved.
+PUSH_HOOK, PUSH_HIT, PUSH_BAR = 0.08, 0.14, 0.05
+BAR_BEATS = 4
+
+
+def punches(plan: sel.Plan, mx: dict | None) -> list[dict]:
+    """set_shot ops with a push per shot: the hook, the hit on the drop, the
+    bars. With no beat known, only the hook and the first body shot move."""
+    out: list[dict] = []
+    seen: set[str] = set()
+
+    def push(pick: sel.Pick, z: float) -> None:
+        k = pick.shot.id
+        if k in seen:
+            return
+        seen.add(k)
+        out.append({"op": "set_shot", "shot": k, "punch": round(z, 3)})
+
+    for h in plan.hook:
+        push(h, PUSH_HOOK)
+    body = [p for sess in plan.sessions for p in sess]
+    if not body:
+        return out
+    push(body[0], PUSH_HIT)
+    if mx:
+        period, sign = mx["period"], 1
+        t = body[0].duration
+        for p in body[1:]:
+            beat = t / period
+            if abs(beat - round(beat / BAR_BEATS) * BAR_BEATS) < 0.26:   # this shot starts a bar
+                push(p, sign * PUSH_BAR)
+                sign = -sign
+            t += p.duration
+    return out
+
+
+# Into the drop [priors]: the hook's last beat runs at RAMP_SPEED (two beats
+# of footage in one), and for the loud looks a white flash sits on the cut.
+# Both are the ops a person could do by hand (split, speed, a transition),
+# so they show in History and undo like anything else.
+RAMP_SPEED = 2.0
+FLASH_LOOKS = ("hype", "playful")
+FLASH_S = 0.2
+
+
+def ramp_hook(plan: sel.Plan, mx: dict | None, fmt: str) -> tuple[str, float, str] | None:
+    """Extend the hook by one beat of footage so its last beat can run at
+    RAMP_SPEED without moving the drop. Returns (hook key, split at, second
+    piece's key) or None when there's no beat, no hook, or no footage past it."""
+    if not mx or not plan.hook or fmt != "short":
+        return None
+    p = plan.hook[-1]
+    period = mx["period"]
+    if p.duration < 2 * period - 1e-3 or p.end + period > p.shot.end + 1e-3:
+        return None
+    cut_at = round(p.end - period, 3)         # the last sequence beat starts here…
+    p.end = round(p.end + period, 3)          # …and shows two beats of footage, at 2×
+    return p.shot.id, cut_at, f"{p.shot.id}~{int(round(cut_at * 1000))}"
 
 
 def say(plan: sel.Plan, fp: dict, mx: dict | None, source: str, judged: bool, ai: dict | None = None) -> str:
@@ -141,8 +343,15 @@ def say(plan: sel.Plan, fp: dict, mx: dict | None, source: str, judged: bool, ai
     elif ai and ai.get("error"):
         parts.append(f"The story plan didn't work ({ai['error']}), so the usual rules picked the moments."
                      + (f" That try cost ${ai['cost']:.3f}." if ai.get("cost") else ""))
+    t = fp.get("text")
+    if fp.get("refs_used") and t:
+        parts.append("No words, like the reel." if t["share"] < 0.05 else
+                     f"Words at the {t.get('band') or 'bottom'}, held about {t.get('hold_s') or 1.5:.1f} s, like the reel.")
     if mx:
-        parts.append(f"Music: {mx['track'].title} ({mx['bpm']:.0f} BPM, from {source}); every cut sits on its beat.")
+        parts.append(f"Music: {mx['track'].title} ({mx['bpm']:.0f} BPM, from {source}); every cut sits on its beat, "
+                     "the hook speeds into the drop, the picture pushes in on it and on every bar.")
+    elif source.startswith("off"):
+        parts.append("No music, as you had it last time; Music in the rail puts one under it.")
     else:
         parts.append("No track fit, so it plays with its own sound; Music in the rail finds one.")
     if judged:
@@ -175,11 +384,16 @@ JOBS: dict[str, Job] = {}
 
 
 def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, about: str, seconds: float,
-          own: list[mu.Track] | None, styles: list[dict] | None, judge, on_done, use_ai: bool = False) -> Job:
+          own: list[mu.Track] | None, styles: list[dict] | None, judge, on_done, want_music: bool = True,
+          register=None, vibe: dict | None = None, taste: str = "", words_ask=None, use_ai: bool = False) -> Job:
     """Run the pipeline in a thread; `on_done(job)` puts the ops on the session.
-    Everything the thread needs is copied in now, so later edits can't move it."""
+    Everything the thread needs is copied in now, so later edits can't move it.
+    `register(job)` is called before the thread starts: a fast job (no music,
+    few clips) can finish before the caller has even seen it."""
     job = Job()
     JOBS[job.id] = job
+    if register:
+        register(job)
 
     def progress(done: int, total: int) -> None:
         job.done, job.total = done, total
@@ -187,10 +401,11 @@ def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, ab
     def run() -> None:
         try:
             job.stage = "choosing"
-            fp = fingerprint(fmt, pace, seconds, styles)
+            fp = fingerprint(fmt, pace, seconds, styles, vibe)
             plan, chapters, ai = None, None, None
-            if use_ai and oai.enabled() and not styles:
-                # the story editor (story.py): only with the AI switch on and this edit's cost agreed
+            if use_ai and oai.enabled() and not styles and not vibe:
+                # the story editor (story.py): only with the AI switch on and this edit's cost agreed;
+                # references or a chosen vibe set the cut themselves
                 job.line = "Planning the story…"
                 try:
                     plan, chapters, _title, usage = story.plan(clips, cut, fmt, fp["duration"], about)
@@ -201,17 +416,23 @@ def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, ab
                     plan, chapters, ai = None, None, {"error": str(e)[:160], "cost": paid}
                 job.line = ""
             if plan is None:
-                plan = moments(clips, cut, fp, judge)
+                plan = moments(clips, cut, fp, judge, taste)
             if not plan.picks:
                 raise ValueError("none of the clips had a moment worth keeping — add more footage")
+            if not chapters:
+                end_strong(plan)      # the AI already ends each chapter on its payoff
             job.stage = "music"
-            mx, source = music(clips, plan, fp, pace, own, progress)
+            mx, source = (music(clips, plan, fp, pace, own, progress) if want_music
+                          else (None, "off, as last time"))
             job.stage = "words"
             pool, _ = sb.usable(sb.shots_from_clips(list(clips.values()), cut))
             talking = tempo.talking(list(clips.values()), pool)
             judged = any(n.startswith("Claude judged") for n in plan.notes)
-            job.result = {"ops": ops(plan, fp, mx, fmt, look, about, talking, chapters=chapters), "music": mx,
-                          "fp": fp, "plan": plan, "ai": ai, "reply": say(plan, fp, mx, source, judged, ai)}
+            # chapters carry their own words (a designed title over a plain line), else a line per stop
+            lines = None if chapters else words(plan, about, taste, words_ask)
+            job.result = {"ops": ops(plan, fp, mx, fmt, look, about, talking, lines=lines, chapters=chapters),
+                          "music": mx, "fp": fp, "plan": plan, "taste": taste, "written": bool(lines), "ai": ai,
+                          "reply": say(plan, fp, mx, source, judged, ai) + (" Claude wrote the lines, in your voice." if lines else "")}
             job.stage = "done"
         except Exception as e:  # noqa: BLE001 -- the dialog shows it; nothing was changed
             job.stage, job.error = "error", str(e)[:300]

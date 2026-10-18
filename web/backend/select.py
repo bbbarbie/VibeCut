@@ -352,14 +352,15 @@ def _frame(clips: dict[str, dict], s: sb.Shot) -> bytes | None:
         return None
 
 
-def judge(plan: Plan, shots: list[sb.Shot], clips: dict[str, dict], ask=None) -> Plan:
+def judge(plan: Plan, shots: list[sb.Shot], clips: dict[str, dict], ask=None, taste: str = "") -> Plan:
     """Re-pick each session with `ask(options, keep) -> (indices, why)`;
-    the default is llm.rank_shots when a key is set, else nothing happens."""
+    the default is llm.rank_shots with the creator's `taste` when a key is
+    set, else nothing happens."""
     if ask is None:
         from . import llm
         if not llm.available():
             return plan
-        ask = llm.rank_shots
+        ask = lambda options, keep: llm.rank_shots(options, keep, taste)  # noqa: E731
     weights = idf(shots)
     scored = {s.id: hero_score(s, clips, weights) for s in shots}
     by_id = {s.id: s for s in shots}

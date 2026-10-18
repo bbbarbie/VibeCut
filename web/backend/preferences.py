@@ -92,6 +92,29 @@ class Preferences:
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps({"schema": SCHEMA, "rules": self.rules}, indent=2, ensure_ascii=False))
         tmp.replace(self.path)
+        from . import cloud
+        cloud.push_rules(self.rules)
+
+    def absorb(self, rows: list[dict]) -> int:
+        """Rules from the mirror: new ids are added, known ids take the newer
+        copy. Returns how many changed. Saved without pushing back."""
+        changed = 0
+        by_id = {str(r.get("id")): i for i, r in enumerate(self.rules) if r.get("id")}
+        for row in rows:
+            rule = row.get("value")
+            if not isinstance(rule, dict) or not rule.get("id"):
+                continue
+            i = by_id.get(str(rule["id"]))
+            if i is None:
+                self.rules.append(rule)
+                changed += 1
+            elif (rule.get("updated") or rule.get("created") or 0) > (self.rules[i].get("updated") or self.rules[i].get("created") or 0):
+                self.rules[i] = rule
+                changed += 1
+        if changed and self.path:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.path.write_text(json.dumps({"schema": SCHEMA, "rules": self.rules}, indent=2, ensure_ascii=False))
+        return changed
 
     def new_project(self) -> None:
         """The shelf was cleared: this video's rules and sortings go with it."""

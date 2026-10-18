@@ -104,6 +104,31 @@ def faces(paths: list[str]) -> dict[str, list[list[float]]]:
         return {r["path"]: r["faces"] for rs in ex.map(run, chunks) for r in rs}
 
 
+def text(paths: list[str]) -> dict[str, list[dict]]:
+    """Words on screen per image ({path: [{text, box, conf}]}), or {} when
+    Vision isn't available. Only timing and place are used downstream."""
+    binary = ensure_built()
+    if binary is None or not paths:
+        return {}
+    chunks = [paths[i:i + 8] for i in range(0, len(paths), 8)]
+
+    def run(chunk: list[str]) -> list[dict]:
+        try:
+            # a hang in the recogniser must never stall a learn: a chunk gets a minute
+            p = subprocess.run([str(binary), "--text", *chunk], capture_output=True, text=True, timeout=60)
+        except subprocess.TimeoutExpired:
+            return []
+        out = []
+        for line in p.stdout.splitlines():
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass
+        return out
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        return {r["path"]: r.get("items", []) for rs in ex.map(run, chunks) for r in rs}
+
+
 # A face this much smaller than the largest in frame is someone in the
 # background (a lecture hall, a street), not a second person in the shot.
 COMPANION = 0.25

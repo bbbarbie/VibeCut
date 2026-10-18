@@ -394,12 +394,13 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     api.makeEstimate().then((e) => live && setEstimate(e), (e) => live && note((e as Error).message))
     return () => { live = false }
   }, [!!setup, ai?.on]) // eslint-disable-line react-hooks/exhaustive-deps
-  const makeIt = async (format: string, look: string) => {
+  const makeIt = async (format: string, look: string, music: boolean = true, vibe: string | null = null, aiCost: number | null = null) => {
     if (autoBrief.current) return
     autoBrief.current = true
     setSetup((x) => x && { ...x, busy: true })
     try {
-      let job = await api.make({ format, look, ai_ok: ai?.on && estimate?.on ? estimate.dollars : null })
+      // the price the button showed goes with it; without one the rules make the edit, free
+      let job = await api.make({ format, look, music, vibe, ai_ok: aiCost })
       setSetup((x) => x && { ...x, progress: job })
       while (job.stage !== 'done' && job.stage !== 'error') {
         await new Promise((r) => window.setTimeout(r, 700))
