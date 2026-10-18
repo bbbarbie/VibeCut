@@ -555,6 +555,12 @@ def text_style(events: list[dict], duration: float) -> dict | None:
                     letters += 1
                     upper += ch.isupper()
     on_arr = np.array(on, dtype=bool)
+    # the recogniser misses a frame now and then; a one-sample hole inside a
+    # caption is the same caption, not two short ones (held 0.8 s read on a
+    # reel whose captions plainly held 2–3 s, 2026-10-18)
+    if len(on_arr) > 2:
+        holes = (~on_arr[1:-1]) & on_arr[:-2] & on_arr[2:]
+        on_arr[1:-1] |= holes
     runs = _runs(on_arr)
     share = float(on_arr.mean())
     if share == 0:
