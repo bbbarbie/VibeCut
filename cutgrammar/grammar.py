@@ -64,7 +64,12 @@ def check_rhythm(shots: list[shots_mod.Shot]) -> list[Finding]:
     mean, median = float(lens.mean()), float(np.median(lens))
     cv = float(lens.std() / (mean + 1e-9))
 
-    if cv < 0.35:
+    # Calibrated 2026-10-11 (design/research/calibration/2026-10-11.md): 18
+    # popular vlogs / travel films had CV 0.81 median, VibeCut's own exports
+    # 0.56, AUC 0.78, best split 0.70. The edge moves from the 0.35 guess to
+    # 0.6 -- short of the split, because the "bad" set was mostly one shoot's
+    # Remix iterations, which are beat-quantised and so unusually even.
+    if cv < 0.6:
         verdict, detail = WARN, (
             "Shot lengths are near-uniform. Even pacing reads as mechanical; "
             "real edits breathe -- a run of quick cuts, then a long shot."
@@ -122,13 +127,16 @@ def check_cut_on_motion(media: Media, shots: list[shots_mod.Shot]) -> list[Findi
         return []
 
     frac = float(np.mean([s > 1.0 for s in scores]))
-    if frac < 0.40:
+    # Calibrated 2026-10-11: well-cut edits land 0.47 of their cuts on motion
+    # (median), VibeCut's 0.41; AUC 0.65, split 0.41. The old OK edge (0.55)
+    # warned on most good edits; 0.45 / 0.30 now. Still ±1 frame-diff motion.
+    if frac < 0.30:
         verdict, detail = BAD, (
             "Most cuts land on a still frame. Moving the cut a few frames "
             "into an existing movement hides it -- this is the single "
             "cheapest thing that makes an edit look professional."
         )
-    elif frac < 0.55:
+    elif frac < 0.45:
         verdict, detail = WARN, "About half the cuts land on static frames."
     else:
         verdict, detail = OK, "Cuts mostly land while the frame is moving."
@@ -180,7 +188,9 @@ def check_jl_cuts(media: Media, shots: list[shots_mod.Shot],
             "Offsetting the audio by 0.3-1s (J-cut: sound arrives first; "
             "L-cut: sound lingers) is the highest-value single change here."
         )
-    elif synced > 0.45:
+    # Calibrated 2026-10-11: good edits 0.41 hard-synced (median), VibeCut's
+    # 0.70; AUC 0.33, split 0.62. WARN moves 0.45 -> 0.6; BAD stays at 0.7.
+    elif synced > 0.6:
         verdict, detail = WARN, "Many cuts are hard-synced; some are offset."
     else:
         verdict, detail = OK, "Audio and picture cuts are offset from each other."

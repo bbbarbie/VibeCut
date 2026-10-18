@@ -97,8 +97,8 @@ def fingerprint(styles: list[dict]) -> dict:
     lo, hi = (min(bpms) * 0.92, max(bpms) * 1.08) if bpms else BPM_DEFAULT
     arcs = [(s.get("music") or {}).get("arc") for s in styles if s.get("music")]
     arc = max(set(arcs), key=arcs.count) if arcs else "builds"
-    energy = np.mean([(s["music"]["energy"]) for s in styles if (s.get("music") or {}).get("energy")], axis=0) \
-        if arcs else None
+    curves = [s["music"]["energy"] for s in styles if (s.get("music") or {}).get("energy")]
+    energy = np.mean(curves, axis=0) if curves else None     # a reference may know its arc but not its curve
     durs = [float(s["duration"]) for s in styles if s.get("duration")]
     dur = float(np.clip(np.median(durs) if durs else 30.0, *DEFAULT_LEN))
     return {
@@ -131,8 +131,10 @@ def load_shoot(folder: str) -> dict[str, dict]:
 
 
 def plan_shots(clips: dict[str, dict], fp: dict, length: float | None = None, hook_n: int = 1,
-               cut: tuple[set, dict] | None = None) -> sel.Plan:
-    """Pick the moments and give each its window, before any beat is known."""
+               cut: tuple[set, dict] | None = None, judge=None) -> sel.Plan:
+    """Pick the moments and give each its window, before any beat is known.
+    `judge`: None = Claude when there is a key (select.judge), False = the
+    rules alone, or a stand-in `ask(options, keep)` for tests."""
     rejected, windows = cut if cut is not None else for_story(rough_cut(clips, None))
     shots = sb.shots_from_clips(list(clips.values()), (rejected, windows))
     shots, notes = sb.usable(shots)
@@ -140,6 +142,8 @@ def plan_shots(clips: dict[str, dict], fp: dict, length: float | None = None, ho
     body = max(1.0, total - fp["hook_s"] * hook_n)
     n = max(4, int(round(body / fp["median_s"])))
     plan = sel.choose(shots, clips, n, hook_n)
+    if judge is not False and os.environ.get("VIBECUT_REMIX_JUDGE", "1") != "0":
+        plan = sel.judge(plan, shots, clips, ask=judge if callable(judge) else None)
     plan.notes = notes + plan.notes
     n_body = sum(len(s) for s in plan.sessions)
     targets = [fp["median_s"] * _curve_at(fp["curve"], (k + 0.5) / max(n_body, 1)) * _spread(fp, k)
@@ -507,7 +511,7 @@ def render_captions(caps: list[dict], size: dict, fps: int, job) -> list[dict]:
 def make(refs: list[str], footage: str | None = None, name: str = "Remix", length: float | None = None,
          title: str | None = None, sub: str | None = None, moods: list[str] | None = None,
          look: bool = True, sfx: bool = True, say=print, clips: dict[str, dict] | None = None,
-         cut: tuple[set, dict] | None = None, stage=lambda s, p: None) -> dict:
+         cut: tuple[set, dict] | None = None, stage=lambda s, p: None, judge=None) -> dict:
     """The whole thing. `stage(name, progress)` reports where it is; `say` explains."""
     t0 = time.time()
     styles, rids = [], []
@@ -534,8 +538,10 @@ def make(refs: list[str], footage: str | None = None, name: str = "Remix", lengt
         if not footage:
             raise ValueError("no footage")
         clips = load_shoot(footage)
-    plan = plan_shots(clips, fp, length, cut=cut)
+    plan = plan_shots(clips, fp, length, cut=cut, judge=judge)
     say(f"shots: {len(plan.picks)} moments from {len(clips)} clips ({plan.duration:.1f} s before the beat)")
+    for n_ in [x for x in plan.notes if x.startswith("Claude judged")]:
+        say(n_)
     stage("music", 0.3)
 
     hook_s = sum(p.duration for p in plan.hook) or fp["hook_s"]
@@ -656,7 +662,7 @@ def start(refs: list[str], clips: dict[str, dict], cut: tuple[set, dict] | None,
         try:
             job.result = make(refs, None, opts.get("name") or "Remix", opts.get("length"), opts.get("title"),
                               opts.get("sub"), opts.get("moods"), opts.get("look", True), opts.get("sfx", True),
-                              say=job.lines.append, clips=clips, cut=cut, stage=stage)
+                              say=job.lines.append, clips=clips, cut=cut, stage=stage, judge=opts.get("judge"))
             if on_done:
                 on_done(job)
             job.stage, job.progress = "done", 1.0

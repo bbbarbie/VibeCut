@@ -72,6 +72,8 @@ export function Export({ tl, overlays, parts, music, style, history = [], onClos
     if (jobId.current) await api.exportCancel(jobId.current).catch(() => {})
   }
 
+  const [verdict, setVerdict] = useState<null | 'sending' | 'sent'>(null)
+  const [note, setNote] = useState('')
   const pct = phase.kind === 'drawing' ? phase.done / Math.max(1, phase.of)
     : phase.kind === 'rendering' ? phase.job.progress : phase.kind === 'done' ? 1 : 0
   const status = phase.kind === 'drawing' ? `Drawing the captions… ${phase.done}/${phase.of} frames`
@@ -121,6 +123,27 @@ export function Export({ tl, overlays, parts, music, style, history = [], onClos
             {phase.kind === 'done' && (
               <p className="mt-1.5 text-[12px] text-zinc-200">Saved <span className="font-medium">{phase.job.file}</span> in {phase.job.elapsed.toFixed(0)}s.
                 {phase.job.notes?.length ? <span className="block text-muted">{phase.job.notes.join(' ')}</span> : null}</p>
+            )}
+            {phase.kind === 'done' && (
+              // The one question that is the launch metric: would you post this?
+              <div className="mt-3 rounded-lg border border-line px-2.5 py-2">
+                {verdict === 'sent' ? <p className="text-[12px] text-zinc-300">Noted — thank you.</p> : <>
+                  <p className="font-serif text-[14px] text-zinc-100">Would you post this?</p>
+                  <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="One line on what's wrong or right (optional)"
+                         className="mt-1.5 w-full rounded-md border border-line bg-panel px-2 py-1 text-[12px] text-zinc-100 outline-none focus:border-zinc-500" />
+                  <div className="mt-1.5 flex gap-1.5">
+                    {([['yes', 'Yes, as it is'], ['no', 'Not yet']] as const).map(([k, label]) => (
+                      <button key={k} type="button" disabled={verdict === 'sending'}
+                              onClick={async () => {
+                                setVerdict('sending')
+                                try { await api.exportVerdict(history.length, k === 'yes', note); setVerdict('sent') }
+                                catch { setVerdict(null) }
+                              }}
+                              className={`rounded-md px-2.5 py-1 text-[12px] ${k === 'yes' ? 'bg-accent font-semibold text-accent-ink' : 'border border-line text-zinc-200 hover:bg-raised'}`}>{label}</button>
+                    ))}
+                  </div>
+                </>}
+              </div>
             )}
           </div>
         )}

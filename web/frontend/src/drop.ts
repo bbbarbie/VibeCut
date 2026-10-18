@@ -57,3 +57,10 @@ export function mergePicked(have: Picked[], more: Picked[]): Picked[] {
   const seen = new Set(have.map(key))
   return [...have, ...more.filter((p) => !seen.has(key(p)) && seen.add(key(p)))]
 }
+
+// The front door (plan step 4): reels pasted on the home page beside the
+// clips. Create parks them here too; the project starts a Remix with them
+// as soon as the clips are read.
+let refs: string[] | null = null
+export function handOffRefs(links: string[]): void { refs = links.length ? links : null }
+export function takeRefs(): string[] | null { const r = refs; refs = null; return r }

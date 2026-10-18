@@ -1,0 +1,823 @@
+{
+  "date": "2026-10-11-local",
+  "sets": {
+    "good": "4 videos — the creator's own reference reels vs VibeCut's exports of her shoot (2026-09-25, before the bed/looks work)",
+    "bad": "18 videos"
+  },
+  "limit_s": 90.0,
+  "min_per_side": 8,
+  "videos": [
+    {
+      "path": "/Users/barbiezhu/.cache/vibecut/references/100fe83689b8/source.mp4",
+      "label": "good",
+      "name": "source.mp4",
+      "duration": 49.614,
+      "n_shots": 54,
+      "values": {
+        "rhythm_cv": 1.0834025353651782,
+        "cut_on_motion": 0.5849056603773585,
+        "jl_cuts": 0.36585365853658536,
+        "continuity": 0.11320754716981132,
+        "duplicates": 1.0,
+        "first_cut": 1.4,
+        "first_speech": 0.02,
+        "loudness": -22.7
+      },
+      "error": null
+    },
+    {
+      "path": "/Users/barbiezhu/.cache/vibecut/references/1f4dc8a5b356/source.mp4",
+      "label": "good",
+      "name": "source.mp4",
+      "duration": 8.014,
+      "n_shots": 10,
+      "values": {
+        "rhythm_cv": 0.45107895286029653,
+        "cut_on_motion": 0.6666666666666666,
+        "jl_cuts": 0.6666666666666666,
+        "continuity": 0.2222222222222222,
+        "duplicates": 0.0,
+        "first_cut": 0.2,
+        "first_speech": 0.0,
+        "loudness": -15.4
+      },
+      "error": null
+    },
+    {
+      "path": "/Users/barbiezhu/.cache/vibecut/references/65e2d44158b9/source.mp4",
+      "label": "good",
+      "name": "source.mp4",
+      "duration": 14.014,
+      "n_shots": 15,
+      "values": {
+        "rhythm_cv": 0.8722868519650118,
+        "cut_on_motion": 0.35714285714285715,
+        "jl_cuts": 0.18181818181818182,
+        "continuity": 0.0,
+        "duplicates": 0.0,
+        "first_cut": 3.6666666666666665,
+        "first_speech": 0.0,
+        "loudness": -10.5
+      },
+      "error": null
+    },
+    {
+      "path": "/Users/barbiezhu/.cache/vibecut/references/95ba50afc99e/source.mp4",
+      "label": "good",
+      "name": "source.mp4",
+      "duration": 22.714,
+      "n_shots": 23,
+      "values": {
+        "rhythm_cv": 0.4152876513845109,
+        "cut_on_motion": 0.4090909090909091,
+        "jl_cuts": 0.6,
+        "continuity": 0.09090909090909091,
+        "duplicates": 0.0,
+        "first_cut": 1.4333333333333333,
+        "first_speech": 0.26,
+        "loudness": -8.6
+      },
+      "error": null
+    },
+    {
+      "path": "/Users/barbiezhu/Movies/VibeCut/A day out with Sarah 2026-09-25 15.54.mp4",
+      "label": "bad",
+      "name": "A day out with Sarah 2026-09-25 15.54.mp4",
+      "duration": 11.0,
+      "n_shots": 2,
+      "values": {
+        "cut_on_motion": 0.0,
+        "continuity": 1.0,
+        "first_cut": 7.0,
+        "first_speech": 7.0,
+        "loudness": -21.8
+      },
+      "error": null
+    },
+    {
+      "path": "/Users/barbiezhu/Movies/VibeCut/A day out with Sarah 2026-09-25 15.55.mp4",
+      "label": "bad",
+      "name": "A day out with Sarah 2026-09-25 15.55.mp4",
+      "duration": 11.0,
+      "n_shots": 2,
+      "values": {
+        "cut_on_motion": 1.0,
+        "continuity": 1.0,
+        "first_cut": 7.0,
+        "first_speech": 7.0,
+        "loudness": -21.8
+      },
+      "error": null
+    },
+    {
+      "path": "/Users/barbiezhu/Movies/VibeCut/As it happened 2026-09-25 15.50.mp4",
+      "label": "bad",
+      "name": "As it happened 2026-09-25 15.50.mp4",
+      "duration": 90.005333,
+      "n_shots": 14,
+      "values": {
+        "rhythm_cv": 0.6843149627943569,
+        "long_shot": 15.533333333333331,
+        "cut_on_motion": 0.38461538461538464,
+        "jl_cuts": 0.7,
+        "continuity": 0.15384615384615385,
+        "duplicates": 0.0,
+        "first_cut": 11.466666666666667,
+        "first_speech": 0.23,
+        "loudness": -23.9
+      },
+      "error": null
+    },
+    {
+      "path": "/Users/barbiezhu/Movies/VibeCut/Remix 2026-09-25 18.17.mp4",
+      "label": "bad",
+      "name": "Remix 2026-09-25 18.17.mp4",
+      "duration": 19.8,
+      "n_shots": 24,
+      "values": {
+        "rhythm_cv": 0.5008919698258858,
+        "cut_on_motion": 0.6086956521739131,
+        "jl_cuts": 0.19047619047619047,
+        "continuity": 0.2608695652173913,
+        "duplicates": 1.0,
+        "first_cut": 1.4,
+        "first_speech": 0.14,
+        "loudness": -14.0
+      },
+      "error": null
+    },
+    {
+      "path": "/Users/barbiezhu/Movies/VibeCut/Sarah remix v1 2026-09-25 17.17.mp4",
+      "label": "bad",
+      "name": "Sarah remix v1 2026-09-25 17.17.mp4",
+      "duration": 37.0,
+      "n_shots": 27,
+      "values": {
+        "rhythm_cv": 0.4614424612568898,
+        "cut_on_motion": 0.46153846153846156,
+        "jl_cuts": 0.7307692307692307,
+        "continuity": 0.15384615384615385,
+        "duplicates": 1.0,
+        "first_cut": 1.5,
+        "first_speech": 0.02,
+        "loudness": -13.7
+      },
+      "error": null
+    },
+    {
+      "path": "/Users/barbiezhu/Movies/VibeCut/Sarah remix v2 2026-09-25 17.18.mp4",
+      "label": "bad",
+      "name": "Sarah remix v2 2026-09-25 17.18.mp4",
+      "duration": 21.5,
+      "n_shots": 27,
+      "values": {
+        "rhythm_cv": 0.35269188067576135,
+        "cut_on_motion": 0.5769230769230769,
+        "jl_cuts": 0.9230769230769231,
+        "continuity": 0.15384615384615385,
+        "duplicates": 1.0,
+        "first_cut": 1.5,
+        "first_speech": 0.01,
+        "loudness": -13.7
+      },
+      "error": null
+    },
+    {
+      "path": "/Users/barbiezhu/Movies/VibeCut/Sarah remix v3 2026-09-25 17.19.mp4",
+      "label": "bad",
+      "name": "Sarah remix v3 2026-09-25 17.19.mp4",
+      "duration": 20.5,
+      "n_shots": 27,
+      "values": {
+        "rhythm_cv": 0.3746900359879013,
+        "cut_on_motion": 0.38461538461538464,
+        "jl_cuts": 0.9230769230769231,
+        "continuity": 0.15384615384615385,
+        "duplicates": 1.0,
+        "first_cut": 1.5,
+        "first_speech": 0.01,
+        "loudness": -13.8
+      },
+      "error": null
+    },
+    {
+      "path": "/Users/barbiezhu/Movies/VibeCut/Sarah remix v4 2026-09-25 17.35.mp4",
+      "label": "bad",
+      "name": "Sarah remix v4 2026-09-25 17.35.mp4",
+      "duration": 20.5,
+      "n_shots": 27,
+      "values": {
+        "rhythm_cv": 0.3746900359879013,
+        "cut_on_motion": 0.38461538461538464,
+        "jl_cuts": 0.9230769230769231,
+        "continuity": 0.15384615384615385,
+        "duplicates": 1.0,
+        "first_cut": 1.5,
+        "first_speech": 0.01,
+        "loudness": -13.8
+      },
+      "error": null
+    },
+    {
+      "path": "/Users/barbiezhu/Movies/VibeCut/Sarah remix v5 2026-09-25 17.41.mp4",
+      "label": "bad",
+      "name": "Sarah remix v5 2026-09-25 17.41.mp4",
+      "duration": 25.366667,
+      "n_shots": 28,
+      "values": {
+        "rhythm_cv": 0.5497156353163437,
+        "cut_on_motion": 0.4074074074074074,
+        "jl_cuts": 0.35,
+        "continuity": 0.1111111111111111,
+        "duplicates": 1.0,
+        "first_cut": 1.5,
+        "first_speech": 1.6,
+        "loudness": -13.7
+      },
+      "error": null
+    },
+    {
+      "path": "/Users/barbiezhu/Movies/VibeCut/Sarah remix v6 2026-09-25 17.44.mp4",
+      "label": "bad",
+      "name": "Sarah remix v6 2026-09-25 17.44.mp4",
+      "duration": 25.5,
+      "n_shots": 28,
+      "values": {
+        "rhythm_cv": 0.5569839378405183,
+        "cut_on_motion": 0.3333333333333333,
+        "jl_cuts": 0.7037037037037037,
+        "continuity": 0.1111111111111111,
+        "duplicates": 1.0,
+        "first_cut": 1.5,
+        "first_speech": 0.01,
+        "loudness": -13.7
+      },
+      "error": null
+    },
+    {
+      "path": "/Users/barbiezhu/Movies/VibeCut/Sarah remix v7 2026-09-25 17.47.mp4",
+      "label": "bad",
+      "name": "Sarah remix v7 2026-09-25 17.47.mp4",
+      "duration": 25.5,
+      "n_shots": 28,
+      "values": {
+        "rhythm_cv": 0.5569839378405183,
+        "cut_on_motion": 0.3333333333333333,
+        "jl_cuts": 0.7037037037037037,
+        "continuity": 0.1111111111111111,
+        "duplicates": 1.0,
+        "first_cut": 1.5,
+        "first_speech": 0.01,
+        "loudness": -13.7
+      },
+      "error": null
+    },
+    {
+      "path": "/Users/barbiezhu/Movies/VibeCut/Sarah remix v8 2026-09-25 17.48.mp4",
+      "label": "bad",
+      "name": "Sarah remix v8 2026-09-25 17.48.mp4",
+      "duration": 24.466667,
+      "n_shots": 28,
+      "values": {
+        "rhythm_cv": 0.5620679485773312,
+        "cut_on_motion": 0.3333333333333333,
+        "jl_cuts": 0.038461538461538464,
+        "continuity": 0.1111111111111111,
+        "duplicates": 1.0,
+        "first_cut": 1.4,
+        "first_speech": 0.14,
+        "loudness": -14.0
+      },
+      "error": null
+    },
+    {
+      "path": "/Users/barbiezhu/Movies/VibeCut/Sarah — viral draft v1.mp4",
+      "label": "bad",
+      "name": "Sarah — viral draft v1.mp4",
+      "duration": 46.421354,
+      "n_shots": 28,
+      "values": {
+        "rhythm_cv": 0.6026709950342583,
+        "cut_on_motion": 0.4074074074074074,
+        "jl_cuts": 0.4375,
+        "continuity": 0.2222222222222222,
+        "duplicates": 1.0,
+        "first_cut": 0.5341007194244605,
+        "first_speech": 0.04,
+        "loudness": -21.4
+      },
+      "error": null
+    },
+    {
+      "path": "/Users/barbiezhu/Movies/VibeCut/Sarah — viral draft v2 (music + text).mp4",
+      "label": "bad",
+      "name": "Sarah — viral draft v2 (music + text).mp4",
+      "duration": 46.08,
+      "n_shots": 28,
+      "values": {
+        "rhythm_cv": 0.569783096786167,
+        "cut_on_motion": 0.5185185185185185,
+        "jl_cuts": 0.6363636363636364,
+        "continuity": 0.18518518518518517,
+        "duplicates": 1.0,
+        "first_cut": 0.48,
+        "first_speech": 0.01,
+        "loudness": -10.1
+      },
+      "error": null
+    },
+    {
+      "path": "/Users/barbiezhu/Movies/VibeCut/Sarah — viral draft v3 (online music + sfx).mp4",
+      "label": "bad",
+      "name": "Sarah — viral draft v3 (online music + sfx).mp4",
+      "duration": 46.08,
+      "n_shots": 28,
+      "values": {
+        "rhythm_cv": 0.569783096786167,
+        "cut_on_motion": 0.5185185185185185,
+        "jl_cuts": 0.6538461538461539,
+        "continuity": 0.18518518518518517,
+        "duplicates": 1.0,
+        "first_cut": 0.48,
+        "first_speech": 0.23,
+        "loudness": -14.0
+      },
+      "error": null
+    },
+    {
+      "path": "/Users/barbiezhu/Movies/VibeCut/口播精剪 · Talking-head cut 2026-09-25 16.13.mp4",
+      "label": "bad",
+      "name": "口播精剪 · Talking-head cut 2026-09-25 16.13.mp4",
+      "duration": 20.533333,
+      "n_shots": 1,
+      "values": {
+        "first_speech": 0.01,
+        "loudness": -18.2
+      },
+      "error": null
+    },
+    {
+      "path": "/Users/barbiezhu/Movies/VibeCut/口播精剪 · Talking-head cut 2026-09-25 16.15.mp4",
+      "label": "bad",
+      "name": "口播精剪 · Talking-head cut 2026-09-25 16.15.mp4",
+      "duration": 20.533333,
+      "n_shots": 1,
+      "values": {
+        "first_speech": 0.01,
+        "loudness": -18.2
+      },
+      "error": null
+    },
+    {
+      "path": "/Users/barbiezhu/Movies/VibeCut/口播精剪 · Talking-head cut 2026-09-25 16.17.mp4",
+      "label": "bad",
+      "name": "口播精剪 · Talking-head cut 2026-09-25 16.17.mp4",
+      "duration": 20.533333,
+      "n_shots": 1,
+      "values": {
+        "first_speech": 0.01,
+        "loudness": -18.2
+      },
+      "error": null
+    }
+  ],
+  "proposals": [
+    {
+      "key": "continuity",
+      "good": [
+        0.11320754716981132,
+        0.2222222222222222,
+        0.0,
+        0.09090909090909091
+      ],
+      "bad": [
+        1.0,
+        1.0,
+        0.15384615384615385,
+        0.2608695652173913,
+        0.15384615384615385,
+        0.15384615384615385,
+        0.15384615384615385,
+        0.15384615384615385,
+        0.1111111111111111,
+        0.1111111111111111,
+        0.1111111111111111,
+        0.1111111111111111,
+        0.2222222222222222,
+        0.18518518518518517,
+        0.18518518518518517
+      ],
+      "auc": 0.258,
+      "cut": 0.101,
+      "good_is": "below",
+      "balanced_acc": 0.75,
+      "current": {
+        "ok": [
+          null,
+          0.0
+        ],
+        "good_is": "below"
+      },
+      "thin": true,
+      "note": "thin: fewer than 8 a side, so this proposal is still a guess",
+      "extra": {
+        "good_median": 0.10205831903945112,
+        "bad_median": 0.15384615384615385,
+        "good_p10_p90": [
+          0.02727272727272728,
+          0.18951781970649895
+        ],
+        "bad_p10_p90": [
+          0.1111111111111111,
+          0.7043478260869562
+        ]
+      }
+    },
+    {
+      "key": "cut_on_motion",
+      "good": [
+        0.5849056603773585,
+        0.6666666666666666,
+        0.35714285714285715,
+        0.4090909090909091
+      ],
+      "bad": [
+        0.0,
+        1.0,
+        0.38461538461538464,
+        0.6086956521739131,
+        0.46153846153846156,
+        0.5769230769230769,
+        0.38461538461538464,
+        0.38461538461538464,
+        0.4074074074074074,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.4074074074074074,
+        0.5185185185185185,
+        0.5185185185185185
+      ],
+      "auc": 0.667,
+      "cut": 0.5809,
+      "good_is": "above",
+      "balanced_acc": 0.683,
+      "current": {
+        "ok": [
+          0.55,
+          null
+        ],
+        "good_is": "above"
+      },
+      "thin": true,
+      "note": "thin: fewer than 8 a side, so this proposal is still a guess",
+      "extra": {
+        "good_median": 0.49699828473413377,
+        "bad_median": 0.4074074074074074,
+        "good_p10_p90": [
+          0.37272727272727274,
+          0.6421383647798742
+        ],
+        "bad_p10_p90": [
+          0.3333333333333333,
+          0.5959866220735786
+        ]
+      }
+    },
+    {
+      "key": "duplicates",
+      "good": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "bad": [
+        0.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "auc": 0.163,
+      "cut": 0.5,
+      "good_is": "below",
+      "balanced_acc": 0.837,
+      "current": {
+        "ok": [
+          null,
+          0.0
+        ],
+        "good_is": "below"
+      },
+      "thin": true,
+      "note": "thin: fewer than 8 a side, so this proposal is still a guess",
+      "extra": {
+        "good_median": 0.0,
+        "bad_median": 1.0,
+        "good_p10_p90": [
+          0.0,
+          0.7000000000000002
+        ],
+        "bad_p10_p90": [
+          1.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "key": "first_cut",
+      "good": [
+        1.4,
+        0.2,
+        3.6666666666666665,
+        1.4333333333333333
+      ],
+      "bad": [
+        7.0,
+        7.0,
+        11.466666666666667,
+        1.4,
+        1.5,
+        1.5,
+        1.5,
+        1.5,
+        1.5,
+        1.5,
+        1.5,
+        1.4,
+        0.5341007194244605,
+        0.48,
+        0.48
+      ],
+      "auc": 0.35,
+      "cut": 1.4667,
+      "good_is": "below",
+      "balanced_acc": 0.708,
+      "current": {
+        "ok": [
+          null,
+          5.0
+        ],
+        "good_is": "below"
+      },
+      "thin": true,
+      "note": "thin: fewer than 8 a side, so this proposal is still a guess",
+      "extra": {
+        "good_median": 1.4166666666666665,
+        "bad_median": 1.5,
+        "good_p10_p90": [
+          0.56,
+          2.996666666666667
+        ],
+        "bad_p10_p90": [
+          0.5016402877697842,
+          7.0
+        ]
+      }
+    },
+    {
+      "key": "first_speech",
+      "good": [
+        0.02,
+        0.0,
+        0.0,
+        0.26
+      ],
+      "bad": [
+        7.0,
+        7.0,
+        0.23,
+        0.14,
+        0.02,
+        0.01,
+        0.01,
+        0.01,
+        1.6,
+        0.01,
+        0.01,
+        0.14,
+        0.04,
+        0.01,
+        0.23,
+        0.01,
+        0.01,
+        0.01
+      ],
+      "auc": 0.34,
+      "cut": 0.005,
+      "good_is": "below",
+      "balanced_acc": 0.75,
+      "current": {
+        "ok": [
+          null,
+          3.0
+        ],
+        "good_is": "below"
+      },
+      "thin": true,
+      "note": "thin: fewer than 8 a side, so this proposal is still a guess",
+      "extra": {
+        "good_median": 0.01,
+        "bad_median": 0.015,
+        "good_p10_p90": [
+          0.0,
+          0.18800000000000006
+        ],
+        "bad_p10_p90": [
+          0.01,
+          3.220000000000004
+        ]
+      }
+    },
+    {
+      "key": "jl_cuts",
+      "good": [
+        0.36585365853658536,
+        0.6666666666666666,
+        0.18181818181818182,
+        0.6
+      ],
+      "bad": [
+        0.7,
+        0.19047619047619047,
+        0.7307692307692307,
+        0.9230769230769231,
+        0.9230769230769231,
+        0.9230769230769231,
+        0.35,
+        0.7037037037037037,
+        0.7037037037037037,
+        0.038461538461538464,
+        0.4375,
+        0.6363636363636364,
+        0.6538461538461539
+      ],
+      "auc": 0.269,
+      "cut": 0.6833,
+      "good_is": "below",
+      "balanced_acc": 0.769,
+      "current": {
+        "ok": [
+          null,
+          0.45
+        ],
+        "good_is": "below"
+      },
+      "thin": true,
+      "note": "thin: fewer than 8 a side, so this proposal is still a guess",
+      "extra": {
+        "good_median": 0.48292682926829267,
+        "bad_median": 0.7,
+        "good_p10_p90": [
+          0.23702882483370288,
+          0.6466666666666666
+        ],
+        "bad_p10_p90": [
+          0.2223809523809524,
+          0.9230769230769231
+        ]
+      }
+    },
+    {
+      "key": "long_shot",
+      "good": [],
+      "bad": [
+        15.533333333333331
+      ],
+      "auc": 0.5,
+      "cut": null,
+      "good_is": "below",
+      "balanced_acc": 0.5,
+      "current": {
+        "ok": [
+          null,
+          12.0
+        ],
+        "good_is": "below"
+      },
+      "thin": true,
+      "note": "one side is empty: nothing to compare",
+      "extra": {
+        "good_median": null,
+        "bad_median": 15.533333333333331,
+        "good_p10_p90": null,
+        "bad_p10_p90": [
+          15.533333333333331,
+          15.533333333333331
+        ]
+      }
+    },
+    {
+      "key": "loudness",
+      "good": [
+        -22.7,
+        -15.4,
+        -10.5,
+        -8.6
+      ],
+      "bad": [
+        -21.8,
+        -21.8,
+        -23.9,
+        -14.0,
+        -13.7,
+        -13.7,
+        -13.8,
+        -13.8,
+        -13.7,
+        -13.7,
+        -13.7,
+        -14.0,
+        -21.4,
+        -10.1,
+        -14.0,
+        -18.2,
+        -18.2,
+        -18.2
+      ],
+      "auc": 0.597,
+      "cut": -12.1,
+      "good_is": "above",
+      "balanced_acc": 0.722,
+      "current": {
+        "ok": [
+          -16.0,
+          -12.5
+        ],
+        "good_is": "inside"
+      },
+      "thin": true,
+      "note": "no signal: this finding doesn't tell the two sets apart",
+      "extra": {
+        "good_median": -12.95,
+        "bad_median": -14.0,
+        "good_p10_p90": [
+          -20.509999999999998,
+          -9.17
+        ],
+        "bad_p10_p90": [
+          -21.8,
+          -13.7
+        ]
+      }
+    },
+    {
+      "key": "rhythm_cv",
+      "good": [
+        1.0834025353651782,
+        0.45107895286029653,
+        0.8722868519650118,
+        0.4152876513845109
+      ],
+      "bad": [
+        0.6843149627943569,
+        0.5008919698258858,
+        0.4614424612568898,
+        0.35269188067576135,
+        0.3746900359879013,
+        0.3746900359879013,
+        0.5497156353163437,
+        0.5569839378405183,
+        0.5569839378405183,
+        0.5620679485773312,
+        0.6026709950342583,
+        0.569783096786167,
+        0.569783096786167
+      ],
+      "auc": 0.615,
+      "cut": 0.7783,
+      "good_is": "above",
+      "balanced_acc": 0.75,
+      "current": {
+        "ok": [
+          0.35,
+          1.4
+        ],
+        "good_is": "inside"
+      },
+      "thin": true,
+      "note": "thin: fewer than 8 a side, so this proposal is still a guess",
+      "extra": {
+        "good_median": 0.6616829024126542,
+        "bad_median": 0.5569839378405183,
+        "good_p10_p90": [
+          0.4260250418272466,
+          1.0200678303451283
+        ],
+        "bad_p10_p90": [
+          0.3746900359879013,
+          0.59609341538464
+        ]
+      }
+    }
+  ]
+}

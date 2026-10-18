@@ -6,8 +6,11 @@ import { api, type RemixJob } from '../api'
 // storyboard so it can be edited like any other cut. The heavy lifting
 // (learning the references, choosing shots, finding music and its drop,
 // rendering) happens on the server; this only asks, waits and shows.
-export function Remix({ onClose, onDone, canLinks = true }: { onClose: () => void; onDone: () => Promise<void> | void; canLinks?: boolean }) {
-  const [links, setLinks] = useState('')
+export function Remix({ onClose, onDone, canLinks = true, initialLinks = '', autoStart = false }: {
+  onClose: () => void; onDone: () => Promise<void> | void; canLinks?: boolean
+  initialLinks?: string; autoStart?: boolean   // the front door: links from the home page, started at once
+}) {
+  const [links, setLinks] = useState(initialLinks)
   const [title, setTitle] = useState('a day in my life')
   const [sub, setSub] = useState('')
   const [job, setJob] = useState<RemixJob | null>(null)
@@ -38,6 +41,11 @@ export function Remix({ onClose, onDone, canLinks = true }: { onClose: () => voi
       setError((e as Error).message)
     }
   }
+
+  const started = useRef(false)
+  useEffect(() => {
+    if (autoStart && initialLinks.trim() && !started.current) { started.current = true; go() }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const stageText = job ? ({
     queued: 'Starting…', references: 'Watching your references…', choosing: 'Choosing the moments…',

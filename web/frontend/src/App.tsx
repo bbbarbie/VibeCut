@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { api, saving } from './api'
+import { api, type MakeJob, saving } from './api'
 import { Chat, type ChatItem } from './components/Chat'
 import { KIND_META, partsOf } from './overlayDraw'
 import { loadProfile } from './profile'
@@ -28,7 +28,7 @@ import { PreviewBar } from './components/PreviewBar'
 import { Handle, useLayout } from './components/Split'
 import { Icon, type IconName } from './components/icons'
 import { Footage, type Importing } from './components/Footage'
-import { fromDataTransfer, fromInput, takeHandoff, type Picked } from './drop'
+import { fromDataTransfer, fromInput, takeHandoff, takeRefs, type Picked } from './drop'
 import { bytes, uid } from './format'
 import { clock, locate, toSource, type SeqItem } from './sequence'
 import { cutWhilePlaying, step } from './snap'
@@ -322,19 +322,45 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   // Two picks remain (2026-10-10): the frame and the look, in one popup
   // with the footage's own defaults; "Make my video" builds the rest.
   const autoBrief = useRef(false)
-  const [setup, setSetup] = useState<{ data: SetupData | null; busy: boolean } | null>(null)
+  const [setup, setSetup] = useState<{ data: SetupData | null; busy: boolean; progress?: MakeJob | null } | null>(null)
+  const playOnLand = useRef(false)   // the first thing after Make my video is the video, playing
   const startQuestions = () => {
-    if (asking || autoBrief.current || setup) return
+    if (asking || autoBrief.current || setup || frontDoor.current || remixing) return
     setSetup({ data: null, busy: false })
     api.setup().then((d) => setSetup((x) => x && { ...x, data: d }), (e) => { note((e as Error).message); setSetup(null) })
   }
-  const makeIt = (format: string, look: string) => {
+  // Make my video (2026-10-17): the one pipeline runs as a job; the dialog
+  // shows where it is; when it lands the edit opens in Frames and plays.
+  const makeIt = async (format: string, look: string) => {
     if (autoBrief.current) return
     autoBrief.current = true
     setSetup((x) => x && { ...x, busy: true })
-    api.autoBrief({ format, look }).then((s) => { setSession(s); setSetup(null) }, (e) => { note((e as Error).message); setSetup((x) => x && { ...x, busy: false }) })
-      .finally(() => { autoBrief.current = false })
+    try {
+      let job = await api.make({ format, look })
+      setSetup((x) => x && { ...x, progress: job })
+      while (job.stage !== 'done' && job.stage !== 'error') {
+        await new Promise((r) => window.setTimeout(r, 700))
+        job = await api.makeStatus(job.id)
+        setSetup((x) => x && { ...x, progress: job })
+      }
+      if (job.stage === 'error') throw new Error(job.error ?? 'Making the video failed')
+      playOnLand.current = true
+      setSession(await api.session())
+      setSetup(null)
+      setLevel('frames')
+    } catch (e) {
+      note((e as Error).message)
+      setSetup((x) => x && { ...x, busy: false, progress: null })
+    } finally {
+      autoBrief.current = false
+    }
   }
+  useEffect(() => {
+    if (!playOnLand.current || level !== 'frames' || !session?.board || !tl.total) return
+    playOnLand.current = false
+    const t = window.setTimeout(() => { snapStore.set(null); transport.seek(0); transport.play(1) }, 400)
+    return () => window.clearTimeout(t)
+  }, [level, session?.board, tl.total])
   // Opening a project that's waiting on them: the questions are simply there.
   useEffect(() => {
     if (shown === 'brief' && !brief && clips.length && !asking) startQuestions()
@@ -440,11 +466,24 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   }, [importing, runImport, say, stage, shown, session?.board])
 
   // Clips picked on the home page before this video existed: read them now.
+  // Reels pasted beside them (the front door, plan step 4) wait until the
+  // clips are read, then a Remix starts with them and lands as the story.
+  const frontDoor = useRef<string[] | null>(null)
+  const [frontLinks, setFrontLinks] = useState<string | null>(null)
   useEffect(() => {
     if (opened !== 'ok') return
+    frontDoor.current = takeRefs()
     const p = takeHandoff()
     if (p?.length) importPicked(p)
   }, [opened]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!frontDoor.current || importing || !clips.length || stage === 'footage') return
+    const links = frontDoor.current.join('\n')
+    frontDoor.current = null
+    transport.stop(); videoRef.current?.pause(); stopQueue(); setMenu(null)
+    setFrontLinks(links)
+    setRemixing(true)
+  }, [importing, clips.length, stage]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const retryImport = async (paths: string[]) => {
     if (importing) return
@@ -1135,7 +1174,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
 
   return (
     <>
-    {setup && <Setup data={setup.data} busy={setup.busy} onDone={makeIt} onCancel={() => { if (!setup.busy) setSetup(null) }} />}
+    {setup && <Setup data={setup.data} busy={setup.busy} progress={setup.progress} onDone={makeIt} onCancel={() => { if (!setup.busy) setSetup(null) }} />}
     {asking && <StyleQuestions questions={asking.questions} tailored={asking.tailored}
                                onDone={answered} onCancel={() => setAsking(null)} />}
     <div className="grid h-full grid-rows-[56px_1fr] bg-ink">
@@ -1307,7 +1346,8 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       {help && <Keys onClose={() => setHelp(false)} />}
       {exporting && <Export tl={tl} overlays={ovData} parts={parts} music={session?.music?.title ?? null} style={session?.board?.style}
                             history={session?.exports ?? []} onClose={() => { setExporting(false); api.session().then(setSession).catch(() => {}) }} />}
-      {remixing && <Remix onClose={() => setRemixing(false)} onDone={remixDone} canLinks={caps.links} />}
+      {remixing && <Remix onClose={() => { setRemixing(false); setFrontLinks(null) }} onDone={remixDone} canLinks={caps.links}
+                          initialLinks={frontLinks ?? ''} autoStart={!!frontLinks} />}
       {referencing && <BorrowStyle onClose={() => setReferencing(false)} onRemix={openRemix}
                                    onApplied={(s) => { setSession(s); offerUndo(s); setReferencing(false); setPeek(null); setLevel('frames') }} />}
       {restart && <Confirm title="Start this video over?" action="Start over" danger onNo={() => setRestart(false)} onYes={startOver}

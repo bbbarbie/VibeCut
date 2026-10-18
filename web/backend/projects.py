@@ -61,6 +61,9 @@ class Project:
     snapshot: dict = field(default_factory=dict)
     # named by VibeCut from its clips (auto_name) until the creator renames it
     auto_name: bool = False
+    # what happened to this video that isn't a turn (launchlog.py): the bed's
+    # pick landing or not, an export's verdict -- {"kind", "at", ...}
+    events: list[dict] = field(default_factory=list)
     format: int = FORMAT
 
     # ---- what the UI lists -------------------------------------------------

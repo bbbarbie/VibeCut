@@ -92,6 +92,33 @@ name, handle, font, colour and caption placement (words on screen, name
 tags, end cards). Taste and bookmarks are kept for you and not yet read by
 the editor — the page says so.
 
+## Make my video
+
+Since 2026-10-17 the two picks run one pipeline — the same one a Remix
+uses — and land as the video, playing: the strongest moments of the shoot
+(a hook first), each a whole number of beats of a track picked for the
+footage's pace and the edit's arc, the look, a title and a line per stop.
+A short is cut like a reel (under a second a shot, a minute at most) and
+rides on the music; a vlog breathes and keeps its own sound up front. The
+dialog shows where it is (choosing, music, words); the result is one turn,
+so Undo takes it all back, and the three stories are still there under
+Other stories. Music is fetched the moment the clips are read, so by the
+time you press Make it's usually waiting.
+
+## The front door: a short like a reel you love
+
+On the home page, under the clips you picked, there is one more line:
+*Make it like a reel you love*. Paste one to three links (TikTok, Reels,
+Shorts, or files on this Mac) and the button becomes *Make a short like
+it*. The video is created, the clips are read, and a Remix starts by
+itself with those reels: their pace, length, how they hold the first shot
+and the feel of their music — never their frames. When it lands it *is* the
+story: the gate is passed in your name, the brief carries the reels' frame
+and length, and the edit opens in Frames with music under it, editable like
+any other cut. With an API key, Claude judges the picked moments from one
+frame each (the rules' picks plus two runners-up a session) and the plan
+says so; without one, the rules choose.
+
 ## Reference: make it feel like a video you love
 
 **Reference** in the header (or *Fine-tune* after a style is on): paste a
@@ -546,6 +573,19 @@ Measured on the 42 real iPhone 4K HEVC clips: a 6:44 vertical edit with 8
 overlays exported in 139 s on an M5; an 11 s voiceover edit in 4 s.
 `tests/test_export.py` checks frame-exact length, the overlay window to the
 frame, and one audio track through silent clips and gaps.
+
+## What the launch tracks
+
+One workflow counts: drop a day's clips, make the two picks, watch, export.
+After every export the dialog asks one question — *Would you post this?* —
+with room for a line. The answer sits on the export's record
+(`/api/exports/{n}/verdict`), and `python -m web.backend.launchlog` reads
+every project record into the numbers the launch checklist asks for:
+completions (an export made without a typed chat edit), successes (a yes),
+failures (unreadable files, a music hunt that found nothing, exports judged
+not postable, with the words), costs (model calls, render seconds, seconds
+spent hunting music) and how much was undone. Nothing is sent anywhere; it
+is a file on this Mac.
 
 ## Out of scope
 

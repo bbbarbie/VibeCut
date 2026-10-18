@@ -13,9 +13,10 @@ export type SetupData = {
 
 const GLYPH: Record<string, string> = { short: 'h-7 w-4', tall: 'h-7 w-4', wide: 'h-4 w-7' }
 
-export function Setup({ data, busy, onDone, onCancel }: {
+export function Setup({ data, busy, progress, onDone, onCancel }: {
   data: SetupData | null
   busy: boolean
+  progress?: { line: string; done: number; total: number; elapsed: number } | null   // where the making is
   onDone: (format: string, look: string) => void
   onCancel: () => void
 }) {
@@ -31,6 +32,11 @@ export function Setup({ data, busy, onDone, onCancel }: {
     <Dialog title="Two picks, then your video" sub={data ? `From the clips: ${data.about}. Length, pace and captions are read from the footage; change any of it in Frames.` : 'Reading your clips…'}
             onClose={onCancel} busy={busy} width={560}
             footer={<>
+              {busy && progress && (
+                <span className="mr-auto self-center text-[12px] text-muted">
+                  {progress.line}{progress.total ? ` ${progress.done}/${progress.total}` : ''} · {Math.round(progress.elapsed)} s
+                </span>
+              )}
               <Button variant="ghost" onClick={onCancel} disabled={busy}>Not yet</Button>
               <Button variant="primary" onClick={() => onDone(fmt, lk)} disabled={!data || busy}>{busy ? 'Making it…' : 'Make my video'}</Button>
             </>}>
