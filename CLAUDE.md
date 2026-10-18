@@ -188,6 +188,24 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   judged on one real shoot (42 clips, 3 references). Every weight is a
   guess; the selector has no model behind it (no key on this Mac).
 
+- **The one pipeline** (`web/backend/make.py`, `/api/make`, 2026-10-17;
+  after rendering the app headless on sarah's shoot: "Make my video" gave a
+  13-shot chronological timeline with clock captions and no music, while the
+  engine that makes the video she asked for lived under "Build a short from
+  reference reels"). Make = the brief from the two picks → gate passed in
+  the creator's name → a job: fingerprint (references', else `PRIOR` by
+  frame and pace: a short 0.7–1.2 s a shot, hook 1.5 s, ≤ 60 s; a vlog
+  1.8–3.2 s, hook 2.5 s) → `remix.plan_shots` (worth-ranked, judged with a
+  key) → music from `bed.candidates` (own folder / Openverse / pack,
+  prefetched at import now) with shots quantised to its beat and the drop
+  at the end of the hook → one turn: `choose_option` (option `made`),
+  `set_music` at the frame's levels (`LEVELS`: a short rides on the music,
+  a vlog keeps its sound and ducks under talking), `set_look`, a title and
+  a line per stop (`remix.captions`). Lands in Frames and plays. The
+  three stories still exist under Other stories (the direction turn is
+  added first). On her 42 clips: 27 moments, 25 s, hook first, cuts on the
+  beat, music under it — see `design/eval/` screenshots 23–25. Every number
+  in `PRIOR` / `LEVELS` is a guess. `tests/test_make.py`.
 - **Two picks up front** (plan of 2026-10-10, step 2; `Setup.tsx`,
   `/api/brief/setup`, `/api/brief/auto {format, look}`, `/api/format`):
   after Footage's "Looks good" one popup asks the **frame** (short ·

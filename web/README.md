@@ -92,6 +92,19 @@ name, handle, font, colour and caption placement (words on screen, name
 tags, end cards). Taste and bookmarks are kept for you and not yet read by
 the editor — the page says so.
 
+## Make my video
+
+Since 2026-10-17 the two picks run one pipeline — the same one a Remix
+uses — and land as the video, playing: the strongest moments of the shoot
+(a hook first), each a whole number of beats of a track picked for the
+footage's pace and the edit's arc, the look, a title and a line per stop.
+A short is cut like a reel (under a second a shot, a minute at most) and
+rides on the music; a vlog breathes and keeps its own sound up front. The
+dialog shows where it is (choosing, music, words); the result is one turn,
+so Undo takes it all back, and the three stories are still there under
+Other stories. Music is fetched the moment the clips are read, so by the
+time you press Make it's usually waiting.
+
 ## The front door: a short like a reel you love
 
 On the home page, under the clips you picked, there is one more line:

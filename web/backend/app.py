@@ -30,7 +30,7 @@ from cutgrammar import grade
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, bed, brief, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, bed, brief, make, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import GATE, Workflow, WorkflowError
 
@@ -591,6 +591,13 @@ def api_import(req: ImportReq) -> dict:
                     WORKFLOW.advance("indexing", f"{len(job.clips)} clips indexed")
                 WORKFLOW.advance("rough-cut", "reject + trim computed")
                 WORKFLOW.advance("cut-review", cut.summary(PLAN["plan"])["line_en"])
+                # the clips are read: start fetching music for their pace now, so
+                # "Make my video" finds tracks waiting rather than hunting (make.py)
+                if musiclib.STATE["status"] != "ready" and os.environ.get("VIBECUT_BED", "1") != "0":
+                    try:
+                        bed.prefetch(tempo.read(list(CLIPS.values()), cut.for_story(PLAN["plan"]))["pace"])
+                    except Exception:  # noqa: BLE001 -- a warm-up, nothing more
+                        pass
             else:
                 WORKFLOW.reopen("system", f"{len(job.clips)} new clip(s) to review")
             SESSION.replay(CATALOG["cat"], _make_proposals)
@@ -952,6 +959,71 @@ def api_brief_auto(req: BriefAutoReq | None = None) -> dict:
         if musiclib.STATE["status"] != "ready" and os.environ.get("VIBECUT_BED", "1") != "0":
             bed.prefetch(feel["pace"])
         return _session()
+
+
+# --------------------------------------------------------------------------
+# make: the two picks -> a finished video on the board (make.py)
+# --------------------------------------------------------------------------
+
+MAKE: dict = {"job": None}
+MAKE_TEXT = "Made your video"
+
+
+@app.post("/api/make")
+def api_make(req: BriefAutoReq | None = None) -> dict:
+    """The main path since 2026-10-17: the brief from the two picks, the gate
+    passed in the creator's name (pressing Make *is* the decision), then the
+    one pipeline runs as a job and lands as one undoable turn. Returns the
+    job; poll /api/make/{id}; the session has the video when it's done."""
+    api_brief_auto(req)
+    with LOCK:
+        if not CLIPS:
+            raise HTTPException(409, "Add clips first.")
+        if MAKE["job"] and MAKE["job"].stage not in ("done", "error"):
+            return MAKE["job"].public()
+        if WORKFLOW.state == GATE:
+            WORKFLOW.approve("user", "made from the two picks")
+        pr = PROJECT["p"]
+        style = (pr.brief or {}).get("style") or {}
+        about = (pr.brief or {}).get("message") or "My video"
+        # the direction turn: the other stories (Other stories…) are built from it
+        if not any(t.direction for t in SESSION.turns if not t.undone):
+            SESSION.add({"kind": "chat", "text": about, "ops": [],
+                         "direction": {"text": about, "style": style, "themes": [], "labels": []}},
+                        CATALOG["cat"], _make_proposals)
+        own = musiclib.STATE["tracks"] if musiclib.STATE["status"] == "ready" else None
+        clips = dict(CLIPS)
+        cut_now = cut.for_story(PLAN["plan"])
+
+    def on_done(job: make.Job) -> None:
+        with LOCK:
+            if MAKE["job"] is not job or job.stage != "done" or not job.result:
+                return
+            mx = job.result["music"]
+            if mx:
+                t = mx["track"]
+                if not any(x.id == t.id for x in musiclib.STATE["tracks"]):
+                    musiclib.STATE["tracks"].append(t)
+                musiclib.use(t.id)
+            SESSION.add({"kind": "direct", "text": MAKE_TEXT, "ops": job.result["ops"], "reply": job.result["reply"]},
+                        CATALOG["cat"], _make_proposals)
+            if PROJECT["p"] is not None:
+                PROJECT["p"].events.append({"kind": "make", "at": time.time(), "music": bool(mx),
+                                            "seconds": round(job.result["plan"].duration, 1),
+                                            "elapsed": round(time.time() - job.started, 1)})
+        _save()
+
+    MAKE["job"] = make.start(clips, cut_now, style.get("format", "tall"), style.get("pace", "balanced"),
+                             style.get("look"), about, float(style.get("seconds") or 60.0), own, None, None, on_done)
+    return MAKE["job"].public()
+
+
+@app.get("/api/make/{jid}")
+def api_make_status(jid: str) -> dict:
+    job = make.JOBS.get(jid)
+    if not job:
+        raise HTTPException(404, "no such job")
+    return job.public()
 
 
 class FormatReq(BaseModel):

@@ -97,8 +97,8 @@ def fingerprint(styles: list[dict]) -> dict:
     lo, hi = (min(bpms) * 0.92, max(bpms) * 1.08) if bpms else BPM_DEFAULT
     arcs = [(s.get("music") or {}).get("arc") for s in styles if s.get("music")]
     arc = max(set(arcs), key=arcs.count) if arcs else "builds"
-    energy = np.mean([(s["music"]["energy"]) for s in styles if (s.get("music") or {}).get("energy")], axis=0) \
-        if arcs else None
+    curves = [s["music"]["energy"] for s in styles if (s.get("music") or {}).get("energy")]
+    energy = np.mean(curves, axis=0) if curves else None     # a reference may know its arc but not its curve
     durs = [float(s["duration"]) for s in styles if s.get("duration")]
     dur = float(np.clip(np.median(durs) if durs else 30.0, *DEFAULT_LEN))
     return {
