@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import type { AIEstimate, AIState } from '../api'
 import { Button, Dialog } from '../ui'
+import { AISwitch } from './AISwitch'
 
 // The two picks before anything is cut (plan of 2026-10-10, step 2): the
 // frame the video is for, and the look of the whole thing. Everything else
@@ -13,8 +15,10 @@ export type SetupData = {
 
 const GLYPH: Record<string, string> = { short: 'h-7 w-4', tall: 'h-7 w-4', wide: 'h-4 w-7' }
 
-export function Setup({ data, busy, progress, onDone, onCancel }: {
+export function Setup({ data, busy, progress, onDone, onCancel, ai, estimate, onAI }: {
   data: SetupData | null
+  ai?: AIState | null; estimate?: AIEstimate | null   // the AI switch, and what this edit would cost with it on
+  onAI?: (on: boolean) => void
   busy: boolean
   progress?: { line: string; done: number; total: number; elapsed: number } | null   // where the making is
   onDone: (format: string, look: string) => void
@@ -26,6 +30,9 @@ export function Setup({ data, busy, progress, onDone, onCancel }: {
   const fmt = format ?? data?.format ?? 'tall'
   const lk = look ?? data?.look ?? 'cozy'
   useEffect(() => { first.current?.focus() }, [data])
+  const aiOn = !!ai?.available && !!ai?.on
+  const cost = aiOn && estimate?.on ? estimate.dollars : null
+  const usd = (d: number) => d < 0.01 ? 'under 1¢' : `$${d.toFixed(2)}`
   const say = (s: number) => s < 60 ? `${s} s` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
   return (
@@ -38,9 +45,23 @@ export function Setup({ data, busy, progress, onDone, onCancel }: {
                 </span>
               )}
               <Button variant="ghost" onClick={onCancel} disabled={busy}>Not yet</Button>
-              <Button variant="primary" onClick={() => onDone(fmt, lk)} disabled={!data || busy}>{busy ? 'Making it…' : 'Make my video'}</Button>
+              <Button variant="primary" onClick={() => onDone(fmt, lk)} disabled={!data || busy || (aiOn && cost == null)}>
+                {busy ? 'Making it…' : cost != null ? `Make my video · ${usd(cost)}` : 'Make my video'}
+              </Button>
             </>}>
       <div className="space-y-4">
+        {ai && onAI && (
+          // what this edit will cost with AI, before anything is spent
+          <div className="flex items-center gap-3 rounded-xl border border-line px-3 py-2.5">
+            <AISwitch ai={ai} onToggle={onAI} busy={busy} />
+            <p className="font-serif text-[15px] leading-snug text-zinc-200">
+              {!ai.available ? 'No AI key on this Mac, so the usual rules make the edit.'
+                : !aiOn ? 'Off: the usual rules make the edit, free.'
+                : cost == null ? 'Working out what this edit costs…'
+                : <>AI plans this edit into chapters: about <b>{usd(cost)}</b> ({estimate!.moments} moments, {estimate!.model}). Nothing is spent until you press Make.</>}
+            </p>
+          </div>
+        )}
         <div>
           <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">Which frame?</div>
           <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Frame">

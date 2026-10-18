@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { api, type MakeJob, saving } from './api'
+import { api, type AIEstimate, type AIState, type MakeJob, saving } from './api'
+import { AISwitch } from './components/AISwitch'
 import { Chat, type ChatItem } from './components/Chat'
 import { KIND_META, partsOf } from './overlayDraw'
 import { loadProfile } from './profile'
@@ -331,12 +332,27 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   }
   // Make my video (2026-10-17): the one pipeline runs as a job; the dialog
   // shows where it is; when it lands the edit opens in Frames and plays.
+  // The AI switch: off by default; on, Make shows this edit's cost first and
+  // only a Make carrying that estimate lets the AI plan it (backend oai.py).
+  const [ai, setAI] = useState<AIState | null>(null)
+  const [estimate, setEstimate] = useState<AIEstimate | null>(null)
+  useEffect(() => { api.ai().then(setAI, () => setAI(null)) }, [])
+  const toggleAI = async (on: boolean) => {
+    try { setAI(await api.setAI(on)) } catch (e) { note((e as Error).message) }
+  }
+  useEffect(() => {
+    setEstimate(null)
+    if (!setup || !ai?.on || setup.busy) return
+    let live = true
+    api.makeEstimate().then((e) => live && setEstimate(e), (e) => live && note((e as Error).message))
+    return () => { live = false }
+  }, [!!setup, ai?.on]) // eslint-disable-line react-hooks/exhaustive-deps
   const makeIt = async (format: string, look: string) => {
     if (autoBrief.current) return
     autoBrief.current = true
     setSetup((x) => x && { ...x, busy: true })
     try {
-      let job = await api.make({ format, look })
+      let job = await api.make({ format, look, ai_ok: ai?.on && estimate?.on ? estimate.dollars : null })
       setSetup((x) => x && { ...x, progress: job })
       while (job.stage !== 'done' && job.stage !== 'error') {
         await new Promise((r) => window.setTimeout(r, 700))
@@ -1185,7 +1201,8 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
 
   return (
     <>
-    {setup && <Setup data={setup.data} busy={setup.busy} progress={setup.progress} onDone={makeIt} onCancel={() => { if (!setup.busy) setSetup(null) }} />}
+    {setup && <Setup data={setup.data} busy={setup.busy} progress={setup.progress} onDone={makeIt} onCancel={() => { if (!setup.busy) setSetup(null) }}
+                     ai={ai} estimate={estimate} onAI={toggleAI} />}
     {asking && <StyleQuestions questions={asking.questions} tailored={asking.tailored}
                                onDone={answered} onCancel={() => setAsking(null)} />}
     <div className="grid h-full grid-rows-[56px_1fr] bg-ink">
@@ -1229,6 +1246,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
         <div className="flex-1" />
 
         {narrow && storyStage && !framesView && <Button size="sm" onClick={() => setChatOpen((o) => !o)} aria-pressed={chatOpen}>Chat</Button>}
+        <AISwitch ai={ai} onToggle={toggleAI} />
         {session?.board && <>
           <button type="button" onClick={() => undoRedo(false)} disabled={!lastDone} aria-label="Undo" title={lastDone ? `Undo: ${lastDone.lines.map((l) => l.text).join(' · ') || 'the last change'} (⌘Z)` : 'Nothing to undo'}
                   className="grid size-9 place-items-center rounded-lg text-zinc-200 hover:bg-raised disabled:opacity-30"><Icon name="undo" /></button>

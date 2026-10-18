@@ -1,7 +1,7 @@
 """The story editor: a model plans the video as chapters (story.py, oai.py).
 
 No network: OpenAI's reply is played by a stand-in. Unit: nothing is called
-without the key *and* the creator's yes (VIBECUT_STORY_AI=1); a call's cost
+without the key, the AI switch on, and that edit's estimate agreed; a call's cost
 comes from its usage; an answer is checked against what was offered (unknown
 numbers, repeats and the hook inside a chapter are dropped, lengths are held
 to their job's range and to what was filmed); payoffs sit on whole beats.
@@ -67,16 +67,20 @@ def reply(ans: dict, prompt=9000, out=2500) -> dict:
 def unit() -> None:
     from web.backend import oai, overlays as ov, story
 
-    print("the yes to spend")
-    for k in ("OPENAI_API_KEY", "VIBECUT_STORY_AI", "OPENAI_MODEL"):
+    print("the AI switch")
+    for k in ("OPENAI_API_KEY", "OPENAI_MODEL"):
         os.environ.pop(k, None)
     real_env = oai.ENV_FILE
     oai.ENV_FILE = Path(tempfile.mkdtemp()) / ".env"
-    check("no key: off", not oai.enabled())
+    oai.switch(True)
+    check("no key: off, whatever the switch says", not oai.enabled())
+    oai.switch(False)
     oai.ENV_FILE.write_text("ANTHROPIC_API_KEY=x\nOPENAI_API_KEY=sk-test\n")
     check("a key alone is not a yes", oai.has_key() and not oai.enabled())
-    oai.ENV_FILE.write_text("OPENAI_API_KEY=sk-test\nVIBECUT_STORY_AI=1\n")
-    check("key + VIBECUT_STORY_AI=1: on", oai.enabled())
+    oai.switch(True)
+    check("key + switch on: on", oai.enabled())
+    oai.switch(False)
+    check("switched off again", not oai.enabled())
     oai.ENV_FILE = real_env
 
     print("what a call costs")
@@ -171,8 +175,8 @@ def api() -> None:
     oai._post = fake
     os.environ["OPENAI_API_KEY"] = "sk-test"
 
-    def make(c, fmt="tall"):
-        job = c.post("/api/make", json={"format": fmt, "look": "cozy"}).json()
+    def make(c, fmt="tall", ai_ok=None):
+        job = c.post("/api/make", json={"format": fmt, "look": "cozy", "ai_ok": ai_ok}).json()
         for _ in range(600):
             if job["stage"] in ("done", "error"):
                 break
@@ -187,13 +191,22 @@ def api() -> None:
             for rec in backend.CLIPS.values():
                 for sh in rec.get("shots", []):
                     sh["utility"] = False
-            os.environ.pop("VIBECUT_STORY_AI", None)
-            job = make(c)
-            check("without the yes, nothing is sent", job["stage"] == "done" and not calls, job.get("error") or "")
+            ai = c.get("/api/ai").json()
+            check("the switch starts off, the key is there", ai["available"] and not ai["on"], json.dumps(ai))
+            est = c.get("/api/make/estimate").json()
+            check("off: the estimate is nothing", est["dollars"] == 0 and not est["on"])
+            job = make(c, ai_ok=0.05)
+            check("switch off: nothing is sent, even with a go-ahead", job["stage"] == "done" and not calls, job.get("error") or "")
             c.post("/api/undo")
-            os.environ["VIBECUT_STORY_AI"] = "1"
+            c.post("/api/ai", json={"on": True})
+            est = c.get("/api/make/estimate").json()
+            check("on: the edit's cost is shown before anything is sent",
+                  est["on"] and est["moments"] >= 3 and 0 < est["dollars"] < 0.2 and not calls, json.dumps(est))
             job = make(c)
-            check("with the yes, one call", job["stage"] == "done" and len(calls) == 1, job.get("error") or str(calls))
+            check("on, but this edit's cost not agreed: nothing is sent", job["stage"] == "done" and not calls)
+            c.post("/api/undo")
+            job = make(c, ai_ok=est["dollars"])
+            check("on and agreed: one call", job["stage"] == "done" and len(calls) == 1, job.get("error") or str(calls))
             s = c.get("/api/session").json()
             titles = [b["title"] for b in s["board"]["beats"]]
             check("the parts are the chapters, after the hook", titles == ["Hook", "Morning Routine", "OOTD"], str(titles))
@@ -210,14 +223,14 @@ def api() -> None:
             check("the cost is kept with the project", ev.get("ai", {}).get("cost", 0) > 0, json.dumps(ev.get("ai")))
             c.post("/api/undo")
             oai._post = lambda url, body, headers: reply({"video_title": "", "hook": None, "chapters": []})
-            job = make(c)
+            job = make(c, ai_ok=est["dollars"])
             s = c.get("/api/session").json()
             check("a useless answer falls back to the rules, and says so",
                   job["stage"] == "done" and "story plan didn't work" in json.dumps(s), job.get("error") or "")
     finally:
         bed.candidates, oai._post = real_cand, real_post
-        for k in ("OPENAI_API_KEY", "VIBECUT_STORY_AI"):
-            os.environ.pop(k, None)
+        os.environ.pop("OPENAI_API_KEY", None)
+        oai.switch(False)
 
 
 def main() -> int:

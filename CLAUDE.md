@@ -217,8 +217,12 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   rules still cut each window, the beat and the music. Chapter titles are
   overlay kind `heading` with their own `look` (script / spaced / bold /
   serif, `overlayDraw.HEADINGS`), independent of the captions' one style.
-  Runs only with `OPENAI_API_KEY` **and** `VIBECUT_STORY_AI=1` in web/.env
-  (a key is not a yes to spend it); `OPENAI_MODEL` overrides `oai.MODEL`.
+  Runs only with `OPENAI_API_KEY` in web/.env **and** the AI switch on (the
+  "AI" pill in the top bar and in the two-picks popup, `/api/ai`, kept in
+  `$VIBECUT_CACHE/ai.json`, off by default; sarah, 2026-10-18), and only for
+  a Make that carries the estimate she saw (`/api/make/estimate` → `ai_ok`):
+  the popup shows "this edit will cost about $…" before Make. A key is not a
+  yes to spend it. `OPENAI_MODEL` overrides `oai.MODEL`.
   Cost is read from each reply's usage, said in the reply and kept in
   `Project.events`. Any failure → the rules' edit, and the reply says so.
   urllib only (no SDK on her Mac). `tests/test_story.py` (stand-in replies).

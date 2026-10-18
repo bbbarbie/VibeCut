@@ -8,6 +8,9 @@ export type MomentAnswer = { reply: string; choices: string[]; ops: Record<strin
 export type ProjectList = { projects: ProjectMeta[]; open: string | null; capabilities: Capabilities }
 export type Opened = { project: ProjectMeta; session: Session }
 
+export type AIState = { available: boolean; on: boolean; model: string }
+export type AIEstimate = AIState & { moments: number; dollars: number }
+
 export type MakeJob = { id: string; stage: string; line: string; done: number; total: number; error: string | null; elapsed: number }
 
 export type RemixJob = {
@@ -79,7 +82,10 @@ export const api = {
   chat: (message: string, style?: StyleAnswers) => j<Session>(post('/api/chat', { message, style: style ?? null })),
   autoBrief: (picks?: { format: string; look: string }) => j<Session>(post('/api/brief/auto', picks ?? {})),
   setup: () => j<SetupData>(fetch('/api/brief/setup')),
-  make: (picks: { format: string; look: string }) => j<MakeJob>(post('/api/make', picks)),
+  make: (picks: { format: string; look: string; ai_ok?: number | null }) => j<MakeJob>(post('/api/make', picks)),
+  ai: () => j<AIState>(fetch('/api/ai')),
+  setAI: (on: boolean) => j<AIState>(post('/api/ai', { on })),
+  makeEstimate: () => j<AIEstimate>(fetch('/api/make/estimate')),
   makeStatus: (id: string) => j<MakeJob>(fetch(`/api/make/${id}`)),
   format: (format: string) => j<Session>(post('/api/format', { format })),
   pile: (clip: string, into: boolean) => j<Session>(post('/api/pile', { clip, into })),

@@ -174,7 +174,7 @@ JOBS: dict[str, Job] = {}
 
 
 def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, about: str, seconds: float,
-          own: list[mu.Track] | None, styles: list[dict] | None, judge, on_done) -> Job:
+          own: list[mu.Track] | None, styles: list[dict] | None, judge, on_done, use_ai: bool = False) -> Job:
     """Run the pipeline in a thread; `on_done(job)` puts the ops on the session.
     Everything the thread needs is copied in now, so later edits can't move it."""
     job = Job()
@@ -188,8 +188,8 @@ def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, ab
             job.stage = "choosing"
             fp = fingerprint(fmt, pace, seconds, styles)
             plan, chapters, ai = None, None, None
-            if oai.enabled() and not styles:
-                # the story editor (story.py): only with a key and the creator's yes to spending it
+            if use_ai and oai.enabled() and not styles:
+                # the story editor (story.py): only with the AI switch on and this edit's cost agreed
                 job.line = "Planning the story…"
                 try:
                     plan, chapters, _title, usage = story.plan(clips, cut, fmt, fp["duration"], about)

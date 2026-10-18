@@ -30,7 +30,7 @@ from cutgrammar import grade
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, bed, brief, make, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, bed, brief, make, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, oai, overlays, reference, remix, speech, story, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import GATE, Workflow, WorkflowError
 
@@ -926,6 +926,7 @@ def api_brief_setup() -> dict:
 class BriefAutoReq(BaseModel):
     format: str | None = None
     look: str | None = None
+    ai_ok: float | None = None      # Make only: the AI estimate the creator saw and went ahead with
 
 
 @app.post("/api/brief/auto")
@@ -1014,9 +1015,52 @@ def api_make(req: BriefAutoReq | None = None) -> dict:
                                             "elapsed": round(time.time() - job.started, 1)})
         _save()
 
+    # the AI plans this edit only when it is switched on and the creator went
+    # ahead having seen what it would cost (/api/make/estimate)
+    use_ai = bool(req and req.ai_ok is not None and oai.enabled())
     MAKE["job"] = make.start(clips, cut_now, style.get("format", "tall"), style.get("pace", "balanced"),
-                             style.get("look"), about, float(style.get("seconds") or 60.0), own, None, None, on_done)
+                             style.get("look"), about, float(style.get("seconds") or 60.0), own, None, None, on_done,
+                             use_ai=use_ai)
     return MAKE["job"].public()
+
+
+class AIReq(BaseModel):
+    on: bool
+
+
+def _ai_public() -> dict:
+    return {"available": oai.has_key(), "on": oai.enabled(), "model": oai.model()}
+
+
+@app.get("/api/ai")
+def api_ai() -> dict:
+    """The AI switch (sarah, 2026-10-18): off by default; on means each
+    edit shows its cost first. No key in web/.env: it can't be turned on."""
+    return _ai_public()
+
+
+@app.post("/api/ai")
+def api_ai_set(req: AIReq) -> dict:
+    if req.on and not oai.has_key():
+        raise HTTPException(409, "There's no AI key in web/.env on this Mac, so AI can't be turned on.")
+    oai.switch(req.on)
+    return _ai_public()
+
+
+@app.get("/api/make/estimate")
+def api_make_estimate() -> dict:
+    """What letting the AI plan this edit would cost, before anything is
+    sent: how many moments it would see, and dollars at the model's price."""
+    with LOCK:
+        if not CLIPS:
+            raise HTTPException(409, "Add clips first.")
+        clips = dict(CLIPS)
+        cut_now = cut.for_story(PLAN["plan"]) if PLAN["plan"] else None
+    out = _ai_public()
+    if not out["on"]:
+        return {**out, "moments": 0, "dollars": 0.0}
+    n = len(story.candidates(clips, cut_now))
+    return {**out, "moments": n, "dollars": round(story.estimate(n), 3)}
 
 
 @app.get("/api/make/{jid}")

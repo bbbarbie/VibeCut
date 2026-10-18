@@ -8,9 +8,12 @@ the price of every call is worked out from its usage and kept with the
 project.
 
 The key lives only in web/.env on the creator's Mac (OPENAI_API_KEY; the
-course forbids committing it or putting it in frontend code). Nothing is
-called unless VIBECUT_STORY_AI=1 is also set there: having a key is not the
-same as having agreed to spend it.
+course forbids committing it or putting it in frontend code). Having a key
+is not the same as agreeing to spend it: the AI switch in the app (sarah,
+2026-10-18: "an ai button that turns on and off ... calculates how much is
+spent for that edit before i proceed") is off until she turns it on, kept
+in $VIBECUT_CACHE/ai.json, and even then each edit shows its estimate first
+and only the Make that carries that estimate calls the model.
 
 Plain urllib, no SDK: pip installs are blocked on her Mac.
 """
@@ -23,6 +26,8 @@ import os
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+from . import indexer
 
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 URL = "https://api.openai.com/v1/chat/completions"
@@ -57,9 +62,25 @@ def has_key() -> bool:
     return bool(_env("OPENAI_API_KEY"))
 
 
+def _switch() -> Path:
+    return indexer.CACHE / "ai.json"
+
+
+def switched_on() -> bool:
+    try:
+        return bool(json.loads(_switch().read_text()).get("on"))
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
+def switch(on: bool) -> None:
+    _switch().parent.mkdir(parents=True, exist_ok=True)
+    _switch().write_text(json.dumps({"on": bool(on)}))
+
+
 def enabled() -> bool:
-    """A key, and the creator's yes to spending it."""
-    return has_key() and (_env("VIBECUT_STORY_AI") or "0") == "1"
+    """A key, and the AI switch on. Each edit still shows its cost first."""
+    return has_key() and switched_on()
 
 
 def model() -> str:
