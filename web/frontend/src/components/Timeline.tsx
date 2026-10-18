@@ -83,6 +83,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   const [edge, setEdge] = useState<{ key: string; edge: 'in' | 'out'; to: number } | null>(null)
   const edging = useRef<{ x: number; base: number; pps: number } | null>(null)
   const items = tl.items
+  useEffect(() => { if (!edging.current) setEdge(null) }, [items])
 
   useEffect(() => {
     const el = track.current
@@ -92,24 +93,62 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
     return () => ro.disconnect()
   }, [])
 
+  // The scale (pixels per second) stays put while the edit changes under it,
+  // as in CapCut: trimming a shot grows or shrinks that shot and slides the
+  // ones after it, it doesn't squeeze every shot to fit again (sarah,
+  // 2026-10-17). It is fitted to the edit only when the timeline's width
+  // changes, a different edit is shown, or she zooms herself.
+  const fitNow = () => tl.total > 0 ? Math.max(0.5, (width - 2 * PAD - items.length * GAP) / tl.total) : 10
+  const [scale, setScale] = useState<number | null>(null)
+  const seen = useRef<{ keys: Set<string>; edit: number }>({ keys: new Set(), edit: 0 })
+  const edit = useMemo(() => {
+    const s = seen.current
+    if (!items.some((it) => s.keys.has(it.key))) s.edit += 1   // nothing in common: another edit
+    s.keys = new Set(items.map((it) => it.key))
+    return s.edit
+  }, [items])
+  const hasEdit = tl.total > 0
+  useEffect(() => { if (hasEdit) setScale(fitNow()) }, [width, edit, hasEdit]) // eslint-disable-line react-hooks/exhaustive-deps
+  const zoomTo = (z: number) => { setScale(fitNow()); setZoom(z) }
+  const pps = (scale ?? fitNow()) * zoom
   // Geometry: widths proportional to duration, with a floor so a short
   // shot stays hittable. Position <-> time is exact within each block.
-  const fit = tl.total > 0 ? Math.max(0.5, (width - 2 * PAD - items.length * GAP) / tl.total) : 10
-  const pps = fit * zoom
-  const geo = useMemo(() => {
-    const w = items.map((it) => Math.max(MIN_W, (it.seq_end - it.seq_start) * pps))
+  // A shot whose end is being dragged is drawn at its new length while the
+  // drag lasts: dragging the end pushes the later shots along, dragging the
+  // start moves that edge with the pointer.
+  const layout = (edge: { key: string; edge: 'in' | 'out'; to: number } | null) => {
+    const dur = (it: SeqItem) => {
+      const d = it.seq_end - it.seq_start
+      if (edge?.key !== it.key) return d
+      const grow = edge.edge === 'out' ? edge.to - it.src_end : it.src_start - edge.to
+      return Math.max(0, d + grow / (it.speed ?? 1))
+    }
+    const w = items.map((it) => Math.max(MIN_W, dur(it) * pps))
     const left: number[] = []
     w.forEach((_, k) => left.push(k ? left[k - 1] + w[k - 1] + GAP : 0))
-    return { w, left, end: (left.at(-1) ?? 0) + (w.at(-1) ?? 0) }
-  }, [items, pps])
+    const k = edge?.edge === 'in' ? items.findIndex((it) => it.key === edge.key) : -1
+    if (k >= 0) {
+      // the start follows the pointer; the shots after stay until it's let go
+      const was = Math.max(MIN_W, (items[k].seq_end - items[k].seq_start) * pps)
+      for (let j = k; j < left.length; j++) left[j] -= w[k] - was
+    }
+    const end = Math.max(...w.map((x, j) => left[j] + x), 0)
+    return { w, left, end }
+  }
+  const geo = useMemo(() => layout(edge), [items, pps, edge]) // eslint-disable-line react-hooks/exhaustive-deps
+  // The timeline as it was before the drag: captions and sound strips keep
+  // their real times while a shot is being trimmed, instead of stretching
+  // with it and jumping back when it's let go (sarah, 2026-10-18).
+  const still = useMemo(() => (edge ? layout(null) : geo), [items, pps, edge == null, geo]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const xOf = (t: number) => {
+  const xOf = (t: number, g = geo) => {
     const k = locate(items, t)
     if (k < 0) return PAD
     const it = items[k]
     const d = Math.max(it.seq_end - it.seq_start, 1e-6)
-    return PAD + geo.left[k] + Math.min(1, (t - it.seq_start) / d) * geo.w[k]
+    return PAD + g.left[k] + Math.min(1, (t - it.seq_start) / d) * g.w[k]
   }
+  const xAt = (t: number) => xOf(t, still)
   const tOf = (x: number): { t: number; localPps: number } => {
     x -= PAD
     let lo = 0
@@ -257,11 +296,11 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
           ))}
         </span>
         <div className="flex shrink-0 items-center gap-1.5" title="Zoom the timeline">
-          <button type="button" aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(1, z / 1.5))}
+          <button type="button" aria-label="Zoom out" onClick={() => zoomTo(Math.max(1, zoom / 1.5))}
                   className="grid size-7 place-items-center rounded-md text-zinc-300 hover:bg-raised"><Icon name="minus" size={18} /></button>
           <input type="range" min={1} max={40} step={0.5} value={zoom} aria-label="Zoom"
-                 onChange={(e) => setZoom(Number(e.target.value))} className="w-24 accent-[#1f5f8b]" />
-          <button type="button" aria-label="Zoom in" onClick={() => setZoom((z) => Math.min(40, z * 1.5))}
+                 onChange={(e) => zoomTo(Number(e.target.value))} className="w-24 accent-[#1f5f8b]" />
+          <button type="button" aria-label="Zoom in" onClick={() => zoomTo(Math.min(40, zoom * 1.5))}
                   className="grid size-7 place-items-center rounded-md text-zinc-300 hover:bg-raised"><Icon name="plus" size={18} /></button>
         </div>
         {onExport && (
@@ -339,7 +378,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
               <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={onSelectMusic}
                       title={`${music.title}: click for the music's controls`}
                       className="absolute flex items-center gap-2 overflow-hidden rounded-md px-2.5 font-serif text-[14px] text-[#1d5c46] hover:brightness-95"
-                      style={{ left: PAD, width: Math.max(40, geo.end), bottom: musicBottom, height: SOUND_H,
+                      style={{ left: PAD, width: Math.max(40, still.end), bottom: musicBottom, height: SOUND_H,
                         background: 'repeating-linear-gradient(90deg, #bfe3d3 0 2px, #cdeadd 2px 5px)' }}>
                 <Icon name="music" size={16} />
                 <span className="truncate">{music.title}</span>
@@ -350,8 +389,8 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
               const d = drag?.id === o.id ? drag : null
               const a = d ? d.start : o.start
               const z = d ? d.end : o.shown_end
-              const x = xOf(a)
-              const w = Math.max(12, xOf(Math.min(z, tl.total)) - x)
+              const x = xAt(a)
+              const w = Math.max(12, xAt(Math.min(z, tl.total)) - x)
               const meta = KIND_META[o.kind]
               const edge = o.dur != null || o.anchor.to === 'edit'
               return (
@@ -407,7 +446,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
               const ed = edge?.key === it.key ? edge : null
               const grow = ed ? (ed.edge === 'out' ? ed.to - it.src_end : it.src_start - ed.to) : 0
               const sp = it.speed ?? 1   // source seconds per second of the edit
-              const w = Math.max(MIN_W, geo.w[k] + (grow / sp) * (geo.w[k] / Math.max(it.seq_end - it.seq_start, 1e-6)))
+              const w = geo.w[k]
               const lo = it.src_min ?? it.src_start
               const hi = it.src_max ?? it.src_end
               // Drag either end: shorter, or longer up to the whole shot as filmed.
@@ -419,7 +458,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                     if (e.button !== 0) return
                     e.stopPropagation(); e.preventDefault()
                     e.currentTarget.setPointerCapture(e.pointerId)
-                    edging.current = { x: e.clientX, base: side === 'in' ? it.src_start : it.src_end, pps: geo.w[k] / Math.max(it.seq_end - it.seq_start, 1e-6) / sp }
+                    edging.current = { x: e.clientX, base: side === 'in' ? it.src_start : it.src_end, pps: pps / sp }
                     setEdge({ key: it.key, edge: side, to: edging.current.base })
                   }}
                   onPointerMove={(e) => {
@@ -433,8 +472,11 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                     const g = edging.current
                     edging.current = null
                     const cur = edge
-                    setEdge(null)
-                    if (g && cur && Math.abs(cur.to - g.base) > 1 / 30) onTrimEdge(it.key, side, cur.to)
+                    if (g && cur && Math.abs(cur.to - g.base) > 1 / 30) {
+                      // hold the new length until the trimmed edit comes back, so the shot doesn't flick back first
+                      onTrimEdge(it.key, side, cur.to)
+                      window.setTimeout(() => setEdge((x) => (x === cur ? null : x)), 3000)
+                    } else setEdge(null)
                   }}
                 />
               )
@@ -494,8 +536,8 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
             {strips.map((a) => {
               const m = moving?.id === a.id ? moving : null
               const at = m ? m.at : a.at
-              const x = xOf(Math.min(at, tl.total))
-              const w = Math.max(28, Math.min(geo.end + PAD, xOf(Math.min(at + a.dur, tl.total))) - x)
+              const x = xAt(Math.min(at, tl.total))
+              const w = Math.max(28, Math.min(still.end + PAD, xAt(Math.min(at + a.dur, tl.total))) - x)
               const label = `Sound of shot ${a.n ?? ''}`.trim()
               return (
                 <div key={a.id}
