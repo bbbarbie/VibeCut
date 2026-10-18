@@ -24,7 +24,7 @@ import { Shelf } from './components/Shelf'
 import { SmoothButton, Story, type PlayItem, type Selection } from './components/Story'
 import { Timeline, type Marks } from './components/Timeline'
 import { Inspector, type InspectorTab, type JoinPick } from './components/Inspector'
-import { PreviewBar } from './components/PreviewBar'
+import { PreviewBar, type FrameChoice } from './components/PreviewBar'
 import { Handle, useLayout } from './components/Split'
 import { Icon, type IconName } from './components/icons'
 import { Footage, type Importing } from './components/Footage'
@@ -952,15 +952,14 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   }
 
   const fmt = brief?.style?.format ?? (tl.frame && tl.frame.w > tl.frame.h ? 'wide' : 'tall')
-  const FRAMES: Record<string, { label: string; ratio: string; wide: boolean }> = {
-    short: { label: 'Short · vertical', ratio: 'Short 9:16', wide: false },
-    tall: { label: 'Vlog · vertical', ratio: '9:16', wide: false },
-    wide: { label: 'Wide · 16:9', ratio: '16:9', wide: true },
-  }
-  const nextFrame = async () => {
-    const order = ['short', 'tall', 'wide'] as const
-    const next = order[(order.indexOf(fmt as typeof order[number]) + 1) % order.length]
-    try { setSession(await api.format(next)); note(`The video is now ${FRAMES[next].label.toLowerCase()}`) } catch (e) { note((e as Error).message) }
+  const FRAMES: FrameChoice[] = [
+    { key: 'short', name: 'Short', ratio: '9:16', about: 'Reels, TikTok, Shorts', wide: false },
+    { key: 'tall', name: 'Vlog', ratio: '9:16', about: 'Upright, any length', wide: false },
+    { key: 'wide', name: 'Wide', ratio: '16:9', about: 'YouTube, a laptop or TV', wide: true },
+  ]
+  const pickFrame = async (key: string) => {
+    const f = FRAMES.find((x) => x.key === key)
+    try { setSession(await api.format(key)); note(`The video is now ${f?.name.toLowerCase()} · ${f?.ratio}`) } catch (e) { note((e as Error).message) }
   }
   const player = (big: boolean) => (
     <Player videoRef={videoRef} backRef={backRef} veilRef={veilRef} bars={session?.mix?.bars} segment={segment}
@@ -978,7 +977,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                             transport.play(1)
                           }}
                           onBack={() => { videoRef.current?.pause(); timelineOwns(); transport.seek(phStore.get()) }}
-                          frame={FRAMES[fmt] ?? FRAMES.tall} onFrame={nextFrame}
+                          frames={FRAMES} frame={fmt} onFrame={pickFrame}
                           onFull={() => { stageRef.current?.requestFullscreen?.().catch(() => {}) }} />
             ) : undefined} />
   )
