@@ -45,7 +45,7 @@ export type ExportRecord = { job: string; file: string; path: string; at: number
   verdict?: { post: boolean; note: string; at: number }; elapsed?: number; default_path?: boolean; undone?: number }
 export type Brief = { message: string; style: StyleAnswers; said: string; at: number; tempo?: string }
 // What this machine can do -- shown, so nothing is offered that then fails.
-export type Capabilities = { llm: boolean; speech: boolean; vision: string; links: boolean; music_folder: string | null; platform: string }
+export type Capabilities = { cloud?: boolean; llm: boolean; speech: boolean; vision: string; links: boolean; music_folder: string | null; platform: string }
 export type ImportError = { path: string | null; error: string }
 
 export type Job = {

@@ -294,6 +294,12 @@ or entrance, and the frame chip follow too. Nothing is applied without the
 dialog showing it; everything is one file in the cache
 (`settings.json`). Taste and rules reaching the edit itself come later.
 
+With `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `web/.env`, those defaults,
+your confirmed rules, your profile and the styles you've learnt from reels
+are mirrored to Supabase (`supabase/migrations/0001_preferences.sql`), so
+they're there on your next Mac. Footage, the index and exports never are.
+Offline, nothing changes; the next change catches up.
+
 ## What your edits teach — only when you say so
 
 Every edit (chat or timeline) can be sorted with **Remember…** under it

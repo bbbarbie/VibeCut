@@ -217,6 +217,9 @@ def _run(job: Job) -> None:
         shutil.rmtree(d, ignore_errors=True)
         tmp.rename(d)
         job.stage, job.progress = "done", 1.0
+        from . import cloud
+        slim = {k: v for k, v in style.items() if k != "transitions"} | {"transitions": {k: v for k, v in (style.get("transitions") or {}).items() if k != "list"}}
+        cloud.push("vibe", job.rid, {"title": meta["title"], "url": meta.get("url"), "duration": meta["duration"], "style": slim}, meta["learnt_at"])
     except Exception as e:  # noqa: BLE001 -- surfaced to the creator verbatim
         job.stage, job.error = "error", str(e)[:400]
         shutil.rmtree(tmp, ignore_errors=True)

@@ -7,6 +7,7 @@ the storyboard *text* goes to the chat model (see llm.py).
 from __future__ import annotations
 
 import copy
+import json
 import os
 import shutil
 import subprocess
@@ -30,7 +31,7 @@ from cutgrammar import grade
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, bed, brief, defaults, make, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, bed, brief, cloud, defaults, make, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import GATE, Workflow, WorkflowError
 
@@ -42,6 +43,9 @@ async def lifespan(_: FastAPI):
     indexer.pool()
     if musiclib.load_setting() and os.path.isdir(musiclib.load_setting()):
         musiclib.set_folder(musiclib.load_setting())
+    # What the mirror knows that this Mac doesn't yet (cloud.py): defaults and
+    # rules newer than the local copies. In a thread: start must not wait on the net.
+    threading.Thread(target=_cloud_pull, daemon=True).start()
     # The project that was open last time is open again, as it was left.
     last = pj.open_id()
     if last:
@@ -163,9 +167,67 @@ def _meta() -> dict | None:
     return None if pr is None else pr.summary(CLIPS, SESSION.board)
 
 
+def _cloud_pull() -> None:
+    if not cloud.available():
+        return
+    rows = cloud.pull()
+    local_at = float((defaults._read().get("defaults") or {}).get("at") or 0)
+    picks = {r["key"]: r["value"] for r in cloud.newer([r for r in rows if r.get("kind") == "default"], local_at)}
+    if picks:
+        defaults.note(_sync=False, **picks)
+    with LOCK:
+        PREFS.absorb([r for r in rows if r.get("kind") == "rule"])
+    prof = [r for r in rows if r.get("kind") == "profile" and r.get("key") == "me"]
+    if prof:
+        _profile_store(prof[-1]["value"], prof[-1].get("at") or 0, sync=False)
+
+
+def _profile_store(profile: dict, at: float, sync: bool = True) -> dict:
+    """The creator's profile, kept beside the defaults so it can be mirrored
+    (the browser keeps its own copy in localStorage; this one follows them)."""
+    with cloud._lock:
+        try:
+            data = json.loads(defaults.SETTINGS.read_text())
+        except (OSError, ValueError):
+            data = {}
+        have = data.get("profile") or {}
+        # a save by hand always wins; only a copy *from* the mirror defers to a newer local one
+        if not sync and have and float(have.get("at") or 0) >= at:
+            return have
+        data["profile"] = {"at": at, "value": profile}
+        defaults.SETTINGS.parent.mkdir(parents=True, exist_ok=True)
+        tmp = defaults.SETTINGS.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data))
+        tmp.replace(defaults.SETTINGS)
+    if sync:
+        cloud.push("profile", "me", profile, at)
+    return data["profile"]
+
+
+class ProfileReq(BaseModel):
+    profile: dict
+
+
+@app.get("/api/profile")
+def api_profile_get() -> dict:
+    try:
+        data = json.loads(defaults.SETTINGS.read_text())
+    except (OSError, ValueError):
+        data = {}
+    return {"profile": (data.get("profile") or {}).get("value"), "at": (data.get("profile") or {}).get("at"),
+            "cloud": cloud.status()}
+
+
+@app.post("/api/profile")
+def api_profile_put(req: ProfileReq) -> dict:
+    rec = _profile_store(req.profile, time.time())
+    return {"profile": rec["value"], "at": rec["at"], "cloud": cloud.status()}
+
+
 def _capabilities() -> dict:
     """What this machine can do, so the UI says so instead of failing later."""
     return {
+        "cloud": cloud.available(),
         "llm": llm.available(),
         "speech": sys.platform == "darwin" and shutil.which("swiftc") is not None,
         "vision": vision.status(),
@@ -180,8 +242,8 @@ def _capabilities() -> dict:
 # they succeed the project is written to disk. Uploads, the finished-video
 # tool and the reference library stand apart: they are not project state.
 _NO_PROJECT_OK = ("/api/projects", "/api/upload", "/api/locate", "/api/polish", "/api/music/folder",
-                  "/api/references")
-_NOT_SAVED = ("/api/projects", "/api/upload", "/api/locate", "/api/polish", "/api/music/folder")
+                  "/api/references", "/api/profile")
+_NOT_SAVED = ("/api/projects", "/api/upload", "/api/locate", "/api/polish", "/api/music/folder", "/api/profile")
 
 
 @app.middleware("http")

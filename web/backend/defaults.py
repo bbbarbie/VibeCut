@@ -39,8 +39,10 @@ def get() -> dict:
     return {k: d[k] for k in KEYS if d.get(k) is not None}
 
 
-def note(**picks) -> dict:
-    """Remember these picks (None clears one). Returns what is remembered now."""
+def note(_sync: bool = True, **picks) -> dict:
+    """Remember these picks (None clears one). Returns what is remembered now.
+    Mirrored to Supabase when configured (cloud.py); `_sync=False` when the
+    picks came *from* there."""
     with _lock:
         data = _read()
         d = dict(data.get("defaults") or {})
@@ -57,6 +59,11 @@ def note(**picks) -> dict:
         tmp = SETTINGS.with_suffix(".tmp")
         tmp.write_text(json.dumps(data))
         tmp.replace(SETTINGS)
+    if _sync:
+        from . import cloud
+        for k, v in picks.items():
+            if k in KEYS and v is not None:
+                cloud.push("default", k, v)
     return get()
 
 

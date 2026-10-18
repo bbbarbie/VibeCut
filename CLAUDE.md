@@ -227,6 +227,20 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   describe the cut (`make.pace_of`), so the Frames chips tell the truth.
   Cuts sit on the half-beat grid (filler) with the hook and heroes on whole
   beats — `remix.quantise`'s rule, now pinned in `test_make`. All priors.
+- **The Supabase mirror** (`web/backend/cloud.py`, `supabase/migrations/
+  0001_preferences.sql`; the user's decision, 2026-10-18: preferences in a
+  backend connected to Supabase). One table, `preferences(device, kind,
+  key, value, updated_at)`, kinds default / rule / profile / vibe. Local
+  JSON stays the source of truth; every change pushes an upsert in a thread
+  through PostgREST over urllib (no SDK), failures are logged and retried
+  on the next push, nothing raises into a request. On start `_cloud_pull`
+  applies rows newer than the local copy (`CLOCK_SLOP` 5 s): defaults
+  (`defaults.note(_sync=False)`), rules (`Preferences.absorb`), the profile
+  (`/api/profile`, also mirrored from the profile page's Save). A learnt
+  reel pushes its numbers (`style` minus the transition list), never a
+  frame. Identity is a `device` id in settings.json until sign-in. Config:
+  `SUPABASE_URL` + `SUPABASE_ANON_KEY` in `web/.env`; off otherwise
+  (`capabilities.cloud`). `tests/test_cloud.py` against a fake endpoint.
 - **Defaults that follow the creator** (`web/backend/defaults.py`, layer 1
   of preserving preference, 2026-10-18): the frame, look and Music switch
   from Make, the frame chip, a look picked under Captions and a caption
