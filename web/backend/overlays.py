@@ -65,7 +65,11 @@ TEMPLATES = {"outlined": "Outlined", "bold": "Big & bold", "label": "Label", "hi
 # How captions arrive (the Animation tab). None = the look's own entrance.
 ENTERS = {"fade": "Fade up", "pop": "Pop", "slide": "Slide in", "stamp": "Stamp", "type": "Typewriter",
           "word": "Word by word"}
-STYLE_FIELDS = ("font", "color", "accent", "captions", "backing", "template", "enter")
+# The captions' colour, picked by hand (the Captions tab). None = automatic:
+# the look's colour, swapped by ink.py for one that reads over the footage.
+# A picked colour is kept as picked; the edge or glow around it does the reading.
+STYLE_FIELDS = ("font", "color", "accent", "captions", "backing", "template", "enter", "text_color")
+PICKED = ("template", "enter", "text_color")   # never come from a look, so need no marking
 
 TEXT_MAX = 140
 EDITABLE = ("text", "sub", "pos", "size", "anim", "dur", "place")
@@ -119,6 +123,10 @@ def clean_style(patch: dict) -> dict:
             if patch[k] is not None and patch[k] not in allowed:
                 raise OverlayError(f"{k} must be one of {', '.join(allowed)}")
             out[k] = patch[k]
+    if "text_color" in patch:
+        if patch["text_color"] is not None and not _hex(patch["text_color"]):
+            raise OverlayError("text_color must be a colour like #ffcc00")
+        out["text_color"] = _hex(patch["text_color"])
     return out
 
 
@@ -342,9 +350,9 @@ def set_style(b: dict, op: dict) -> None:
     # Remembered as set by hand, so a later look fills in only the rest. The
     # profile's saved defaults (source "profile") are a starting point, not
     # a choice made on this video: a look replaces them.
-    # (A template or an entrance never comes from a look, so it needs no marking.)
-    if op.get("source") != "profile" and set(patch) - {"template", "enter"}:
-        b["style_set"] = sorted(set(b.get("style_set") or []) | (set(patch) - {"template", "enter"}))
+    # (A template, an entrance or a picked colour never comes from a look, so it needs no marking.)
+    if op.get("source") != "profile" and set(patch) - set(PICKED):
+        b["style_set"] = sorted(set(b.get("style_set") or []) | (set(patch) - set(PICKED)))
 
 
 def prune(b: dict) -> None:
@@ -415,6 +423,9 @@ def describe(a: dict | None, b: dict | None) -> list[dict]:
                 v = sb2.get(k)
                 lines.append({"kind": "retitled", "text": f"{what}: {names[v]}" if v
                               else f"{what}: back to the look's own"})
+        if sa_.get("text_color") != sb2.get("text_color"):
+            v = sb2.get("text_color")
+            lines.append({"kind": "retitled", "text": f"Caption colour: {v}" if v else "Caption colour: automatic"})
         changed = [k for k in ("font", "color", "accent", "captions", "backing")
                    if style_of(a).get(k) != style_of(b).get(k)]
         if changed:

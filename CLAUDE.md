@@ -238,8 +238,9 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   caption on the preview to select it, drag to move (snaps to the centre
   lines), drag a corner to size it, double-click for its words; each drop is
   one `edit_overlay` with `place: {x, y, scale}` (block centre, 0–1; null =
-  back to its usual spot), drawn by the same `overlayDraw` in export, still
-  pulled inside the safe area; checks still only warn. "Same place for all
+  back to its usual spot), drawn by the same `overlayDraw` in export, free
+  up to the frame's edge (sarah, 2026-10-18: "all the way to the edge"; the
+  safe area only places captions left where they usually go); checks still only warn. "Same place for all
   captions" is one turn. `test_overlays.py`, `overlayLooks.test.ts`. Older answers (day / simple / bold /
   key) map to describe + a look. `tests/test_captions_answer.py`.
   The description is read from the shoot (`pitch.py`: days,
@@ -441,6 +442,18 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   length kept, all different), `test_caption_templates.py`,
   `overlayTemplates.test.ts` (safe area every intro frame, every template ×
   entrance). Sizes, durations and the glow are priors.
+  **Caption words and colour in the Captions tab** (sarah, 2026-10-17): a
+  clicked caption shows its words in one box, lines as on the picture (the
+  place name is its first line; sarah 2026-10-18), See it play,
+  Delete; with none clicked, Off/On and "Add a caption at the playhead".
+  **Typed on the picture** (sarah, 2026-10-18: "edit the words on screen"):
+  clicking a picked caption again (or Edit words, or a double-click) opens a
+  box right where it's drawn, same lines as the tab (`captionWords.ts`);
+  click away or Cmd/Ctrl+Enter = one undoable edit, Escape = no change.
+  **Colour** is `overlay_style.text_color` (None = automatic, ink.py picks
+  one that reads; never set by a look): a picked colour is kept as picked,
+  ink.py only adds a glow where it would blend in; a template takes it as
+  its letters (edge flips white under dark ones) or as its box / band.
 - **polish/** (`polish/`, `web/backend/polish_api.py`, `Polish.tsx`,
   `polishDraw.ts`; page `#polish`). Assisting an edit that is already cut:
   input is one finished video, never raw clips; no auto-editing, no

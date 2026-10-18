@@ -29,6 +29,7 @@ import numpy as np
 GRID_W, GRID_H = 32, 18
 READABLE = 4.5        # WCAG AA for body text [prior for video]
 HALO = "rgba(0,0,0,0.85)"         # under light words
+HALO_LIGHT = "rgba(255,255,255,0.85)"   # around dark words picked by hand
 COVER = 0.95         # share of the background an ink must read over to need no halo [prior]
 LOW, HIGH = 15, 85    # percentiles of the background taken as its darkest / brightest
 
@@ -142,6 +143,12 @@ def worst(ink: str, lum: np.ndarray) -> float:
     return min(contrast(li, lo), contrast(li, hi))
 
 
+def reads(ink: str, cells: np.ndarray) -> bool:
+    """Does `ink` stand out from (nearly) all of what's behind the words?"""
+    li = float(luminance(hex_rgb(ink)))
+    return float(np.mean([contrast(li, float(x)) >= READABLE for x in luminance(cells)])) >= COVER
+
+
 def pick(own: str, cells: np.ndarray, pal: list[str]) -> tuple[str | None, str | None]:
     """-> (ink to use instead of `own`, or None to keep it; halo colour or None).
 
@@ -187,6 +194,13 @@ def inks(items: list[dict], style: dict, layout: list[dict], tones: dict[str, np
             out.append(o)
             continue
         o = dict(o)
+        mine = style.get("text_color") if o["kind"] == "caption" else None
+        if mine:
+            # picked by hand: kept as picked; a glow carries it where it would blend in
+            if not reads(mine, cells):
+                o["halo"] = HALO_LIGHT if float(luminance(hex_rgb(mine))) < 0.35 else HALO
+            out.append(o)
+            continue
         ink, halo = pick(style["color"], cells, pal)
         if ink:
             o["ink"] = ink

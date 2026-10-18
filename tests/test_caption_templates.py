@@ -65,6 +65,13 @@ def main() -> int:
     for bad in ({"template": "comic-sans"}, {"enter": "explode"}):
         t = do(**bad)
         check(f"refuses {bad}", bool(t.skipped), str(t.skipped))
+    c = do(text_color="#FFD84D")
+    check("a picked caption colour is the video's", overlays.style_of(s.board).get("text_color") == "#ffd84d", str(c.lines))
+    s.add({"kind": "direct", "text": "look", "ops": [{"op": "set_look", "look": "hype"}]}, cat, mk)
+    check("a new look keeps the picked colour", overlays.style_of(s.board).get("text_color") == "#ffd84d")
+    do(text_color=None)
+    check("None: back to automatic", not overlays.style_of(s.board).get("text_color"))
+    check("refuses a colour that isn't one", bool(do(text_color="yellow").skipped))
     check("every template has a name", set(overlays.TEMPLATES) == {"outlined", "bold", "label", "highlight", "handwritten",
                                                                      "tape", "pop", "quiet"})
     print()
