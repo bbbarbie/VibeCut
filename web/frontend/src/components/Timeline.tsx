@@ -380,7 +380,10 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   const outX = marks.out != null ? xOf(marks.out) : null
 
   return (
-    <section className="flex min-h-0 shrink-0 flex-col" style={{ height }}>
+    // The timeline reads like an editor's (Final Cut, CapCut): a crisp sans
+    // with even-width numbers, so times don't jitter; the rest of the app
+    // keeps its serif (sarah, 2026-10-18: "a more formal font").
+    <section className="flex min-h-0 shrink-0 flex-col font-sans tabular-nums" style={{ height }}>
       <header className="flex h-12 shrink-0 items-center gap-2.5 border-b border-line px-3">
         <div className="flex items-center gap-1">
           <TB title="Play backwards (J — press again to go faster)" onClick={() => transport.play(rate < 0 ? Math.max(rate * 2, -8) : -1)}>◀◀</TB>
@@ -500,7 +503,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                 {timeMarks.map(({ t, x }) => (
                   <g key={t} className="text-zinc-300">
                     <line x1={x} x2={x} y1={0} y2={5} stroke="currentColor" strokeWidth={1} opacity={0.6} />
-                    <text x={x + 4} y={14} fill="currentColor" fontSize={13} style={{ fontFamily: 'var(--font-serif)' }}>{rulerLabel(t)}</text>
+                    <text x={x + 4} y={14} fill="currentColor" fontSize={12} fontWeight={500}>{rulerLabel(t)}</text>
                   </g>
                 ))}
                 {tl.targets.map((g: Target, i) => (
@@ -518,7 +521,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
             {music && (
               <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={onSelectMusic}
                       title={`${music.title}: click for the music's controls`}
-                      className="absolute flex items-center gap-2 overflow-hidden rounded-md px-2.5 font-serif text-[14px] text-[#1d5c46] hover:brightness-95"
+                      className="absolute flex items-center gap-2 overflow-hidden rounded-md px-2.5 text-[14px] text-[#1d5c46] hover:brightness-95"
                       style={{ left: PAD, width: Math.max(40, still.end), bottom: musicBottom, height: SOUND_H,
                         background: 'repeating-linear-gradient(90deg, #bfe3d3 0 2px, #cdeadd 2px 5px)' }}>
                 <Icon name="music" size={16} />
@@ -711,7 +714,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                        if (!m.moved) { onSelectAudio?.(a.id, e.currentTarget.getBoundingClientRect()); return }
                        if (Math.abs(m.at - a.at) > 1 / 60) onAudioMove?.(a.id, Math.round(m.at * 1000) / 1000)
                      }}
-                     className={`absolute flex cursor-grab items-center gap-1.5 overflow-hidden rounded-md px-1.5 font-serif text-[12px] leading-none active:cursor-grabbing ${
+                     className={`absolute flex cursor-grab items-center gap-1.5 overflow-hidden rounded-md px-1.5 text-[12px] leading-none active:cursor-grabbing ${
                        a.mute ? 'bg-stone-300 text-stone-600' : 'bg-teal-600 text-white'} ${
                        selectedAudio === a.id ? 'ring-2 ring-accent' : ''} ${m?.moved ? 'opacity-80' : ''}`}
                      style={{ left: x, width: w, bottom: stripBottom, height: SOUND_H,
@@ -752,7 +755,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
 
 function LaneLabel({ icon, style, children }: { icon: IconName; style: React.CSSProperties; children: React.ReactNode }) {
   return (
-    <div className="absolute inset-x-0 flex items-center gap-2 px-3 font-serif text-[15px] text-zinc-200" style={style}>
+    <div className="absolute inset-x-0 flex items-center gap-2 px-3 text-[15px] text-zinc-200" style={style}>
       <Icon name={icon} size={18} className="shrink-0 text-zinc-400" />{children}
     </div>
   )
@@ -761,7 +764,7 @@ function LaneLabel({ icon, style, children }: { icon: IconName; style: React.CSS
 function Tool({ icon, label, title, onClick, disabled }: { icon: IconName; label: string; title: string; onClick: () => void; disabled?: boolean }) {
   return (
     <button type="button" onClick={onClick} title={title} disabled={disabled}
-            className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 font-serif text-[15px] text-zinc-100 hover:bg-raised disabled:opacity-35">
+            className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-[15px] text-zinc-100 hover:bg-raised disabled:opacity-35">
       <Icon name={icon} size={18} />{label}
     </button>
   )
