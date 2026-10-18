@@ -489,6 +489,8 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   clicking a picked caption again (or Edit words, or a double-click) opens a
   box right where it's drawn, same lines as the tab (`captionWords.ts`);
   click away or Cmd/Ctrl+Enter = one undoable edit, Escape = no change.
+  The box wears the caption's own look while typing (`overlayDraw.typeLook`:
+  each line's font, size, colour, edge, band; the place name small above).
   **Colour** is `overlay_style.text_color` (None = automatic, ink.py picks
   one that reads; never set by a look): a picked colour is kept as picked,
   ink.py only adds a glow where it would blend in; a template takes it as
