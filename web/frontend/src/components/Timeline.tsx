@@ -6,6 +6,7 @@ import type { JoinInfo, Overlay, SoundStrip, TimelineData } from '../types'
 import { KIND_META } from '../overlayDraw'
 import { SHOT_MIME } from './Shelf'
 import { Icon, type IconName } from './icons'
+import { LABEL_GAP_PX, rulerLabel, rulerMarks, rulerStep } from '../ruler'
 import { anchoredScroll, clampZoom, fromSlider, toSlider, wheelFactor } from '../zoom'
 
 const TL_MIME = 'application/x-vibecut-tl'
@@ -253,6 +254,21 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
     }
   }, [])
 
+  // Times along the ruler (5s, 10s, …), a step that suits this zoom; a
+  // label that would land on the one before it (short shots are drawn
+  // wider than their length) is skipped.
+  const timeMarks = useMemo(() => {
+    const out: { t: number; x: number }[] = []
+    for (const t of rulerMarks(tl.total, rulerStep(pps))) {
+      const x = xOf(t)
+      if (!out.length || x - out[out.length - 1].x >= LABEL_GAP_PX * 0.75) out.push({ t, x })
+    }
+    // and the edit's own length at its end, when there's room for it
+    const end = xOf(tl.total)
+    if (out.length && end - out[out.length - 1].x >= LABEL_GAP_PX) out.push({ t: tl.total, x: end })
+    return out
+  }, [tl.total, pps, geo]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Keep the playhead in view while it moves.
   useEffect(() => {
     const el = track.current
@@ -481,6 +497,12 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                 {inX != null && outX != null && outX > inX && (
                   <rect x={inX} y={0} width={outX - inX} height={28} fill="#1f5f8b" opacity={0.18} />
                 )}
+                {timeMarks.map(({ t, x }) => (
+                  <g key={t} className="text-zinc-300">
+                    <line x1={x} x2={x} y1={0} y2={5} stroke="currentColor" strokeWidth={1} opacity={0.6} />
+                    <text x={x + 4} y={14} fill="currentColor" fontSize={13} style={{ fontFamily: 'var(--font-serif)' }}>{rulerLabel(t)}</text>
+                  </g>
+                ))}
                 {tl.targets.map((g: Target, i) => (
                   <line key={i} x1={xOf(g.t)} x2={xOf(g.t)} y1={28 - TICK_H[g.type]} y2={28}
                         stroke={TICK[g.type]} strokeWidth={g.type === 'shot' ? 1.5 : 1} opacity={g === hl ? 1 : 0.55} />
