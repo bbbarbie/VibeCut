@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { drawOverlays, ensureFonts, type OverlayBox, type Part } from '../overlayDraw'
+import { drawOverlays, ensureFonts, safe, typeLook, type OverlayBox, type Part, type TypeLine, type TypeLook } from '../overlayDraw'
 import { phStore } from '../transport'
 import { multiline, typable, wordsOf, wordsPatch } from '../captionWords'
 import type { Overlay, OverlayPlace, OverlayStyle } from '../types'
@@ -22,7 +22,7 @@ export type OverlayEdit = {
 const SNAP = 0.02   // pulls onto the centre lines within 2% of the frame
 type Drag = { id: string; mode: 'move' | 'scale'; x0: number; y0: number; start: OverlayPlace; d0: number; moved: boolean; again: boolean }
 // the box being typed into: where the caption was drawn when typing began
-type Typing = { id: string; box: OverlayBox; value: string; size: number }
+type Typing = { id: string; box: OverlayBox; value: string }
 type Guides = { v: boolean; h: boolean } | null
 
 // The live preview of words on screen: the same drawOverlays the export
@@ -112,10 +112,7 @@ export function OverlayCanvas({ view, width, height, edit }: { view: OverlayView
     const o = view.items.find((x) => x.id === id)
     const b = boxes.current.find((x) => x.id === id)
     if (!o || !b || !typable(o)) return
-    const value = wordsOf(o)
-    // letters about as big as the drawn ones, read off the drawn box's height
-    const size = Math.round(Math.min(44, Math.max(15, (b.h / value.split('\n').length) * 0.62)))
-    setTyping({ id, box: b, value, size })
+    setTyping({ id, box: b, value: wordsOf(o) })
   }
   const stopTyping = (save: boolean) => {
     const t = typingRef.current
@@ -198,8 +195,10 @@ export function OverlayCanvas({ view, width, height, edit }: { view: OverlayView
             ))}
           </div>
         )}
-        {typing && <TypeBox typing={typing} lines={!!sel && multiline(sel)} width={width}
-                            onChange={(value) => setTyping({ ...typing, value })} onDone={stopTyping} />}
+        {typing && sel && <TypeBox key={typing.id} typing={typing} lines={multiline(sel)} width={width} height={height}
+                                   look={typeLook(sel, view.style, Math.min(width, height))}
+                                   onChange={(value) => setTyping((t) => (t ? { ...t, value } : t))}
+                                   onDone={stopTyping} />}
         {selBox && sel && !drag && !typing && (
           <div className="absolute flex flex-wrap gap-1 whitespace-nowrap text-[10px]"
                // on a narrow (vertical) frame the buttons wrap rather than run off it
@@ -225,30 +224,99 @@ export function OverlayCanvas({ view, width, height, edit }: { view: OverlayView
   )
 }
 
-// Typing on the picture: a box where the caption was, its lines as they read
-// there. Enter starts a new line where there can be one; clicking away or
-// Cmd/Ctrl+Enter saves (one undoable edit), Escape leaves the words as they were.
-function TypeBox({ typing, lines, width, onChange, onDone }: {
-  typing: Typing; lines: boolean; width: number; onChange: (v: string) => void; onDone: (save: boolean) => void
+// Typing on the picture, in the caption's own look (sarah, 2026-10-18: "keep
+// the same font so I can visualize how it looks while editing the words"):
+// each line is dressed as the canvas draws it, the place name small above,
+// edge, backing and colour included. Enter starts a new line where there can
+// be one; clicking away or Cmd/Ctrl+Enter saves (one undoable edit), Escape
+// leaves the words as they were.
+function TypeBox({ typing, lines, width, height, look, onChange, onDone }: {
+  typing: Typing; lines: boolean; width: number; height: number; look: TypeLook
+  onChange: (v: string) => void; onDone: (save: boolean) => void
 }) {
-  const ref = useRef<HTMLTextAreaElement>(null)
-  useEffect(() => { const t = ref.current; if (t) { t.focus(); t.select() } }, [])
-  const { box, size } = typing
-  const n = Math.max(1, typing.value.split('\n').length)
-  const w = Math.min(width - 8, Math.max(box.w + 40, 220))
-  const left = Math.min(width - 4 - w, Math.max(4, box.x + box.w / 2 - w / 2))
+  const ref = useRef<HTMLDivElement>(null)
+  const lookRef = useRef(look)
+  lookRef.current = look
+  const read = () => Array.from(ref.current?.children ?? []).map((c) => (c.textContent ?? '').replace(/\n/g, ' ')).join('\n')
+  // a line's look depends on how many lines there are (one line = the
+  // caption's words; two = the place name above, or a second line below)
+  const dress = () => {
+    const ed = ref.current
+    if (!ed) return
+    // stray text typed straight into the box goes into a line of its own
+    const sel = window.getSelection()
+    for (const n of Array.from(ed.childNodes)) {
+      if (n.nodeType === Node.ELEMENT_NODE && (n as Element).tagName === 'DIV') continue
+      const at = sel?.anchorNode === n ? sel.anchorOffset : -1
+      const d = document.createElement('div')
+      ed.insertBefore(d, n)
+      d.appendChild(n)
+      if (at >= 0) sel?.collapse(n, at)   // keep the caret where it was
+    }
+    const rows = Array.from(ed.children) as HTMLElement[]
+    const { lead, main, trail } = lookRef.current
+    rows.forEach((r, i) => {
+      const ln = rows.length > 1 && lead && i === 0 ? lead : rows.length > 1 && trail && i > 0 ? trail : main
+      dressLine(r, ln)
+    })
+  }
+  useEffect(() => {
+    const ed = ref.current
+    if (!ed) return
+    for (const line of typing.value.split('\n')) {
+      const d = document.createElement('div')
+      if (line) d.textContent = line
+      else d.appendChild(document.createElement('br'))
+      ed.appendChild(d)
+    }
+    dress()
+    ed.focus()
+    // the caret at the end of the words, nothing selected
+    const r = document.createRange()
+    r.selectNodeContents(ed)
+    r.collapse(false)
+    const sel = window.getSelection()
+    sel?.removeAllRanges()
+    sel?.addRange(r)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(dress, [look]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const { box } = typing
+  const m = safe(width, height)
   return (
-    <textarea ref={ref} value={typing.value} maxLength={200} aria-label="Caption words" rows={n} spellCheck={false}
-              onChange={(e) => onChange(e.target.value)}
-              onBlur={() => onDone(true)}
-              onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => {
-                e.stopPropagation()   // typing must not split shots or play the video
-                if (e.key === 'Enter' && (!lines || e.metaKey || e.ctrlKey)) { e.preventDefault(); onDone(true) }
-                if (e.key === 'Escape') { e.preventDefault(); onDone(false) }
-              }}
-              className="absolute resize-none overflow-hidden rounded-md bg-black/45 px-2 py-1 text-center font-semibold leading-tight text-white caret-white outline outline-2 outline-accent [text-shadow:0_1px_3px_rgba(0,0,0,.8)]"
-              style={{ left, top: box.y + box.h / 2 - (n * size * 1.25 + 8) / 2, width: w, fontSize: size }} />
+    <div ref={ref} contentEditable suppressContentEditableWarning role="textbox" aria-multiline={lines} aria-label="Caption words"
+         spellCheck={false}
+         onInput={() => { dress(); onChange(read()) }}
+         onBlur={() => onDone(true)}
+         onPaste={(e) => { e.preventDefault(); document.execCommand('insertText', false, e.clipboardData.getData('text/plain').replace(/\n/g, lines ? '\n' : ' ')) }}
+         onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}
+         onKeyDown={(e) => {
+           e.stopPropagation()   // typing must not split shots or play the video
+           if (e.key === 'Enter' && (!lines || e.metaKey || e.ctrlKey)) { e.preventDefault(); onDone(true) }
+           if (e.key === 'Escape') { e.preventDefault(); onDone(false) }
+         }}
+         className="absolute -translate-x-1/2 -translate-y-1/2 cursor-text whitespace-pre-wrap break-words rounded text-center outline-dashed outline-1 outline-offset-4 outline-white/70"
+         style={{ left: box.x + box.w / 2, top: box.y + box.h / 2, width: 'max-content', minWidth: 40,
+           maxWidth: Math.max(80, width - m.l - m.r), background: look.backing ?? undefined,
+           padding: look.backing ? '0.3em 0.6em' : 0, caretColor: look.main.color }} />
   )
 }
 
+// one typed line, dressed the way the canvas draws it
+function dressLine(el: HTMLElement, ln: TypeLine) {
+  const st = el.style
+  st.font = ln.font
+  st.lineHeight = String(ln.lh)
+  st.color = ln.color
+  st.letterSpacing = `${ln.track}px`
+  st.textTransform = ln.upper ? 'uppercase' : ln.lower ? 'lowercase' : 'none'
+  st.textShadow = ln.shadow
+  st.setProperty('-webkit-text-stroke', ln.stroke ? `${ln.stroke.w}px ${ln.stroke.color}` : '0')
+  st.setProperty('paint-order', 'stroke fill')
+  st.background = ln.band?.fill ?? 'none'
+  st.borderRadius = ln.band ? `${ln.band.radius}px` : '0'
+  st.padding = ln.band ? `0 ${ln.band.padX}px` : '0'
+  st.width = ln.band ? 'fit-content' : 'auto'
+  st.marginInline = ln.band ? 'auto' : '0'
+  st.marginBlock = ln.band ? `${ln.px * 0.12}px` : '0'
+}

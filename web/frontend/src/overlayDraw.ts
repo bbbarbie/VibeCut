@@ -372,6 +372,48 @@ function anchorFor(pos: Overlay['pos'], W: number, H: number): Anchor {
   return { x, align, v, y }
 }
 
+// ---- typing on the picture --------------------------------------------------
+//
+// How a caption's lines look, as CSS, for the box it's typed into on the
+// preview (sarah, 2026-10-18: keep the caption's own font while editing the
+// words, so she sees what she'll get). Same lines, sizes, colours, edges and
+// backings the canvas draws; `u` is the frame's short side in CSS pixels.
+export type TypeLine = { font: string; color: string; track: number; upper: boolean; lower: boolean; px: number; lh: number
+  stroke?: { color: string; w: number }; band?: { fill: string; radius: number; padX: number }; shadow: string }
+export type TypeLook = { lead: TypeLine | null; main: TypeLine; trail: TypeLine | null; backing: string | null }
+
+export function typeLook(o: Overlay, style: OverlayStyle, u: number): TypeLook {
+  const su = u * (o.place?.scale ?? 1)
+  const probe = { ...o, sub: o.sub || ' ', text: o.text || ' ' }
+  const lines = linesFor(probe, style, su, Infinity)
+  const tpl = lines[0]?.tpl
+  const shadow = tpl && !tpl.shadow ? 'none'
+    : tpl && !o.halo ? `0 ${0.003 * u}px ${0.02 * u}px rgba(0,0,0,0.7)`
+    : o.halo ? `0 0 ${0.005 * u}px ${o.halo}, 0 ${0.002 * u}px ${0.022 * u}px ${o.halo}`
+    : style.backing === 'shadow' ? `0 ${0.003 * u}px ${0.018 * u}px rgba(0,0,0,0.6)` : 'none'
+  const css = (ln: Line): TypeLine => {
+    const t = ln.tpl
+    return {
+      font: lineFont(style, ln), color: ln.color, track: (ln.track ?? 0) * ln.px, px: ln.px,
+      upper: !!ln.upper, lower: t?.case === 'lower',
+      lh: t?.box ? 1.75 : t?.marker ? 1.45 : t?.stroke ? 1.3 : 1.18,
+      stroke: t?.stroke ? { color: t.stroke.color, w: ln.px * t.stroke.w } : undefined,
+      band: t?.box ? { fill: t.box.fill, radius: ln.px * 1.5 * t.box.round, padX: ln.px * 0.45 }
+        : t?.marker ? { fill: t.marker.band, radius: ln.px * 0.12, padX: ln.px * 0.45 } : undefined,
+      shadow,
+    }
+  }
+  // which drawn line is the place name (above) or a second line (below);
+  // a split template's time and words read as one typed line, in the words' size
+  const above = o.kind === 'caption' || o.kind === 'part'
+  const hasSub = !['date', 'chapters'].includes(o.kind) && lines.length > 1
+  const lead = hasSub && above ? css(lines[0]) : null
+  const trail = hasSub && !above ? css(lines[lines.length - 1]) : null
+  const main = css(lines[hasSub && above ? lines.length - 1 : 0])
+  const backing = !tpl && (style.backing === 'box' || o.kind === 'name') && style.backing !== 'none' ? 'rgba(10,10,12,0.55)' : null
+  return { lead, main, trail, backing }
+}
+
 // ---- draw -----------------------------------------------------------------
 
 // Where each block landed on this frame, in canvas pixels (for picking and
