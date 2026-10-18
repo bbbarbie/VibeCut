@@ -80,8 +80,23 @@ def main() -> int:
     do(typeface=None)
     check("None: back to the style's own font", not overlays.style_of(s.board).get("typeface"))
     check("refuses a font that isn't shipped", bool(do(typeface="comic-sans").skipped))
+    d = do(outline={"color": "#FF0000", "width": 0.2}, shadow={"color": "#000000", "opacity": 0.5, "blur": 0.4, "dist": 0.1})
+    st = overlays.style_of(s.board)
+    check("outline and shadow are the video's, said in words", st.get("outline") == {"color": "#ff0000", "width": 0.2}
+          and st.get("shadow", {}).get("opacity") == 0.5 and any("outline and shadow" in ln["text"] for ln in d.lines), str(d.lines))
+    do(backdrop={"color": "#000000", "opacity": 0.8, "round": 0.25}, thick=0.06)
+    check("background and boldness kept", overlays.style_of(s.board).get("backdrop", {}).get("opacity") == 0.8
+          and overlays.style_of(s.board).get("thick") == 0.06)
+    s.add({"kind": "direct", "text": "look", "ops": [{"op": "set_look", "look": "hype"}]}, cat, mk)
+    check("a new look keeps them", overlays.style_of(s.board).get("outline", {}).get("width") == 0.2)
+    do(outline=None, shadow=None, backdrop=None, thick=None)
+    check("None: back to the style's own", not any(overlays.style_of(s.board).get(k) for k in ("outline", "shadow", "backdrop", "thick")))
+    for bad in ({"outline": {"color": "#000000", "width": 2}}, {"shadow": {"color": "red", "opacity": 1, "blur": 0, "dist": 0}},
+                {"backdrop": {"color": "#000000", "opacity": 0.5}}, {"thick": 1}):
+        check(f"refuses {bad}", bool(do(**bad).skipped))
     check("every template has a name", set(overlays.TEMPLATES) == {"outlined", "bold", "label", "highlight", "handwritten",
-                                                                     "tape", "pop", "quiet"})
+                                                                     "tape", "pop", "quiet", "neon", "glow", "gradient",
+                                                                     "extrude", "retro"})
     print()
     if failures:
         print(f"{len(failures)} failed: {', '.join(failures)}")

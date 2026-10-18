@@ -60,8 +60,11 @@ DEFAULT_STYLE = {"font": "Clean", "color": "#ffffff", "accent": "#b9d9eb", "capt
 # caption in the video is dressed -- lettering, edge, backing -- drawn by
 # overlayDraw.ts for preview and export alike. None = the look's own words.
 # "outlined" is sarah's own hand edit: serif, black edge, the time on top.
+# The last five are word art (sarah, 2026-10-18): neon, glow, a gradient, 3D
+# letters and a retro hard drop, the kinds CapCut offers.
 TEMPLATES = {"outlined": "Outlined", "bold": "Big & bold", "label": "Label", "highlight": "Highlighter",
-             "handwritten": "Handwritten", "tape": "Typed tape", "pop": "Pop colour", "quiet": "Quiet"}
+             "handwritten": "Handwritten", "tape": "Typed tape", "pop": "Pop colour", "quiet": "Quiet",
+             "neon": "Neon", "glow": "Glow", "gradient": "Gradient", "extrude": "3D", "retro": "Retro drop"}
 # How captions arrive (the Animation tab). None = the look's own entrance.
 ENTERS = {"fade": "Fade up", "pop": "Pop", "slide": "Slide in", "stamp": "Stamp", "type": "Typewriter",
           "word": "Word by word"}
@@ -76,8 +79,20 @@ TYPEFACES = {"tiktok-sans": "TikTok Sans", "montserrat": "Montserrat", "poppins"
              "luckiest-guy": "Luckiest Guy", "bangers": "Bangers", "fredoka": "Fredoka",
              "permanent-marker": "Permanent Marker", "caveat": "Caveat", "pacifico": "Pacifico",
              "lobster": "Lobster", "playfair-display": "Playfair Display", "courier-prime": "Courier Prime"}
-STYLE_FIELDS = ("font", "color", "accent", "captions", "backing", "template", "enter", "text_color", "typeface")
-PICKED = ("template", "enter", "text_color", "typeface")   # never come from a look, so need no marking
+# The captions' outline, shadow, background box and letter weight, set by
+# hand with sliders (the Captions tab; sarah, 2026-10-18). None = the
+# template's own; a width / opacity of 0 = none at all. Sizes are shares of
+# the letter size, so they hold at any frame size.
+DRESS = {
+    "outline": {"width": (0.0, 0.4)},
+    "shadow": {"opacity": (0.0, 1.0), "blur": (0.0, 1.5), "dist": (0.0, 0.4)},
+    "backdrop": {"opacity": (0.0, 1.0), "round": (0.0, 0.5)},
+}
+THICK_MAX = 0.15
+DRESS_NAMES = {"outline": "outline", "shadow": "shadow", "backdrop": "background", "thick": "letter weight"}
+STYLE_FIELDS = ("font", "color", "accent", "captions", "backing", "template", "enter", "text_color", "typeface",
+                "outline", "shadow", "backdrop", "thick")
+PICKED = ("template", "enter", "text_color", "typeface", "outline", "shadow", "backdrop", "thick")   # never come from a look, so need no marking
 
 TEXT_MAX = 140
 EDITABLE = ("text", "sub", "pos", "size", "anim", "dur", "place")
@@ -131,6 +146,26 @@ def clean_style(patch: dict) -> dict:
             if patch[k] is not None and patch[k] not in allowed:
                 raise OverlayError(f"{k} must be one of {', '.join(allowed)}")
             out[k] = patch[k]
+    for k, nums in DRESS.items():
+        if k in patch:
+            v = patch[k]
+            if v is None:
+                out[k] = None
+                continue
+            if not isinstance(v, dict) or not _hex(v.get("color")):
+                raise OverlayError(f"{k} needs a colour like #ffcc00")
+            d = {"color": _hex(v["color"])}
+            for n, (lo, hi) in nums.items():
+                x = v.get(n)
+                if not isinstance(x, (int, float)) or isinstance(x, bool) or not lo <= x <= hi:
+                    raise OverlayError(f"{k} {n} must be between {lo} and {hi}")
+                d[n] = round(float(x), 3)
+            out[k] = d
+    if "thick" in patch:
+        v = patch["thick"]
+        if v is not None and (not isinstance(v, (int, float)) or isinstance(v, bool) or not 0 <= v <= THICK_MAX):
+            raise OverlayError(f"thick must be between 0 and {THICK_MAX}")
+        out["thick"] = None if v is None else round(float(v), 3)
     if "text_color" in patch:
         if patch["text_color"] is not None and not _hex(patch["text_color"]):
             raise OverlayError("text_color must be a colour like #ffcc00")
@@ -432,6 +467,9 @@ def describe(a: dict | None, b: dict | None) -> list[dict]:
                 v = sb2.get(k)
                 lines.append({"kind": "retitled", "text": f"{what}: {names[v]}" if v
                               else f"{what}: back to the look's own"})
+        dressed = [DRESS_NAMES[k] for k in DRESS_NAMES if sa_.get(k) != sb2.get(k)]
+        if dressed:
+            lines.append({"kind": "retitled", "text": f"Changed the captions' {what_list(dressed)}"})
         if sa_.get("text_color") != sb2.get("text_color"):
             v = sb2.get("text_color")
             lines.append({"kind": "retitled", "text": f"Caption colour: {v}" if v else "Caption colour: automatic"})

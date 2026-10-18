@@ -536,6 +536,19 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   own), one font per video like the colour; a template keeps its edge and
   backing around it; drawn by `overlayDraw` so preview, typing box and export
   match. Per-font size factors are eyeballed. `captionFonts.test.ts`.
+  **Caption text panel** (sarah, 2026-10-18: "pick different fonts, colors,
+  outlining, shadows, backgrounds and adjust how thick they are"; plain
+  controls, no video behind them; word art shown on a frame). Captions tab:
+  Font, Colour, Outline (on/off, colour, thickness), Shadow (colour,
+  strength, softness, distance), Background (colour, opacity, roundness),
+  Boldness (a stroke in the letters' own colour), then **Word art** (the
+  templates, plus Neon, Glow, Gradient, 3D, Retro drop). `overlay_style`
+  fields `outline` / `shadow` / `backdrop` / `thick` (`overlays.DRESS`; None
+  = the template's own, width or opacity 0 = none); `overlayDraw.dress` lays
+  them over the template, and a caption with no template but something set
+  is drawn the template way from the look's lettering. Picking a word art
+  starts it fresh (clears the four). One look for every caption, undoable,
+  same drawing in preview, typing box and export. `overlayDress.test.ts`.
 
 ## The rule that matters most
 

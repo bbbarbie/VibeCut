@@ -327,7 +327,8 @@ def apply(board: dict | None, op: dict, cat: Catalog, proposals: dict | None,
     # "as long as what it hangs off" (a caption filling its spoken line) and its
     # place, where it means "back where it usually goes" (undoing a drag).
     op = {k: v for k, v in op.items() if v is not None or (k in ("dur", "place") and kind in OVERLAY_OPS)
-          or (k in ("template", "enter", "text_color", "typeface") and kind == "overlay_style")}   # None = back to the look's own
+          or (k in ("template", "enter", "text_color", "typeface", "outline", "shadow", "backdrop", "thick")
+              and kind == "overlay_style")}   # None = back to the look's own
 
     if kind == "choose_option":
         snap = op.get("snapshot")
