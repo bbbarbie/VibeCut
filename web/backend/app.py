@@ -30,7 +30,7 @@ from cutgrammar import grade
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, bed, brief, make, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, bed, brief, defaults, make, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import GATE, Workflow, WorkflowError
 
@@ -917,15 +917,19 @@ def api_brief_setup() -> dict:
         about = pitch.guess(list(CLIPS.values())) or "My video"
         marks = brief.length_marks(_usable_s(), about)
         share = _portrait_share()
-        return {"format": brief.suggest_format(share, marks["max"]), "portrait_share": round(share, 2),
+        remembered = defaults.get()
+        return {"format": remembered.get("format") or brief.suggest_format(share, marks["max"]),
+                "suggested": brief.suggest_format(share, marks["max"]), "remembered": remembered,
+                "music": remembered.get("music", "on") != "off", "portrait_share": round(share, 2),
                 "formats": [{"key": k, "label": v, "seconds": round(brief.length_for(k, marks))} for k, v in brief.FORMATS.items()],
-                "look": (_direction() or {}).get("style", {}).get("look") or "cozy",
+                "look": (_direction() or {}).get("style", {}).get("look") or remembered.get("look") or "cozy",
                 "looks": looks.public(), "about": about}
 
 
 class BriefAutoReq(BaseModel):
     format: str | None = None
     look: str | None = None
+    music: bool | None = None       # None = as last time (defaults.py), else this time's switch
 
 
 @app.post("/api/brief/auto")
@@ -994,6 +998,11 @@ def api_make(req: BriefAutoReq | None = None) -> dict:
         own = musiclib.STATE["tracks"] if musiclib.STATE["status"] == "ready" else None
         clips = dict(CLIPS)
         cut_now = cut.for_story(PLAN["plan"])
+        remembered = defaults.get()
+        want_music = req.music if (req and req.music is not None) else remembered.get("music", "on") != "off"
+        # the creator's own picks follow them to the next video (defaults.py, layer 1)
+        defaults.note(format=style.get("format"), look=style.get("look"), music="on" if want_music else "off")
+        caption_style = {k: remembered[f"caption_{k}"] for k in ("template", "enter") if remembered.get(f"caption_{k}")}
 
     def on_done(job: make.Job) -> None:
         with LOCK:
@@ -1005,7 +1014,10 @@ def api_make(req: BriefAutoReq | None = None) -> dict:
                 if not any(x.id == t.id for x in musiclib.STATE["tracks"]):
                     musiclib.STATE["tracks"].append(t)
                 musiclib.use(t.id)
-            SESSION.add({"kind": "direct", "text": MAKE_TEXT, "ops": job.result["ops"], "reply": job.result["reply"]},
+            ops_ = list(job.result["ops"])
+            if caption_style:
+                ops_.append({"op": "overlay_style", **caption_style, "source": "defaults"})   # as last time
+            SESSION.add({"kind": "direct", "text": MAKE_TEXT, "ops": ops_, "reply": job.result["reply"]},
                         CATALOG["cat"], _make_proposals)
             if PROJECT["p"] is not None:
                 PROJECT["p"].events.append({"kind": "make", "at": time.time(), "music": bool(mx),
@@ -1013,9 +1025,13 @@ def api_make(req: BriefAutoReq | None = None) -> dict:
                                             "elapsed": round(time.time() - job.started, 1)})
         _save()
 
-    MAKE["job"] = make.start(clips, cut_now, style.get("format", "tall"), style.get("pace", "balanced"),
-                             style.get("look"), about, float(style.get("seconds") or 60.0), own, None, None, on_done)
-    return MAKE["job"].public()
+    def register(job: make.Job) -> None:
+        MAKE["job"] = job     # before the thread runs: a fast job must not land as "not mine"
+
+    job = make.start(clips, cut_now, style.get("format", "tall"), style.get("pace", "balanced"),
+                     style.get("look"), about, float(style.get("seconds") or 60.0), own, None, None, on_done,
+                     want_music=want_music, register=register)
+    return job.public()
 
 
 @app.get("/api/make/{jid}")
@@ -1043,6 +1059,7 @@ def api_format(req: FormatReq) -> dict:
     with LOCK:
         pr.brief = {**(pr.brief or {"message": "", "said": "", "at": time.time()}),
                     "style": {**((pr.brief or {}).get("style") or {}), "format": req.format}}
+        defaults.note(format=req.format)
         return _session()
 
 
@@ -1342,6 +1359,11 @@ def api_ops(req: OpsReq) -> dict:
     with LOCK:
         SESSION.add({"kind": "direct", "text": req.label, "ops": req.ops},
                     CATALOG["cat"], _make_proposals)
+        for o in req.ops:   # picks made by hand follow the creator to the next video
+            if o.get("op") == "set_look" and o.get("look"):
+                defaults.note(look=o["look"])
+            if o.get("op") == "overlay_style" and o.get("source") != "defaults":
+                defaults.note(**{f"caption_{k}": o[k] for k in ("template", "enter") if k in o})
         if [o.get("op") for o in req.ops] == ["choose_option"]:
             _drop_repeats()
             _words_as_asked()
@@ -1418,6 +1440,7 @@ def api_bed(req: BedReq) -> dict:
     with LOCK:
         if not SESSION.board:
             raise HTTPException(409, "Choose a story first.")
+        defaults.note(music="on" if req.on else "off")
         if req.on:
             _bed_start(force=True)
         else:

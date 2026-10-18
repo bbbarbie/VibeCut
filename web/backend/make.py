@@ -131,6 +131,8 @@ def say(plan: sel.Plan, fp: dict, mx: dict | None, source: str, judged: bool) ->
              + (", in the style of your references" if fp.get("refs_used") else "") + "."]
     if mx:
         parts.append(f"Music: {mx['track'].title} ({mx['bpm']:.0f} BPM, from {source}); every cut sits on its beat.")
+    elif source.startswith("off"):
+        parts.append("No music, as you had it last time; Music in the rail puts one under it.")
     else:
         parts.append("No track fit, so it plays with its own sound; Music in the rail finds one.")
     if judged:
@@ -163,11 +165,16 @@ JOBS: dict[str, Job] = {}
 
 
 def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, about: str, seconds: float,
-          own: list[mu.Track] | None, styles: list[dict] | None, judge, on_done) -> Job:
+          own: list[mu.Track] | None, styles: list[dict] | None, judge, on_done, want_music: bool = True,
+          register=None) -> Job:
     """Run the pipeline in a thread; `on_done(job)` puts the ops on the session.
-    Everything the thread needs is copied in now, so later edits can't move it."""
+    Everything the thread needs is copied in now, so later edits can't move it.
+    `register(job)` is called before the thread starts: a fast job (no music,
+    few clips) can finish before the caller has even seen it."""
     job = Job()
     JOBS[job.id] = job
+    if register:
+        register(job)
 
     def progress(done: int, total: int) -> None:
         job.done, job.total = done, total
@@ -180,7 +187,8 @@ def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, ab
             if not plan.picks:
                 raise ValueError("none of the clips had a moment worth keeping — add more footage")
             job.stage = "music"
-            mx, source = music(clips, plan, fp, pace, own, progress)
+            mx, source = (music(clips, plan, fp, pace, own, progress) if want_music
+                          else (None, "off, as last time"))
             job.stage = "words"
             pool, _ = sb.usable(sb.shots_from_clips(list(clips.values()), cut))
             talking = tempo.talking(list(clips.values()), pool)

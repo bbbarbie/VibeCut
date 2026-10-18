@@ -5,7 +5,9 @@ import { Button, Dialog } from '../ui'
 // frame the video is for, and the look of the whole thing. Everything else
 // is read from the footage. Defaults come from the server; one button.
 export type SetupData = {
-  format: string; portrait_share: number
+  format: string; suggested?: string; portrait_share: number
+  remembered?: { format?: string; look?: string; music?: string }   // what was picked last time (defaults.py)
+  music?: boolean
   formats: { key: string; label: string; seconds: number }[]
   look: string; looks: { id: string; name: string; line: string; font: string; palette: string[]; status: string }[]
   about: string
@@ -17,11 +19,14 @@ export function Setup({ data, busy, progress, onDone, onCancel }: {
   data: SetupData | null
   busy: boolean
   progress?: { line: string; done: number; total: number; elapsed: number } | null   // where the making is
-  onDone: (format: string, look: string) => void
+  onDone: (format: string, look: string, music: boolean) => void
   onCancel: () => void
 }) {
   const [format, setFormat] = useState<string | null>(null)
   const [look, setLook] = useState<string | null>(null)
+  const [music, setMusic] = useState<boolean | null>(null)
+  const withMusic = music ?? data?.music ?? true
+  const last = data?.remembered
   const first = useRef<HTMLButtonElement>(null)
   const fmt = format ?? data?.format ?? 'tall'
   const lk = look ?? data?.look ?? 'cozy'
@@ -38,11 +43,13 @@ export function Setup({ data, busy, progress, onDone, onCancel }: {
                 </span>
               )}
               <Button variant="ghost" onClick={onCancel} disabled={busy}>Not yet</Button>
-              <Button variant="primary" onClick={() => onDone(fmt, lk)} disabled={!data || busy}>{busy ? 'Making it…' : 'Make my video'}</Button>
+              <Button variant="primary" onClick={() => onDone(fmt, lk, withMusic)} disabled={!data || busy}>{busy ? 'Making it…' : 'Make my video'}</Button>
             </>}>
       <div className="space-y-4">
         <div>
-          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">Which frame?</div>
+          <div className="mb-1.5 flex items-baseline gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted">Which frame?
+            {last?.format && format === null && <span className="font-normal normal-case tracking-normal">as last time{data?.suggested && data.suggested !== last.format ? ` · the footage suggests ${data.suggested}` : ''}</span>}
+          </div>
           <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Frame">
             {(data?.formats ?? []).map((f, i) => (
               <button key={f.key} type="button" role="radio" aria-checked={fmt === f.key} ref={i === 0 ? first : undefined}
@@ -59,7 +66,9 @@ export function Setup({ data, busy, progress, onDone, onCancel }: {
           )}
         </div>
         <div>
-          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">Which look?</div>
+          <div className="mb-1.5 flex items-baseline gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted">Which look?
+            {last?.look && look === null && <span className="font-normal normal-case tracking-normal">as last time</span>}
+          </div>
           <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Look">
             {(data?.looks ?? []).map((l) => (
               <button key={l.id} type="button" role="radio" aria-checked={lk === l.id} onClick={() => setLook(l.id)} title={l.line}
@@ -72,6 +81,10 @@ export function Setup({ data, busy, progress, onDone, onCancel }: {
           {data && <p className="mt-1 font-serif text-[13px] text-zinc-300">{data.looks.find((l) => l.id === lk)?.line}</p>}
           <p className="mt-0.5 text-[10px] text-muted">A look sets the words, the colour, how parts join and the music's feel. Change it later under Captions.</p>
         </div>
+        <label className="flex items-center gap-2 text-[12px] text-zinc-300">
+          <input type="checkbox" checked={withMusic} onChange={(e) => setMusic(e.target.checked)} />
+          Music under it{last?.music && music === null ? <span className="text-muted"> · as last time</span> : null}
+        </label>
       </div>
     </Dialog>
   )

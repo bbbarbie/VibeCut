@@ -188,6 +188,18 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   judged on one real shoot (42 clips, 3 references). Every weight is a
   guess; the selector has no model behind it (no key on this Mac).
 
+- **Defaults that follow the creator** (`web/backend/defaults.py`, layer 1
+  of preserving preference, 2026-10-18): the frame, look and Music switch
+  from Make, the frame chip, a look picked under Captions and a caption
+  template / entrance are remembered in `$VIBECUT_CACHE/settings.json`
+  and offered next time as the *preselected* answer ("as last time"; the
+  footage's own frame suggestion still shown), never applied silently; the
+  remembered caption style rides on the Make turn as its own `overlay_style`
+  op (`source: "defaults"`, which is not re-remembered). `BriefAutoReq.music`
+  None = as last time. Layer 2 (taste + confirmed rules into the judge's
+  prompt, key only) and layer 3 (undo / verdicts as candidate rules) are
+  not built. `tests/test_defaults.py`. `make.start(register=…)` sets the
+  job before its thread runs — a fast job landed as "not mine" before.
 - **The one pipeline** (`web/backend/make.py`, `/api/make`, 2026-10-17;
   after rendering the app headless on sarah's shoot: "Make my video" gave a
   13-shot chronological timeline with clock captions and no music, while the

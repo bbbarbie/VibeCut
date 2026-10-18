@@ -331,12 +331,12 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   }
   // Make my video (2026-10-17): the one pipeline runs as a job; the dialog
   // shows where it is; when it lands the edit opens in Frames and plays.
-  const makeIt = async (format: string, look: string) => {
+  const makeIt = async (format: string, look: string, music: boolean = true) => {
     if (autoBrief.current) return
     autoBrief.current = true
     setSetup((x) => x && { ...x, busy: true })
     try {
-      let job = await api.make({ format, look })
+      let job = await api.make({ format, look, music })
       setSetup((x) => x && { ...x, progress: job })
       while (job.stage !== 'done' && job.stage !== 'error') {
         await new Promise((r) => window.setTimeout(r, 700))

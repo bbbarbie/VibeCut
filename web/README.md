@@ -277,6 +277,15 @@ description of the video keeps it. Once chosen, the story is edited by
 chat and timeline exactly as before. The narration itself is not played or
 mixed — there's no audio track for it yet.
 
+## What follows you to the next video
+
+The frame, the look and the music switch you picked last time are
+preselected next time, marked *as last time*, with the footage's own
+suggestion still shown. A look you choose under Captions, a caption style
+or entrance, and the frame chip follow too. Nothing is applied without the
+dialog showing it; everything is one file in the cache
+(`settings.json`). Taste and rules reaching the edit itself come later.
+
 ## What your edits teach — only when you say so
 
 Every edit (chat or timeline) can be sorted with **Remember…** under it
