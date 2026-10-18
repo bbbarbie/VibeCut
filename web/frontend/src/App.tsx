@@ -1227,6 +1227,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
               <MoreMenu onClose={() => setMore(false)} items={[
                 { label: 'Rename this video', onClick: () => setRenaming(true) },
                 { label: 'Look at your footage again', hint: 'Every clip, kept and left out', disabled: !framesView, onClick: () => showStep('footage') },
+                { label: 'Make my video again…', hint: 'The two picks (and AI, if on), then a fresh edit; Undo brings this one back', disabled: !clips.length || !session?.board, onClick: () => { transport.stop(); startQuestions() } },
                 { label: 'Other stories…', hint: 'The same clips told another way', disabled: !session?.proposals || !session?.board || shown !== 'story', onClick: () => { transport.stop(); setOthersOpen(true); setLevel('story') } },
                 { label: 'Feel like a video you love…', hint: 'Its pace, cuts and colour, never its frames', disabled: !clips.length || shown !== 'story', onClick: () => { transport.stop(); setMenu(null); setReferencing(true) } },
                 { label: 'Talking to camera…', hint: caps.speech ? 'Transcribe on this Mac, cut pauses and retakes' : 'Needs macOS 26 with the Xcode command-line tools', disabled: !caps.speech || !clips.length, onClick: openTalk },
