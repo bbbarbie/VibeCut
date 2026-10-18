@@ -1,3 +1,4 @@
+import type { Habit } from '../types'
 import { api } from '../api'
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { emptyProfile, FONTS, loadProfile, PACES, PLATFORMS, safeReference, saveProfile, VIBES, type CreatorProfile as Profile } from '../profile'
@@ -113,6 +114,9 @@ export function CreatorProfile({ onClose }: { onClose: () => void }) {
               <Field label="Things to avoid"><textarea value={profile.avoid} rows={2} maxLength={1000} placeholder="No heavy filters. Keep natural sound. Go easy on zooms." onChange={e => update('avoid', e.target.value)} className={inputCls + ' resize-y'} /></Field>
             </Section>
 
+            <Section n="05" title="What VibeCut has learned about you" text="From what you cut, kept and switched off on more than one video. Each one is a small nudge, never a decision; switch any off here or with one tap on the video.">
+              <Habits />
+            </Section>
             <Section n="04" title="Videos you look up to" text="Bookmarks with a note. To actually borrow a video's feel, use Reference inside a project.">
               {profile.references.length > 0 && (
                 <ul className="space-y-2">
@@ -181,5 +185,30 @@ function Section({ n, title, text, children }: { n: string; title: string; text:
       </header>
       <div className="mt-4 grid gap-4 pl-8">{children}</div>
     </section>
+  )
+}
+
+
+function Habits() {
+  const [list, setList] = useState<Habit[] | null>(null)
+  const [phrases, setPhrases] = useState<string[]>([])
+  useEffect(() => { api.habits().then((r) => { setList(r.habits); setPhrases(r.phrases) }).catch(() => setList([])) }, [])
+  if (list === null) return <p className="text-[12px] text-muted">Looking…</p>
+  if (!list.length && !phrases.length) return <p className="text-[12px] text-muted">Nothing yet. It takes the same thing on two videos.</p>
+  return (
+    <div className="space-y-2">
+      {list.map((h) => (
+        <label key={h.id} className="flex items-center gap-3 text-[13px] text-zinc-200">
+          <input type="checkbox" checked={!h.off} onChange={async (e) => {
+            const off = !e.target.checked
+            await api.habitSwitch(h.id, off).catch(() => {})
+            setList((l) => l && l.map((x) => (x.id === h.id ? { ...x, off } : x)))
+          }} />
+          <span className={h.off ? 'line-through text-muted' : ''}>{h.text.charAt(0).toUpperCase() + h.text.slice(1)}</span>
+          <span className="text-[11px] text-muted">from {h.evidence.join(', ')} · used {h.used}×</span>
+        </label>
+      ))}
+      {phrases.length > 0 && <p className="text-[12px] text-muted">Your own lines the writer learns from: {phrases.slice(0, 5).map((p) => `“${p}”`).join(', ')}</p>}
+    </div>
   )
 }

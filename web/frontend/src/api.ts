@@ -1,5 +1,5 @@
 import type { SetupData } from './components/Setup'
-import type { Capabilities, CutData, ExportJob, Job, LengthSlider, LookFit, PrefClass, Project, ProjectMeta, RefCard, RefJob, RefSummary, Session, StyleAnswers, StyleQuestion, TalkState } from './types'
+import type { Habit, Capabilities, CutData, ExportJob, Job, LengthSlider, LookFit, PrefClass, Project, ProjectMeta, RefCard, RefJob, RefSummary, Session, StyleAnswers, StyleQuestion, TalkState } from './types'
 
 export type MomentInfo = { header: string; key: string; llm: boolean; estimate: { tokens_in: number; usd: [number, number] } }
 export type MomentAnswer = { reply: string; choices: string[]; ops: Record<string, unknown>[]
@@ -123,6 +123,9 @@ export const api = {
   talkToggle: (id: string) => j<TalkState>(post('/api/talk/toggle', { id })),
   talkApply: (captions: boolean, profile: Record<string, unknown>) => j<Session>(post('/api/talk/apply', { captions, profile })),
   exportReveal: (id: string) => fetch(`/api/export/${id}/reveal`, { method: 'POST' }),
+  exportPhotos: (id: string) => j<{ ok: boolean }>(post(`/api/export/${id}/photos`, {})),
+  habits: () => j<{ habits: Habit[]; phrases: string[]; last: { id: string; text: string }[] }>(fetch('/api/habits')),
+  habitSwitch: (id: string, off: boolean, remake = false) => j<MakeJob & { habit?: Habit }>(post(`/api/habits/${encodeURIComponent(id)}`, { off, remake })),
   exportVerdict: (n: number, wouldPost: boolean, note: string) => j<Session>(post(`/api/exports/${n}/verdict`, { post: wouldPost, note })),
   // Remix: reference reels + the shelf -> one finished short, then the board
   remixStart: (req: { refs: string[]; title?: string; sub?: string; length?: number }) =>

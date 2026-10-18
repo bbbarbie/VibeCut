@@ -147,7 +147,8 @@ def load_shoot(folder: str) -> dict[str, dict]:
 
 
 def plan_shots(clips: dict[str, dict], fp: dict, length: float | None = None, hook_n: int = 1,
-               cut: tuple[set, dict] | None = None, judge=None, taste: str = "") -> sel.Plan:
+               cut: tuple[set, dict] | None = None, judge=None, taste: str = "",
+               bias: dict[str, float] | None = None) -> sel.Plan:
     """Pick the moments and give each its window, before any beat is known.
     `judge`: None = Claude when there is a key (select.judge), False = the
     rules alone, or a stand-in `ask(options, keep)` for tests."""
@@ -157,7 +158,7 @@ def plan_shots(clips: dict[str, dict], fp: dict, length: float | None = None, ho
     total = length or fp["duration"]
     body = max(1.0, total - fp["hook_s"] * hook_n)
     n = max(4, int(round(body / fp["median_s"])))
-    plan = sel.choose(shots, clips, n, hook_n)
+    plan = sel.choose(shots, clips, n, hook_n, bias)
     if judge is not False and os.environ.get("VIBECUT_REMIX_JUDGE", "1") != "0":
         plan = sel.judge(plan, shots, clips, ask=judge if callable(judge) else None, taste=taste)
     plan.notes = notes + plan.notes
@@ -363,7 +364,7 @@ def _clock(dt: datetime) -> str:
 
 
 def captions(plan: sel.Plan, title: str | None, sub: str | None, hold_s: float | None = None,
-             with_title: bool = True, phrases: list[str] | None = None) -> list[dict]:
+             with_title: bool = True, phrases: list[str] | None = None, clock: bool = True) -> list[dict]:
     """What goes on screen, in sequence seconds. Built only from what the edit
     knows. `hold_s`: how long a stop's line stays (a reference's own hold);
     `with_title`: a reel with no words at the top gets no title."""
@@ -383,9 +384,11 @@ def captions(plan: sel.Plan, title: str | None, sub: str | None, hold_s: float |
         if not picks:
             continue
         p0 = picks[0]
-        words = _clock(p0.shot.when) if p0.shot.when else ""
+        words = _clock(p0.shot.when) if (p0.shot.when and clock) else ""
         # a written line for this stop (make.words, the model with the creator's taste) beats the label table
         phrase = (phrases[n_] if phrases and n_ < len(phrases) and phrases[n_] else None) or _phrase(picks)
+        if not clock and not phrase:
+            continue      # no clock stamps on their own (2026-10-18): a stop with nothing to say says nothing
         if phrase:
             words = f"{words} · {phrase}" if words else phrase
         if words:

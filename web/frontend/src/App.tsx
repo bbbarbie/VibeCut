@@ -1294,6 +1294,23 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
               <Button variant="ghost" size="md" onClick={() => setWatching(false)} title="The editor: every shot, caption, join and sound">Fine-tune</Button>
             </div>
             {undoable && <p className="mt-2 text-[12px] text-muted">{undoable.text} · <button type="button" className="underline" onClick={() => toggle(undoable.turn)}>Undo</button></p>}
+            {session?.habits?.length ? (
+              <p className="mt-1 text-[12px] text-muted">
+                Kept {session.habits.map((h) => h.text).join(' and ')}, as you did last time ·{' '}
+                <button type="button" className="underline" title="Switch this habit off and make the video again without it"
+                        onClick={async () => {
+                          try {
+                            let job = await api.habitSwitch(session.habits![0].id, true, true)
+                            while (job.stage && job.stage !== 'done' && job.stage !== 'error') {
+                              await new Promise((r) => window.setTimeout(r, 700))
+                              job = await api.makeStatus(job.id)
+                            }
+                            playOnLand.current = true
+                            setSession(await api.session())
+                          } catch (e) { note((e as Error).message) }
+                        }}>Undo that</button>
+              </p>
+            ) : null}
           </main>
         ) : framesView ? (
           <main className="relative flex min-h-0 min-w-0 flex-col px-3 pb-3">
@@ -1396,7 +1413,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       {session?.mix && <audio ref={mixRef} src={session.mix.audio} preload="auto"
                               onError={() => { transport.mixBroken = true }} />}
       {help && <Keys onClose={() => setHelp(false)} />}
-      {exporting && <Export tl={tl} overlays={ovData} parts={parts} music={session?.music?.title ?? null} style={session?.board?.style}
+      {exporting && <Export tl={tl} overlays={ovData} parts={parts} music={session?.music?.title ?? null} credit={session?.music?.credit ?? null} style={session?.board?.style}
                             history={session?.exports ?? []} onClose={() => { setExporting(false); api.session().then(setSession).catch(() => {}) }} />}
       {remixing && <Remix onClose={() => { setRemixing(false); setFrontLinks(null) }} onDone={remixDone} canLinks={caps.links}
                           initialLinks={frontLinks ?? ''} autoStart={!!frontLinks} />}

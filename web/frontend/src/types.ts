@@ -177,7 +177,8 @@ export type LookInfo = { id: string; name: string; line: string; font: OverlaySt
 export type OverlayFinding = { overlay: string; rule: string; value: number; verdict: 'ok' | 'warn' | 'bad' | 'pending'; basis: string; message: string }
 export type Overlays = { items: Overlay[]; style: OverlayStyle; findings: OverlayFinding[]
   look?: { id: string | null; overrides: string[]; all: LookInfo[] } }
-export type MusicTrack = { id: string; title: string; duration: number; bpm: number | null; audio: string }
+export type MusicTrack = { id: string; title: string; duration: number; bpm: number | null; audio: string; credit?: string | null }
+export type Habit = { id: string; kind: 'avoid' | 'prefer' | 'music_off'; label: string | null; weight: number; n: number; evidence: string[]; text: string; used: number; off: boolean }
 
 export type CutSummary = { clips: number; kept: number; rejected: number; raw: number; cut: number; ratio: number | null; line_en: string }
 export type Workflow = { state: string; gate: string; decision: string | null; revision: number; history: { action: string; actor: string; note: string; at: number }[] }
@@ -194,6 +195,8 @@ export type Session = {
   timeline: TimelineData
   music: MusicTrack | null
   // Music by default (backend/bed.py): the pick runs in the background and lands as a turn.
+  // what the creator's habits did to the last Make (habits.py), for the one line and its Undo
+  habits?: { id: string; text: string }[]
   bed: { stage: 'looking' | 'done' | 'nothing' | 'error'; why: string; source: string; done: number; total: number; elapsed: number } | null
   // The edit's sound as one track (backend/audiomix.py) -- what preview plays and export writes.
   mix: { key: string; audio: string; joins: JoinInfo[]; transitions: Trans[]; bars: number } | null

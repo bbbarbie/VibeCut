@@ -227,6 +227,40 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   describe the cut (`make.pace_of`), so the Frames chips tell the truth.
   Cuts sit on the half-beat grid (filler) with the hook and heroes on whole
   beats — `remix.quantise`'s rule, now pinned in `test_make`. All priors.
+- **Habits: the second video learns from the first** (`web/backend/
+  habits.py`, 2026-10-18; the user's ask "do everything now"). At export,
+  `habits.record` keeps the video's *signals* on its record (`events`
+  kind "signals": shots removed / kept / held by hand with their top
+  labels and hour, music switched off by hand, lines retyped; the
+  machine's own turns don't count). At Make, `habits.derive(pj.list_all())`
+  turns the same thing on ≥ `MIN_PROJECTS` 2 videos into a habit (`avoid:`
+  / `prefer:` a label at ±`LABEL_W` 0.2, `music_off`), kept in
+  `$VIBECUT_CACHE/habits.json` with evidence, use count and an off switch
+  that survives re-deriving; a label both removed and kept is no habit.
+  Habits only *bias*: `select.hero_score(bias=)` adds weight × confidence
+  per label (the "why" part `habit`), `music_default` sets the switch,
+  `phrases` (retyped lines, also `remember_phrase` from `edit_overlay`)
+  ride on the writer's prompt. The Make reply ends "Kept more food and
+  fewer whiteboard shots, as you did last time."; `session.habits` lists
+  what acted; the Watch screen's "Undo that" = `POST /api/habits/{id}
+  {off, remake}` (switch off, undo the Make turn, make again). Used
+  `SUGGEST_AFTER` 3 times without an undo → offered once as a rule
+  (`_prefs_public`, id `habit:…`). Profile page: "What VibeCut has learned
+  about you" with switches (`/api/habits`). Local only (not mirrored yet).
+  `tests/test_habits.py`.
+- **Lines from place and time** (`make.plain_lines`, `time_of_day`,
+  2026-10-18): without a key a stop's line is "Morningside Heights,
+  morning" from the clip's GPS (places.py) and hour — never a clock stamp
+  alone, and a stop with nothing to say says nothing
+  (`remix.captions(clock=False)`); with a key the writer gets the place as
+  a label and the creator's own retyped lines (`phrasing`), and any empty
+  answer falls back to the plain line.
+- **Posting** (2026-10-18): `POST /api/export/{jid}/photos` imports the
+  file into Photos by AppleScript (Mac only, says so elsewhere); the
+  export dialog has Save to Photos and "Copy caption + credit" (the title
+  line plus the track's licence credit, now on `session.music.credit`);
+  the no-music export is the dialog's Music switch; "Would you post this?"
+  stays the number.
 - **Watch, then Fine-tune** (2026-10-18, `App.tsx` `watching`): a made or
   remixed video opens as the video, full-size, with four chips under it —
   music (the bed switch), length (`LengthButton`), look (cycles the looks
