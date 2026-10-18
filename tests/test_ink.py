@@ -101,6 +101,14 @@ def main() -> int:
     check("pale wall with black trousers under the words: light words on a dark halo, never dark words",
           sp.get("halo") == ink.HALO and ink.luminance(ink.hex_rgb(sp.get("ink", COZY["color"]))) > 0.35, str(sp))
     check("a pale background gets no halo", "halo" not in bright)
+    # a colour picked by hand is kept as picked; a glow carries it where it blends in
+    mine = {**COZY, "text_color": "#ffd84d"}
+    kept = run({"a": frame(blue_sky, pavement)}, cap(), mine)
+    check("picked yellow over dark pavement: kept, nothing added", "ink" not in kept and "halo" not in kept, str(kept))
+    wall = run({"a": frame(white_wall, white_wall)}, cap(), mine)
+    check("picked yellow over a white wall: still yellow, with a dark glow", "ink" not in wall and wall.get("halo") == ink.HALO, str(wall))
+    black = run({"a": frame(blue_sky, pavement)}, cap(), {**COZY, "text_color": "#141414"})
+    check("picked black over dark pavement: a light glow", black.get("halo") == ink.HALO_LIGHT, str(black))
     speck = np.zeros((4, H, W, 3), dtype=np.uint8)
     speck[:] = white_wall
     speck[:, 13, 8] = (12, 12, 14)        # one dark cell of 80 under the words

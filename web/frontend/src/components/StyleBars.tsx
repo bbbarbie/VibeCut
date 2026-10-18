@@ -3,7 +3,7 @@ import { blendLook } from '../joinView'
 import { drawOverlays } from '../overlayDraw'
 import type { CaptionEnter, CaptionTemplate, JoinInfo, Overlay, OverlayStyle } from '../types'
 import { cx } from '../ui'
-import { Chip, Slider } from './Inspector'
+import { Chip, Slider, type CaptionStylePatch } from './Inspector'
 
 // The captions' Style and Animation, and the Transition at a cut, as tiles
 // in the inspector's Captions and Effects tabs. Every choice is a tile that
@@ -15,6 +15,7 @@ import { Chip, Slider } from './Inspector'
 const TEMPLATE_NAMES: Record<CaptionTemplate, string> = {
   outlined: 'Outlined', bold: 'Big & bold', label: 'Label', highlight: 'Highlighter',
   handwritten: 'Handwritten', tape: 'Typed tape', pop: 'Pop colour', quiet: 'Quiet',
+  neon: 'Neon', glow: 'Glow', gradient: 'Gradient', extrude: '3D', retro: 'Retro drop',
 }
 const ENTER_NAMES: Record<CaptionEnter, string> = {
   fade: 'Fade up', pop: 'Pop', slide: 'Slide in', stamp: 'Stamp', type: 'Typewriter', word: 'Word by word',
@@ -67,7 +68,9 @@ function CaptionSample({ style, text, t, scale = 3 }: { style: OverlayStyle; tex
 
 const GRID = 'grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] justify-items-center gap-x-2 gap-y-3'
 
-type CaptionPick = (patch: { template?: CaptionTemplate | null; enter?: CaptionEnter | null }, label: string) => void
+type CaptionPick = (patch: CaptionStylePatch, label: string) => void
+// a word art tile shows the art as it comes, and picking one starts it fresh
+const PLAIN = { outline: null, shadow: null, backdrop: null, thick: null }
 
 /** One style for every caption in the video. */
 export function CaptionStyles({ style, thumb, onPick }: { style: OverlayStyle; thumb: string | null; onPick: CaptionPick }) {
@@ -75,15 +78,15 @@ export function CaptionStyles({ style, thumb, onPick }: { style: OverlayStyle; t
   const held = 2.0   // the caption fully in
   return (
     <div className={GRID}>
-      <Tile on={!style.template} label="The look's own" onClick={() => style.template && onPick({ template: null }, 'Captions back to the look\'s own')}>
+      <Tile on={!style.template} label="The look's own" onClick={() => style.template && onPick({ template: null, ...PLAIN }, 'Captions back to the look\'s own')}>
         <span className="absolute inset-0" style={bg} />
-        <CaptionSample style={{ ...style, template: null, enter: null }} text="Aa" t={held} />
+        <CaptionSample style={{ ...style, ...PLAIN, template: null, enter: null }} text="Aa" t={held} />
       </Tile>
       {(Object.keys(TEMPLATE_NAMES) as CaptionTemplate[]).map((id) => (
         <Tile key={id} on={style.template === id} label={TEMPLATE_NAMES[id]}
-              onClick={() => style.template !== id && onPick({ template: id }, `Every caption is now ${TEMPLATE_NAMES[id]}`)}>
+              onClick={() => style.template !== id && onPick({ template: id, ...PLAIN }, `Every caption is now ${TEMPLATE_NAMES[id]}`)}>
           <span className="absolute inset-0" style={bg} />
-          <CaptionSample style={{ ...style, template: id, enter: null }} text="Aa" t={held} />
+          <CaptionSample style={{ ...style, ...PLAIN, template: id, enter: null }} text="Aa" t={held} />
         </Tile>
       ))}
     </div>

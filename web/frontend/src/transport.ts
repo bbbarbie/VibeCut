@@ -8,6 +8,7 @@ import { locate, toSource, type SeqItem } from './sequence'
 import type { Target } from './snap'
 import { hideStill, settleStill, swapSource } from './hold'
 import { blendLook, dissolveAfter, mixAt, preloadAt, veilAt, type Pic, type TransMap } from './joinView'
+import { effectAt, noise, tuneSvg, NO_FX, type FxLook } from './effectView'
 
 export function createStore<T>(initial: T) {
   let v = initial
@@ -214,18 +215,42 @@ export class Transport {
       const d = dissolveAfter(this.items, this.cur, this.trans, this.fps)
       if (d) { top = b; under = v; look = blendLook(d.blend, mixAt(d, t)) }
     }
-    const put = (el: HTMLVideoElement, z: string, p: Pic | null, opacity: number) => {
+    // each picture's own effect (effectView), at its own moment of its shot
+    const k0 = locate(this.items, t)
+    const shown = (el: HTMLVideoElement): SeqItem | undefined =>
+      this.leaving?.el === el ? this.items[k0 - 1] : el === b && top === b ? this.items[this.cur + 1] : this.items[k0]
+    const fxOf = (el: HTMLVideoElement): FxLook => {
+      const it = shown(el)
+      if (!it || it.kind !== 'shot' || !it.effect || this.lent) return NO_FX
+      const fx = effectAt(it.effect, it.effect_amount, t - it.seq_start, it.seq_end - it.seq_start, el.clientWidth, el.clientHeight)
+      tuneSvg(fx)
+      return fx
+    }
+    let topFx = NO_FX
+    const put = (el: HTMLVideoElement, z: string, p: Pic | null, opacity: number, fx: FxLook) => {
       el.style.zIndex = z
       el.style.opacity = String(p ? p.opacity : opacity)
       el.style.translate = p?.translate ?? ''
       el.style.scale = p?.scale ?? ''
-      el.style.filter = p?.filter ?? ''
+      el.style.filter = [p?.filter ?? '', fx.filter].join(' ').trim()
+      el.style.transform = [fx.transform, el.dataset.dress ?? ''].join(' ').trim()
     }
     for (const el of [v, b]) {
       if (!el) continue
-      if (el === top) put(el, '2', look?.in ?? null, 1)
-      else if (el === under) put(el, '1', look?.out ?? null, 1)
-      else put(el, '0', null, 0)
+      if (el === top) { topFx = fxOf(el); put(el, '2', look?.in ?? null, 1, topFx) }
+      else if (el === under) put(el, '1', look?.out ?? null, 1, fxOf(el))
+      else put(el, '0', null, 0, NO_FX)
+    }
+    const stage = this.veil?.parentElement
+    const tint = stage?.querySelector<HTMLDivElement>('[data-fx-tint]')
+    const grain = stage?.querySelector<HTMLDivElement>('[data-fx-grain]')
+    if (tint) tint.style.background = topFx.tint
+    if (grain) {
+      grain.style.opacity = String(topFx.grain)
+      if (topFx.grain) {
+        grain.style.backgroundImage = `url(${noise()})`
+        grain.style.backgroundPosition = `${Math.floor(Math.random() * 128)}px ${Math.floor(Math.random() * 128)}px`
+      }
     }
     if (this.veil) {
       const k = locate(this.items, t)
@@ -445,6 +470,7 @@ export function dress(el: HTMLVideoElement | null, it: SeqItem | null | undefine
   // the held frame laid over the picture (hold.ts) is the same picture: dress it alike
   const still = hold ? el.parentElement?.querySelector<HTMLCanvasElement>('canvas[data-hold]') : null
   for (const x of still ? [el, still] : [el]) {
+    x.dataset.dress = transform   // paint() puts the shot's effect in front of it
     x.style.transform = transform
     x.style.objectFit = fit
     if (push) {

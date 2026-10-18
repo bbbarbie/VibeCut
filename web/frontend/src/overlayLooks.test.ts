@@ -115,7 +115,7 @@ test('without a look, nothing about the words changes', () => {
 // Words dragged on the picture by hand: drawn where they were dropped, at
 // their own size, still never out of the safe area -- the export draws them
 // the same way, because it is the same function.
-test('a caption placed by hand is drawn there, sized, and held inside the safe area', () => {
+test('a caption placed by hand is drawn there, sized, and kept inside the frame', () => {
   const W = 1080, H = 1920
   const style = styleOf(LOOKS.find((r) => r.id === 'clean') ?? LOOKS[0])
   const cap = ov('c', { kind: 'caption', text: 'coffee run', anim: 'none' })
@@ -130,7 +130,9 @@ test('a caption placed by hand is drawn there, sized, and held inside the safe a
   assert.ok(Math.abs(top.y + top.h / 2 - 0.3 * H) < 2 && Math.abs(top.x + top.w / 2 - W / 2) < 2, 'centred where it was dropped')
   assert.ok(Math.abs(big.w / top.w - 2) < 0.15, `twice the size: ${big.w / top.w}`)
   const edge = at({ x: 0.99, y: 0.99, scale: 1 }), sa = safe(W, H)
-  assert.ok(edge.x + edge.w <= W - sa.r + 1 && edge.y + edge.h <= H - sa.b + 1, 'dropped at the edge, pulled back inside')
+  // up to the frame's own edge, past the safe area (sarah, 2026-10-18), never off it
+  assert.ok(edge.x + edge.w <= W + 1 && edge.y + edge.h <= H + 1, 'dropped at the edge, kept in the frame')
+  assert.ok(edge.x + edge.w > W - sa.r + 1 && edge.y + edge.h > H - sa.b + 1, 'not pulled back to the safe area')
 })
 
 test('a long title is drawn whole, smaller, never cut off with …', () => {

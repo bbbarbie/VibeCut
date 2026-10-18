@@ -47,7 +47,7 @@ from pathlib import Path
 
 from cutgrammar import media
 
-from . import audiomix, indexer
+from . import audiomix, effects, indexer
 from . import timeline as tlm
 
 FPS = tlm.FPS
@@ -429,7 +429,9 @@ def _shot(job: Job, it: dict, out: Path, tr: dict | None = None) -> None:
     # A span that runs to the very end of its file can decode a frame or two
     # short; hold the last frame so every shot is exactly its frame count.
     args = [*src, "-map", "0:v:0", *amap, "-vf",
-            turn + retime + _fit(size, job.style, vfade, bool(it.get("fill"))) + punch
+            turn + retime + _fit(size, job.style, vfade, bool(it.get("fill")))
+            + effects.chain(it.get("effect"), float(it.get("effect_amount") or 1.0), size, tr["head"] / FPS, it["frames"], FPS)
+            + punch
             + ",tpad=stop_mode=clone:stop_duration=1", *common]
     hw = ["-hwaccel", "videotoolbox"] if sys.platform == "darwin" else []
     try:

@@ -155,8 +155,18 @@ export type OverlayPlace = { x: number; y: number; scale: number }
 export type OverlayStyle = { font: 'Clean' | 'Editorial' | 'Rounded' | 'Mono' | 'Condensed'; color: string; accent: string; captions: 'bottom' | 'center'; backing: 'shadow' | 'box' | 'none'
   look?: string; motion?: Motion | null
   /** the caption template and entrance the creator picked (overlays.TEMPLATES / ENTERS); null = the look's own */
-  template?: CaptionTemplate | null; enter?: CaptionEnter | null }
+  template?: CaptionTemplate | null; enter?: CaptionEnter | null
+  /** the captions' colour picked by hand (the Captions tab); null = automatic, read against the footage */
+  text_color?: string | null
+  /** the captions' font picked by hand (captionFonts.ts id); null = the template's or the look's own */
+  typeface?: string | null
+  /** set by hand with sliders (overlays.DRESS); null = the template's own, width / opacity 0 = none */
+  outline?: CaptionOutline | null; shadow?: CaptionShadow | null; backdrop?: CaptionBackdrop | null; thick?: number | null }
+export type CaptionOutline = { color: string; width: number }
+export type CaptionShadow = { color: string; opacity: number; blur: number; dist: number }
+export type CaptionBackdrop = { color: string; opacity: number; round: number }
 export type CaptionTemplate = 'outlined' | 'bold' | 'label' | 'highlight' | 'handwritten' | 'tape' | 'pop' | 'quiet'
+  | 'neon' | 'glow' | 'gradient' | 'extrude' | 'retro'
 export type CaptionEnter = 'fade' | 'pop' | 'slide' | 'stamp' | 'type' | 'word'
 // How a look moves words (backend looks/*.json): one curve and timing for the whole video.
 export type Motion = { curve: [number, number, number, number]; in_s: number; step_fps: number; stagger_s: number

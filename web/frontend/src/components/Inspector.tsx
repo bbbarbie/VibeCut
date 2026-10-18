@@ -1,14 +1,20 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { CAPTION_FONTS, type CaptionFont } from '../captionFonts'
 import type { SeqItem } from '../sequence'
-import type { CaptionEnter, CaptionTemplate, JoinInfo, LookInfo, OverlayStyle, SoundStrip } from '../types'
+import { dressOf, isDressed, KIND_META } from '../overlayDraw'
+import { multiline, typable, wordsOf, wordsPatch } from '../captionWords'
+import type { JoinInfo, LookInfo, Overlay, OverlayPlace, OverlayStyle, SoundStrip } from '../types'
 import { Button, cx } from '../ui'
 import { Icon, type IconName } from './icons'
 import { CaptionAnimations, CaptionStyles, Transitions } from './StyleBars'
+import { EffectTiles } from './Effects'
+import { effectName } from '../effectView'
 
 // The right-hand inspector of the edit screen (sarah, 2026-10-16: the layout
 // of her reference picture). Five tabs: Edit (the clicked shot: trim, speed,
-// turn, fit or fill; with nothing clicked, the whole video), Captions (one
-// style and entrance for every caption), Effects (the transition at a cut),
+// turn, fit or fill; with nothing clicked, the whole video), Captions (the
+// clicked caption's words, then one style and entrance for every caption),
+// Effects (the clicked shot's effect, else every shot's; the transition at a cut),
 // Audio (the shot's or a sound strip's volume and fades, and the music) and
 // Adjust (the look). Clicking something on the timeline opens its tab.
 // Every change is one undoable turn, sent when a slider is let go.
@@ -42,6 +48,14 @@ export function Inspector(p: {
   captionsOn: boolean
   captionThumb: string | null
   captionSample: string
+  /** the caption clicked on the picture or the timeline */
+  caption: Overlay | null
+  onCaptionEdit: (patch: { text?: string; sub?: string }, label: string) => void
+  onCaptionDelete: () => void
+  onCaptionAdd: () => void
+  onCaptionWatch: () => void
+  onCaptionDone: () => void
+  onCaptionPlace: (place: OverlayPlace | null, label: string) => void
   looks: { id: string | null; all: LookInfo[] } | null
   music: ReactNode
   /** Length, tempo, frame, smoother cuts: the whole video's own controls */
@@ -56,8 +70,11 @@ export function Inspector(p: {
   onStrip: (patch: Patch, label: string) => void
   onStripDelete: () => void
   onCaptions: () => void
-  onCaptionStyle: (patch: { template?: CaptionTemplate | null; enter?: CaptionEnter | null }, label: string) => void
+  onCaptionStyle: (patch: CaptionStylePatch, label: string) => void
   onJoin: (op: { kind: string; dur?: number; all?: boolean }, label: string) => void
+  /** every shot's effect when they all share one (with no shot clicked), and a thumbnail to show effects on */
+  allEffect: { effect: string | null; amount: number; thumb: string | null }
+  onEffect: (patch: { effect?: string | null; effect_amount?: number }, all: boolean, label: string) => void
   onLook: (id: string, name: string) => void
 }) {
   const it = p.item
@@ -121,23 +138,53 @@ export function Inspector(p: {
         </>)}
 
         {p.tab === 'captions' && <>
-          <Line label="Captions">
-            <Segmented options={[['off', 'Off'], ['on', 'On']]} value={p.captionsOn ? 'on' : 'off'}
-                       onPick={(v) => (v === 'on') !== p.captionsOn && p.onCaptions()} />
-          </Line>
+          {p.caption && <CaptionWords key={p.caption.id} o={p.caption} onEdit={p.onCaptionEdit} onDelete={p.onCaptionDelete}
+                                      onWatch={p.onCaptionWatch} onDone={p.onCaptionDone} onPlace={p.onCaptionPlace} />}
+          {!p.caption && <>
+            <Line label="Captions">
+              <Segmented options={[['off', 'Off'], ['on', 'On']]} value={p.captionsOn ? 'on' : 'off'}
+                         onPick={(v) => (v === 'on') !== p.captionsOn && p.onCaptions()} />
+            </Line>
+            <Button onClick={p.onCaptionAdd}>+ Add a caption at the playhead</Button>
+          </>}
           {p.captionsOn ? <>
-            <Section title="Style"><CaptionStyles style={p.style} thumb={p.captionThumb} onPick={p.onCaptionStyle} /></Section>
-            <Section title="Animation"><CaptionAnimations style={p.style} thumb={p.captionThumb} sample={p.captionSample} onPick={p.onCaptionStyle} /></Section>
-            <Hint>One style for every caption. Click a caption on the picture to move it or change its words.</Hint>
+            <Section title={p.caption ? 'Font of every caption' : 'Font'}>
+              <CaptionFonts value={p.style.typeface ?? null}
+                            onPick={(f) => p.onCaptionStyle({ typeface: f?.id ?? null }, f ? `The captions are in ${f.name}` : 'The captions are back to their own font')} />
+            </Section>
+            <Section title={p.caption ? 'Colour of every caption' : 'Colour'}>
+              <CaptionColours value={p.style.text_color ?? null}
+                              onPick={(c) => p.onCaptionStyle({ text_color: c }, c ? 'You changed the colour of the captions' : 'The captions are back to their automatic colour')} />
+            </Section>
+            <CaptionDress style={p.style} onPick={p.onCaptionStyle} />
+            <Section title="Word art"><CaptionStyles style={p.style} thumb={p.captionThumb} onPick={p.onCaptionStyle} /></Section>
+            <Section title={p.caption ? 'Animation of every caption' : 'Animation'}><CaptionAnimations style={p.style} thumb={p.captionThumb} sample={p.captionSample} onPick={p.onCaptionStyle} /></Section>
+            {!p.caption && <Hint>One style for every caption. Click a caption on the picture or the timeline to change its words.</Hint>}
           </> : <Hint>Turn captions on to put the time and place of each moment on the video.</Hint>}
         </>}
 
-        {p.tab === 'effects' && (p.join ? (
-          <Section title={p.joinPicked ? `The cut from shot ${p.join.before} to shot ${p.join.after}` : 'Every cut'}>
-            {!p.joinPicked && <Hint>Or click the dot between two shots on the timeline to change just that cut.</Hint>}
-            <Transitions {...p.join} before={p.joinPicked ? p.join.before : null} after={p.joinPicked ? p.join.after : null} onPick={p.onJoin} />
-          </Section>
-        ) : <Hint>Transitions go between two shots. Your edit has no cuts yet.</Hint>)}
+        {p.tab === 'effects' && <>
+          {!p.joinPicked && (shot ? (
+            <Section title={`Effect on shot ${shot.n}`}>
+              <EffectTiles n={shot.n} effect={shot.effect ?? null} amount={shot.effect_amount ?? 1} thumb={p.itemThumb}
+                           onPick={(patch, label) => p.onEffect(patch, false, label)}
+                           onAll={() => p.onEffect({ effect: shot.effect ?? null, effect_amount: shot.effect_amount ?? 1 }, true,
+                             shot.effect ? `Every shot now has ${effectName(shot.effect)}` : 'You took the effects off every shot')} />
+            </Section>
+          ) : (
+            <Section title="Effect on every shot">
+              <Hint>Or click a shot on the timeline to give just that shot an effect.</Hint>
+              <EffectTiles n={null} effect={p.allEffect.effect} amount={p.allEffect.amount} thumb={p.allEffect.thumb}
+                           onPick={(patch, label) => p.onEffect(patch, true, label)} onAll={() => {}} />
+            </Section>
+          ))}
+          {p.join ? (
+            <Section title={p.joinPicked ? `The cut from shot ${p.join.before} to shot ${p.join.after}` : 'Transition at every cut'}>
+              {!p.joinPicked && <Hint>Or click the dot between two shots on the timeline to change just that cut.</Hint>}
+              <Transitions {...p.join} before={p.joinPicked ? p.join.before : null} after={p.joinPicked ? p.join.after : null} onPick={p.onJoin} />
+            </Section>
+          ) : <Hint>Transitions go between two shots. Your edit has no cuts yet.</Hint>}
+        </>}
 
         {p.tab === 'audio' && (p.strip ? (
           <Section title={`Sound of shot ${p.strip.n ?? ''}`}>
@@ -181,6 +228,179 @@ export function Inspector(p: {
         )}
       </div>
     </aside>
+  )
+}
+
+// The clicked caption's own words. One undoable turn when the box is left
+// or Enter is pressed; Escape puts the words back.
+function CaptionWords({ o, onEdit, onDelete, onWatch, onDone, onPlace }: {
+  o: Overlay
+  onEdit: (patch: { text?: string; sub?: string }, label: string) => void
+  onDelete: () => void; onWatch: () => void; onDone: () => void
+  onPlace: (place: OverlayPlace | null, label: string) => void
+}) {
+  // where it sits now: dragged by hand, else its usual spot (the drawing
+  // still pulls it inside the safe area)
+  const here: OverlayPlace = o.place ?? { x: 0.5, y: o.pos.startsWith('top') ? 0.2 : o.pos === 'center' ? 0.5 : 0.8, scale: 1 }
+  const row = here.y < 0.35 ? 'top' : here.y > 0.65 ? 'bottom' : 'middle'
+  const name = KIND_META[o.kind].label
+  // one box, the lines as they read on the picture (captionWords.ts)
+  const shown = wordsOf(o)
+  const commit = (v: string) => {
+    const patch = wordsPatch(o, v)
+    if (patch) onEdit(patch, `You changed the words of the ${name.toLowerCase()}`)
+  }
+  return (
+    <Section title={`This ${name.toLowerCase()} · ${mmss(o.start)}`}>
+      {typable(o) && <WordsBox key={o.id + shown} value={shown} lines={multiline(o)} onCommit={commit} />}
+      <div className="flex flex-wrap gap-2 pt-1">
+        <Chip onClick={onWatch}><Icon name="play" size={17} /> See it play</Chip>
+        <Chip danger onClick={onDelete}><Icon name="trash" size={17} /> Delete</Chip>
+        <Chip onClick={onDone}>Done</Chip>
+      </div>
+      <Line label="Place">
+        <Segmented options={[['top', 'Top'], ['middle', 'Middle'], ['bottom', 'Bottom']]} value={row}
+                   onPick={(v) => v !== row && onPlace({ x: 0.5, y: v === 'top' ? 0.2 : v === 'middle' ? 0.5 : 0.8, scale: here.scale },
+                     `You moved the ${name.toLowerCase()} to the ${v}`)} />
+      </Line>
+      <Slider label="Size" value={Math.round(here.scale * 100)} min={40} max={300} step={10} unit="%"
+              onCommit={(v) => onPlace({ ...here, scale: v / 100 }, `You made the ${name.toLowerCase()} ${v > here.scale * 100 ? 'bigger' : 'smaller'}`)} />
+      <Hint>On the picture, drag it anywhere, drag a corner to size it, or click it again to type its words there.</Hint>
+      {o.place && <Chip onClick={() => onPlace(null, `You put the ${name.toLowerCase()} back in its usual place`)}>Put it back in its usual place</Chip>}
+    </Section>
+  )
+}
+
+// The captions' colour. Automatic reads the footage behind each caption and
+// picks what stands out; a picked colour is kept, with an edge or glow so it
+// still reads. One undoable turn per pick.
+const TEXT_COLOURS: [string, string][] = [['#ffffff', 'White'], ['#fff3d6', 'Cream'], ['#ffd84d', 'Yellow'], ['#ff9eb5', 'Pink'],
+  ['#7fd0ff', 'Sky blue'], ['#8fe3b0', 'Mint'], ['#ff7a59', 'Coral'], ['#141414', 'Black']]
+// outlines, shadows and backgrounds: true black first, the way editors offer them
+const EDGE_COLOURS: [string, string][] = [['#000000', 'Black'], ['#ffffff', 'White'], ['#ffd84d', 'Yellow'], ['#ff9eb5', 'Pink'],
+  ['#ff4d6d', 'Red'], ['#7fd0ff', 'Sky blue'], ['#8fe3b0', 'Mint'], ['#7b5cff', 'Purple']]
+
+export type CaptionStylePatch = Partial<Pick<OverlayStyle, 'template' | 'enter' | 'text_color' | 'typeface' | 'outline' | 'shadow' | 'backdrop' | 'thick'>>
+
+// Outline, shadow, background box and letter weight as plain controls, the
+// way CapCut's text panel has them (sarah, 2026-10-18: "for the normal
+// adjustments you dont have to have a video background"). Each starts from
+// what the captions have now; a slider is one undoable turn when let go.
+function CaptionDress({ style, onPick }: { style: OverlayStyle; onPick: (patch: CaptionStylePatch, label: string) => void }) {
+  const d = dressOf(style)
+  const pc = (x: number) => Math.round(x * 100)
+  const onOff = (on: boolean, flip: (on: boolean) => void) => (
+    <Segmented options={[['off', 'Off'], ['on', 'On']]} value={on ? 'on' : 'off'} onPick={(v) => (v === 'on') !== on && flip(v === 'on')} />
+  )
+  const ol = d.outline, sh = d.shadow, bd = d.backdrop
+  return <>
+    <Section title="Outline">
+      {onOff(ol.width > 0, (on) => onPick({ outline: { ...ol, width: on ? 0.12 : 0 } }, on ? 'The captions have an outline' : 'The captions have no outline'))}
+      {ol.width > 0 && <>
+        <CaptionColours auto={false} value={ol.color} onPick={(c) => c && onPick({ outline: { ...ol, color: c } }, 'You changed the outline colour')} />
+        <Slider label="Thickness" value={pc(ol.width)} min={1} max={40} step={1} unit=""
+                onCommit={(x) => onPick({ outline: { ...ol, width: x / 100 } }, 'You changed how thick the outline is')} />
+      </>}
+    </Section>
+    <Section title="Shadow">
+      {onOff(sh.opacity > 0, (on) => onPick({ shadow: { ...sh, opacity: on ? 0.7 : 0 } }, on ? 'The captions have a shadow' : 'The captions have no shadow'))}
+      {sh.opacity > 0 && <>
+        <CaptionColours auto={false} value={sh.color} onPick={(c) => c && onPick({ shadow: { ...sh, color: c } }, 'You changed the shadow colour')} />
+        <Slider label="Strength" value={pc(sh.opacity)} min={10} max={100} step={5} unit="%"
+                onCommit={(x) => onPick({ shadow: { ...sh, opacity: x / 100 } }, 'You changed how strong the shadow is')} />
+        <Slider label="Softness" value={pc(sh.blur)} min={0} max={150} step={5} unit=""
+                onCommit={(x) => onPick({ shadow: { ...sh, blur: x / 100 } }, 'You changed how soft the shadow is')} />
+        <Slider label="Distance" value={pc(sh.dist)} min={0} max={40} step={1} unit=""
+                onCommit={(x) => onPick({ shadow: { ...sh, dist: x / 100 } }, 'You moved the shadow')} />
+      </>}
+    </Section>
+    <Section title="Background">
+      {onOff(bd.opacity > 0, (on) => onPick({ backdrop: { ...bd, opacity: on ? 0.85 : 0 } }, on ? 'The captions sit on a background' : 'The captions have no background'))}
+      {bd.opacity > 0 && <>
+        <CaptionColours auto={false} value={bd.color} onPick={(c) => c && onPick({ backdrop: { ...bd, color: c } }, 'You changed the background colour')} />
+        <Slider label="Opacity" value={pc(bd.opacity)} min={10} max={100} step={5} unit="%"
+                onCommit={(x) => onPick({ backdrop: { ...bd, opacity: x / 100 } }, 'You changed how see-through the background is')} />
+        <Slider label="Roundness" value={pc(bd.round)} min={0} max={50} step={1} unit=""
+                onCommit={(x) => onPick({ backdrop: { ...bd, round: x / 100 } }, 'You changed how round the background is')} />
+      </>}
+    </Section>
+    <Section title="Boldness">
+      <Slider label="Letters" value={pc(d.thick)} min={0} max={15} step={1} unit=""
+              onCommit={(x) => onPick({ thick: x / 100 }, x ? 'You made the letters bolder' : 'The letters are back to their usual weight')} />
+    </Section>
+    {isDressed(style) && <div><Chip onClick={() => onPick({ outline: null, shadow: null, backdrop: null, thick: null }, 'Outline, shadow and background are back to the style\'s own')}>
+      Back to the style's own outline, shadow and background</Chip></div>}
+  </>
+}
+
+// Each font shown in its own letters on a dark tile, the way it will sit on
+// the footage; one tap sets it for every caption (one font per video).
+function CaptionFonts({ value, onPick }: { value: string | null; onPick: (f: CaptionFont | null) => void }) {
+  const tile = (on: boolean) => cx('flex h-14 min-w-0 items-center justify-center rounded-lg border px-2 text-center',
+    on ? 'border-accent ring-2 ring-accent ring-offset-2 ring-offset-panel' : 'border-black/15 hover:brightness-125')
+  return (
+    <div className="grid grid-cols-2 gap-2.5">
+      <button type="button" aria-pressed={!value} onClick={() => value && onPick(null)}
+              className={cx('flex h-14 items-center justify-center rounded-lg border px-2 font-serif text-[16px]',
+                !value ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-panel text-zinc-100 hover:bg-raised')}>Style's own</button>
+      {CAPTION_FONTS.map((f) => (
+        <button key={f.id} type="button" title={f.name} aria-label={f.name} aria-pressed={value === f.id}
+                onClick={() => value !== f.id && onPick(f)} className={tile(value === f.id)} style={{ background: '#1d1d22' }}>
+          <span className="leading-[1.1] text-white"
+                style={{ fontFamily: f.family, fontWeight: f.weight, fontSize: Math.round((f.name.length > 12 ? 16 : 19) * f.size) }}>{f.name}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function CaptionColours({ value, onPick, auto = true }: { value: string | null; onPick: (c: string | null) => void; auto?: boolean }) {
+  const COLOURS = auto ? TEXT_COLOURS : EDGE_COLOURS
+  const [own, setOwn] = useState(value ?? '#ffffff')
+  // the picker's native change fires once, when it closes; React's onChange fires on every drag
+  const ref = useRef<HTMLInputElement>(null)
+  const pick = useRef(onPick)
+  pick.current = onPick
+  useEffect(() => {
+    const el = ref.current
+    const done = () => el && el.value !== value && pick.current(el.value)
+    el?.addEventListener('change', done)
+    return () => el?.removeEventListener('change', done)
+  }, [value])
+  const custom = !!value && !COLOURS.some(([c]) => c === value)
+  return (
+    <div className="flex flex-wrap items-center gap-2.5">
+      {auto && <button type="button" aria-pressed={!value} onClick={() => value && onPick(null)}
+              className={cx('rounded-lg border px-3 py-1.5 font-serif text-[15px]',
+                !value ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-panel text-zinc-100 hover:bg-raised')}>Automatic</button>}
+      {COLOURS.map(([c, name]) => (
+        <button key={c} type="button" title={name} aria-label={name} aria-pressed={value === c} onClick={() => value !== c && onPick(c)}
+                className={cx('size-9 shrink-0 rounded-full border border-black/15', value === c && 'ring-2 ring-accent ring-offset-2 ring-offset-panel')}
+                style={{ background: c }} />
+      ))}
+      <label title="Any colour" className={cx('relative inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 font-serif text-[15px]',
+        custom ? 'border-accent text-accent' : 'border-line bg-panel text-zinc-100 hover:bg-raised')}>
+        <span className="size-5 rounded-full border border-black/15" style={{ background: custom ? value! : 'conic-gradient(#ff6b6b, #ffd84d, #8fe3b0, #7fd0ff, #c49bff, #ff6b6b)' }} />
+        Other…
+        <input ref={ref} type="color" value={custom ? value! : own} onChange={(e) => setOwn(e.target.value)}
+               className="absolute inset-0 cursor-pointer opacity-0" />
+      </label>
+    </div>
+  )
+}
+
+function WordsBox({ value, lines, onCommit }: { value: string; lines: boolean; onCommit: (v: string) => void }) {
+  const [v, setV] = useState(value)   // keyed on value by the caller: a new value remounts
+  return (
+    <textarea value={v} maxLength={200} aria-label="Words" rows={Math.max(2, v.split('\n').length)} onChange={(e) => setV(e.target.value)}
+              onBlur={() => v !== value && onCommit(v)}
+              onKeyDown={(e) => {
+                e.stopPropagation()   // typing must not split shots or play the video
+                // Enter starts a new line where there can be one, like any text box; leaving the box saves
+                if (e.key === 'Enter' && (!lines || e.metaKey || e.ctrlKey)) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur() }
+                if (e.key === 'Escape') { setV(value); setTimeout(() => (e.target as HTMLTextAreaElement).blur()) }
+              }}
+              className="block w-full resize-none rounded-lg border border-line bg-panel px-3 py-2 font-serif text-[17px] leading-snug text-zinc-100 outline-none focus:border-accent" />
   )
 }
 

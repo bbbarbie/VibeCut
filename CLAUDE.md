@@ -364,8 +364,9 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   caption on the preview to select it, drag to move (snaps to the centre
   lines), drag a corner to size it, double-click for its words; each drop is
   one `edit_overlay` with `place: {x, y, scale}` (block centre, 0–1; null =
-  back to its usual spot), drawn by the same `overlayDraw` in export, still
-  pulled inside the safe area; checks still only warn. "Same place for all
+  back to its usual spot), drawn by the same `overlayDraw` in export, free
+  up to the frame's edge (sarah, 2026-10-18: "all the way to the edge"; the
+  safe area only places captions left where they usually go); checks still only warn. "Same place for all
   captions" is one turn. `test_overlays.py`, `overlayLooks.test.ts`. Older answers (day / simple / bold /
   key) map to describe + a look. `tests/test_captions_answer.py`.
   The description is read from the shoot (`pitch.py`: days,
@@ -575,6 +576,32 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   length kept, all different), `test_caption_templates.py`,
   `overlayTemplates.test.ts` (safe area every intro frame, every template ×
   entrance). Sizes, durations and the glow are priors.
+  **Caption words and colour in the Captions tab** (sarah, 2026-10-17): a
+  clicked caption shows its words in one box, lines as on the picture (the
+  place name is its first line; sarah 2026-10-18), See it play,
+  Delete; with none clicked, Off/On and "Add a caption at the playhead".
+  **Typed on the picture** (sarah, 2026-10-18: "edit the words on screen"):
+  clicking a picked caption again (or Edit words, or a double-click) opens a
+  box right where it's drawn, same lines as the tab (`captionWords.ts`);
+  click away or Cmd/Ctrl+Enter = one undoable edit, Escape = no change.
+  The box wears the caption's own look while typing (`overlayDraw.typeLook`:
+  each line's font, size, colour, edge, band; the place name small above).
+  **Colour** is `overlay_style.text_color` (None = automatic, ink.py picks
+  one that reads; never set by a look): a picked colour is kept as picked,
+  ink.py only adds a glow where it would blend in; a template takes it as
+  its letters (edge flips white under dark ones) or as its box / band.
+- **Video effects** (sarah, 2026-10-18: "more effects ... i want the popular
+  ones"; `web/backend/effects.py`, `web/frontend/src/effectView.ts`,
+  `Effects.tsx`). 14 of the effects short-form edits use most, opt-in, one
+  per shot: Shake, Zoom in / out, Pulse, Flash, Strobe, Blur in, Glow, VHS,
+  Glitch, Film grain, Old film, Vignette, Disco. On the entry as
+  `set_shot {effect, effect_amount}` (Strength 25–200%), kept through a cut;
+  "Use for every shot" is one turn of set_shots. Each is a function of time
+  into the shot: export runs `effects.chain` after `_fit` (ffmpeg crop /
+  zoompan / blend / gblur / rgbashift / noise / vignette / hue), the player
+  draws the same numbers with CSS + two SVG filters (`FxDefs`) and an overlay
+  for tints and grain (`transport.paint`). Built from the filmed frames only.
+  Every number is a prior. `tests/test_effects.py`, `effectView.test.ts`.
 - **polish/** (`polish/`, `web/backend/polish_api.py`, `Polish.tsx`,
   `polishDraw.ts`; page `#polish`). Assisting an edit that is already cut:
   input is one finished video, never raw clips; no auto-editing, no
@@ -597,11 +624,38 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   `tests/test_polish.py`, `test_polish_api.py` (face in the lower third vs
   the top, through the API), `polishDraw.test.ts`. Windows and margins are
   priors.
-- **Fonts: only what's already on the creator's machine.** A system family,
-  or a font file the creator points at (served back only if a saved recipe
-  names it). Never bundle or ship a font. **Recognising a font in a
-  reference image or video is not a licence to render it** — naming it is
-  fine, drawing with it needs the creator's own licensed copy.
+- **Fonts: openly licensed, or already on the creator's machine.** A system
+  family, a font file the creator points at (served back only if a saved
+  recipe names it), or one of the caption fonts that ship with the app
+  (below). Only OFL / Apache faces are ever bundled, each with its licence
+  beside it; never a proprietary face (CapCut's, TikTok's or Instagram's own
+  app fonts), never a look-alike pulled from a reference. **Recognising a
+  font in a reference image or video is not a licence to render it** —
+  naming it is fine, drawing with it needs the creator's own licensed copy.
+  **Caption fonts** (sarah, 2026-10-18: "i want the popular ones to all be in
+  our app"; `captionFonts.ts`, `public/fonts/`, `overlays.TYPEFACES`): 15
+  faces popular in CapCut / TikTok / Reels captions (TikTok Sans, Montserrat,
+  Poppins, Bebas Neue, Anton, Archivo Black, Luckiest Guy, Bangers, Fredoka,
+  Permanent Marker, Caveat, Pacifico, Lobster, Playfair Display, Courier
+  Prime), latin subsets, one weight each, from Fontsource (~850 KB), family
+  names prefixed "VC " so a Mac's own copy never stands in. Picked in the
+  Captions tab as `overlay_style.typeface` (None = the template's or look's
+  own), one font per video like the colour; a template keeps its edge and
+  backing around it; drawn by `overlayDraw` so preview, typing box and export
+  match. Per-font size factors are eyeballed. `captionFonts.test.ts`.
+  **Caption text panel** (sarah, 2026-10-18: "pick different fonts, colors,
+  outlining, shadows, backgrounds and adjust how thick they are"; plain
+  controls, no video behind them; word art shown on a frame). Captions tab:
+  Font, Colour, Outline (on/off, colour, thickness), Shadow (colour,
+  strength, softness, distance), Background (colour, opacity, roundness),
+  Boldness (a stroke in the letters' own colour), then **Word art** (the
+  templates, plus Neon, Glow, Gradient, 3D, Retro drop). `overlay_style`
+  fields `outline` / `shadow` / `backdrop` / `thick` (`overlays.DRESS`; None
+  = the template's own, width or opacity 0 = none); `overlayDraw.dress` lays
+  them over the template, and a caption with no template but something set
+  is drawn the template way from the look's lettering. Picking a word art
+  starts it fresh (clears the four). One look for every caption, undoable,
+  same drawing in preview, typing box and export. `overlayDress.test.ts`.
 
 ## The rule that matters most
 

@@ -24,7 +24,7 @@ import { Shelf } from './components/Shelf'
 import { SmoothButton, Story, type PlayItem, type Selection } from './components/Story'
 import { Timeline, type Marks } from './components/Timeline'
 import { Inspector, type InspectorTab, type JoinPick } from './components/Inspector'
-import { PreviewBar } from './components/PreviewBar'
+import { PreviewBar, type FrameChoice } from './components/PreviewBar'
 import { Handle, useLayout } from './components/Split'
 import { Icon, type IconName } from './components/icons'
 import { Footage, type Importing } from './components/Footage'
@@ -864,6 +864,10 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       if (ops.length) run(ops, 'You put every caption in the same place')
     },
     onOpen: (id) => selectOverlay(id),
+    onWords: (id, patch) => {
+      const o = ovData.items.find((x) => x.id === id)
+      run([{ op: 'edit_overlay', overlay: id, ...patch }], `You changed the words of the ${o ? KIND_META[o.kind].label.toLowerCase() : 'caption'}`)
+    },
   } : undefined
   const overlaysPanel = session?.board ? (
     <Overlays data={ovData} items={tl.items} level={level} selected={selOverlay} busy={!!pending}
@@ -948,15 +952,14 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   }
 
   const fmt = brief?.style?.format ?? (tl.frame && tl.frame.w > tl.frame.h ? 'wide' : 'tall')
-  const FRAMES: Record<string, { label: string; ratio: string; wide: boolean }> = {
-    short: { label: 'Short · vertical', ratio: 'Short 9:16', wide: false },
-    tall: { label: 'Vlog · vertical', ratio: '9:16', wide: false },
-    wide: { label: 'Wide · 16:9', ratio: '16:9', wide: true },
-  }
-  const nextFrame = async () => {
-    const order = ['short', 'tall', 'wide'] as const
-    const next = order[(order.indexOf(fmt as typeof order[number]) + 1) % order.length]
-    try { setSession(await api.format(next)); note(`The video is now ${FRAMES[next].label.toLowerCase()}`) } catch (e) { note((e as Error).message) }
+  const FRAMES: FrameChoice[] = [
+    { key: 'short', name: 'Short', ratio: '9:16', about: 'Reels, TikTok, Shorts', wide: false },
+    { key: 'tall', name: 'Vlog', ratio: '9:16', about: 'Upright, any length', wide: false },
+    { key: 'wide', name: 'Wide', ratio: '16:9', about: 'YouTube, a laptop or TV', wide: true },
+  ]
+  const pickFrame = async (key: string) => {
+    const f = FRAMES.find((x) => x.key === key)
+    try { setSession(await api.format(key)); note(`The video is now ${f?.name.toLowerCase()} · ${f?.ratio}`) } catch (e) { note((e as Error).message) }
   }
   const player = (big: boolean) => (
     <Player videoRef={videoRef} backRef={backRef} veilRef={veilRef} bars={session?.mix?.bars} segment={segment}
@@ -974,7 +977,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                             transport.play(1)
                           }}
                           onBack={() => { videoRef.current?.pause(); timelineOwns(); transport.seek(phStore.get()) }}
-                          frame={FRAMES[fmt] ?? FRAMES.tall} onFrame={nextFrame}
+                          frames={FRAMES} frame={fmt} onFrame={pickFrame}
                           onFull={() => { stageRef.current?.requestFullscreen?.().catch(() => {}) }} />
             ) : undefined} />
   )
@@ -1022,10 +1025,17 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     const a = tl.items[k], b = tl.items[k + 1]
     return { join: j, before: a?.n ?? null, after: b?.n ?? null, from: shotThumb(a), to: shotThumb(b) }
   }
+  const ovSel = selOverlay ? ovData.items.find((o) => o.id === selOverlay) : undefined
   const capSel = selOverlay ? ovData.items.find((o) => o.id === selOverlay && o.kind === 'caption') : undefined
   const capFirst = capSel ?? ovData.items.find((o) => o.kind === 'caption')
   const capUnder = capFirst ? tl.items[locate(tl.items, Math.min(capFirst.start + 0.1, tl.total - 1e-3))] : tl.items[0]
   const capText = capFirst?.text ?? 'Coffee run'
+  // with no shot clicked the Effects tab shows every shot's effect, if they all share one
+  const shotItems = tl.items.filter((x) => x.kind === 'shot')
+  const same = shotItems.length > 0 && shotItems.every((x) => (x.effect ?? null) === (shotItems[0].effect ?? null)
+    && (x.effect_amount ?? 1) === (shotItems[0].effect_amount ?? 1))
+  const allEffect = { effect: same ? shotItems[0].effect ?? null : null, amount: same ? shotItems[0].effect_amount ?? 1 : 1,
+                      thumb: shotThumb(shotItems[0]) }
   const inspector = (
     <Inspector tab={insTab} onTab={setInsTab}
                item={selItem} itemThumb={shotThumb(selItem ?? undefined)}
@@ -1035,6 +1045,13 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                join={pickedJoin ? joinAt(pickedJoin) : allJoins[0] ? joinAt(allJoins[0]) : null} joinPicked={!!pickedJoin}
                style={ovData.style} captionsOn={!!ovData.items.length} captionThumb={shotThumb(capUnder)}
                captionSample={capText.length > 20 ? capText.slice(0, Math.max(10, capText.lastIndexOf(' ', 20))) : capText}
+               caption={ovSel ?? null}
+               onCaptionEdit={(patch, label) => ovSel && run([{ op: 'edit_overlay', overlay: ovSel.id, ...patch }], label)}
+               onCaptionDelete={() => { if (ovSel) { run([{ op: 'drop_overlay', overlay: ovSel.id }], `You removed the ${KIND_META[ovSel.kind].label.toLowerCase()}`); setSelOverlay(null) } }}
+               onCaptionAdd={() => runOverlay([{ op: 'add_overlay', kind: 'caption', ...newOverlayAt('caption') }], 'You added a caption')}
+               onCaptionWatch={() => ovSel && watchOverlay(ovSel)}
+               onCaptionDone={() => setSelOverlay(null)}
+               onCaptionPlace={(place, label) => ovSel && run([{ op: 'edit_overlay', overlay: ovSel.id, place }], label)}
                looks={ovData.look ? { id: ovData.look.id, all: ovData.look.all } : null}
                music={musicNode}
                video={session?.board ? (
@@ -1068,7 +1085,12 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                onCaptions={toggleCaptions}
                onCaptionStyle={(patch, label) => run([{ op: 'overlay_style', ...patch }], label)}
                onJoin={(op, label) => run([{ op: 'set_transition', ...(op.all || !pickedJoin ? {} : { shot: pickedJoin.after }), ...op }], label)}
-               onLook={(id, name) => run([{ op: 'set_look', look: id }], `The video now has the ${name} look`)} />
+               onLook={(id, name) => run([{ op: 'set_look', look: id }], `The video now has the ${name} look`)}
+               allEffect={allEffect}
+               onEffect={(patch, all, label) => {
+                 const keys = all ? tl.items.filter((x) => x.kind === 'shot').map((x) => x.key) : selItem ? [selItem.key] : []
+                 if (keys.length) run(keys.map((k) => ({ op: 'set_shot', shot: k, ...patch })), label)
+               }} />
   )
   const RAIL: { id: NonNullable<typeof side>; icon: IconName; label: string }[] = [
     { id: 'media', icon: 'media', label: 'Media' },
