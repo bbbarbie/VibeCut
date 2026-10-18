@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { CAPTION_FONTS, type CaptionFont } from '../captionFonts'
 import type { SeqItem } from '../sequence'
-import { KIND_META } from '../overlayDraw'
+import { dressOf, isDressed, KIND_META } from '../overlayDraw'
 import { multiline, typable, wordsOf, wordsPatch } from '../captionWords'
-import type { CaptionEnter, CaptionTemplate, JoinInfo, LookInfo, Overlay, OverlayPlace, OverlayStyle, SoundStrip } from '../types'
+import type { JoinInfo, LookInfo, Overlay, OverlayPlace, OverlayStyle, SoundStrip } from '../types'
 import { Button, cx } from '../ui'
 import { Icon, type IconName } from './icons'
 import { CaptionAnimations, CaptionStyles, Transitions } from './StyleBars'
@@ -67,7 +68,7 @@ export function Inspector(p: {
   onStrip: (patch: Patch, label: string) => void
   onStripDelete: () => void
   onCaptions: () => void
-  onCaptionStyle: (patch: { template?: CaptionTemplate | null; enter?: CaptionEnter | null; text_color?: string | null }, label: string) => void
+  onCaptionStyle: (patch: CaptionStylePatch, label: string) => void
   onJoin: (op: { kind: string; dur?: number; all?: boolean }, label: string) => void
   onLook: (id: string, name: string) => void
 }) {
@@ -142,11 +143,16 @@ export function Inspector(p: {
             <Button onClick={p.onCaptionAdd}>+ Add a caption at the playhead</Button>
           </>}
           {p.captionsOn ? <>
-            <Section title={p.caption ? 'Style of every caption' : 'Style'}><CaptionStyles style={p.style} thumb={p.captionThumb} onPick={p.onCaptionStyle} /></Section>
+            <Section title={p.caption ? 'Font of every caption' : 'Font'}>
+              <CaptionFonts value={p.style.typeface ?? null}
+                            onPick={(f) => p.onCaptionStyle({ typeface: f?.id ?? null }, f ? `The captions are in ${f.name}` : 'The captions are back to their own font')} />
+            </Section>
             <Section title={p.caption ? 'Colour of every caption' : 'Colour'}>
               <CaptionColours value={p.style.text_color ?? null}
                               onPick={(c) => p.onCaptionStyle({ text_color: c }, c ? 'You changed the colour of the captions' : 'The captions are back to their automatic colour')} />
             </Section>
+            <CaptionDress style={p.style} onPick={p.onCaptionStyle} />
+            <Section title="Word art"><CaptionStyles style={p.style} thumb={p.captionThumb} onPick={p.onCaptionStyle} /></Section>
             <Section title={p.caption ? 'Animation of every caption' : 'Animation'}><CaptionAnimations style={p.style} thumb={p.captionThumb} sample={p.captionSample} onPick={p.onCaptionStyle} /></Section>
             {!p.caption && <Hint>One style for every caption. Click a caption on the picture or the timeline to change its words.</Hint>}
           </> : <Hint>Turn captions on to put the time and place of each moment on the video.</Hint>}
@@ -247,10 +253,88 @@ function CaptionWords({ o, onEdit, onDelete, onWatch, onDone, onPlace }: {
 // The captions' colour. Automatic reads the footage behind each caption and
 // picks what stands out; a picked colour is kept, with an edge or glow so it
 // still reads. One undoable turn per pick.
-const COLOURS: [string, string][] = [['#ffffff', 'White'], ['#fff3d6', 'Cream'], ['#ffd84d', 'Yellow'], ['#ff9eb5', 'Pink'],
+const TEXT_COLOURS: [string, string][] = [['#ffffff', 'White'], ['#fff3d6', 'Cream'], ['#ffd84d', 'Yellow'], ['#ff9eb5', 'Pink'],
   ['#7fd0ff', 'Sky blue'], ['#8fe3b0', 'Mint'], ['#ff7a59', 'Coral'], ['#141414', 'Black']]
+// outlines, shadows and backgrounds: true black first, the way editors offer them
+const EDGE_COLOURS: [string, string][] = [['#000000', 'Black'], ['#ffffff', 'White'], ['#ffd84d', 'Yellow'], ['#ff9eb5', 'Pink'],
+  ['#ff4d6d', 'Red'], ['#7fd0ff', 'Sky blue'], ['#8fe3b0', 'Mint'], ['#7b5cff', 'Purple']]
 
-function CaptionColours({ value, onPick }: { value: string | null; onPick: (c: string | null) => void }) {
+export type CaptionStylePatch = Partial<Pick<OverlayStyle, 'template' | 'enter' | 'text_color' | 'typeface' | 'outline' | 'shadow' | 'backdrop' | 'thick'>>
+
+// Outline, shadow, background box and letter weight as plain controls, the
+// way CapCut's text panel has them (sarah, 2026-10-18: "for the normal
+// adjustments you dont have to have a video background"). Each starts from
+// what the captions have now; a slider is one undoable turn when let go.
+function CaptionDress({ style, onPick }: { style: OverlayStyle; onPick: (patch: CaptionStylePatch, label: string) => void }) {
+  const d = dressOf(style)
+  const pc = (x: number) => Math.round(x * 100)
+  const onOff = (on: boolean, flip: (on: boolean) => void) => (
+    <Segmented options={[['off', 'Off'], ['on', 'On']]} value={on ? 'on' : 'off'} onPick={(v) => (v === 'on') !== on && flip(v === 'on')} />
+  )
+  const ol = d.outline, sh = d.shadow, bd = d.backdrop
+  return <>
+    <Section title="Outline">
+      {onOff(ol.width > 0, (on) => onPick({ outline: { ...ol, width: on ? 0.12 : 0 } }, on ? 'The captions have an outline' : 'The captions have no outline'))}
+      {ol.width > 0 && <>
+        <CaptionColours auto={false} value={ol.color} onPick={(c) => c && onPick({ outline: { ...ol, color: c } }, 'You changed the outline colour')} />
+        <Slider label="Thickness" value={pc(ol.width)} min={1} max={40} step={1} unit=""
+                onCommit={(x) => onPick({ outline: { ...ol, width: x / 100 } }, 'You changed how thick the outline is')} />
+      </>}
+    </Section>
+    <Section title="Shadow">
+      {onOff(sh.opacity > 0, (on) => onPick({ shadow: { ...sh, opacity: on ? 0.7 : 0 } }, on ? 'The captions have a shadow' : 'The captions have no shadow'))}
+      {sh.opacity > 0 && <>
+        <CaptionColours auto={false} value={sh.color} onPick={(c) => c && onPick({ shadow: { ...sh, color: c } }, 'You changed the shadow colour')} />
+        <Slider label="Strength" value={pc(sh.opacity)} min={10} max={100} step={5} unit="%"
+                onCommit={(x) => onPick({ shadow: { ...sh, opacity: x / 100 } }, 'You changed how strong the shadow is')} />
+        <Slider label="Softness" value={pc(sh.blur)} min={0} max={150} step={5} unit=""
+                onCommit={(x) => onPick({ shadow: { ...sh, blur: x / 100 } }, 'You changed how soft the shadow is')} />
+        <Slider label="Distance" value={pc(sh.dist)} min={0} max={40} step={1} unit=""
+                onCommit={(x) => onPick({ shadow: { ...sh, dist: x / 100 } }, 'You moved the shadow')} />
+      </>}
+    </Section>
+    <Section title="Background">
+      {onOff(bd.opacity > 0, (on) => onPick({ backdrop: { ...bd, opacity: on ? 0.85 : 0 } }, on ? 'The captions sit on a background' : 'The captions have no background'))}
+      {bd.opacity > 0 && <>
+        <CaptionColours auto={false} value={bd.color} onPick={(c) => c && onPick({ backdrop: { ...bd, color: c } }, 'You changed the background colour')} />
+        <Slider label="Opacity" value={pc(bd.opacity)} min={10} max={100} step={5} unit="%"
+                onCommit={(x) => onPick({ backdrop: { ...bd, opacity: x / 100 } }, 'You changed how see-through the background is')} />
+        <Slider label="Roundness" value={pc(bd.round)} min={0} max={50} step={1} unit=""
+                onCommit={(x) => onPick({ backdrop: { ...bd, round: x / 100 } }, 'You changed how round the background is')} />
+      </>}
+    </Section>
+    <Section title="Boldness">
+      <Slider label="Letters" value={pc(d.thick)} min={0} max={15} step={1} unit=""
+              onCommit={(x) => onPick({ thick: x / 100 }, x ? 'You made the letters bolder' : 'The letters are back to their usual weight')} />
+    </Section>
+    {isDressed(style) && <div><Chip onClick={() => onPick({ outline: null, shadow: null, backdrop: null, thick: null }, 'Outline, shadow and background are back to the style\'s own')}>
+      Back to the style's own outline, shadow and background</Chip></div>}
+  </>
+}
+
+// Each font shown in its own letters on a dark tile, the way it will sit on
+// the footage; one tap sets it for every caption (one font per video).
+function CaptionFonts({ value, onPick }: { value: string | null; onPick: (f: CaptionFont | null) => void }) {
+  const tile = (on: boolean) => cx('flex h-14 min-w-0 items-center justify-center rounded-lg border px-2 text-center',
+    on ? 'border-accent ring-2 ring-accent ring-offset-2 ring-offset-panel' : 'border-black/15 hover:brightness-125')
+  return (
+    <div className="grid grid-cols-2 gap-2.5">
+      <button type="button" aria-pressed={!value} onClick={() => value && onPick(null)}
+              className={cx('flex h-14 items-center justify-center rounded-lg border px-2 font-serif text-[16px]',
+                !value ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-panel text-zinc-100 hover:bg-raised')}>Style's own</button>
+      {CAPTION_FONTS.map((f) => (
+        <button key={f.id} type="button" title={f.name} aria-label={f.name} aria-pressed={value === f.id}
+                onClick={() => value !== f.id && onPick(f)} className={tile(value === f.id)} style={{ background: '#1d1d22' }}>
+          <span className="leading-[1.1] text-white"
+                style={{ fontFamily: f.family, fontWeight: f.weight, fontSize: Math.round((f.name.length > 12 ? 16 : 19) * f.size) }}>{f.name}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function CaptionColours({ value, onPick, auto = true }: { value: string | null; onPick: (c: string | null) => void; auto?: boolean }) {
+  const COLOURS = auto ? TEXT_COLOURS : EDGE_COLOURS
   const [own, setOwn] = useState(value ?? '#ffffff')
   // the picker's native change fires once, when it closes; React's onChange fires on every drag
   const ref = useRef<HTMLInputElement>(null)
@@ -265,9 +349,9 @@ function CaptionColours({ value, onPick }: { value: string | null; onPick: (c: s
   const custom = !!value && !COLOURS.some(([c]) => c === value)
   return (
     <div className="flex flex-wrap items-center gap-2.5">
-      <button type="button" aria-pressed={!value} onClick={() => value && onPick(null)}
+      {auto && <button type="button" aria-pressed={!value} onClick={() => value && onPick(null)}
               className={cx('rounded-lg border px-3 py-1.5 font-serif text-[15px]',
-                !value ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-panel text-zinc-100 hover:bg-raised')}>Automatic</button>
+                !value ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-panel text-zinc-100 hover:bg-raised')}>Automatic</button>}
       {COLOURS.map(([c, name]) => (
         <button key={c} type="button" title={name} aria-label={name} aria-pressed={value === c} onClick={() => value !== c && onPick(c)}
                 className={cx('size-9 shrink-0 rounded-full border border-black/15', value === c && 'ring-2 ring-accent ring-offset-2 ring-offset-panel')}

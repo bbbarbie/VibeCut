@@ -8,7 +8,8 @@
 // state at t is computed, never accumulated, which is what lets the export
 // render any frame in any order.
 
-import type { CaptionEnter, CaptionTemplate, Motion, Overlay, OverlayKind, OverlayStyle } from './types'
+import { fontById } from './captionFonts.ts'
+import type { CaptionBackdrop, CaptionEnter, CaptionOutline, CaptionShadow, CaptionTemplate, Motion, Overlay, OverlayKind, OverlayStyle } from './types'
 
 export type Part = { id: string; title: string; start: number; end: number }
 
@@ -159,7 +160,9 @@ const lineFont = (style: OverlayStyle, ln: Line, px = ln.px) =>
 export async function ensureFonts(style: OverlayStyle): Promise<void> {
   if (typeof document === 'undefined' || !document.fonts) return
   const tpl = tplFor(style)
-  const fonts = [fontCss(style, 40, true), fontCss(style, 40, false), ...(tpl ? [`${tpl.weight} 40px ${tpl.family}`] : [])]
+  const face = fontById(style.typeface)
+  const fonts = [fontCss(style, 40, true), fontCss(style, 40, false), ...(tpl ? [`${tpl.weight} 40px ${tpl.family}`] : []),
+    ...(face ? [`${face.weight} 40px ${face.family}`] : [])]
   await Promise.all(fonts.map((f) => document.fonts.load(f).catch(() => [])))
 }
 
@@ -177,7 +180,11 @@ type Tpl = {
   stroke?: { color: string; w: number }            // edge width as a share of the letter size
   box?: { fill: string; ink: string; round: number }   // a backing per line; round as a share of its height
   marker?: { band: string; ink: string }           // a highlighter stroke behind each line
-  shadow?: boolean
+  shadow?: boolean | { color: string; blur: number; dist: number }   // blur and distance as shares of the letter size
+  glow?: { color: string; blur: number }           // neon: coloured light around the letters
+  gradient?: [string, string]                      // letters filled top to bottom
+  extrude?: { color: string; depth: number; solid?: boolean }   // 3D sides, or one hard drop when solid
+  thick?: number                                   // heavier letters: a stroke in their own colour
   split?: boolean                                  // "7:42 am · coffee run": the time on its own line, on top
   pop?: string[]                                   // the longest words in colour
   rule?: boolean                                   // a thin line above
@@ -197,6 +204,16 @@ export const TEMPLATES: Record<CaptionTemplate, Tpl> = {
   pop: { family: `"Arial Rounded MT Bold", "Nunito", "Avenir Next", ${SANS}`, weight: 800, size: 0.066, color: '#ffffff',
          stroke: { color: '#1a1a1a', w: 0.18 }, pop: ['#ffd84d', '#7fe0ff'], split: true },
   quiet: { family: SANS, weight: 400, size: 0.03, color: '#ffffff', case: 'upper', track: 0.3, shadow: true, rule: true },
+  // word art (sarah, 2026-10-18): each reads over any frame by its own light, edge or sides
+  neon: { family: '"VC Pacifico", cursive', weight: 400, size: 0.07, color: '#fff4fd', glow: { color: '#ff2fd0', blur: 0.45 },
+          stroke: { color: '#ff7ae6', w: 0.04 } },
+  glow: { family: '"VC TikTok Sans", sans-serif', weight: 800, size: 0.06, color: '#ffffff', glow: { color: '#3fc8ff', blur: 0.5 } },
+  gradient: { family: '"VC Montserrat", sans-serif', weight: 800, size: 0.064, color: '#ffd84d', gradient: ['#ffe259', '#ff5fa2'],
+              stroke: { color: '#1a1a1a', w: 0.14 }, split: true },
+  extrude: { family: '"VC Luckiest Guy", cursive', weight: 400, size: 0.068, color: '#ffd84d', stroke: { color: '#1a1a1a', w: 0.08 },
+             extrude: { color: '#1a1a1a', depth: 0.1 } },
+  retro: { family: '"VC Bebas Neue", sans-serif', weight: 400, size: 0.085, color: '#ffffff', track: 0.04,
+           extrude: { color: '#ff4d6d', depth: 0.07, solid: true } },
 }
 
 // A colour picked by hand dresses the template: the letters of an edged or
@@ -218,7 +235,50 @@ export function tinted(tpl: Tpl, c: string | null | undefined): Tpl {
   if (tpl.stroke) return { ...tpl, color: c, stroke: { ...tpl.stroke, color: edge } }
   return dark(c) ? { ...tpl, color: c, stroke: { color: edge, w: 0.1 }, shadow: false } : { ...tpl, color: c }
 }
-const tplFor = (style: OverlayStyle): Tpl | null => style.template ? tinted(TEMPLATES[style.template], style.text_color) : null
+const rgba = (hex: string, a: number) => {
+  const n = parseInt(hex.slice(1), 16)
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`
+}
+const DRESS_KEYS = ['outline', 'shadow', 'backdrop', 'thick'] as const
+export const isDressed = (style: OverlayStyle) => DRESS_KEYS.some((k) => style[k] != null)
+
+/** A template with the outline, shadow, background and weight set by hand
+ *  (the Captions tab's sliders) laid over its own; the colour too. */
+export function dress(tpl0: Tpl, style: OverlayStyle): Tpl {
+  const bd = style.backdrop
+  let t: Tpl = !bd ? tinted(tpl0, style.text_color)
+    : { ...tpl0, color: style.text_color ?? tpl0.color, marker: undefined,
+        box: bd.opacity > 0 ? { fill: rgba(bd.color, bd.opacity), ink: style.text_color ?? tpl0.color, round: bd.round } : undefined }
+  const ol = style.outline, sh = style.shadow
+  if (ol) t = { ...t, stroke: ol.width > 0 ? { color: ol.color, w: ol.width } : undefined }
+  if (sh) t = { ...t, shadow: sh.opacity > 0 ? { color: rgba(sh.color, sh.opacity), blur: sh.blur, dist: sh.dist } : false }
+  if (style.thick != null) t = { ...t, thick: style.thick || undefined }
+  return t
+}
+
+/** What the sliders start from: the outline, shadow, background and weight
+ *  the captions have now, whether set by hand or the template's own. */
+export function dressOf(style: OverlayStyle): { outline: CaptionOutline; shadow: CaptionShadow; backdrop: CaptionBackdrop; thick: number } {
+  const t = style.template ? dress(TEMPLATES[style.template], style) : null
+  const sh = typeof t?.shadow === 'object' ? t.shadow : null
+  return {
+    outline: style.outline ?? { color: t?.stroke && t.stroke.color !== '#1a1a1a' ? t.stroke.color : '#000000', width: t?.stroke?.w ?? 0 },
+    shadow: style.shadow ?? (sh ? { color: '#000000', opacity: 0.7, blur: sh.blur, dist: sh.dist }
+      : { color: '#000000', opacity: t && !t.shadow ? 0 : 0.7, blur: 0.4, dist: 0.06 }),
+    backdrop: style.backdrop ?? (t?.box ? { color: t.box.fill.startsWith('#') ? t.box.fill : '#000000', opacity: 1, round: t.box.round }
+      : { color: '#000000', opacity: 0, round: 0.25 }),
+    thick: style.thick ?? 0,
+  }
+}
+
+const tplFor = (style: OverlayStyle): Tpl | null => style.template ? dress(TEMPLATES[style.template], style) : null
+
+// Captions with no template but something set by hand are drawn the
+// template way, from the look's own lettering and the colour ink.py picked.
+const plainTpl = (o: Overlay, style: OverlayStyle): Tpl => ({
+  family: FAMILY[style.font], weight: WEIGHT[style.font].bold, size: 0.046, color: o.ink || style.color,
+  shadow: style.backing === 'shadow',
+})
 
 // The time at the head of a describing caption, "7:42 am · coffee run".
 const TIME_HEAD = /^(\d{1,2}[:.]\d{2}\s*(?:[ap]\.?m\.?)?)\s*[·•\-–—|]\s*(.+)$/i
@@ -314,14 +374,22 @@ export function wrap(measure: (s: string) => number, text: string, maxW: number,
 }
 
 function linesFor(o: Overlay, style: OverlayStyle, u: number, chars: number): Line[] {
+  const face = o.kind === 'caption' ? fontById(style.typeface) : null
+  // a picked font letters every caption line; the template keeps its edge,
+  // backing and case, the look its colour and motion
+  const lettered = (lines: Line[]) => !face ? lines
+    : lines.map((ln) => ({ ...ln, family: face.family, weight: face.weight, px: ln.px * face.size }))
   if (o.kind === 'caption' && style.template) {
-    return templateLines(o, tplFor(style)!, u, chars)
+    return lettered(templateLines(o, tplFor(style)!, u, chars))
+  }
+  if (o.kind === 'caption' && isDressed(style)) {
+    return lettered(templateLines(o, dress(plainTpl(o, style), style), u, chars))
   }
   const lines = baseLines(o, style, u, chars)
   const m = style.motion
-  if (!m || o.kind === 'date') return lines
+  if (!m || o.kind === 'date') return lettered(lines)
   // the look's case and tracking, on every line (a date keeps its own)
-  return lines.map((ln) => ({
+  return lettered(lines).map((ln) => ({
     ...ln,
     text: m.case === 'lower' ? ln.text.toLowerCase() : ln.text,
     upper: ln.upper || m.case === 'upper',
@@ -393,14 +461,24 @@ export function typeLook(o: Overlay, style: OverlayStyle, u: number): TypeLook {
     : style.backing === 'shadow' ? `0 ${0.003 * u}px ${0.018 * u}px rgba(0,0,0,0.6)` : 'none'
   const css = (ln: Line): TypeLine => {
     const t = ln.tpl
+    const px = ln.px
+    // word art and a hand-set shadow, as CSS text-shadows of the same size
+    const art = t?.glow ? `0 0 ${px * t.glow.blur * 0.4}px ${t.glow.color}, 0 0 ${px * t.glow.blur}px ${t.glow.color}`
+      : t?.extrude ? Array.from({ length: t.extrude.solid ? 1 : 6 }, (_, i) => {
+          const o = (px * t.extrude!.depth * (i + 1)) / (t.extrude!.solid ? 1 : 6)
+          return `${o}px ${o}px 0 ${t.extrude!.color}`
+        }).join(', ')
+      : t && typeof t.shadow === 'object' ? `${t.shadow.dist * px * 0.7071}px ${t.shadow.dist * px * 0.7071}px ${t.shadow.blur * px}px ${t.shadow.color}`
+      : null
+    const sw = (t?.stroke?.w ?? 0) + (t?.thick ?? 0)
     return {
-      font: lineFont(style, ln), color: ln.color, track: (ln.track ?? 0) * ln.px, px: ln.px,
+      font: lineFont(style, ln), color: t?.gradient ? t.gradient[0] : ln.color, track: (ln.track ?? 0) * ln.px, px: ln.px,
       upper: !!ln.upper, lower: t?.case === 'lower',
       lh: t?.box ? 1.75 : t?.marker ? 1.45 : t?.stroke ? 1.3 : 1.18,
-      stroke: t?.stroke ? { color: t.stroke.color, w: ln.px * t.stroke.w } : undefined,
+      stroke: sw > 0 ? { color: t?.stroke?.color ?? ln.color, w: px * sw } : undefined,
       band: t?.box ? { fill: t.box.fill, radius: ln.px * 1.5 * t.box.round, padX: ln.px * 0.45 }
         : t?.marker ? { fill: t.marker.band, radius: ln.px * 0.12, padX: ln.px * 0.45 } : undefined,
-      shadow,
+      shadow: art ?? shadow,
     }
   }
   // which drawn line is the place name (above) or a second line (below);
@@ -439,6 +517,9 @@ export function drawOverlays(ctx: CanvasRenderingContext2D | OffscreenCanvasRend
   }
 }
 
+// room a line needs beyond its letters: a backing's padding, 3D sides
+const extra = (ln: Line) => (ln.tpl?.box || ln.tpl?.marker ? ln.px * 0.9 : 0) + (ln.tpl?.extrude ? ln.px * ln.tpl.extrude.depth : 0)
+
 function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, W: number, H: number, u: number,
   lines: Line[], o: Overlay, style: OverlayStyle, a: Anchor, at: (group: number) => Pose, boxes?: OverlayBox[]) {
   const m = safe(W, H)
@@ -457,12 +538,12 @@ function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingConte
       ctx.font = lineFont(style, ln)
       setTracking(ctx, ln.track ? ln.track * ln.px : 0)
       // a backing's padding comes out of the room the words have
-      out = wrap((s) => ctx.measureText(s).width, text, maxW - (ln.tpl?.box || ln.tpl?.marker ? ln.px * 0.9 : 0), max)
+      out = wrap((s) => ctx.measureText(s).width, text, maxW - extra(ln), max)
       if (!out[out.length - 1]?.endsWith('…') || text.endsWith('…') || k < 0.62) break
     }
     // a backing or an edge needs room around the letters, inside the block
     const lh = ln.tpl?.box ? 1.75 : ln.tpl?.marker ? 1.45 : ln.tpl?.stroke ? 1.3 : 1.18
-    for (const r of out) rows.push({ text: r, line: ln, w: ctx.measureText(r).width + (ln.tpl?.box || ln.tpl?.marker ? ln.px * 0.9 : 0), h: ln.px * lh })
+    for (const r of out) rows.push({ text: r, line: ln, w: ctx.measureText(r).width + extra(ln), h: ln.px * lh })
   }
   if (!rows.length) return
   const gap = 0.012 * u
@@ -532,6 +613,13 @@ function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingConte
   if (tpl && !tpl.shadow) {
     ctx.shadowColor = 'rgba(0,0,0,0)'
     ctx.shadowBlur = 0
+  } else if (tpl && typeof tpl.shadow === 'object') {
+    // set by hand: a drop down and to the right, sized from the main line
+    const px = lines[lines.length - 1].px, d = tpl.shadow.dist * px * 0.7071
+    ctx.shadowColor = tpl.shadow.color
+    ctx.shadowBlur = tpl.shadow.blur * px
+    ctx.shadowOffsetX = d
+    ctx.shadowOffsetY = d
   } else if (tpl && !o.halo) {
     ctx.shadowColor = 'rgba(0,0,0,0.7)'
     ctx.shadowBlur = 0.02 * u
@@ -608,19 +696,58 @@ function drawTemplateRow(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderin
   const ranked = tpl.pop ? [...new Set(words.filter((t) => t.trim()))].sort((p, q) => q.length - p.length) : []
   const lit = new Map(ranked.slice(0, ranked.length >= 4 ? 2 : 1).map((t, i) => [t, tpl.pop![i]]))
   let cx = left + pad
+  const fill = tpl.gradient ? gradientFill(ctx, tpl.gradient, ty, px) : ln.color
+  ctx.lineJoin = 'round'
   for (const word of words) {
     if (!word) continue
+    const paint = lit.get(word) ?? fill
+    if (tpl.extrude && word.trim()) {
+      // the sides first, stepping back from the face (or one hard drop)
+      const steps = tpl.extrude.solid ? 1 : Math.max(2, Math.round(px * tpl.extrude.depth))
+      const d = px * tpl.extrude.depth
+      ctx.fillStyle = tpl.extrude.color
+      ctx.strokeStyle = tpl.extrude.color
+      for (let k = steps; k >= 1; k--) {
+        const o = (d * k) / steps
+        if (tpl.stroke) { ctx.lineWidth = px * (tpl.stroke.w + (tpl.thick ?? 0)); ctx.strokeText(word, cx + o, ty + o) }
+        ctx.fillText(word, cx + o, ty + o)
+      }
+    }
     if (tpl.stroke && word.trim()) {
-      ctx.lineJoin = 'round'
-      ctx.lineWidth = px * tpl.stroke.w
+      ctx.lineWidth = px * (tpl.stroke.w + (tpl.thick ?? 0))
       ctx.strokeStyle = tpl.stroke.color
       ctx.strokeText(word, cx, ty)
     }
-    ctx.fillStyle = lit.get(word) ?? ln.color
+    if (tpl.thick && word.trim()) {
+      ctx.lineWidth = px * tpl.thick
+      ctx.strokeStyle = paint
+      ctx.strokeText(word, cx, ty)
+    }
+    ctx.fillStyle = paint
+    if (tpl.glow && word.trim()) {
+      // neon: the light, twice for depth, then the letters crisp on top
+      ctx.save()
+      ctx.shadowColor = tpl.glow.color
+      ctx.shadowOffsetX = 0
+      ctx.shadowOffsetY = 0
+      ctx.shadowBlur = px * tpl.glow.blur
+      ctx.fillText(word, cx, ty)
+      ctx.shadowBlur = px * tpl.glow.blur * 0.4
+      ctx.fillText(word, cx, ty)
+      ctx.restore()
+    }
     ctx.fillText(word, cx, ty)
     cx += ctx.measureText(word).width
   }
   ctx.textAlign = align
+}
+
+function gradientFill(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, [a, b]: [string, string], ty: number, px: number) {
+  if (!ctx.createLinearGradient) return a
+  const g = ctx.createLinearGradient(0, ty, 0, ty + px)
+  g.addColorStop(0.15, a)
+  g.addColorStop(0.9, b)
+  return g
 }
 
 function drawChapters(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, W: number, H: number, u: number,

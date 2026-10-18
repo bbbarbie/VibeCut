@@ -93,3 +93,10 @@ and its generative half (swapping in generated footage, faces or voices) is
 deliberately not adopted. Here a reference is only *measured*
 (cutgrammar/style.py) and applied to the creator's own footage
 (web/backend/restyle.py, reference.py, export.py).
+
+Caption fonts — web/frontend/public/fonts/
+TikTok Sans, Montserrat, Poppins, Bebas Neue, Anton, Archivo Black,
+Bangers, Fredoka, Pacifico, Lobster, Caveat, Playfair Display and Courier
+Prime are licensed under the SIL Open Font License 1.1; Luckiest Guy and
+Permanent Marker under the Apache License 2.0. Files from Fontsource
+(https://fontsource.org), unmodified; each folder carries its licence.
