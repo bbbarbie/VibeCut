@@ -825,6 +825,10 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       if (ops.length) run(ops, 'You put every caption in the same place')
     },
     onOpen: (id) => selectOverlay(id),
+    onWords: (id, patch) => {
+      const o = ovData.items.find((x) => x.id === id)
+      run([{ op: 'edit_overlay', overlay: id, ...patch }], `You changed the words of the ${o ? KIND_META[o.kind].label.toLowerCase() : 'caption'}`)
+    },
   } : undefined
   const overlaysPanel = session?.board ? (
     <Overlays data={ovData} items={tl.items} level={level} selected={selOverlay} busy={!!pending}

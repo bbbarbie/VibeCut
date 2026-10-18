@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { SeqItem } from '../sequence'
 import { KIND_META } from '../overlayDraw'
+import { multiline, typable, wordsOf, wordsPatch } from '../captionWords'
 import type { CaptionEnter, CaptionTemplate, JoinInfo, LookInfo, Overlay, OverlayPlace, OverlayStyle, SoundStrip } from '../types'
 import { Button, cx } from '../ui'
 import { Icon, type IconName } from './icons'
@@ -216,26 +217,15 @@ function CaptionWords({ o, onEdit, onDelete, onWatch, onDone, onPlace }: {
   const here: OverlayPlace = o.place ?? { x: 0.5, y: o.pos.startsWith('top') ? 0.2 : o.pos === 'center' ? 0.5 : 0.8, scale: 1 }
   const row = here.y < 0.35 ? 'top' : here.y > 0.65 ? 'bottom' : 'middle'
   const name = KIND_META[o.kind].label
-  // One box, the lines as they read on the picture (sarah, 2026-10-18: the
-  // place shouldn't be a separate text; CapCut and the rest keep a caption's
-  // words in one box). A caption's place name and a part's label sit above
-  // the main line, a title's or name tag's second line below; a date has one.
-  const two = !['date', 'chapters'].includes(o.kind)
-  const above = o.kind === 'caption' || o.kind === 'part'
-  const shown = !o.sub ? o.text : above ? `${o.sub}\n${o.text}` : `${o.text}\n${o.sub}`
+  // one box, the lines as they read on the picture (captionWords.ts)
+  const shown = wordsOf(o)
   const commit = (v: string) => {
-    const ls = v.split('\n').map((x) => x.trim()).filter(Boolean)
-    if (!ls.length) return
-    const [text, sub] = !two || ls.length === 1 ? [ls.join(' '), ''] : above
-      ? [ls.slice(1).join(' '), ls[0]] : [ls[0], ls.slice(1).join(' ')]
-    const patch: { text?: string; sub?: string } = {}
-    if (text !== o.text) patch.text = text
-    if (two && sub !== o.sub) patch.sub = sub
-    if (Object.keys(patch).length) onEdit(patch, `You changed the words of the ${name.toLowerCase()}`)
+    const patch = wordsPatch(o, v)
+    if (patch) onEdit(patch, `You changed the words of the ${name.toLowerCase()}`)
   }
   return (
     <Section title={`This ${name.toLowerCase()} · ${mmss(o.start)}`}>
-      {o.kind !== 'chapters' && <WordsBox key={o.id + shown} value={shown} lines={two} onCommit={commit} />}
+      {typable(o) && <WordsBox key={o.id + shown} value={shown} lines={multiline(o)} onCommit={commit} />}
       <div className="flex flex-wrap gap-2 pt-1">
         <Chip onClick={onWatch}><Icon name="play" size={17} /> See it play</Chip>
         <Chip danger onClick={onDelete}><Icon name="trash" size={17} /> Delete</Chip>
@@ -248,7 +238,7 @@ function CaptionWords({ o, onEdit, onDelete, onWatch, onDone, onPlace }: {
       </Line>
       <Slider label="Size" value={Math.round(here.scale * 100)} min={40} max={300} step={10} unit="%"
               onCommit={(v) => onPlace({ ...here, scale: v / 100 }, `You made the ${name.toLowerCase()} ${v > here.scale * 100 ? 'bigger' : 'smaller'}`)} />
-      <Hint>Or drag it on the picture to put it anywhere, and drag a corner to size it.</Hint>
+      <Hint>On the picture, drag it anywhere, drag a corner to size it, or click it again to type its words there.</Hint>
       {o.place && <Chip onClick={() => onPlace(null, `You put the ${name.toLowerCase()} back in its usual place`)}>Put it back in its usual place</Chip>}
     </Section>
   )

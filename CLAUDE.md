@@ -446,6 +446,10 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   clicked caption shows its words in one box, lines as on the picture (the
   place name is its first line; sarah 2026-10-18), See it play,
   Delete; with none clicked, Off/On and "Add a caption at the playhead".
+  **Typed on the picture** (sarah, 2026-10-18: "edit the words on screen"):
+  clicking a picked caption again (or Edit words, or a double-click) opens a
+  box right where it's drawn, same lines as the tab (`captionWords.ts`);
+  click away or Cmd/Ctrl+Enter = one undoable edit, Escape = no change.
   **Colour** is `overlay_style.text_color` (None = automatic, ink.py picks
   one that reads; never set by a look): a picked colour is kept as picked,
   ink.py only adds a glow where it would blend in; a template takes it as
