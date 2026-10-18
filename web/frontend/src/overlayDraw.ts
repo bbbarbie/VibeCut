@@ -431,7 +431,11 @@ function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingConte
   const x = a.x + p0.dx
   // A scaled entrance (Hype's slam) may never push words out of the safe
   // area: the block's own room caps how big it can start.
-  const roomW = W - m.l - m.r, roomH = H - m.t - m.b
+  // Words dragged by hand go wherever they were put, up to the frame's own
+  // edge (sarah, 2026-10-18: "all the way to the edge"); the safe area only
+  // decides where captions sit on their own.
+  const e = o.place ? { l: 0, r: 0, t: 0, b: 0 } : m
+  const roomW = W - e.l - e.r, roomH = H - e.t - e.b
   const fit = Math.max(1, Math.min(roomW / Math.max(1, blockW), roomH / Math.max(1, blockH)))
   const cx = a.align === 'left' ? x + blockW / 2 : a.align === 'right' ? x - blockW / 2 : x
   const cy = y + blockH / 2
@@ -444,8 +448,8 @@ function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingConte
     const tilted = Math.min(roomW / (blockW * c + blockH * sn), roomH / (blockW * sn + blockH * c))
     const sc = Math.min(pz.scale, fit, pz.rot ? tilted : Infinity)
     const hw = ((blockW * c + blockH * sn) * sc) / 2, hh = ((blockW * sn + blockH * c) * sc) / 2
-    const ox = Math.min(0, W - m.r - (cx + hw)) + Math.max(0, m.l - (cx - hw))
-    const oy = Math.min(0, H - m.b - (cy + hh)) + Math.max(0, m.t - (cy - hh))
+    const ox = Math.min(0, W - e.r - (cx + hw)) + Math.max(0, e.l - (cx - hw))
+    const oy = Math.min(0, H - e.b - (cy + hh)) + Math.max(0, e.t - (cy - hh))
     return { sc, ox, oy }
   }
 

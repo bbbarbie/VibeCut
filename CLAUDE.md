@@ -238,8 +238,9 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   caption on the preview to select it, drag to move (snaps to the centre
   lines), drag a corner to size it, double-click for its words; each drop is
   one `edit_overlay` with `place: {x, y, scale}` (block centre, 0–1; null =
-  back to its usual spot), drawn by the same `overlayDraw` in export, still
-  pulled inside the safe area; checks still only warn. "Same place for all
+  back to its usual spot), drawn by the same `overlayDraw` in export, free
+  up to the frame's edge (sarah, 2026-10-18: "all the way to the edge"; the
+  safe area only places captions left where they usually go); checks still only warn. "Same place for all
   captions" is one turn. `test_overlays.py`, `overlayLooks.test.ts`. Older answers (day / simple / bold /
   key) map to describe + a look. `tests/test_captions_answer.py`.
   The description is read from the shoot (`pitch.py`: days,

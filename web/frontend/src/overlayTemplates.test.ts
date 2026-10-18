@@ -127,3 +127,19 @@ test('a colour picked by hand is the colour drawn, and still reads', () => {
   assert.equal(tinted(TEMPLATES.handwritten, '#141414').stroke?.color, '#ffffff')
   assert.ok(draw({ ...BASE, template: 'quiet', text_color: '#141414' }, o, 2).drawn.every((d) => d.stroked), 'a dark pick on a bare template is edged')
 })
+
+test('a caption dragged by hand goes up to the frame edge, not just the safe area', () => {
+  const W = 1080, H = 1920, sa = safe(W, H)
+  for (const id of [undefined, ...IDS]) {
+    const style = id ? { ...BASE, template: id } : BASE
+    const low = draw(style, cap('down here', { place: { x: 0.5, y: 1, scale: 1 } }), 2, W, H).drawn
+    const bottom = Math.max(...low.flatMap((d) => d.pts.map(([, y]) => y)))
+    assert.ok(bottom > H - sa.b + 20, `${id ?? 'plain'}: it goes below the safe area (${bottom.toFixed(0)})`)
+    assert.ok(bottom <= H + 2, `${id ?? 'plain'}: but stays in the frame (${bottom.toFixed(0)})`)
+    const right = Math.max(...draw(style, cap('over here', { place: { x: 1, y: 0.5, scale: 1 } }), 2, W, H).drawn.flatMap((d) => d.pts.map(([x]) => x)))
+    assert.ok(right > W - sa.r + 20 && right <= W + 2, `${id ?? 'plain'}: right edge ${right.toFixed(0)}`)
+  }
+  // one left where it usually goes still keeps clear of the apps' buttons
+  const usual = Math.max(...draw(BASE, cap('as usual'), 2, W, H).drawn.flatMap((d) => d.pts.map(([, y]) => y)))
+  assert.ok(usual <= H - sa.b + 2)
+})

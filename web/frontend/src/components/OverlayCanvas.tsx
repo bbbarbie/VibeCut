@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { drawOverlays, ensureFonts, safe, type OverlayBox, type Part } from '../overlayDraw'
+import { drawOverlays, ensureFonts, type OverlayBox, type Part } from '../overlayDraw'
 import { phStore } from '../transport'
 import type { Overlay, OverlayPlace, OverlayStyle } from '../types'
 
@@ -144,7 +144,6 @@ export function OverlayCanvas({ view, width, height, edit }: { view: OverlayView
     // keep showing the dropped place until the edit comes back
     if (!drag?.moved) setLive(null)
   }
-  const m = safe(width, height)
   const sel = edit.selected ? view.items.find((o) => o.id === edit.selected) : null
   return (
     <>
@@ -152,10 +151,6 @@ export function OverlayCanvas({ view, width, height, edit }: { view: OverlayView
       <div className="absolute inset-0 z-[6]" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
            onDoubleClick={(e) => { const p = local(e as unknown as React.PointerEvent); const b = hit(p.x, p.y); if (b) { e.stopPropagation(); edit.onOpen(b.id) } }}
            onClick={(e) => { if (drag || selBox) e.stopPropagation() }}>
-        {drag && (
-          <div className="pointer-events-none absolute border border-dashed border-white/25"
-               style={{ left: m.l, top: m.t, right: m.r, bottom: m.b }} />
-        )}
         {guides?.v && <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px bg-accent/80" />}
         {guides?.h && <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px bg-accent/80" />}
         {selBox && (
