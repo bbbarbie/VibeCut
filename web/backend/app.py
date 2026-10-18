@@ -1019,6 +1019,16 @@ def api_make(req: BriefAutoReq | None = None) -> dict:
                 ops_.append({"op": "overlay_style", **caption_style, "source": "defaults"})   # as last time
             SESSION.add({"kind": "direct", "text": MAKE_TEXT, "ops": ops_, "reply": job.result["reply"]},
                         CATALOG["cat"], _make_proposals)
+            pr_ = PROJECT["p"]
+            if pr_ is not None and pr_.brief:
+                # the chips read the brief: after Make it must describe the cut, not the guess
+                fp_ = job.result["fp"]
+                pace_ = make.pace_of(fp_)
+                pr_.brief = {**pr_.brief,
+                             "style": {**(pr_.brief.get("style") or {}), "pace": pace_,
+                                       "seconds": round(job.result["plan"].duration, 1)},
+                             "tempo": f"{tempo.NAMES[pace_]}: about {fp_['median_s']:.1f} s a shot, "
+                                      + ("from your reels." if fp_.get("refs_used") else "the way a short is cut." if fp_["median_s"] < 1.3 else "the way a vlog breathes.")}
             if PROJECT["p"] is not None:
                 PROJECT["p"].events.append({"kind": "make", "at": time.time(), "music": bool(mx),
                                             "seconds": round(job.result["plan"].duration, 1),

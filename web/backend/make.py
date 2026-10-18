@@ -82,6 +82,43 @@ def moments(clips: dict[str, dict], cut, fp: dict, judge=None) -> sel.Plan:
     return remix.plan_shots(clips, fp, length=fp["duration"], cut=cut, judge=judge)
 
 
+END_BEATS = 2            # the last shot holds at least this many beats, so the end lands [prior]
+
+
+def end_strong(plan: sel.Plan) -> bool:
+    """A short lands on something: the last stop's strongest moment goes
+    last. The hook is deliberate; before this the ending was whatever came
+    last in the day (eval 2026-10-11: a day that winds down ended on its
+    quietest footage). Only the last stop is reordered, and only if its
+    strongest isn't already last. Returns whether anything moved."""
+    if not plan.sessions or not plan.sessions[-1]:
+        return False
+    last = plan.sessions[-1]
+    best = max(last, key=lambda p: p.score)
+    if last[-1] is best:
+        return False
+    last.remove(best)
+    last.append(best)
+    best.why = (best.why + "; ends the video").strip("; ")
+    return True
+
+
+def hold_ending(clips: dict[str, dict], plan: sel.Plan, period: float) -> None:
+    """The last shot gets END_BEATS beats if it was filmed long enough."""
+    if not plan.sessions or not plan.sessions[-1]:
+        return
+    p = plan.sessions[-1][-1]
+    want = END_BEATS * period
+    if p.duration + 1e-3 < want:
+        p.start, p.end, p.short = sel.window(clips, p.shot, want)
+
+
+def pace_of(fp: dict) -> str:
+    """The cut's own tempo word, from the shots it was made of."""
+    med = float(fp.get("median_s") or 2.0)
+    return "fast" if med < 1.3 else "calm" if med > 3.0 else "balanced"
+
+
 def music(clips: dict[str, dict], plan: sel.Plan, fp: dict, pace: str, own: list[mu.Track] | None,
           progress=None, pool: list[mu.Track] | None = None) -> tuple[dict | None, str]:
     """A track for this plan, and the plan re-cut to its beat. `pool` stands
@@ -93,6 +130,7 @@ def music(clips: dict[str, dict], plan: sel.Plan, fp: dict, pace: str, own: list
     mx = remix.pick_from(pool, fp, plan.duration + 4.0, hook_s)
     if mx:
         remix.quantise(plan, clips, mx["period"])
+        hold_ending(clips, plan, mx["period"])
         hook_s = sum(p.duration for p in plan.hook) or hook_s
         mx["in"] = round(max(0.0, mx["drop"] - hook_s), 3)
     return mx, source
@@ -186,6 +224,7 @@ def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, ab
             plan = moments(clips, cut, fp, judge)
             if not plan.picks:
                 raise ValueError("none of the clips had a moment worth keeping — add more footage")
+            end_strong(plan)
             job.stage = "music"
             mx, source = (music(clips, plan, fp, pace, own, progress) if want_music
                           else (None, "off, as last time"))

@@ -48,6 +48,19 @@ def main() -> int:
                                                             "music": {"bpm": 120, "arc": "builds"}, "duration": 25.0, "frame": {"vertical": True}}])
     check("references win when given", ref["median_s"] == 0.6 and ref["refs_used"] and ref["duration"] == 25.0)
 
+    print("the ending")
+    from types import SimpleNamespace
+    from web.backend import select as sel
+    def pick(sid, score, dur=1.0):
+        return sel.Pick(SimpleNamespace(id=sid, start=0.0, end=dur, clip_id="c"), "hero", 0.0, dur, score, "", 0)
+    plan = sel.Plan(hook=[pick("h", 0.9)], sessions=[[pick("a", 0.5), pick("b", 0.8), pick("c", 0.3)]], titles=["Stop"])
+    moved = make.end_strong(plan)
+    check("the last stop ends on its strongest moment", moved and plan.sessions[-1][-1].shot.id == "b"
+          and [p.shot.id for p in plan.sessions[-1]] == ["a", "c", "b"], str([p.shot.id for p in plan.sessions[-1]]))
+    check("…and says so", plan.sessions[-1][-1].why.endswith("ends the video"))
+    check("already strongest last: nothing moves", not make.end_strong(plan))
+    check("the cut's own tempo word", make.pace_of({"median_s": 0.7}) == "fast" and make.pace_of({"median_s": 2.5}) == "balanced" and make.pace_of({"median_s": 3.5}) == "calm")
+
     print("through the API")
     from fastapi.testclient import TestClient
     from tests.test_projects import TMP as PTMP, clip, wait
@@ -94,6 +107,11 @@ def main() -> int:
             kinds = [o["kind"] for o in s["overlays"]["items"]]
             check("a title and a line per stop", "title" in kinds and "part" in kinds, str(kinds))
             check("the look is on", s["overlays"]["look"]["id"] == "hype")
+            check("the chips describe the cut, not the guess", s["brief"]["style"]["pace"] == "fast" and abs(s["brief"]["style"]["seconds"] - s["timeline"]["total"]) < 1.0
+                  and "a shot" in s["brief"]["tempo"], json.dumps({"pace": s["brief"]["style"]["pace"], "seconds": s["brief"]["style"]["seconds"], "tempo": s["brief"]["tempo"]}))
+            last_item = [it for it in s["timeline"]["items"] if it["kind"] == "shot"][-1]
+            check("the last shot holds at least two beats", last_item["seq_end"] - last_item["seq_start"] >= 2 * period - 0.05,
+                  f"{last_item['seq_end'] - last_item['seq_start']:.2f} s vs {2 * period:.2f}")
             check("the project knows it was made", any(e.get("kind") == "make" for e in c.get("/api/project").json().get("events", [])) or True)
             s = c.post(f"/api/turns/{s['turns'][-1]['id']}/toggle", json={}).json()
             check("one undo takes all of it back", s["board"] is None or s["board"]["option"] != "made", str(s["board"] and s["board"]["option"]))
