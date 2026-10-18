@@ -206,6 +206,23 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   added first). On her 42 clips: 27 moments, 25 s, hook first, cuts on the
   beat, music under it — see `design/eval/` screenshots 23–25. Every number
   in `PRIOR` / `LEVELS` is a guess. `tests/test_make.py`.
+- **The story editor** (`web/backend/story.py`, `oai.py`; sarah, 2026-10-18,
+  after comparing VibeCut with a London day vlog: named chapters, each a
+  setup → steps → payoff, a designed title over a plain line). Inside Make,
+  one OpenAI call (her course's team key, $25 for the term; **not Claude**)
+  sees up to 60 rough-cut moments (one index frame each, low detail, plus
+  time / stop / labels / faces / talking / worth) and returns chapters named
+  by what happens, what's kept, its order, each shot's job and length
+  (`ROLE_S` by frame, priors), a hook and a title look per chapter. The
+  rules still cut each window, the beat and the music. Chapter titles are
+  overlay kind `heading` with their own `look` (script / spaced / bold /
+  serif, `overlayDraw.HEADINGS`), independent of the captions' one style.
+  Runs only with `OPENAI_API_KEY` **and** `VIBECUT_STORY_AI=1` in web/.env
+  (a key is not a yes to spend it); `OPENAI_MODEL` overrides `oai.MODEL`.
+  Cost is read from each reply's usage, said in the reply and kept in
+  `Project.events`. Any failure → the rules' edit, and the reply says so.
+  urllib only (no SDK on her Mac). `tests/test_story.py` (stand-in replies).
+  Not yet run against the live model.
 - **Two picks up front** (plan of 2026-10-10, step 2; `Setup.tsx`,
   `/api/brief/setup`, `/api/brief/auto {format, look}`, `/api/format`):
   after Footage's "Looks good" one popup asks the **frame** (short ·

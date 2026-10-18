@@ -36,7 +36,7 @@ import uuid
 
 from cutgrammar import music as mu
 
-from . import audiomix, bed, remix, select as sel, storyboard as sb, tempo, timeline
+from . import audiomix, bed, oai, remix, select as sel, story, storyboard as sb, tempo, timeline
 
 # Shot length and hook by frame and pace [prior]. A short is cut like the
 # reels the creator brought on 2026-09-25 (0.7 s a shot, hook 1.4 s); a
@@ -99,12 +99,17 @@ def music(clips: dict[str, dict], plan: sel.Plan, fp: dict, pace: str, own: list
 
 
 def ops(plan: sel.Plan, fp: dict, mx: dict | None, fmt: str, look: str | None, about: str,
-        talking: set[str], name: str = "Your video") -> list[dict]:
-    """Everything the turn applies: the board, the bed, the look, the words."""
+        talking: set[str], name: str = "Your video", chapters: list[dict] | None = None) -> list[dict]:
+    """Everything the turn applies: the board, the bed, the look, the words.
+    `chapters` (story.py): the plan's chapters, which then carry the words --
+    a designed title and a plain line under it each -- instead of a clock
+    time per stop."""
     board = remix.board_of(plan, fp, name)
     board["option"] = "made"
     board["structure"] = ("Made from your clips in the style of your references — " if fp.get("refs_used")
                           else "Made from your clips — ") + remix.describe(fp)
+    if chapters:
+        board["structure"] = f"Told in {len(chapters)} chapters, each a setup, its steps and a payoff — " + remix.describe(fp)
     out: list[dict] = [{"op": "choose_option", "option": "made", "snapshot": board}]
     if mx:
         lv = LEVELS.get(fmt, LEVELS["tall"])
@@ -115,6 +120,8 @@ def ops(plan: sel.Plan, fp: dict, mx: dict | None, fmt: str, look: str | None, a
         out.append(m)
     if look:
         out.append({"op": "set_look", "look": look})
+    if chapters:
+        return out + story.heading_ops(plan, chapters)
     title = (about or "").split(",")[0].strip()[:40] or None
     for c in remix.captions(plan, title, None):
         if c["kind"] == "title":
@@ -126,9 +133,13 @@ def ops(plan: sel.Plan, fp: dict, mx: dict | None, fmt: str, look: str | None, a
     return out
 
 
-def say(plan: sel.Plan, fp: dict, mx: dict | None, source: str, judged: bool) -> str:
+def say(plan: sel.Plan, fp: dict, mx: dict | None, source: str, judged: bool, ai: dict | None = None) -> str:
     parts = [f"Made your video: {len(plan.picks)} moments, {plan.duration:.0f} s"
              + (", in the style of your references" if fp.get("refs_used") else "") + "."]
+    if ai and ai.get("chapters"):
+        parts.append(f"{ai['model']} planned it as {ai['chapters']} chapters (cost ${ai['cost']:.3f}).")
+    elif ai and ai.get("error"):
+        parts.append(f"The story plan didn't work ({ai['error']}), so the usual rules picked the moments.")
     if mx:
         parts.append(f"Music: {mx['track'].title} ({mx['bpm']:.0f} BPM, from {source}); every cut sits on its beat.")
     else:
@@ -176,7 +187,19 @@ def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, ab
         try:
             job.stage = "choosing"
             fp = fingerprint(fmt, pace, seconds, styles)
-            plan = moments(clips, cut, fp, judge)
+            plan, chapters, ai = None, None, None
+            if oai.enabled() and not styles:
+                # the story editor (story.py): only with a key and the creator's yes to spending it
+                job.line = "Planning the story…"
+                try:
+                    plan, chapters, _title, usage = story.plan(clips, cut, fmt, fp["duration"], about)
+                    ai = {"model": usage.get("model"), "cost": usage.get("cost", 0.0), "chapters": len(chapters),
+                          "tokens_in": usage.get("prompt_tokens"), "tokens_out": usage.get("completion_tokens")}
+                except Exception as e:  # noqa: BLE001 -- the rules make the edit instead, and say so
+                    plan, chapters, ai = None, None, {"error": str(e)[:160], "cost": 0.0}
+                job.line = ""
+            if plan is None:
+                plan = moments(clips, cut, fp, judge)
             if not plan.picks:
                 raise ValueError("none of the clips had a moment worth keeping — add more footage")
             job.stage = "music"
@@ -185,8 +208,8 @@ def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, ab
             pool, _ = sb.usable(sb.shots_from_clips(list(clips.values()), cut))
             talking = tempo.talking(list(clips.values()), pool)
             judged = any(n.startswith("Claude judged") for n in plan.notes)
-            job.result = {"ops": ops(plan, fp, mx, fmt, look, about, talking), "music": mx, "fp": fp,
-                          "plan": plan, "reply": say(plan, fp, mx, source, judged)}
+            job.result = {"ops": ops(plan, fp, mx, fmt, look, about, talking, chapters=chapters), "music": mx,
+                          "fp": fp, "plan": plan, "ai": ai, "reply": say(plan, fp, mx, source, judged, ai)}
             job.stage = "done"
         except Exception as e:  # noqa: BLE001 -- the dialog shows it; nothing was changed
             job.stage, job.error = "error", str(e)[:300]

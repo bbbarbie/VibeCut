@@ -1010,6 +1010,7 @@ def api_make(req: BriefAutoReq | None = None) -> dict:
             if PROJECT["p"] is not None:
                 PROJECT["p"].events.append({"kind": "make", "at": time.time(), "music": bool(mx),
                                             "seconds": round(job.result["plan"].duration, 1),
+                                            "ai": job.result.get("ai"),
                                             "elapsed": round(time.time() - job.started, 1)})
         _save()
 

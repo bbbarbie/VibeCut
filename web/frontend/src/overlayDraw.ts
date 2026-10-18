@@ -9,7 +9,7 @@
 // render any frame in any order.
 
 import { fontById } from './captionFonts.ts'
-import type { CaptionBackdrop, CaptionEnter, CaptionOutline, CaptionShadow, CaptionTemplate, Motion, Overlay, OverlayKind, OverlayStyle } from './types'
+import type { CaptionBackdrop, CaptionEnter, CaptionOutline, CaptionShadow, CaptionTemplate, HeadingLook, Motion, Overlay, OverlayKind, OverlayStyle } from './types'
 
 export type Part = { id: string; title: string; start: number; end: number }
 
@@ -21,6 +21,7 @@ export const KIND_META: Record<OverlayKind, { label: string; icon: string; color
   date: { label: 'Date', icon: '◷', color: '#c4b5fd', hint: 'When it was filmed' },
   end: { label: 'End card', icon: '■', color: '#f0a8a8', hint: 'The last words, over the last seconds' },
   chapters: { label: 'Chapter bar', icon: '▭', color: '#9fb4c7', hint: 'Shows which part of the video you are in' },
+  heading: { label: 'Chapter title', icon: '❡', color: '#f2b8c6', hint: 'A designed title with a plain line under it' },
 }
 
 // ---- timing ---------------------------------------------------------------
@@ -80,7 +81,7 @@ export function pose(o: Pick<Overlay, 'anim' | 'kind' | 'start' | 'shown_end'>, 
   const lag = motion && inS > 0 ? (group * motion.stagger_s) / inS : 0
   const p = clamp01((pin - lag) / Math.max(1e-6, 1 - Math.min(lag, 0.9)))
   const e = ease(p)
-  const big = o.kind === 'title' || o.kind === 'end' || o.kind === 'part'
+  const big = o.kind === 'title' || o.kind === 'end' || o.kind === 'part' || o.kind === 'heading'
   const typing = o.anim === 'type'
   let alpha = (typing ? Math.min(1, p * 4) : clamp01(e)) * pout
   let dx = 0, dy = 0, scale = 1, rot = 0
@@ -162,6 +163,7 @@ export async function ensureFonts(style: OverlayStyle): Promise<void> {
   const tpl = tplFor(style)
   const face = fontById(style.typeface)
   const fonts = [fontCss(style, 40, true), fontCss(style, 40, false), ...(tpl ? [`${tpl.weight} 40px ${tpl.family}`] : []),
+    ...Object.values(HEADINGS).map((h) => `${h.weight} 40px ${h.family}`),
     ...(face ? [`${face.weight} 40px ${face.family}`] : [])]
   await Promise.all(fonts.map((f) => document.fonts.load(f).catch(() => [])))
 }
@@ -269,6 +271,28 @@ export function dressOf(style: OverlayStyle): { outline: CaptionOutline; shadow:
       : { color: '#000000', opacity: 0, round: 0.25 }),
     thick: style.thick ?? 0,
   }
+}
+
+// A chapter title's own look (story.py; sarah's reference vlog: a script
+// "Morning Routine", a red wide-spaced "OOTD"), each over a plain line. Its
+// look is its own, not the captions' one style, so a video can carry a
+// designed title and plain words in the same frame. Bundled open fonts only.
+export const HEADINGS: Record<HeadingLook, Tpl> = {
+  script: { family: '"VC Pacifico", cursive', weight: 400, size: 0.088, color: '#ffffff', shadow: true },
+  spaced: { family: '"VC Montserrat", sans-serif', weight: 800, size: 0.07, color: '#ff3b47', case: 'upper', track: 0.32, shadow: true },
+  bold: { family: '"VC Anton", Impact, sans-serif', weight: 400, size: 0.1, color: '#ffffff', case: 'upper',
+          stroke: { color: '#000000', w: 0.07 }, shadow: true },
+  serif: { family: '"VC Playfair Display", Georgia, serif', weight: 700, size: 0.08, color: '#fff8ec', shadow: true },
+}
+const HEADING_SUB: Tpl = { family: SANS, weight: 500, size: 0.034, color: '#ffffff', shadow: true }
+
+function headingLines(o: Overlay, u: number): Line[] {
+  const s = SIZE[o.size]
+  const t = HEADINGS[o.look ?? 'bold'] ?? HEADINGS.bold
+  const line = (tpl: Tpl, text: string, px: number): Line =>
+    ({ text: tpl.case === 'lower' ? text.toLowerCase() : text, px, bold: true, family: tpl.family, weight: tpl.weight,
+       color: tpl.color, track: tpl.track, upper: tpl.case === 'upper', tpl })
+  return [line(t, o.text, t.size * u * s), ...(o.sub ? [line(HEADING_SUB, o.sub, HEADING_SUB.size * u * s)] : [])]
 }
 
 const tplFor = (style: OverlayStyle): Tpl | null => style.template ? dress(TEMPLATES[style.template], style) : null
@@ -379,6 +403,7 @@ function linesFor(o: Overlay, style: OverlayStyle, u: number, chars: number): Li
   // backing and case, the look its colour and motion
   const lettered = (lines: Line[]) => !face ? lines
     : lines.map((ln) => ({ ...ln, family: face.family, weight: face.weight, px: ln.px * face.size }))
+  if (o.kind === 'heading') return headingLines(o, u)
   if (o.kind === 'caption' && style.template) {
     return lettered(templateLines(o, tplFor(style)!, u, chars))
   }

@@ -139,7 +139,9 @@ export type SoundStrip = { id: string; at: number; dur: number; gain: number; mu
 
 // Words on screen. Anchored to the edit, its end, a part or a shot; the
 // server resolves each to sequence time (start/end) for drawing.
-export type OverlayKind = 'title' | 'part' | 'name' | 'caption' | 'date' | 'end' | 'chapters'
+export type OverlayKind = 'title' | 'part' | 'name' | 'caption' | 'date' | 'end' | 'chapters' | 'heading'
+/** a chapter title's own look (overlays.HEADING_LOOKS), independent of the captions' style */
+export type HeadingLook = 'script' | 'spaced' | 'bold' | 'serif'
 export type OverlayPos = 'top-left' | 'top' | 'top-right' | 'left' | 'center' | 'right' | 'bottom-left' | 'bottom' | 'bottom-right'
 export type OverlayAnim = 'fade' | 'rise' | 'slide' | 'type'
 export type Overlay = {
@@ -150,6 +152,7 @@ export type Overlay = {
   ink?: string; ink2?: string; halo?: string
   // dragged on the picture by hand: block centre (0..1 of the frame) and size multiplier
   place?: OverlayPlace | null
+  look?: HeadingLook
 }
 export type OverlayPlace = { x: number; y: number; scale: number }
 export type OverlayStyle = { font: 'Clean' | 'Editorial' | 'Rounded' | 'Mono' | 'Condensed'; color: string; accent: string; captions: 'bottom' | 'center'; backing: 'shadow' | 'box' | 'none'
