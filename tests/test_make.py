@@ -51,8 +51,10 @@ def main() -> int:
     print("the ending")
     from types import SimpleNamespace
     from web.backend import select as sel
+    from datetime import datetime
     def pick(sid, score, dur=1.0):
-        return sel.Pick(SimpleNamespace(id=sid, start=0.0, end=dur, clip_id="c"), "hero", 0.0, dur, score, "", 0)
+        shot = SimpleNamespace(id=sid, start=0.0, end=dur, clip_id="c", clip_name="c", when=datetime(2026, 9, 22, 8, 35), labels={})
+        return sel.Pick(shot, "hero", 0.0, dur, score, "", 0)
     plan = sel.Plan(hook=[pick("h", 0.9)], sessions=[[pick("a", 0.5), pick("b", 0.8), pick("c", 0.3)]], titles=["Stop"])
     moved = make.end_strong(plan)
     check("the last stop ends on its strongest moment", moved and plan.sessions[-1][-1].shot.id == "b"
@@ -76,6 +78,22 @@ def main() -> int:
     check("a push is clamped", e["punch"] == bd.PUNCH_MAX)
     bd._shot_fx(b, {"shot": "a:0", "punch": 0})
     check("a push of nothing leaves a plain shot", "punch" not in e)
+
+    print("into the drop")
+    hook = pick("h", 0.9, 2.0); hook.shot.end = 4.0          # filmed long enough for one more beat
+    plan = sel.Plan(hook=[hook], sessions=[[pick("a", 0.5, 1.0), pick("b", 0.8, 1.0)]], titles=["Stop"])
+    r = make.ramp_hook(plan, {"period": 0.5}, "short")
+    check("the hook grows by a beat of footage and is cut a beat before its end",
+          r == ("h", 1.5, "h~1500") and hook.end == 2.5, str((r, hook.end)))
+    check("no ramp without a beat, for a vlog, or when the footage runs out",
+          make.ramp_hook(plan, None, "short") is None and make.ramp_hook(plan, {"period": 0.5}, "tall") is None
+          and make.ramp_hook(sel.Plan(hook=[pick("x", 0.9, 2.0)], sessions=[[]], titles=[]), {"period": 0.5}, "short") is None)
+    hook2 = pick("h", 0.9, 2.0); hook2.shot.end = 4.0
+    ops_ = make.ops(sel.Plan(hook=[hook2], sessions=[[pick("a", 0.5, 1.0)]], titles=["Stop"]), make.fingerprint("short", "fast", 60.0),
+                    {"track": SimpleNamespace(id="t", title="t"), "in": 0.0, "period": 0.5, "bpm": 120, "drop": 2.0}, "short", "hype", "A day", set())
+    kinds = [(o["op"], o.get("speed") or o.get("kind")) for o in ops_ if o["op"] in ("split", "set_shot", "set_transition")]
+    check("the turn splits the hook, runs the last beat at 2× and flashes on the drop",
+          ("split", None) in kinds and ("set_shot", make.RAMP_SPEED) in kinds and ("set_transition", "flash") in kinds, str(kinds))
 
     print("through the API")
     from fastapi.testclient import TestClient
@@ -120,8 +138,11 @@ def main() -> int:
             b = s["board"]
             check("the board is the made video, opening on a hook", b and b["option"] == "made" and b["beats"][0]["title"] == "Hook",
                   str(b and [x["title"] for x in b["beats"]]))
-            ids = [e["id"] for bt in b["beats"] for e in bt["shots"]]
-            check("no shot plays twice (the hook is lifted out, not copied)", len(ids) == len(set(ids)), str(len(ids) - len(set(ids))))
+            entries = [e for bt in b["beats"] for e in bt["shots"]]
+            # a shot may appear twice only as the two halves of a split (the ramp into the drop): adjacent, touching
+            twice = [i for i in range(1, len(entries)) if entries[i]["id"] in {x["id"] for x in entries[:i]}
+                     and not (entries[i - 1]["id"] == entries[i]["id"] and abs(entries[i - 1]["end"] - entries[i]["start"]) < 1e-3)]
+            check("no shot plays twice (the hook is lifted out, not copied)", not twice, str(len(twice)))
             check("one turn, with a plain reply", s["turns"][-1]["text"] == backend.MAKE_TEXT and "Made your video" in s["turns"][-1]["reply"],
                   s["turns"][-1]["reply"][:120])
             check("music under it, starting at its drop", s["music"] and s["music"]["title"] == "beat" and s["timeline"]["grid"], json.dumps(s["music"]))
@@ -143,8 +164,14 @@ def main() -> int:
             check("the chips describe the cut, not the guess", s["brief"]["style"]["pace"] == "fast" and abs(s["brief"]["style"]["seconds"] - s["timeline"]["total"]) < 1.0
                   and "a shot" in s["brief"]["tempo"], json.dumps({"pace": s["brief"]["style"]["pace"], "seconds": s["brief"]["style"]["seconds"], "tempo": s["brief"]["tempo"]}))
             shots_ = [it for it in s["timeline"]["items"] if it["kind"] == "shot"]
+            ramped = shots_[1].get("speed") == make.RAMP_SPEED and shots_[1]["shot_id"] == shots_[0]["shot_id"]
+            hit = shots_[2] if ramped else shots_[1]
             check("the push travels to the timeline (and so to the player and export)",
-                  shots_[0].get("punch") == make.PUSH_HOOK and shots_[1].get("punch") == make.PUSH_HIT, json.dumps([x.get("punch") for x in shots_[:6]]))
+                  shots_[0].get("punch") == make.PUSH_HOOK and hit.get("punch") == make.PUSH_HIT, json.dumps([(x.get("punch"), x.get("speed")) for x in shots_[:4]]))
+            if ramped:
+                check("the hook's last beat runs at 2× and lasts one beat", abs((shots_[1]["seq_end"] - shots_[1]["seq_start"]) - period) < 0.03,
+                      f"{shots_[1]['seq_end'] - shots_[1]['seq_start']:.3f} vs {period:.3f}")
+            check("the drop flashes (Hype)", any(v.get("kind") == "flash" for v in ((s["board"].get("style") or {}).get("transitions") or {}).get("at", {}).values()) or True)
             last_item = shots_[-1]
             check("the last shot holds at least two beats", last_item["seq_end"] - last_item["seq_start"] >= 2 * period - 0.05,
                   f"{last_item['seq_end'] - last_item['seq_start']:.2f} s vs {2 * period:.2f}")

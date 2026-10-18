@@ -155,6 +155,7 @@ def music(clips: dict[str, dict], plan: sel.Plan, fp: dict, pace: str, own: list
 def ops(plan: sel.Plan, fp: dict, mx: dict | None, fmt: str, look: str | None, about: str,
         talking: set[str], name: str = "Your video") -> list[dict]:
     """Everything the turn applies: the board, the bed, the look, the words."""
+    ramp = ramp_hook(plan, mx, fmt)
     board = remix.board_of(plan, fp, name)
     board["option"] = "made"
     board["structure"] = ("Made from your clips in the style of your references — " if fp.get("refs_used")
@@ -170,6 +171,14 @@ def ops(plan: sel.Plan, fp: dict, mx: dict | None, fmt: str, look: str | None, a
     if look:
         out.append({"op": "set_look", "look": look})
     out.extend(punches(plan, mx))
+    if ramp:
+        hook_key, cut_at, second = ramp
+        out.append({"op": "split", "shot": hook_key, "at": cut_at})
+        out.append({"op": "set_shot", "shot": second, "speed": RAMP_SPEED})
+        if look in FLASH_LOOKS:
+            out.append({"op": "set_transition", "shot": second, "kind": "flash", "dur": FLASH_S})
+    elif look in FLASH_LOOKS and plan.hook and mx:
+        out.append({"op": "set_transition", "shot": plan.hook[-1].shot.id, "kind": "flash", "dur": FLASH_S})
     # the references' words: where they sit, how long they hold, whether a
     # reel that opens on its footage gets a title at all, caps or not
     text = fp.get("text")
@@ -236,6 +245,30 @@ def punches(plan: sel.Plan, mx: dict | None) -> list[dict]:
     return out
 
 
+# Into the drop [priors]: the hook's last beat runs at RAMP_SPEED (two beats
+# of footage in one), and for the loud looks a white flash sits on the cut.
+# Both are the ops a person could do by hand (split, speed, a transition),
+# so they show in History and undo like anything else.
+RAMP_SPEED = 2.0
+FLASH_LOOKS = ("hype", "playful")
+FLASH_S = 0.2
+
+
+def ramp_hook(plan: sel.Plan, mx: dict | None, fmt: str) -> tuple[str, float, str] | None:
+    """Extend the hook by one beat of footage so its last beat can run at
+    RAMP_SPEED without moving the drop. Returns (hook key, split at, second
+    piece's key) or None when there's no beat, no hook, or no footage past it."""
+    if not mx or not plan.hook or fmt != "short":
+        return None
+    p = plan.hook[-1]
+    period = mx["period"]
+    if p.duration < 2 * period - 1e-3 or p.end + period > p.shot.end + 1e-3:
+        return None
+    cut_at = round(p.end - period, 3)         # the last sequence beat starts here…
+    p.end = round(p.end + period, 3)          # …and shows two beats of footage, at 2×
+    return p.shot.id, cut_at, f"{p.shot.id}~{int(round(cut_at * 1000))}"
+
+
 def say(plan: sel.Plan, fp: dict, mx: dict | None, source: str, judged: bool) -> str:
     parts = [f"Made your video: {len(plan.picks)} moments, {plan.duration:.0f} s"
              + (", in the style of your references" if fp.get("refs_used") else "") + "."]
@@ -245,7 +278,7 @@ def say(plan: sel.Plan, fp: dict, mx: dict | None, source: str, judged: bool) ->
                      f"Words at the {t.get('band') or 'bottom'}, held about {t.get('hold_s') or 1.5:.1f} s, like the reel.")
     if mx:
         parts.append(f"Music: {mx['track'].title} ({mx['bpm']:.0f} BPM, from {source}); every cut sits on its beat, "
-                     "the picture pushes in on the drop and on every bar.")
+                     "the hook speeds into the drop, the picture pushes in on it and on every bar.")
     elif source.startswith("off"):
         parts.append("No music, as you had it last time; Music in the rail puts one under it.")
     else:

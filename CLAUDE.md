@@ -204,6 +204,15 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   holds the ending as many beats as the reel's last shot (1–4). Verified
   OCR end to end on this Mac (`tests/test_ideas.py`); references learnt
   before this have no `words` and fall back to the priors.
+- **Into the drop** (`make.ramp_hook`, 2026-10-18; built from `split`,
+  `set_shot speed` and `set_transition`, nothing new on the board): for a
+  short with a beat, the hook grows by one beat of footage and its last
+  sequence beat runs at `RAMP_SPEED` 2× (two beats of footage in one, so the
+  drop doesn't move); Hype and Playful (`FLASH_LOOKS`) get a `FLASH_S` 0.2 s
+  white flash on that cut. The split's second key is `{id}~{ms}` as
+  `board._split` names it. A shot may now appear twice on a made board only
+  as the two touching halves of that split. Preview plays the ramp by rate
+  and the flash by veil; export by atempo and fade. Priors.
 - **Motion on the beat and a deliberate ending** (`make.py`, 2026-10-18):
   `punch` is a shot fix like speed or mirror (`board.SHOT_FX`, ±`PUNCH_MAX`
   0.25; `timeline.layout` carries it, `export._shot` renders it as zoompan,
