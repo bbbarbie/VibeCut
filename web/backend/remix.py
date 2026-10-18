@@ -144,7 +144,7 @@ def load_shoot(folder: str) -> dict[str, dict]:
 
 
 def plan_shots(clips: dict[str, dict], fp: dict, length: float | None = None, hook_n: int = 1,
-               cut: tuple[set, dict] | None = None, judge=None) -> sel.Plan:
+               cut: tuple[set, dict] | None = None, judge=None, taste: str = "") -> sel.Plan:
     """Pick the moments and give each its window, before any beat is known.
     `judge`: None = Claude when there is a key (select.judge), False = the
     rules alone, or a stand-in `ask(options, keep)` for tests."""
@@ -156,7 +156,7 @@ def plan_shots(clips: dict[str, dict], fp: dict, length: float | None = None, ho
     n = max(4, int(round(body / fp["median_s"])))
     plan = sel.choose(shots, clips, n, hook_n)
     if judge is not False and os.environ.get("VIBECUT_REMIX_JUDGE", "1") != "0":
-        plan = sel.judge(plan, shots, clips, ask=judge if callable(judge) else None)
+        plan = sel.judge(plan, shots, clips, ask=judge if callable(judge) else None, taste=taste)
     plan.notes = notes + plan.notes
     n_body = sum(len(s) for s in plan.sessions)
     targets = [fp["median_s"] * _curve_at(fp["curve"], (k + 0.5) / max(n_body, 1)) * _spread(fp, k)
@@ -352,7 +352,7 @@ def _clock(dt: datetime) -> str:
 
 
 def captions(plan: sel.Plan, title: str | None, sub: str | None, hold_s: float | None = None,
-             with_title: bool = True) -> list[dict]:
+             with_title: bool = True, phrases: list[str] | None = None) -> list[dict]:
     """What goes on screen, in sequence seconds. Built only from what the edit
     knows. `hold_s`: how long a stop's line stays (a reference's own hold);
     `with_title`: a reel with no words at the top gets no title."""
@@ -368,12 +368,13 @@ def captions(plan: sel.Plan, title: str | None, sub: str | None, hold_s: float |
     total = plan.duration
     if total > hook_end + 1:
         out.append({"kind": "tag", "text": title or TAG_TEXT, "start": hook_end, "end": total, "anim": "fade"})
-    for picks in plan.sessions:
+    for n_, picks in enumerate(plan.sessions):
         if not picks:
             continue
         p0 = picks[0]
         words = _clock(p0.shot.when) if p0.shot.when else ""
-        phrase = _phrase(picks)
+        # a written line for this stop (make.words, the model with the creator's taste) beats the label table
+        phrase = (phrases[n_] if phrases and n_ < len(phrases) and phrases[n_] else None) or _phrase(picks)
         if phrase:
             words = f"{words} · {phrase}" if words else phrase
         if words:

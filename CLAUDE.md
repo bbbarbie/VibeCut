@@ -227,6 +227,20 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   describe the cut (`make.pace_of`), so the Frames chips tell the truth.
   Cuts sit on the half-beat grid (filler) with the hook and heroes on whole
   beats — `remix.quantise`'s rule, now pinned in `test_make`. All priors.
+- **Taste in the loop** (layer 2 of preserving preference, 2026-10-18;
+  key only). `make.taste_text(profile, PREFS.for_model())` renders the
+  creator in their own words (name, what they make, the feeling, pace,
+  never…) plus the confirmed rules; it rides on the system prompt of the
+  two calls that choose and write: `llm.rank_shots(…, taste)` through
+  `select.judge(taste=)` / `remix.plan_shots(taste=)`, and
+  `llm.day_phrases(…, taste)` through `make.words`, which writes one line
+  per stop from its time and labels (the same writer as the describe
+  captions) and hands them to `remix.captions(phrases=)`; caps when the
+  reel's words were caps; a failed call leaves the label table's phrase;
+  the job records `taste` and `written`. The profile the server knows is
+  the one mirrored from the profile page (`/api/profile`). Not tried
+  against the live model (no key on this Mac). `tests/test_taste.py`.
+  Layer 3 (undo and verdicts as candidate rules) is not built.
 - **The viral library** (`web/backend/vibes.py`, `/api/vibes`, "Cut it
   like" in `Setup.tsx`; the user's vision, 2026-10-18: learn from viral
   vlogs). A vibe = `remix.fingerprint` over a *set* of reels learnt through
@@ -240,6 +254,9 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   `make.fingerprint(vibe=…)` takes it over the frame's prior (duration
   still capped by the frame). Popularity stands in for "well cut"; the
   record names its reels so that can be judged. `tests/test_vibes.py`.
+  First real vibe, 2026-10-18: `day-in-my-life-popular-reels-20261018`
+  from the 19 vlogs and reels on this Mac (the calibration set): 1.20 s a
+  shot, hook 2.1 s, 69–144 BPM, builds; 90 s learnt of each.
 - **The Supabase mirror** (`web/backend/cloud.py`, `supabase/migrations/
   0001_preferences.sql`; the user's decision, 2026-10-18: preferences in a
   backend connected to Supabase). One table, `preferences(device, kind,

@@ -80,8 +80,33 @@ def fingerprint(fmt: str, pace: str, seconds: float, styles: list[dict] | None =
             "duration": round(max(15.0, dur), 1), "vertical": fmt != "wide", "refs": 0, "refs_used": False}
 
 
-def moments(clips: dict[str, dict], cut, fp: dict, judge=None) -> sel.Plan:
-    plan = remix.plan_shots(clips, fp, length=fp["duration"], cut=cut, judge=judge)
+def taste_text(profile: dict | None, rules: str = "") -> str:
+    """The creator, in their own words, for the prompts that choose and
+    write (llm.rank_shots, llm.day_phrases): what they make, the feeling
+    and pace they want, what to avoid, then the rules they confirmed
+    (preferences.for_model). Empty when nothing was said."""
+    p = profile or {}
+    lines = []
+    if p.get("name") or p.get("handle"):
+        lines.append(f"The creator: {p.get('name') or p.get('handle')}" + (f" ({p['handle']})" if p.get("handle") and p.get("name") else ""))
+    if p.get("about"):
+        lines.append(f"What they make: {str(p['about'])[:200]}")
+    if p.get("goal"):
+        lines.append(f"What they want from their videos: {str(p['goal'])[:200]}")
+    if p.get("vibes"):
+        lines.append("The feeling they want: " + ", ".join(str(v) for v in p["vibes"][:6]))
+    if p.get("pace"):
+        lines.append(f"Their pace: {p['pace']}")
+    if p.get("avoid"):
+        lines.append(f"Never: {str(p['avoid'])[:200]}")
+    out = ("CREATOR TASTE (their own words; let it shape what you keep and what you write):\n" + "\n".join(lines)) if lines else ""
+    if rules:
+        out = (out + "\n\n" if out else "") + rules
+    return out
+
+
+def moments(clips: dict[str, dict], cut, fp: dict, judge=None, taste: str = "") -> sel.Plan:
+    plan = remix.plan_shots(clips, fp, length=fp["duration"], cut=cut, judge=judge, taste=taste)
     # The hook is lifted out of its stop, not copied: a Remix played the hook
     # shot again in its place (sarah: never the same shot twice). A stop that
     # was only its hook is not lost: it opens the video.
@@ -154,8 +179,37 @@ def music(clips: dict[str, dict], plan: sel.Plan, fp: dict, pace: str, own: list
     return mx, source
 
 
+def words(plan: sel.Plan, about: str, taste: str = "", ask=None) -> list[str] | None:
+    """One written line per stop (the clock stays in front of it): Claude,
+    with the creator's taste, from each stop's time and labels -- the same
+    writer the describe captions use (llm.day_phrases). None without a key
+    or when it fails: the label table's phrase stands. `ask(items, about,
+    taste)` stands in for tests."""
+    if ask is None:
+        from . import llm
+        if not llm.available():
+            return None
+        ask = llm.day_phrases
+    items = []
+    for picks in plan.sessions:
+        if not picks:
+            items.append({"time": "", "labels": []})
+            continue
+        labels: dict[str, float] = {}
+        for p in picks[:4]:
+            for k, v in (getattr(p.shot, "labels", None) or {}).items():
+                labels[k] = max(labels.get(k, 0.0), float(v))
+        top = [k for k, _ in sorted(labels.items(), key=lambda kv: -kv[1])[:6]]
+        items.append({"time": remix._clock(picks[0].shot.when) if picks[0].shot.when else "", "labels": top})
+    try:
+        lines = ask(items, about, taste)
+    except Exception:  # noqa: BLE001 -- the label table's phrase stands
+        return None
+    return [str(x).strip() for x in lines][:len(items)] + [""] * max(0, len(items) - len(lines))
+
+
 def ops(plan: sel.Plan, fp: dict, mx: dict | None, fmt: str, look: str | None, about: str,
-        talking: set[str], name: str = "Your video") -> list[dict]:
+        talking: set[str], name: str = "Your video", lines: list[str] | None = None) -> list[dict]:
     """Everything the turn applies: the board, the bed, the look, the words."""
     ramp = ramp_hook(plan, mx, fmt)
     board = remix.board_of(plan, fp, name)
@@ -198,7 +252,9 @@ def ops(plan: sel.Plan, fp: dict, mx: dict | None, fmt: str, look: str | None, a
         hold = text.get("hold_s")
         with_title = text.get("first_s") is None or text["first_s"] <= fp.get("hook_s", 1.5) + 0.5
     title = (about or "").split(",")[0].strip()[:40] or None
-    for c in remix.captions(plan, title, None, hold_s=hold, with_title=with_title):
+    if lines and text and text.get("upper"):
+        lines = [l.upper() for l in lines]
+    for c in remix.captions(plan, title, None, hold_s=hold, with_title=with_title, phrases=lines):
         if c["kind"] == "title":
             out.append({"op": "add_overlay", "kind": "title", "text": c["text"], "sub": c.get("sub", ""),
                         "anchor": {"to": "edit"}, "at": 0.0, "dur": round(c["end"] - c["start"], 2), "anim": "rise"})
@@ -316,7 +372,7 @@ JOBS: dict[str, Job] = {}
 
 def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, about: str, seconds: float,
           own: list[mu.Track] | None, styles: list[dict] | None, judge, on_done, want_music: bool = True,
-          register=None, vibe: dict | None = None) -> Job:
+          register=None, vibe: dict | None = None, taste: str = "", words_ask=None) -> Job:
     """Run the pipeline in a thread; `on_done(job)` puts the ops on the session.
     Everything the thread needs is copied in now, so later edits can't move it.
     `register(job)` is called before the thread starts: a fast job (no music,
@@ -333,7 +389,7 @@ def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, ab
         try:
             job.stage = "choosing"
             fp = fingerprint(fmt, pace, seconds, styles, vibe)
-            plan = moments(clips, cut, fp, judge)
+            plan = moments(clips, cut, fp, judge, taste)
             if not plan.picks:
                 raise ValueError("none of the clips had a moment worth keeping — add more footage")
             end_strong(plan)
@@ -344,8 +400,10 @@ def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, ab
             pool, _ = sb.usable(sb.shots_from_clips(list(clips.values()), cut))
             talking = tempo.talking(list(clips.values()), pool)
             judged = any(n.startswith("Claude judged") for n in plan.notes)
-            job.result = {"ops": ops(plan, fp, mx, fmt, look, about, talking), "music": mx, "fp": fp,
-                          "plan": plan, "reply": say(plan, fp, mx, source, judged)}
+            lines = words(plan, about, taste, words_ask)
+            job.result = {"ops": ops(plan, fp, mx, fmt, look, about, talking, lines=lines), "music": mx, "fp": fp,
+                          "plan": plan, "taste": taste, "written": bool(lines),
+                          "reply": say(plan, fp, mx, source, judged) + (" Claude wrote the lines, in your voice." if lines else "")}
             job.stage = "done"
         except Exception as e:  # noqa: BLE001 -- the dialog shows it; nothing was changed
             job.stage, job.error = "error", str(e)[:300]

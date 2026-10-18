@@ -1068,6 +1068,11 @@ def api_make(req: BriefAutoReq | None = None) -> dict:
         defaults.note(format=style.get("format"), look=style.get("look"), music="on" if want_music else "off",
                       vibe=style.get("vibe") or None)
         vibe_fp = vibes.fingerprint_for(style.get("vibe"))
+        try:
+            prof = (json.loads(defaults.SETTINGS.read_text()).get("profile") or {}).get("value")
+        except (OSError, ValueError):
+            prof = None
+        taste = make.taste_text(prof, PREFS.for_model())
         caption_style = {k: remembered[f"caption_{k}"] for k in ("template", "enter") if remembered.get(f"caption_{k}")}
 
     def on_done(job: make.Job) -> None:
@@ -1106,7 +1111,7 @@ def api_make(req: BriefAutoReq | None = None) -> dict:
 
     job = make.start(clips, cut_now, style.get("format", "tall"), style.get("pace", "balanced"),
                      style.get("look"), about, float(style.get("seconds") or 60.0), own, None, None, on_done,
-                     want_music=want_music, register=register, vibe=vibe_fp)
+                     want_music=want_music, register=register, vibe=vibe_fp, taste=taste)
     return job.public()
 
 
