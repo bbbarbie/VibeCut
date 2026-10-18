@@ -385,6 +385,9 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   `tests/test_songpack.py`.
   `timeline.grid_of` now subtracts the music in-point (every Remix grid was
   off before). `VIBECUT_BED=0` keeps tests offline. `tests/test_bed.py`.
+  A picked track (Openverse download or backup song) is found again by id
+  in the music cache after a restart (`musiclib.find`); before, the edit
+  lost its song. `tests/test_music_restart.py`.
   Measured 2026-10-10 on this Mac: a cold online pick took 195 s (36 tracks
   fetched + analysed), so `/api/brief/auto` calls `bed.prefetch(pace)` as
   soon as the pace is read and the chip shows done/total. Openverse's

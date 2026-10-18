@@ -64,7 +64,11 @@ class Track:
 
     @property
     def id(self) -> str:
-        return hashlib.sha1(self.path.encode()).hexdigest()[:12]
+        return track_id(self.path)
+
+
+def track_id(path: str) -> str:
+    return hashlib.sha1(path.encode()).hexdigest()[:12]
 
 
 class TrackSource:
@@ -106,6 +110,20 @@ class LocalFolderSource(TrackSource):
         h = hashlib.sha1(str(self.root.resolve()).encode()).hexdigest()[:12]
         return Path("~/.cache/vibecut/music").expanduser() / f"{h}.json"
 
+    def _key(self, p: Path) -> str:
+        st = p.stat()
+        return f"{p.relative_to(self.root)}|{st.st_size}|{st.st_mtime_ns}"
+
+    def one(self, p: Path) -> Track:
+        """One file of the folder: its cached features, else read now (not cached)."""
+        try:
+            cache = json.loads(self._cache_path().read_text())
+            entries = cache.get("tracks", {}) if cache.get("version") == FEATURE_VERSION else {}
+        except (OSError, ValueError):
+            entries = {}
+        rec = entries.get(self._key(p))
+        return _from_json(str(p), rec) if rec else analyse(str(p))
+
     def list(self) -> list[Track]:
         files = self.files()
         cache_file = self._cache_path()
@@ -116,12 +134,7 @@ class LocalFolderSource(TrackSource):
         except (OSError, ValueError):
             cache = {}
         entries: dict = cache.get("tracks", {})
-
-        def key(p: Path) -> str:
-            st = p.stat()
-            return f"{p.relative_to(self.root)}|{st.st_size}|{st.st_mtime_ns}"
-
-        keys = {p: key(p) for p in files}
+        keys = {p: self._key(p) for p in files}
         todo = [p for p in files if keys[p] not in entries]
         done = len(files) - len(todo)
         if self.progress:

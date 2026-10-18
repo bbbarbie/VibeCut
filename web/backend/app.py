@@ -319,7 +319,7 @@ def _track():
     replayed), else whatever the music card last put under it."""
     m = (SESSION.board or {}).get("music")
     if m is not None and "track" in m:
-        return next((t for t in musiclib.STATE["tracks"] if t.id == m["track"]), None)
+        return musiclib.find(m["track"])
     return musiclib.current()
 
 
@@ -1839,7 +1839,7 @@ def api_music_suggest() -> dict:
 
 @app.get("/api/music/audio/{track_id}")
 def api_music_audio(track_id: str) -> FileResponse:
-    p = musiclib.path_for(track_id)  # only files from the chosen folder
+    p = musiclib.path_for(track_id)  # only known tracks: the chosen folder, or VibeCut's own music cache
     if not p:
         raise HTTPException(404)
     return FileResponse(p)
