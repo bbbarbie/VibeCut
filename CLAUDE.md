@@ -517,11 +517,25 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   `tests/test_polish.py`, `test_polish_api.py` (face in the lower third vs
   the top, through the API), `polishDraw.test.ts`. Windows and margins are
   priors.
-- **Fonts: only what's already on the creator's machine.** A system family,
-  or a font file the creator points at (served back only if a saved recipe
-  names it). Never bundle or ship a font. **Recognising a font in a
-  reference image or video is not a licence to render it** — naming it is
-  fine, drawing with it needs the creator's own licensed copy.
+- **Fonts: openly licensed, or already on the creator's machine.** A system
+  family, a font file the creator points at (served back only if a saved
+  recipe names it), or one of the caption fonts that ship with the app
+  (below). Only OFL / Apache faces are ever bundled, each with its licence
+  beside it; never a proprietary face (CapCut's, TikTok's or Instagram's own
+  app fonts), never a look-alike pulled from a reference. **Recognising a
+  font in a reference image or video is not a licence to render it** —
+  naming it is fine, drawing with it needs the creator's own licensed copy.
+  **Caption fonts** (sarah, 2026-10-18: "i want the popular ones to all be in
+  our app"; `captionFonts.ts`, `public/fonts/`, `overlays.TYPEFACES`): 15
+  faces popular in CapCut / TikTok / Reels captions (TikTok Sans, Montserrat,
+  Poppins, Bebas Neue, Anton, Archivo Black, Luckiest Guy, Bangers, Fredoka,
+  Permanent Marker, Caveat, Pacifico, Lobster, Playfair Display, Courier
+  Prime), latin subsets, one weight each, from Fontsource (~850 KB), family
+  names prefixed "VC " so a Mac's own copy never stands in. Picked in the
+  Captions tab as `overlay_style.typeface` (None = the template's or look's
+  own), one font per video like the colour; a template keeps its edge and
+  backing around it; drawn by `overlayDraw` so preview, typing box and export
+  match. Per-font size factors are eyeballed. `captionFonts.test.ts`.
 
 ## The rule that matters most
 

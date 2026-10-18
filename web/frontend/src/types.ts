@@ -157,7 +157,9 @@ export type OverlayStyle = { font: 'Clean' | 'Editorial' | 'Rounded' | 'Mono' | 
   /** the caption template and entrance the creator picked (overlays.TEMPLATES / ENTERS); null = the look's own */
   template?: CaptionTemplate | null; enter?: CaptionEnter | null
   /** the captions' colour picked by hand (the Captions tab); null = automatic, read against the footage */
-  text_color?: string | null }
+  text_color?: string | null
+  /** the captions' font picked by hand (captionFonts.ts id); null = the template's or the look's own */
+  typeface?: string | null }
 export type CaptionTemplate = 'outlined' | 'bold' | 'label' | 'highlight' | 'handwritten' | 'tape' | 'pop' | 'quiet'
 export type CaptionEnter = 'fade' | 'pop' | 'slide' | 'stamp' | 'type' | 'word'
 // How a look moves words (backend looks/*.json): one curve and timing for the whole video.

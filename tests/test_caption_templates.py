@@ -72,6 +72,14 @@ def main() -> int:
     do(text_color=None)
     check("None: back to automatic", not overlays.style_of(s.board).get("text_color"))
     check("refuses a colour that isn't one", bool(do(text_color="yellow").skipped))
+    f = do(typeface="bebas-neue")
+    check("a picked font is the video's, said in words", overlays.style_of(s.board).get("typeface") == "bebas-neue"
+          and any("Bebas Neue" in ln["text"] for ln in f.lines), str(f.lines))
+    s.add({"kind": "direct", "text": "look", "ops": [{"op": "set_look", "look": "cozy"}]}, cat, mk)
+    check("a new look keeps the picked font", overlays.style_of(s.board).get("typeface") == "bebas-neue")
+    do(typeface=None)
+    check("None: back to the style's own font", not overlays.style_of(s.board).get("typeface"))
+    check("refuses a font that isn't shipped", bool(do(typeface="comic-sans").skipped))
     check("every template has a name", set(overlays.TEMPLATES) == {"outlined", "bold", "label", "highlight", "handwritten",
                                                                      "tape", "pop", "quiet"})
     print()

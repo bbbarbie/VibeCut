@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { CAPTION_FONTS, type CaptionFont } from '../captionFonts'
 import type { SeqItem } from '../sequence'
 import { KIND_META } from '../overlayDraw'
 import { multiline, typable, wordsOf, wordsPatch } from '../captionWords'
@@ -67,7 +68,7 @@ export function Inspector(p: {
   onStrip: (patch: Patch, label: string) => void
   onStripDelete: () => void
   onCaptions: () => void
-  onCaptionStyle: (patch: { template?: CaptionTemplate | null; enter?: CaptionEnter | null; text_color?: string | null }, label: string) => void
+  onCaptionStyle: (patch: { template?: CaptionTemplate | null; enter?: CaptionEnter | null; text_color?: string | null; typeface?: string | null }, label: string) => void
   onJoin: (op: { kind: string; dur?: number; all?: boolean }, label: string) => void
   onLook: (id: string, name: string) => void
 }) {
@@ -143,6 +144,10 @@ export function Inspector(p: {
           </>}
           {p.captionsOn ? <>
             <Section title={p.caption ? 'Style of every caption' : 'Style'}><CaptionStyles style={p.style} thumb={p.captionThumb} onPick={p.onCaptionStyle} /></Section>
+            <Section title={p.caption ? 'Font of every caption' : 'Font'}>
+              <CaptionFonts value={p.style.typeface ?? null}
+                            onPick={(f) => p.onCaptionStyle({ typeface: f?.id ?? null }, f ? `The captions are in ${f.name}` : 'The captions are back to their own font')} />
+            </Section>
             <Section title={p.caption ? 'Colour of every caption' : 'Colour'}>
               <CaptionColours value={p.style.text_color ?? null}
                               onPick={(c) => p.onCaptionStyle({ text_color: c }, c ? 'You changed the colour of the captions' : 'The captions are back to their automatic colour')} />
@@ -249,6 +254,27 @@ function CaptionWords({ o, onEdit, onDelete, onWatch, onDone, onPlace }: {
 // still reads. One undoable turn per pick.
 const COLOURS: [string, string][] = [['#ffffff', 'White'], ['#fff3d6', 'Cream'], ['#ffd84d', 'Yellow'], ['#ff9eb5', 'Pink'],
   ['#7fd0ff', 'Sky blue'], ['#8fe3b0', 'Mint'], ['#ff7a59', 'Coral'], ['#141414', 'Black']]
+
+// Each font shown in its own letters on a dark tile, the way it will sit on
+// the footage; one tap sets it for every caption (one font per video).
+function CaptionFonts({ value, onPick }: { value: string | null; onPick: (f: CaptionFont | null) => void }) {
+  const tile = (on: boolean) => cx('flex h-14 min-w-0 items-center justify-center rounded-lg border px-2 text-center',
+    on ? 'border-accent ring-2 ring-accent ring-offset-2 ring-offset-panel' : 'border-black/15 hover:brightness-125')
+  return (
+    <div className="grid grid-cols-2 gap-2.5">
+      <button type="button" aria-pressed={!value} onClick={() => value && onPick(null)}
+              className={cx('flex h-14 items-center justify-center rounded-lg border px-2 font-serif text-[16px]',
+                !value ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-panel text-zinc-100 hover:bg-raised')}>Style's own</button>
+      {CAPTION_FONTS.map((f) => (
+        <button key={f.id} type="button" title={f.name} aria-label={f.name} aria-pressed={value === f.id}
+                onClick={() => value !== f.id && onPick(f)} className={tile(value === f.id)} style={{ background: '#1d1d22' }}>
+          <span className="leading-[1.1] text-white"
+                style={{ fontFamily: f.family, fontWeight: f.weight, fontSize: Math.round((f.name.length > 12 ? 16 : 19) * f.size) }}>{f.name}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
 
 function CaptionColours({ value, onPick }: { value: string | null; onPick: (c: string | null) => void }) {
   const [own, setOwn] = useState(value ?? '#ffffff')

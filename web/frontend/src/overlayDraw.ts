@@ -8,6 +8,7 @@
 // state at t is computed, never accumulated, which is what lets the export
 // render any frame in any order.
 
+import { fontById } from './captionFonts.ts'
 import type { CaptionEnter, CaptionTemplate, Motion, Overlay, OverlayKind, OverlayStyle } from './types'
 
 export type Part = { id: string; title: string; start: number; end: number }
@@ -159,7 +160,9 @@ const lineFont = (style: OverlayStyle, ln: Line, px = ln.px) =>
 export async function ensureFonts(style: OverlayStyle): Promise<void> {
   if (typeof document === 'undefined' || !document.fonts) return
   const tpl = tplFor(style)
-  const fonts = [fontCss(style, 40, true), fontCss(style, 40, false), ...(tpl ? [`${tpl.weight} 40px ${tpl.family}`] : [])]
+  const face = fontById(style.typeface)
+  const fonts = [fontCss(style, 40, true), fontCss(style, 40, false), ...(tpl ? [`${tpl.weight} 40px ${tpl.family}`] : []),
+    ...(face ? [`${face.weight} 40px ${face.family}`] : [])]
   await Promise.all(fonts.map((f) => document.fonts.load(f).catch(() => [])))
 }
 
@@ -314,14 +317,19 @@ export function wrap(measure: (s: string) => number, text: string, maxW: number,
 }
 
 function linesFor(o: Overlay, style: OverlayStyle, u: number, chars: number): Line[] {
+  const face = o.kind === 'caption' ? fontById(style.typeface) : null
+  // a picked font letters every caption line; the template keeps its edge,
+  // backing and case, the look its colour and motion
+  const lettered = (lines: Line[]) => !face ? lines
+    : lines.map((ln) => ({ ...ln, family: face.family, weight: face.weight, px: ln.px * face.size }))
   if (o.kind === 'caption' && style.template) {
-    return templateLines(o, tplFor(style)!, u, chars)
+    return lettered(templateLines(o, tplFor(style)!, u, chars))
   }
   const lines = baseLines(o, style, u, chars)
   const m = style.motion
-  if (!m || o.kind === 'date') return lines
+  if (!m || o.kind === 'date') return lettered(lines)
   // the look's case and tracking, on every line (a date keeps its own)
-  return lines.map((ln) => ({
+  return lettered(lines).map((ln) => ({
     ...ln,
     text: m.case === 'lower' ? ln.text.toLowerCase() : ln.text,
     upper: ln.upper || m.case === 'upper',

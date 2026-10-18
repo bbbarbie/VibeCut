@@ -68,8 +68,16 @@ ENTERS = {"fade": "Fade up", "pop": "Pop", "slide": "Slide in", "stamp": "Stamp"
 # The captions' colour, picked by hand (the Captions tab). None = automatic:
 # the look's colour, swapped by ink.py for one that reads over the footage.
 # A picked colour is kept as picked; the edge or glow around it does the reading.
-STYLE_FIELDS = ("font", "color", "accent", "captions", "backing", "template", "enter", "text_color")
-PICKED = ("template", "enter", "text_color")   # never come from a look, so need no marking
+# The captions' typeface, picked by hand (the Captions tab). None = the
+# template's or the look's own. Ids of web/frontend/src/captionFonts.ts, whose
+# openly licensed files ship with the app so preview and export match.
+TYPEFACES = {"tiktok-sans": "TikTok Sans", "montserrat": "Montserrat", "poppins": "Poppins",
+             "bebas-neue": "Bebas Neue", "anton": "Anton", "archivo-black": "Archivo Black",
+             "luckiest-guy": "Luckiest Guy", "bangers": "Bangers", "fredoka": "Fredoka",
+             "permanent-marker": "Permanent Marker", "caveat": "Caveat", "pacifico": "Pacifico",
+             "lobster": "Lobster", "playfair-display": "Playfair Display", "courier-prime": "Courier Prime"}
+STYLE_FIELDS = ("font", "color", "accent", "captions", "backing", "template", "enter", "text_color", "typeface")
+PICKED = ("template", "enter", "text_color", "typeface")   # never come from a look, so need no marking
 
 TEXT_MAX = 140
 EDITABLE = ("text", "sub", "pos", "size", "anim", "dur", "place")
@@ -118,7 +126,7 @@ def clean_style(patch: dict) -> dict:
         if patch["backing"] not in BACKINGS:
             raise OverlayError(f"backing must be one of {', '.join(BACKINGS)}")
         out["backing"] = patch["backing"]
-    for k, allowed in (("template", TEMPLATES), ("enter", ENTERS)):
+    for k, allowed in (("template", TEMPLATES), ("enter", ENTERS), ("typeface", TYPEFACES)):
         if k in patch:
             if patch[k] is not None and patch[k] not in allowed:
                 raise OverlayError(f"{k} must be one of {', '.join(allowed)}")
@@ -418,7 +426,8 @@ def describe(a: dict | None, b: dict | None) -> list[dict]:
     sa, sb_ = (a or {}).get("overlay_style"), (b or {}).get("overlay_style")
     if b is not None and sa != sb_ and sb_:
         sa_, sb2 = style_of(a), style_of(b)
-        for k, names, what in (("template", TEMPLATES, "Captions"), ("enter", ENTERS, "Captions come in")):
+        for k, names, what in (("template", TEMPLATES, "Captions"), ("enter", ENTERS, "Captions come in"),
+                               ("typeface", TYPEFACES, "Caption font")):
             if sa_.get(k) != sb2.get(k):
                 v = sb2.get(k)
                 lines.append({"kind": "retitled", "text": f"{what}: {names[v]}" if v
