@@ -101,7 +101,20 @@ def fingerprint(styles: list[dict]) -> dict:
     energy = np.mean(curves, axis=0) if curves else None     # a reference may know its arc but not its curve
     durs = [float(s["duration"]) for s in styles if s.get("duration")]
     dur = float(np.clip(np.median(durs) if durs else 30.0, *DEFAULT_LEN))
+    # the reels' ideas (style.words / ending): where words sit, how long they
+    # hold, whether there are any; how long the last shot is held
+    ws = [s["words"] for s in styles if (s.get("words") or {}).get("share") is not None]
+    text = None
+    if ws:
+        bands = [w["band"] for w in ws if w.get("band")]
+        text = {"share": round(float(np.median([w["share"] for w in ws])), 3),
+                "band": max(set(bands), key=bands.count) if bands else None,
+                "hold_s": round(float(np.median([w["hold_s"] for w in ws if w.get("hold_s")])), 2) if any(w.get("hold_s") for w in ws) else None,
+                "upper": bool(np.median([w.get("upper") or 0 for w in ws]) > 0.8),
+                "first_s": round(float(np.median([w["first_s"] for w in ws if w.get("first_s") is not None])), 2) if any(w.get("first_s") is not None for w in ws) else None}
+    ends = [s["ending"]["last_s"] for s in styles if (s.get("ending") or {}).get("last_s")]
     return {
+        "text": text, "last_s": round(float(np.median(ends)), 2) if ends else None,
         "median_s": round(med, 3), "curve": [round(float(c), 3) for c in curve],
         "spread": (round(p10 / med, 2), round(p90 / med, 2)),
         "hook_s": round(float(np.clip(first, *HOOK_HOLD)), 2),
@@ -338,13 +351,16 @@ def _clock(dt: datetime) -> str:
     return f"{h}:{dt.minute:02d} {'a.m.' if dt.hour < 12 else 'p.m.'}"
 
 
-def captions(plan: sel.Plan, title: str | None, sub: str | None) -> list[dict]:
-    """What goes on screen, in sequence seconds. Built only from what the edit knows."""
+def captions(plan: sel.Plan, title: str | None, sub: str | None, hold_s: float | None = None,
+             with_title: bool = True) -> list[dict]:
+    """What goes on screen, in sequence seconds. Built only from what the edit
+    knows. `hold_s`: how long a stop's line stays (a reference's own hold);
+    `with_title`: a reel with no words at the top gets no title."""
     out = []
     t = 0.0
     hook_end = sum(p.duration for p in plan.hook)
     first = next((p.shot.when for p in plan.picks if p.shot.when), None)
-    if plan.hook:
+    if plan.hook and with_title:
         out.append({"kind": "title", "text": title or TAG_TEXT,
                     "sub": sub or (first.strftime("%A, %B %-d") if first else ""),
                     "start": 0.0, "end": hook_end, "anim": "pop"})
@@ -361,7 +377,8 @@ def captions(plan: sel.Plan, title: str | None, sub: str | None) -> list[dict]:
         if phrase:
             words = f"{words} · {phrase}" if words else phrase
         if words:
-            hold = min(2.2, max(1.2, sum(p.duration for p in picks[:3])))
+            hold = hold_s if hold_s else min(2.2, max(1.2, sum(p.duration for p in picks[:3])))
+            hold = min(hold, max(0.8, sum(p.duration for p in picks)))   # never past the stop itself
             out.append({"kind": "scene", "text": words, "start": round(t, 3), "end": round(t + hold, 3),
                         "anim": "pop"})
         t += sum(p.duration for p in picks)

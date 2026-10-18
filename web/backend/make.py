@@ -110,12 +110,21 @@ def end_strong(plan: sel.Plan) -> bool:
     return True
 
 
-def hold_ending(clips: dict[str, dict], plan: sel.Plan, period: float) -> None:
-    """The last shot gets END_BEATS beats if it was filmed long enough."""
+def end_beats(fp: dict, period: float) -> int:
+    """How many beats the ending holds: the references' last shot in beats
+    (1–4), else END_BEATS."""
+    last = fp.get("last_s")
+    if last:
+        return int(min(4, max(1, round(float(last) / period))))
+    return END_BEATS
+
+
+def hold_ending(clips: dict[str, dict], plan: sel.Plan, period: float, beats: int = END_BEATS) -> None:
+    """The last shot gets `beats` beats if it was filmed long enough."""
     if not plan.sessions or not plan.sessions[-1]:
         return
     p = plan.sessions[-1][-1]
-    want = END_BEATS * period
+    want = beats * period
     if p.duration + 1e-3 < want:
         p.start, p.end, p.short = sel.window(clips, p.shot, want)
 
@@ -137,7 +146,7 @@ def music(clips: dict[str, dict], plan: sel.Plan, fp: dict, pace: str, own: list
     mx = remix.pick_from(pool, fp, plan.duration + 4.0, hook_s)
     if mx:
         remix.quantise(plan, clips, mx["period"])
-        hold_ending(clips, plan, mx["period"])
+        hold_ending(clips, plan, mx["period"], end_beats(fp, mx["period"]))
         hook_s = sum(p.duration for p in plan.hook) or hook_s
         mx["in"] = round(max(0.0, mx["drop"] - hook_s), 3)
     return mx, source
@@ -161,8 +170,24 @@ def ops(plan: sel.Plan, fp: dict, mx: dict | None, fmt: str, look: str | None, a
     if look:
         out.append({"op": "set_look", "look": look})
     out.extend(punches(plan, mx))
+    # the references' words: where they sit, how long they hold, whether a
+    # reel that opens on its footage gets a title at all, caps or not
+    text = fp.get("text")
+    with_title, hold = True, None
+    if text:
+        if text["share"] < 0.05:
+            return out                      # a wordless reel makes a wordless video
+        style_op: dict = {"op": "overlay_style", "source": "reference"}
+        if text.get("band") in ("bottom", "middle"):
+            style_op["captions"] = text["band"]
+        if text.get("upper"):
+            style_op["template"] = "bold"
+        if len(style_op) > 2:
+            out.append(style_op)
+        hold = text.get("hold_s")
+        with_title = text.get("first_s") is None or text["first_s"] <= fp.get("hook_s", 1.5) + 0.5
     title = (about or "").split(",")[0].strip()[:40] or None
-    for c in remix.captions(plan, title, None):
+    for c in remix.captions(plan, title, None, hold_s=hold, with_title=with_title):
         if c["kind"] == "title":
             out.append({"op": "add_overlay", "kind": "title", "text": c["text"], "sub": c.get("sub", ""),
                         "anchor": {"to": "edit"}, "at": 0.0, "dur": round(c["end"] - c["start"], 2), "anim": "rise"})
@@ -214,6 +239,10 @@ def punches(plan: sel.Plan, mx: dict | None) -> list[dict]:
 def say(plan: sel.Plan, fp: dict, mx: dict | None, source: str, judged: bool) -> str:
     parts = [f"Made your video: {len(plan.picks)} moments, {plan.duration:.0f} s"
              + (", in the style of your references" if fp.get("refs_used") else "") + "."]
+    t = fp.get("text")
+    if fp.get("refs_used") and t:
+        parts.append("No words, like the reel." if t["share"] < 0.05 else
+                     f"Words at the {t.get('band') or 'bottom'}, held about {t.get('hold_s') or 1.5:.1f} s, like the reel.")
     if mx:
         parts.append(f"Music: {mx['track'].title} ({mx['bpm']:.0f} BPM, from {source}); every cut sits on its beat, "
                      "the picture pushes in on the drop and on every bar.")

@@ -130,6 +130,14 @@ curve, white balance, split toning, saturation), its **frame** (cinematic
 bars) and its **music feel** (energy arc, tempo). Each trait says what it
 was measured from.
 
+Since 2026-10-18 a reference also teaches its **ideas**: where it puts
+words and for how long (read from its frames by the Mac's Vision; "not
+checked" elsewhere), how it opens (first cut, on action or still) and how
+it ends (last shot held, fade). Make my video with a reel puts your
+captions where the reel's were, holds them as long, skips the title when
+the reel's words start late, makes a wordless video from a wordless reel,
+and holds your ending as many beats as the reel's last shot.
+
 Tick what to borrow. Pacing and beat retime your shots (a shot is never
 held longer than it was filmed; voiceover parts keep their timing). The
 colour becomes one LUT fitted to *your* shots, previewed before/after, with

@@ -188,6 +188,22 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   judged on one real shoot (42 clips, 3 references). Every weight is a
   guess; the selector has no model behind it (no key on this Mac).
 
+- **A reel's ideas, not only its rhythm** (2026-10-18, the user's vision
+  restated: "analyse the aesthetics, get a similar version"). `style.learn`
+  gained three traits: **words** (`text_style`: share of time with text,
+  first words at, band bottom / middle / top, hold, cards, caps, size; from
+  `vibevision --text` = Vision `RecognizeTextRequest` at `.fast`, spec P16,
+  over the source's frames at 2 fps 540p, `reference.text_events`; frames
+  deleted after; `pending: ["vision"]` elsewhere), **opening** (first cut,
+  motion in the first 2 s vs the rest) and **ending** (last shot held,
+  fade out, motion in the last 2 s). `VERSION` 2. `remix.fingerprint`
+  carries `text` and `last_s`; `make.ops` puts captions where the reel's
+  words were (`overlay_style captions`, `template: bold` for caps), holds
+  them as long (`remix.captions(hold_s=…)`), gives no title when the reel's
+  words start late, no words at all for a wordless reel, and `end_beats`
+  holds the ending as many beats as the reel's last shot (1–4). Verified
+  OCR end to end on this Mac (`tests/test_ideas.py`); references learnt
+  before this have no `words` and fall back to the priors.
 - **Motion on the beat and a deliberate ending** (`make.py`, 2026-10-18):
   `punch` is a shot fix like speed or mirror (`board.SHOT_FX`, ±`PUNCH_MAX`
   0.25; `timeline.layout` carries it, `export._shot` renders it as zoompan,
