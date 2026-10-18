@@ -227,6 +227,21 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   describe the cut (`make.pace_of`), so the Frames chips tell the truth.
   Cuts sit on the half-beat grid (filler) with the hook and heroes on whole
   beats — `remix.quantise`'s rule, now pinned in `test_make`. All priors.
+- **What you undo and refuse** (layer 3, 2026-10-18; `Preferences.
+  suggestions` / `take`, `/api/preferences/suggest`, "From what you did"
+  in `Chat.tsx`): an undone turn of the machine's own (`MACHINE`: the bed,
+  the captions, the repeat check, smoother cuts) and a "no" at export with
+  a note are offered once as suggested rules; only the creator turns one
+  into a rule (every video needs when / when not; this video; or No), and
+  the decision is kept in the preferences file (`suggested`) so it never
+  comes back. Undone hand edits are not suggested (they're the creator's
+  own). Nothing is applied from a suggestion by itself. `tests/test_learn3.py`.
+  Also that day: the writer hears the reel's own lines (`words.samples`
+  from the OCR, ≤ 12, on `fp.text.samples`, appended to the taste as
+  "write new ones in that spirit, never these"); the setup's lengths
+  differ by frame (`brief.length_for`: a vlog takes the Medium mark);
+  Keyboard shortcuts and Polish left the name menu (the `?` in the timeline
+  bar and `#polish` still reach them).
 - **Taste in the loop** (layer 2 of preserving preference, 2026-10-18;
   key only). `make.taste_text(profile, PREFS.for_model())` renders the
   creator in their own words (name, what they make, the feeling, pace,

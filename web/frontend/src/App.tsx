@@ -989,7 +989,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const chat = (
     <Chat items={chatItems} pending={pending} onSend={send} onToggle={toggle}
           disabled={!!pending} llm={caps.llm} hasBoard={!!session?.board || !!session?.proposals}
-          prefs={session?.preferences ?? null} onClassify={classify} onRule={changeRule}
+          prefs={session?.preferences ?? null} onClassify={classify} onRule={changeRule} onSuggest={async (r) => { const s = await api.suggest(r); setSession(s) }}
           review={session?.last ? { turn: session.last.turn, items: session.last.review ?? [] } : null} />
   )
 
@@ -1213,8 +1213,6 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                 { label: 'Feel like a video you love…', hint: 'Its pace, cuts and colour, never its frames', disabled: !clips.length || shown !== 'story', onClick: () => { transport.stop(); setMenu(null); setReferencing(true) } },
                 { label: 'Talking to camera…', hint: caps.speech ? 'Transcribe on this Mac, cut pauses and retakes' : 'Needs macOS 26 with the Xcode command-line tools', disabled: !caps.speech || !clips.length, onClick: openTalk },
                 { label: 'Build a short from reference reels…', hint: caps.links ? 'Their pace and length, your clips, free music' : 'Links need yt-dlp; files work', disabled: !clips.length, onClick: openRemix },
-                { label: 'Keyboard shortcuts', onClick: () => setHelp(true) },
-                { label: 'Polish a finished video', hint: 'A separate tool for a video you already cut', onClick: () => go({ kind: 'polish' }) },
                 { label: 'All your videos', onClick: () => go({ kind: 'projects' }) },
                 { label: 'Start this video over…', hint: 'Clears the footage list and the story; files stay', danger: true, disabled: !clips.length, onClick: () => setRestart(true) },
               ]} />

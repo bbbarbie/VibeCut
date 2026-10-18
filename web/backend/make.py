@@ -179,7 +179,7 @@ def music(clips: dict[str, dict], plan: sel.Plan, fp: dict, pace: str, own: list
     return mx, source
 
 
-def words(plan: sel.Plan, about: str, taste: str = "", ask=None) -> list[str] | None:
+def words(plan: sel.Plan, about: str, taste: str = "", ask=None, fp: dict | None = None) -> list[str] | None:
     """One written line per stop (the clock stays in front of it): Claude,
     with the creator's taste, from each stop's time and labels -- the same
     writer the describe captions use (llm.day_phrases). None without a key
@@ -201,6 +201,10 @@ def words(plan: sel.Plan, about: str, taste: str = "", ask=None) -> list[str] | 
                 labels[k] = max(labels.get(k, 0.0), float(v))
         top = [k for k, _ in sorted(labels.items(), key=lambda kv: -kv[1])[:6]]
         items.append({"time": remix._clock(picks[0].shot.when) if picks[0].shot.when else "", "labels": top})
+    samples = ((fp or {}).get("text") or {}).get("samples") or []
+    if samples:
+        # the reel's own lines, so the writer hears how they phrase things -- never copied
+        taste = (taste + "\n\n" if taste else "") + "LINES FROM THE REFERENCE REEL (their way of saying it; write new ones in that spirit, never these): " + "; ".join(samples[:8])
     try:
         lines = ask(items, about, taste)
     except Exception:  # noqa: BLE001 -- the label table's phrase stands
@@ -400,7 +404,7 @@ def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, ab
             pool, _ = sb.usable(sb.shots_from_clips(list(clips.values()), cut))
             talking = tempo.talking(list(clips.values()), pool)
             judged = any(n.startswith("Claude judged") for n in plan.notes)
-            lines = words(plan, about, taste, words_ask)
+            lines = words(plan, about, taste, words_ask, fp)
             job.result = {"ops": ops(plan, fp, mx, fmt, look, about, talking, lines=lines), "music": mx, "fp": fp,
                           "plan": plan, "taste": taste, "written": bool(lines),
                           "reply": say(plan, fp, mx, source, judged) + (" Claude wrote the lines, in your voice." if lines else "")}

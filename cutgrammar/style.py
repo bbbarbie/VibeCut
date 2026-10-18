@@ -532,6 +532,7 @@ def text_style(events: list[dict], duration: float) -> dict | None:
     on = []
     bands = {"bottom": 0, "middle": 0, "top": 0}
     heights, cards_words, letters, upper = [], [], 0, 0
+    samples: list[str] = []            # the reel's own lines, a few, for the writer's ear
     for e in sorted(events, key=lambda e: e["t"]):
         items = [i for i in e.get("items", []) if i.get("conf", 1) >= TEXT_MIN_CONF and i.get("text", "").strip()]
         on.append(bool(items))
@@ -543,6 +544,9 @@ def text_style(events: list[dict], duration: float) -> dict | None:
                     bands[name] += 1
             heights.append(h)
             cards_words.append(len(i["text"].split()))
+            line = " ".join(i["text"].split())
+            if 2 <= len(line) <= 48 and line.lower() not in {x.lower() for x in samples} and len(samples) < 12:
+                samples.append(line)
             for ch in i["text"]:
                 if ch.isalpha():
                     letters += 1
@@ -563,7 +567,7 @@ def text_style(events: list[dict], duration: float) -> dict | None:
         words.append("ALL CAPS")
     return {"share": round(share, 3), "first_s": round(first, 2), "band": band, "hold_s": round(hold, 2),
             "cards": len(runs), "upper": round(up, 2), "size": round(float(np.median(heights)), 3),
-            "words_per_card": round(float(np.median(cards_words)), 1),
+            "words_per_card": round(float(np.median(cards_words)), 1), "samples": samples,
             "bands": {k: round(v / max(1, sum(bands.values())), 2) for k, v in bands.items()}, "words": words}
 
 

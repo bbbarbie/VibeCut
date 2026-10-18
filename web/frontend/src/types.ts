@@ -232,7 +232,8 @@ export type PrefRule = {
   id: string; klass: 'long_term' | 'project'; rule: string; scope: string; counter: string; reason: string
   active: boolean; evidence: { said: string; changed: string[] }; history: { at: number; action: string; klass: string; actor: string }[]
 }
-export type Preferences = { candidates: PrefCandidate[]; rules: PrefRule[] }
+export type PrefSuggestion = { id: string; source: 'undo' | 'verdict'; said: string; rule: string; suggested: PrefClass }
+export type Preferences = { candidates: PrefCandidate[]; rules: PrefRule[]; suggestions?: PrefSuggestion[] }
 
 export type TimelineItem = { uid: string; shotId: string; clipId: string; start: number; end: number; thumb: string; beatId: string; beatTitle: string; mark?: Mark }
 export type Mark = 'added' | 'moved' | 'trimmed'

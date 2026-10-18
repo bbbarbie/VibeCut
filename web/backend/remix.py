@@ -111,6 +111,7 @@ def fingerprint(styles: list[dict]) -> dict:
                 "band": max(set(bands), key=bands.count) if bands else None,
                 "hold_s": round(float(np.median([w["hold_s"] for w in ws if w.get("hold_s")])), 2) if any(w.get("hold_s") for w in ws) else None,
                 "upper": bool(np.median([w.get("upper") or 0 for w in ws]) > 0.8),
+                "samples": [x for w in ws for x in (w.get("samples") or [])][:12],
                 "first_s": round(float(np.median([w["first_s"] for w in ws if w.get("first_s") is not None])), 2) if any(w.get("first_s") is not None for w in ws) else None}
     ends = [s["ending"]["last_s"] for s in styles if (s.get("ending") or {}).get("last_s")]
     return {

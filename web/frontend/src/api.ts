@@ -101,6 +101,7 @@ export const api = {
     j<MomentAnswer>(post('/api/moment/chat', { t, message, history })),
   toggle: (turn: number) => j<Session>(post(`/api/turns/${turn}/toggle`, {})),
   voiceover: (text: string) => j<Session>(post('/api/voiceover', { text })),
+  suggest: (req: { id: string; klass: PrefClass | 'rejected'; rule?: string; scope?: string; counter?: string }) => j<Session>(post('/api/preferences/suggest', req)),
   classify: (req: { turn: number; klass: PrefClass; rule?: string; scope?: string; counter?: string; reason?: string }) =>
     j<Session>(post('/api/preferences/classify', req)),
   rule: (id: string, action: 'forget' | 'narrow') => j<Session>(post(`/api/preferences/${id}/${action}`, {})),

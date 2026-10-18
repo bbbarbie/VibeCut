@@ -340,7 +340,7 @@ def _session() -> dict:
         "music": _music_public(),
         "bed": BED["job"].public() if BED["job"] else None,
         "mix": _mix_public(b, tl),
-        "preferences": PREFS.public(SESSION),
+        "preferences": PREFS.public(SESSION, PROJECT["p"].exports if PROJECT["p"] else None),
         "voiceover": _voiceover_public(),
         "project": _meta(),
         "brief": PROJECT["p"].brief if PROJECT["p"] else None,
@@ -1371,6 +1371,25 @@ def api_pref_classify(req: ClassifyReq) -> dict:
     with LOCK:
         try:
             PREFS.classify(SESSION, req.turn, req.klass, "user", req.rule, req.scope, req.counter, req.reason)
+        except PreferenceError as e:
+            raise HTTPException(400, str(e)) from e
+        return _session()
+
+
+class SuggestReq(BaseModel):
+    id: str
+    klass: str
+    rule: str = ""
+    scope: str = ""
+    counter: str = ""
+
+
+@app.post("/api/preferences/suggest")
+def api_pref_suggest(req: SuggestReq) -> dict:
+    """A suggested rule (from an undo or a "no" at export) becomes a rule, or is dismissed."""
+    with LOCK:
+        try:
+            PREFS.take(req.id, req.klass, "user", req.rule, req.scope, req.counter)
         except PreferenceError as e:
             raise HTTPException(400, str(e)) from e
         return _session()
