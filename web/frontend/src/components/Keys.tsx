@@ -16,6 +16,9 @@ const ROWS: [string, string][] = [
   ['Delete', 'Remove the marked section, or the selected shot — the rest moves up'],
   ['⌥ Delete', 'Same, but leave empty space instead'],
   ['⌘Z · ⇧⌘Z', 'Undo · redo'],
+  ['⌘ + scroll  or  pinch', 'Zoom the timeline around the pointer — all the way in to single frames'],
+  ['⌘= · ⌘−', 'Zoom the timeline in · out'],
+  ['⇧Z', 'Fit the whole video in the timeline'],
   ['Hold ⌥ while dragging the playhead', 'Don’t stick — go exactly where you point'],
   ['Time box', 'Type 21.3, 0:21.3 or 00:00:21:09 and press Enter — goes exactly there'],
 ]

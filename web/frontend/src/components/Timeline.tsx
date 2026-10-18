@@ -6,8 +6,8 @@ import type { JoinInfo, Overlay, SoundStrip, TimelineData } from '../types'
 import { KIND_META } from '../overlayDraw'
 import { SHOT_MIME } from './Shelf'
 import { Icon, type IconName } from './icons'
-import { LABEL_GAP_PX, rulerLabel, rulerMarks, rulerStep } from '../ruler'
-import { anchoredScroll, clampZoom, fromSlider, toSlider, wheelFactor } from '../zoom'
+import { LABEL_GAP_PX, rulerFps, rulerLabel, rulerMarks, rulerScale, TICK_GAP_PX } from '../ruler'
+import { anchoredScroll, clampZoom, fromSlider, maxZoom, toSlider, wheelFactor } from '../zoom'
 
 const TL_MIME = 'application/x-vibecut-tl'
 const MIN_W = 56
@@ -120,8 +120,9 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   const anchor = useRef<{ t: number; offset: number } | null>(null)
   const zoomRef = useRef(zoom)
   useLayoutEffect(() => { zoomRef.current = zoom }, [zoom])
+  const zoomMax = maxZoom(fitNow(), tl.fps)
   const zoomTo = (z: number, at?: { t: number; offset: number }) => {
-    z = clampZoom(z)
+    z = clampZoom(z, zoomMax)
     if (z === zoomRef.current) return
     const el = track.current
     if (!anchor.current && el) {
@@ -192,7 +193,9 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
     const { t, localPps } = tOf(clientX - el.getBoundingClientRect().left + el.scrollLeft)
     const opts = { pxPerSec: localPps, disabled: bypass }
     const r = snap(tl.targets, t, opts)
-    transport.seek(r.t)
+    // as in every editor, the playhead lands on a frame, never between two
+    const fps = rulerFps(tl.fps)
+    transport.seek(r.target ? r.t : Math.min(tl.total, Math.round(r.t * fps) / fps))
     const near = r.target ? null : approaching(tl.targets, t, opts)
     snapStore.set(r.target ? { target: r.target, snapped: true } : near ? { target: near, snapped: false } : null)
   }
@@ -234,7 +237,25 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
     const t = anchor.current?.t ?? tOf(offset + el.scrollLeft).t
     zoomTo(gestureRef.current.z * e.scale, { t, offset })
   }
-  useLayoutEffect(() => { wheelRef.current = onWheel; pinchRef.current = onPinch })
+  // The keys every editor zooms with: ⌘= / ⌘− (Ctrl on Windows) in and out
+  // around the playhead, ⇧Z to fit the whole video, as in Final Cut.
+  const onKey = (e: KeyboardEvent) => {
+    const tag = (e.target as HTMLElement | null)?.tagName
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement | null)?.isContentEditable || !items.length) return
+    const mod = e.metaKey || e.ctrlKey
+    if (mod && (e.key === '=' || e.key === '+')) zoomTo(zoomRef.current * 1.5)
+    else if (mod && (e.key === '-' || e.key === '_')) zoomTo(zoomRef.current / 1.5)
+    else if (!mod && !e.altKey && e.shiftKey && e.key.toLowerCase() === 'z') zoomTo(1)
+    else return
+    e.preventDefault()
+  }
+  const keyRef = useRef<(e: KeyboardEvent) => void>(() => {})
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => keyRef.current(e)
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [])
+  useLayoutEffect(() => { wheelRef.current = onWheel; pinchRef.current = onPinch; keyRef.current = onKey })
   useEffect(() => {
     const el = track.current
     if (!el) return
@@ -254,20 +275,46 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
     }
   }, [])
 
-  // Times along the ruler (5s, 10s, …), a step that suits this zoom; a
-  // label that would land on the one before it (short shots are drawn
-  // wider than their length) is skipped.
-  const timeMarks = useMemo(() => {
-    const out: { t: number; x: number }[] = []
-    for (const t of rulerMarks(tl.total, rulerStep(pps))) {
-      const x = xOf(t)
-      if (!out.length || x - out[out.length - 1].x >= LABEL_GAP_PX * 0.75) out.push({ t, x })
+  // The part of the edit on screen: zoomed in to frames, the ruler only
+  // draws what can be seen (a long edit would be tens of thousands of ticks).
+  const [view, setView] = useState({ left: 0, width: 800 })
+  useEffect(() => {
+    const el = track.current
+    if (!el) return
+    let raf = 0
+    const read = () => { raf = 0; setView({ left: el.scrollLeft, width: el.clientWidth }) }
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(read) }
+    read()
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => { el.removeEventListener('scroll', onScroll); cancelAnimationFrame(raf) }
+  }, [width, pps])
+
+  // The ruler: labelled times (5s, 10s… down to 15f, 1f zoomed in) with small
+  // ticks between them. A label that would land on the one before it (short
+  // shots are drawn wider than their length) is skipped, as is a tick.
+  const ruler = useMemo(() => {
+    const fps = rulerFps(tl.fps)
+    const { major, minor } = rulerScale(pps, fps)
+    const from = Math.max(0, tOf(view.left - 2 * LABEL_GAP_PX).t)
+    const to = Math.min(tl.total, tOf(view.left + view.width + 2 * LABEL_GAP_PX).t)
+    const labels: { f: number; x: number }[] = []
+    for (const f of rulerMarks(from, to, major, fps)) {
+      const x = xOf(f / fps)
+      if (!labels.length || x - labels[labels.length - 1].x >= LABEL_GAP_PX * 0.75) labels.push({ f, x })
+    }
+    const ticks: number[] = []
+    for (const f of rulerMarks(from, to, minor, fps)) {
+      if (f % major === 0) continue
+      const x = xOf(f / fps)
+      if (!ticks.length || x - ticks[ticks.length - 1] >= TICK_GAP_PX * 0.7) ticks.push(x)
     }
     // and the edit's own length at its end, when there's room for it
     const end = xOf(tl.total)
-    if (out.length && end - out[out.length - 1].x >= LABEL_GAP_PX) out.push({ t: tl.total, x: end })
-    return out
-  }, [tl.total, pps, geo]) // eslint-disable-line react-hooks/exhaustive-deps
+    const endF = Math.round(tl.total * fps)
+    if (labels.length && endF % major && end - labels[labels.length - 1].x >= LABEL_GAP_PX && end <= view.left + view.width + 2 * LABEL_GAP_PX)
+      labels.push({ f: endF, x: end })
+    return { labels, ticks, fps }
+  }, [tl.total, tl.fps, pps, geo, view]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep the playhead in view while it moves.
   useEffect(() => {
@@ -436,10 +483,12 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
         <div className="flex shrink-0 items-center gap-1.5" title="Zoom the timeline. You can also hold ⌘ (or Ctrl) and scroll, or pinch on the trackpad, over the timeline">
           <button type="button" aria-label="Zoom out" onClick={() => zoomTo(zoom / 1.5)}
                   className="grid size-7 place-items-center rounded-md text-zinc-300 hover:bg-raised"><Icon name="minus" size={18} /></button>
-          <input type="range" min={0} max={1} step="any" value={toSlider(zoom)} aria-label="Zoom"
-                 onChange={(e) => zoomTo(fromSlider(Number(e.target.value)))} className="w-24 accent-[#1f5f8b]" />
+          <input type="range" min={0} max={1} step="any" value={toSlider(zoom, zoomMax)} aria-label="Zoom"
+                 onChange={(e) => zoomTo(fromSlider(Number(e.target.value), zoomMax))} className="w-24 accent-[#1f5f8b]" />
           <button type="button" aria-label="Zoom in" onClick={() => zoomTo(zoom * 1.5)}
                   className="grid size-7 place-items-center rounded-md text-zinc-300 hover:bg-raised"><Icon name="plus" size={18} /></button>
+          <button type="button" onClick={() => zoomTo(1)} disabled={zoom === 1} title="Fit the whole video (⇧Z)"
+                  className="rounded-md px-1.5 py-1 font-serif text-[13px] text-zinc-300 hover:bg-raised disabled:opacity-40">Fit</button>
         </div>
         {onExport && (
           <button type="button" onClick={onExport} disabled={!items.length} title="Render the edit, its captions and its music to one video file"
@@ -500,12 +549,17 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                 {inX != null && outX != null && outX > inX && (
                   <rect x={inX} y={0} width={outX - inX} height={28} fill="#1f5f8b" opacity={0.18} />
                 )}
-                {timeMarks.map(({ t, x }) => (
-                  <g key={t} className="text-zinc-300">
-                    <line x1={x} x2={x} y1={0} y2={5} stroke="currentColor" strokeWidth={1} opacity={0.6} />
-                    <text x={x + 4} y={14} fill="currentColor" fontSize={12} fontWeight={500}>{rulerLabel(t)}</text>
-                  </g>
-                ))}
+                <g className="text-zinc-300">
+                  {ruler.ticks.length > 0 && (
+                    <path d={ruler.ticks.map((x) => `M${x},0v4`).join('')} stroke="currentColor" strokeWidth={1} opacity={0.4} />
+                  )}
+                  {ruler.labels.map(({ f, x }) => (
+                    <g key={f}>
+                      <line x1={x} x2={x} y1={0} y2={9} stroke="currentColor" strokeWidth={1} opacity={0.7} />
+                      <text x={x + 4} y={14} fill="currentColor" fontSize={12} fontWeight={500}>{rulerLabel(f, ruler.fps)}</text>
+                    </g>
+                  ))}
+                </g>
                 {tl.targets.map((g: Target, i) => (
                   <line key={i} x1={xOf(g.t)} x2={xOf(g.t)} y1={28 - TICK_H[g.type]} y2={28}
                         stroke={TICK[g.type]} strokeWidth={g.type === 'shot' ? 1.5 : 1} opacity={g === hl ? 1 : 0.55} />
