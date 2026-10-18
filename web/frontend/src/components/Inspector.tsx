@@ -216,20 +216,26 @@ function CaptionWords({ o, onEdit, onDelete, onWatch, onDone, onPlace }: {
   const here: OverlayPlace = o.place ?? { x: 0.5, y: o.pos.startsWith('top') ? 0.2 : o.pos === 'center' ? 0.5 : 0.8, scale: 1 }
   const row = here.y < 0.35 ? 'top' : here.y > 0.65 ? 'bottom' : 'middle'
   const name = KIND_META[o.kind].label
-  // a described moment's place name sits above its line; other kinds have a second line of their own
-  const subLabel = o.kind === 'caption' ? (o.sub ? 'Place above it' : null)
-    : o.kind === 'date' || o.kind === 'chapters' ? null
-      : o.kind === 'part' ? 'Small line above' : o.kind === 'name' ? 'Handle or role' : 'Second line'
+  // One box, the lines as they read on the picture (sarah, 2026-10-18: the
+  // place shouldn't be a separate text; CapCut and the rest keep a caption's
+  // words in one box). A caption's place name and a part's label sit above
+  // the main line, a title's or name tag's second line below; a date has one.
+  const two = !['date', 'chapters'].includes(o.kind)
+  const above = o.kind === 'caption' || o.kind === 'part'
+  const shown = !o.sub ? o.text : above ? `${o.sub}\n${o.text}` : `${o.text}\n${o.sub}`
+  const commit = (v: string) => {
+    const ls = v.split('\n').map((x) => x.trim()).filter(Boolean)
+    if (!ls.length) return
+    const [text, sub] = !two || ls.length === 1 ? [ls.join(' '), ''] : above
+      ? [ls.slice(1).join(' '), ls[0]] : [ls[0], ls.slice(1).join(' ')]
+    const patch: { text?: string; sub?: string } = {}
+    if (text !== o.text) patch.text = text
+    if (two && sub !== o.sub) patch.sub = sub
+    if (Object.keys(patch).length) onEdit(patch, `You changed the words of the ${name.toLowerCase()}`)
+  }
   return (
     <Section title={`This ${name.toLowerCase()} · ${mmss(o.start)}`}>
-      {o.kind !== 'chapters' && (
-        <WordsBox key={'t' + o.text} label="Words" value={o.text} big
-                  onCommit={(v) => v.trim() && onEdit({ text: v.trim() }, `You changed the words of the ${name.toLowerCase()}`)} />
-      )}
-      {subLabel && (
-        <WordsBox key={'s' + o.sub} label={subLabel} value={o.sub}
-                  onCommit={(v) => onEdit({ sub: v.trim() }, `You changed the ${subLabel.toLowerCase()} of the ${name.toLowerCase()}`)} />
-      )}
+      {o.kind !== 'chapters' && <WordsBox key={o.id + shown} value={shown} lines={two} onCommit={commit} />}
       <div className="flex flex-wrap gap-2 pt-1">
         <Chip onClick={onWatch}><Icon name="play" size={17} /> See it play</Chip>
         <Chip danger onClick={onDelete}><Icon name="trash" size={17} /> Delete</Chip>
@@ -288,20 +294,18 @@ function CaptionColours({ value, onPick }: { value: string | null; onPick: (c: s
   )
 }
 
-function WordsBox({ label, value, big, onCommit }: { label: string; value: string; big?: boolean; onCommit: (v: string) => void }) {
+function WordsBox({ value, lines, onCommit }: { value: string; lines: boolean; onCommit: (v: string) => void }) {
   const [v, setV] = useState(value)   // keyed on value by the caller: a new value remounts
   return (
-    <label className="block space-y-1.5">
-      <span className="font-serif text-[16px] text-zinc-100">{label}</span>
-      <textarea value={v} maxLength={140} rows={big ? 2 : 1} onChange={(e) => setV(e.target.value)}
-                onBlur={() => v !== value && onCommit(v)}
-                onKeyDown={(e) => {
-                  e.stopPropagation()   // typing must not split shots or play the video
-                  if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLTextAreaElement).blur() }
-                  if (e.key === 'Escape') { setV(value); setTimeout(() => (e.target as HTMLTextAreaElement).blur()) }
-                }}
-                className="block w-full resize-none rounded-lg border border-line bg-panel px-3 py-2 font-serif text-[17px] leading-snug text-zinc-100 outline-none focus:border-accent" />
-    </label>
+    <textarea value={v} maxLength={200} aria-label="Words" rows={Math.max(2, v.split('\n').length)} onChange={(e) => setV(e.target.value)}
+              onBlur={() => v !== value && onCommit(v)}
+              onKeyDown={(e) => {
+                e.stopPropagation()   // typing must not split shots or play the video
+                // Enter starts a new line where there can be one, like any text box; leaving the box saves
+                if (e.key === 'Enter' && (!lines || e.metaKey || e.ctrlKey)) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur() }
+                if (e.key === 'Escape') { setV(value); setTimeout(() => (e.target as HTMLTextAreaElement).blur()) }
+              }}
+              className="block w-full resize-none rounded-lg border border-line bg-panel px-3 py-2 font-serif text-[17px] leading-snug text-zinc-100 outline-none focus:border-accent" />
   )
 }
 

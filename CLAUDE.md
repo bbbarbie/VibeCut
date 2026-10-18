@@ -443,7 +443,8 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   `overlayTemplates.test.ts` (safe area every intro frame, every template ×
   entrance). Sizes, durations and the glow are priors.
   **Caption words and colour in the Captions tab** (sarah, 2026-10-17): a
-  clicked caption shows its words (and place line) to edit, See it play,
+  clicked caption shows its words in one box, lines as on the picture (the
+  place name is its first line; sarah 2026-10-18), See it play,
   Delete; with none clicked, Off/On and "Add a caption at the playhead".
   **Colour** is `overlay_style.text_color` (None = automatic, ink.py picks
   one that reads; never set by a look): a picked colour is kept as picked,
