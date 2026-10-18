@@ -118,8 +118,9 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   // Geometry: widths proportional to duration, with a floor so a short
   // shot stays hittable. Position <-> time is exact within each block.
   // A shot whose end is being dragged is drawn at its new length while the
-  // drag lasts: dragging the end pushes the later shots along, dragging the
-  // start moves that edge with the pointer.
+  // drag lasts. Either end keeps it joined to the shot before, as in CapCut:
+  // the shots after slide along live, never a gap or an overlap (sarah,
+  // 2026-10-18).
   const layout = (edge: { key: string; edge: 'in' | 'out'; to: number } | null) => {
     const dur = (it: SeqItem) => {
       const d = it.seq_end - it.seq_start
@@ -130,12 +131,6 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
     const w = items.map((it) => Math.max(MIN_W, dur(it) * pps))
     const left: number[] = []
     w.forEach((_, k) => left.push(k ? left[k - 1] + w[k - 1] + GAP : 0))
-    const k = edge?.edge === 'in' ? items.findIndex((it) => it.key === edge.key) : -1
-    if (k >= 0) {
-      // the start follows the pointer; the shots after stay until it's let go
-      const was = Math.max(MIN_W, (items[k].seq_end - items[k].seq_start) * pps)
-      for (let j = k; j < left.length; j++) left[j] -= w[k] - was
-    }
     const end = Math.max(...w.map((x, j) => left[j] + x), 0)
     return { w, left, end }
   }
