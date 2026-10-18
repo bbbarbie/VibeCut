@@ -493,6 +493,18 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   one that reads; never set by a look): a picked colour is kept as picked,
   ink.py only adds a glow where it would blend in; a template takes it as
   its letters (edge flips white under dark ones) or as its box / band.
+- **Video effects** (sarah, 2026-10-18: "more effects ... i want the popular
+  ones"; `web/backend/effects.py`, `web/frontend/src/effectView.ts`,
+  `Effects.tsx`). 14 of the effects short-form edits use most, opt-in, one
+  per shot: Shake, Zoom in / out, Pulse, Flash, Strobe, Blur in, Glow, VHS,
+  Glitch, Film grain, Old film, Vignette, Disco. On the entry as
+  `set_shot {effect, effect_amount}` (Strength 25–200%), kept through a cut;
+  "Use for every shot" is one turn of set_shots. Each is a function of time
+  into the shot: export runs `effects.chain` after `_fit` (ffmpeg crop /
+  zoompan / blend / gblur / rgbashift / noise / vignette / hue), the player
+  draws the same numbers with CSS + two SVG filters (`FxDefs`) and an overlay
+  for tints and grain (`transport.paint`). Built from the filmed frames only.
+  Every number is a prior. `tests/test_effects.py`, `effectView.test.ts`.
 - **polish/** (`polish/`, `web/backend/polish_api.py`, `Polish.tsx`,
   `polishDraw.ts`; page `#polish`). Assisting an edit that is already cut:
   input is one finished video, never raw clips; no auto-editing, no

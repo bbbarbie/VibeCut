@@ -3,6 +3,7 @@ import type { Segment } from '../types'
 import { dur } from '../format'
 import { hideStill, settleStill, swapSource } from '../hold'
 import { OverlayCanvas, type OverlayEdit, type OverlayView } from './OverlayCanvas'
+import { FxDefs } from './Effects'
 
 // One <video> element. Two drivers share it: a preview (a span or a queue
 // of spans from the shelf or a storyboard card, via `segment`) and the
@@ -111,6 +112,12 @@ export function Player({ videoRef, backRef, veilRef, bars, segment, label, gap, 
           {backRef && <video ref={backRef} muted playsInline aria-hidden
                              className={`pointer-events-none absolute inset-0 size-full object-contain ${gap ? 'invisible' : ''}`}
                              style={{ opacity: 0 }} />}
+          {/* each shot's effect: what lies over the picture (flashes, corners, scanlines, grain; transport.paint) */}
+          {veilRef && <>
+            <FxDefs id="vcfx" />
+            <div data-fx-tint className={`pointer-events-none absolute inset-0 z-[3] ${segment ? 'invisible' : ''}`} />
+            <div data-fx-grain className={`pointer-events-none absolute inset-0 z-[3] mix-blend-overlay ${segment ? 'invisible' : ''}`} style={{ opacity: 0 }} />
+          </>}
           {/* The edit's dips and flashes; never over a clip previewed from the shelf
               (at a fade from black it covered the whole preview: sarah, 2026-10-14). */}
           {veilRef && <div ref={veilRef} className={`pointer-events-none absolute inset-0 z-[3] ${segment ? 'invisible' : ''}`} style={{ opacity: 0, background: 'black' }} />}

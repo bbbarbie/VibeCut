@@ -60,9 +60,11 @@ AUDIO_GAIN_MAX = 2.0   # 200%: louder than filmed, short of distorting most phon
 # From the shot menu, never chat. Kept on the entry, so a cut keeps them.
 OPS = OPS + ("set_shot",)
 SPEEDS = (0.25, 4.0)           # the slowest and fastest a shot may play
-SHOT_FX = ("speed", "gain", "mute", "rotate", "fill", "mirror", "fade_in", "fade_out")
+SHOT_FX = ("speed", "gain", "mute", "rotate", "fill", "mirror", "fade_in", "fade_out",
+           "effect", "effect_amount")
+# effect: one of effects.KINDS (Shake, Glitch, VHS...), picked in the Effects tab
 FX_PLAIN = {"speed": 1.0, "gain": 1.0, "mute": False, "rotate": 0, "fill": False, "mirror": False,
-            "fade_in": 0.0, "fade_out": 0.0}
+            "fade_in": 0.0, "fade_out": 0.0, "effect": None, "effect_amount": 1.0}
 FADE_MAX = 5.0   # a shot's own sound fading in or out, seconds
 
 FRAME = 1 / 30  # sequence frame; the smallest piece a cut or trim may leave
@@ -255,9 +257,24 @@ def _shot_fx(b: dict, op: dict) -> None:
     for f in ("fade_in", "fade_out"):
         if f in op:
             e[f] = round(max(0.0, min(FADE_MAX, float(op[f]))), 2)
+    if "effect" in op:
+        from . import effects
+        if op["effect"] is not None and op["effect"] not in effects.KINDS:
+            raise OpError(f"no effect called {op['effect']!r}")
+        e["effect"] = op["effect"]
+        if not op["effect"]:
+            e.pop("effect_amount", None)
+    if "effect_amount" in op:
+        from . import effects
+        e["effect_amount"] = effects.clamp_amount(op["effect_amount"])
     for f, plain in FX_PLAIN.items():
         if f in e and e[f] == plain:
             del e[f]
+
+
+def _effect_name(k) -> str:
+    from . import effects
+    return effects.describe(k)
 
 
 def _sound_op(b: dict, op: dict, kind: str, new_id) -> None:
@@ -327,7 +344,8 @@ def apply(board: dict | None, op: dict, cat: Catalog, proposals: dict | None,
     # "as long as what it hangs off" (a caption filling its spoken line) and its
     # place, where it means "back where it usually goes" (undoing a drag).
     op = {k: v for k, v in op.items() if v is not None or (k in ("dur", "place") and kind in OVERLAY_OPS)
-          or (k in ("template", "enter", "text_color") and kind == "overlay_style")}   # None = back to the look's own
+          or (k in ("template", "enter", "text_color") and kind == "overlay_style")   # None = back to the look's own
+          or (k == "effect" and kind == "set_shot")}   # None = no effect
 
     if kind == "choose_option":
         snap = op.get("snapshot")
@@ -806,6 +824,8 @@ def _describe_sound(a: dict | None, b: dict | None) -> list[dict]:
                 x, y = o.get(f, plain), s.get(f, plain)
                 if x == y:
                     continue
+                if f == "effect_amount" and not s.get("effect"):
+                    continue
                 text = {"speed": lambda: f"Shot plays at {y:g}×" if y != 1 else "Shot back to normal speed",
                         "gain": lambda: f"Shot volume {round(x * 100)}% → {round(y * 100)}%",
                         "mute": lambda: "Muted a shot" if y else "Unmuted a shot",
@@ -814,6 +834,8 @@ def _describe_sound(a: dict | None, b: dict | None) -> list[dict]:
                         "mirror": lambda: "Mirrored a shot" if y else "Shot no longer mirrored",
                         "fade_in": lambda: f"Shot's sound fades in over {y:g}s" if y else "Shot's sound starts without a fade",
                         "fade_out": lambda: f"Shot's sound fades out over {y:g}s" if y else "Shot's sound ends without a fade",
+                        "effect": lambda: f"Shot has the {_effect_name(y)} effect" if y else f"Took the {_effect_name(x)} effect off a shot",
+                        "effect_amount": lambda: f"Shot's effect at {round(y * 100)}%",
                         }[f]()
                 lines.append({"kind": "sound" if f in ("gain", "mute", "fade_in", "fade_out") else "trimmed", "beat": bt["id"],
                               "shot": key(s), "text": text})

@@ -6,12 +6,14 @@ import type { CaptionEnter, CaptionTemplate, JoinInfo, LookInfo, Overlay, Overla
 import { Button, cx } from '../ui'
 import { Icon, type IconName } from './icons'
 import { CaptionAnimations, CaptionStyles, Transitions } from './StyleBars'
+import { EffectTiles } from './Effects'
+import { effectName } from '../effectView'
 
 // The right-hand inspector of the edit screen (sarah, 2026-10-16: the layout
 // of her reference picture). Five tabs: Edit (the clicked shot: trim, speed,
 // turn, fit or fill; with nothing clicked, the whole video), Captions (the
 // clicked caption's words, then one style and entrance for every caption),
-// Effects (the transition at a cut),
+// Effects (the clicked shot's effect, else every shot's; the transition at a cut),
 // Audio (the shot's or a sound strip's volume and fades, and the music) and
 // Adjust (the look). Clicking something on the timeline opens its tab.
 // Every change is one undoable turn, sent when a slider is let go.
@@ -69,6 +71,9 @@ export function Inspector(p: {
   onCaptions: () => void
   onCaptionStyle: (patch: { template?: CaptionTemplate | null; enter?: CaptionEnter | null; text_color?: string | null }, label: string) => void
   onJoin: (op: { kind: string; dur?: number; all?: boolean }, label: string) => void
+  /** every shot's effect when they all share one (with no shot clicked), and a thumbnail to show effects on */
+  allEffect: { effect: string | null; amount: number; thumb: string | null }
+  onEffect: (patch: { effect?: string | null; effect_amount?: number }, all: boolean, label: string) => void
   onLook: (id: string, name: string) => void
 }) {
   const it = p.item
@@ -152,12 +157,28 @@ export function Inspector(p: {
           </> : <Hint>Turn captions on to put the time and place of each moment on the video.</Hint>}
         </>}
 
-        {p.tab === 'effects' && (p.join ? (
-          <Section title={p.joinPicked ? `The cut from shot ${p.join.before} to shot ${p.join.after}` : 'Every cut'}>
-            {!p.joinPicked && <Hint>Or click the dot between two shots on the timeline to change just that cut.</Hint>}
-            <Transitions {...p.join} before={p.joinPicked ? p.join.before : null} after={p.joinPicked ? p.join.after : null} onPick={p.onJoin} />
-          </Section>
-        ) : <Hint>Transitions go between two shots. Your edit has no cuts yet.</Hint>)}
+        {p.tab === 'effects' && <>
+          {!p.joinPicked && (shot ? (
+            <Section title={`Effect on shot ${shot.n}`}>
+              <EffectTiles n={shot.n} effect={shot.effect ?? null} amount={shot.effect_amount ?? 1} thumb={p.itemThumb}
+                           onPick={(patch, label) => p.onEffect(patch, false, label)}
+                           onAll={() => p.onEffect({ effect: shot.effect ?? null, effect_amount: shot.effect_amount ?? 1 }, true,
+                             shot.effect ? `Every shot now has ${effectName(shot.effect)}` : 'You took the effects off every shot')} />
+            </Section>
+          ) : (
+            <Section title="Effect on every shot">
+              <Hint>Or click a shot on the timeline to give just that shot an effect.</Hint>
+              <EffectTiles n={null} effect={p.allEffect.effect} amount={p.allEffect.amount} thumb={p.allEffect.thumb}
+                           onPick={(patch, label) => p.onEffect(patch, true, label)} onAll={() => {}} />
+            </Section>
+          ))}
+          {p.join ? (
+            <Section title={p.joinPicked ? `The cut from shot ${p.join.before} to shot ${p.join.after}` : 'Transition at every cut'}>
+              {!p.joinPicked && <Hint>Or click the dot between two shots on the timeline to change just that cut.</Hint>}
+              <Transitions {...p.join} before={p.joinPicked ? p.join.before : null} after={p.joinPicked ? p.join.after : null} onPick={p.onJoin} />
+            </Section>
+          ) : <Hint>Transitions go between two shots. Your edit has no cuts yet.</Hint>}
+        </>}
 
         {p.tab === 'audio' && (p.strip ? (
           <Section title={`Sound of shot ${p.strip.n ?? ''}`}>
