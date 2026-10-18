@@ -172,7 +172,13 @@ def api() -> None:
     bed.candidates = lambda pace, own, progress=None: (pool, "a test track")
     calls = []
 
+    looks = []
+
     def fake(url, body, headers):
+        if body["response_format"]["json_schema"]["name"] == "edit_check":
+            # then it looks over the finished cut once (selfcheck.py; tests/test_selfcheck.py)
+            looks.append(body)
+            return reply({"summary": "It holds up.", "issues": [], "fixes": []}, prompt=6000, out=2000)
         n = sum(1 for p in body["messages"][1]["content"] if p["type"] == "text" and p["text"].startswith("#"))
         calls.append(n)
         return reply(answer_for(n, hook=n))
@@ -200,18 +206,30 @@ def api() -> None:
             est = c.get("/api/make/estimate").json()
             check("off: the estimate is nothing", est["dollars"] == 0 and not est["on"])
             job = make(c, ai_ok=0.05)
-            check("switch off: nothing is sent, even with a go-ahead", job["stage"] == "done" and not calls, job.get("error") or "")
+            check("switch off: nothing is sent, even with a go-ahead", job["stage"] == "done" and not calls and not looks,
+                  job.get("error") or "")
             c.post("/api/undo")
             c.post("/api/ai", json={"on": True})
             est = c.get("/api/make/estimate").json()
             check("on: the edit's cost is shown before anything is sent",
-                  est["on"] and est["moments"] >= 3 and 0 < est["dollars"] < 0.2 and not calls, json.dumps(est))
+                  est["on"] and est["moments"] >= 3 and 0 < est["dollars"] < 0.25 and not calls, json.dumps(est))
+            check("the price covers planning it and one look at the finished cut",
+                  est["plan"] > 0 and est["check"] > 0 and abs(est["plan"] + est["check"] - est["dollars"]) < 0.002)
             job = make(c)
-            check("on, but this edit's cost not agreed: nothing is sent", job["stage"] == "done" and not calls)
+            check("on, but this edit's cost not agreed: nothing is sent", job["stage"] == "done" and not calls and not looks)
             c.post("/api/undo")
             job = make(c, ai_ok=est["dollars"])
-            check("on and agreed: one call", job["stage"] == "done" and len(calls) == 1, job.get("error") or str(calls))
+            check("on and agreed: one plan, then one look at the cut", job["stage"] == "done" and len(calls) == 1
+                  and len(looks) == 1, job.get("error") or str(calls))
+            sheet = [p for p in looks[0]["messages"][1]["content"] if p["type"] == "image_url"]
+            check("it looked at a contact sheet of the real clips", sheet and sheet[0]["image_url"]["detail"] == "high")
             s = c.get("/api/session").json()
+            kinds = [t["kind"] for t in s["turns"]][-2:]
+            check("the look lands as its own turn after the video", kinds == ["direct", "check"]
+                  and s["turns"][-1]["sheets"] and "holds up" in s["turns"][-1]["reply"], str(kinds))
+            ev = backend.PROJECT["p"].events
+            check("both costs are kept", ev[-1]["kind"] == "make" and ev[-2]["kind"] == "check" and ev[-2]["cost"] > 0,
+                  json.dumps(ev[-2:])[:200])
             titles = [b["title"] for b in s["board"]["beats"]]
             check("the parts are the chapters, after the hook", titles == ["Hook", "Morning Routine", "OOTD"], str(titles))
             items = s["overlays"]["items"]

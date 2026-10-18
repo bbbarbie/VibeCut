@@ -878,7 +878,7 @@ def _describe_sound(a: dict | None, b: dict | None) -> list[dict]:
 @dataclass
 class Turn:
     id: int
-    kind: str                       # "chat" | "direct"
+    kind: str                       # "chat" | "direct" | "check" (the AI checking its own edit)
     text: str                       # what the user said / did
     ops: list[dict]                 # as recorded (after first application)
     reply: str = ""
@@ -888,6 +888,7 @@ class Turn:
     undone: bool = False
     at: float = field(default_factory=time.time)
     cost: float | None = None       # dollars, when an AI answered this turn
+    sheets: list[str] = field(default_factory=list)   # contact sheets the AI looked at (selfcheck.py)
     # filled by replay
     skipped: list[str] = field(default_factory=list)
     diff: dict | None = None

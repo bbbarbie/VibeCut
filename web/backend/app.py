@@ -31,7 +31,7 @@ from cutgrammar import grade
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, bed, brief, cloud, defaults, make, vibes, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, oai, overlays, reference, remix, speech, story, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, bed, brief, cloud, defaults, make, vibes, tempo, ink, moment, cut, export, looks, pitch, seams, selfcheck, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, oai, overlays, reference, remix, speech, story, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import GATE, Workflow, WorkflowError
 
@@ -331,6 +331,7 @@ def _session() -> dict:
             "id": t.id, "kind": t.kind, "text": t.text, "reply": t.reply, "question": t.question,
             "choices": t.choices, "lines": _with_thumbs(t.lines, cat), "skipped": t.skipped,
             "undone": t.undone, "at": t.at, "has_ops": bool(t.ops) or t.direction is not None, "cost": t.cost,
+            "sheets": t.sheets,
             "direction": {k: t.direction[k] for k in ("themes",) if k in t.direction} if t.direction else None,
         } for t in SESSION.turns],
         "proposals": SESSION.proposals,
@@ -857,12 +858,13 @@ def _chat_spent(out: dict, where: str) -> float | None:
 
 
 def _ai_spent() -> float:
-    """Dollars AI has cost on this video: every chat answer and AI-planned Make."""
+    """Dollars AI has cost on this video: every chat answer, AI-planned Make
+    and check of the edit."""
     pr = PROJECT["p"]
     if pr is None:
         return 0.0
     return round(sum(float(e.get("cost") or (e.get("ai") or {}).get("cost") or 0) for e in pr.events
-                     if e.get("kind") in ("chat", "make")), 4)
+                     if e.get("kind") in ("chat", "make", "check")), 4)
 
 
 class QuestionsReq(BaseModel):
@@ -1234,6 +1236,8 @@ def api_make(req: BriefAutoReq | None = None) -> dict:
                 ops_.append({"op": "overlay_style", **caption_style, "source": "defaults"})   # as last time
             SESSION.add({"kind": "direct", "text": MAKE_TEXT, "ops": ops_, "reply": job.result["reply"]},
                         CATALOG["cat"], _make_proposals)
+            if job.result.get("check"):
+                _check_landed(job.result["check"], PROJECT["p"], "make")     # its fixes undo on their own
             pr_ = PROJECT["p"]
             if pr_ is not None and pr_.brief:
                 # the chips read the brief: after Make it must describe the cut, not the guess
@@ -1258,9 +1262,21 @@ def api_make(req: BriefAutoReq | None = None) -> dict:
     # ahead having seen what it would cost (/api/make/estimate); a chosen vibe
     # sets the cut itself, so it never spends then
     use_ai = bool(req and req.ai_ok is not None and oai.enabled() and not vibe_fp)
+
+    def check_made(ops_: list[dict], period: float | None) -> dict:
+        # the finished cut as it will land, worked out on a copy of the log (the price shown covered this look)
+        with LOCK:
+            trial = bd.Session()
+            trial.turns = copy.deepcopy(SESSION.turns)
+            trial._next = SESSION._next
+            trial.add({"kind": "direct", "text": MAKE_TEXT, "ops": copy.deepcopy(ops_)}, CATALOG["cat"], _make_proposals)
+            board_, cat_, clips_ = trial.board, CATALOG["cat"], dict(CLIPS)
+        return _check(board_, cat_, clips_, style.get("format", "tall"), float(style.get("seconds") or 60.0), period)
+
     job = make.start(clips, cut_now, style.get("format", "tall"), style.get("pace", "balanced"),
                      style.get("look"), about, float(style.get("seconds") or 60.0), own, None, None, on_done,
-                     want_music=want_music, register=register, vibe=vibe_fp, taste=taste, use_ai=use_ai)
+                     want_music=want_music, register=register, vibe=vibe_fp, taste=taste, use_ai=use_ai,
+                     check=check_made if use_ai else None)
     return job.public()
 
 
@@ -1306,7 +1322,11 @@ def api_make_estimate() -> dict:
     if not out["on"]:
         return {**out, "moments": 0, "dollars": 0.0}
     n = len(story.candidates(clips, cut_now))
-    return {**out, "moments": n, "dollars": round(story.estimate(n), 3)}
+    # planning it, then one look at the finished cut (selfcheck.py); the plan
+    # keeps at most CHECK_SHOTS of the moments [prior], so this never comes out low
+    plan_usd, check_usd = story.estimate(n), selfcheck.estimate(min(n, CHECK_SHOTS))
+    return {**out, "moments": n, "dollars": round(plan_usd + check_usd, 3),
+            "plan": round(plan_usd, 3), "check": round(check_usd, 3)}
 
 
 @app.get("/api/make/{jid}")
@@ -1315,6 +1335,115 @@ def api_make_status(jid: str) -> dict:
     if not job:
         raise HTTPException(404, "no such job")
     return job.public()
+
+
+# --------------------------------------------------------------------------
+# the AI checks its own edit (selfcheck.py; sarah, 2026-10-18)
+# --------------------------------------------------------------------------
+
+CHECK_TEXT = "Checked its own edit"
+CHECK_SHOTS = 48
+
+
+def _music_period(board: dict | None) -> float | None:
+    """The beat of the edit's music, when its tempo is known: shortening keeps it."""
+    t = musiclib.find(((board or {}).get("music") or {}).get("track"))
+    return 60.0 / t.bpm if t is not None and t.bpm else None
+
+
+def _check(board: dict | None, cat, clips: dict[str, dict], fmt: str, target: float | None,
+           period: float | None) -> dict:
+    """One look at the cut, outside the lock. -> selfcheck.review's answer, or
+    {error, usage} (a failed answer can still have cost something)."""
+    try:
+        return selfcheck.review(board, cat, clips, fmt, target, period)
+    except Exception as e:  # noqa: BLE001 -- the edit stands as it is, and the turn says so
+        return {"error": str(e)[:200], "usage": getattr(e, "usage", None) or {}}
+
+
+def _check_cost(res: dict, pr, where: str) -> float | None:
+    """What a check cost goes with the video it was asked about."""
+    u = res.get("usage") or {}
+    if "cost" not in u:
+        return None
+    if pr is not None:
+        pr.events.append({"kind": "check", "at": time.time(), "where": where, "model": u.get("model"),
+                          "cost": u["cost"], "tokens_in": u.get("prompt_tokens"),
+                          "tokens_out": u.get("completion_tokens"), "fixes": len(res.get("ops") or []),
+                          "error": res.get("error")})
+    return u["cost"]
+
+
+def _check_landed(res: dict, pr, where: str) -> bd.Turn:
+    """Under LOCK: the check as one turn (its fixes undo together), with what it cost."""
+    cost = _check_cost(res, pr, where)
+    if res.get("error"):
+        said = f"I couldn't check the finished cut ({res['error']}), so your edit is as it was."
+        if cost:
+            said += f" That try cost {_cents(cost)}."
+        return SESSION.add({"kind": "check", "text": CHECK_TEXT, "ops": [], "reply": said, "cost": cost},
+                           CATALOG["cat"], _make_proposals)
+    return SESSION.add({"kind": "check", "text": CHECK_TEXT, "ops": res["ops"], "reply": res["reply"],
+                        "cost": cost, "sheets": res.get("sheets") or []}, CATALOG["cat"], _make_proposals)
+
+
+@app.get("/api/check/estimate")
+def api_check_estimate() -> dict:
+    """What one check of the edit as it stands would cost, before it's sent. Never calls a model."""
+    with LOCK:
+        n = len(selfcheck.shots_of(SESSION.board))
+        spent = _ai_spent()
+    on = oai.enabled() and n >= 3
+    return {"on": on, "available": oai.has_key(), "model": oai.model(), "shots": n,
+            "dollars": round(selfcheck.estimate(n), 3) if on else 0.0, "spent": spent}
+
+
+class CheckReq(BaseModel):
+    ai_ok: float | None = None    # the price the button showed
+    rid: str | None = None        # so Stop can find it
+
+
+@app.post("/api/check")
+def api_check(req: CheckReq) -> dict:
+    """Check my edit: the AI looks at the cut as it stands (a contact sheet of
+    every shot) and fixes what's clearly wrong, as one undoable turn. Only with
+    the AI switch on and the price shown on the button. Asked outside the
+    lock, like the chat; applied to the edit as it is when it lands."""
+    if not oai.enabled():
+        raise HTTPException(409, "Checking the edit needs AI: turn AI on in the top bar." if oai.has_key()
+                            else "Checking the edit needs AI, and there's no AI key on this Mac.")
+    if req.ai_ok is None:
+        raise HTTPException(409, "Press Check my edit, which shows what it costs before it goes.")
+    with LOCK:
+        if len(selfcheck.shots_of(SESSION.board)) < 3:
+            raise HTTPException(409, "Make your video first: there's nothing to check yet.")
+        board, cat, clips = copy.deepcopy(SESSION.board), CATALOG["cat"], dict(CLIPS)
+        pr, asked_on = PROJECT["p"], SESSION
+        style = ((pr.brief or {}).get("style") or {}) if pr else {}
+        period = _music_period(board)
+    res = _check(board, cat, clips, style.get("format") or "tall", style.get("seconds"), period)
+    rid = req.rid or ""
+    with LOCK:
+        if rid in STOPPED or asked_on is not SESSION:
+            # Stop was pressed, or another video opened: nothing changes; what it cost is kept
+            STOPPED.discard(rid)
+            cost = _check_cost(res, pr, "button")
+            if asked_on is not SESSION:
+                if cost and pr is not None:
+                    pj.save(pr)     # an error isn't saved by the middleware; what it cost must be
+                raise HTTPException(409, "Another video was opened while the AI looked, so nothing was changed.")
+            return {**_session(), "stopped": True, "stop_cost": cost}
+        _check_landed(res, pr, "button")
+        return _session()
+
+
+@app.get("/api/check/sheet/{name}")
+def api_check_sheet(name: str):
+    """A contact sheet the AI looked at, so the creator can see it too."""
+    p = selfcheck.sheet_path(name)
+    if p is None:
+        raise HTTPException(404, "no such sheet")
+    return FileResponse(p, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
 class FormatReq(BaseModel):

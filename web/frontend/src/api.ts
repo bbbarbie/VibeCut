@@ -18,7 +18,9 @@ export type ProjectList = { projects: ProjectMeta[]; open: string | null; capabi
 export type Opened = { project: ProjectMeta; session: Session }
 
 export type AIState = { available: boolean; on: boolean; model: string }
-export type AIEstimate = AIState & { moments: number; dollars: number }
+export type AIEstimate = AIState & { moments: number; dollars: number; plan?: number; check?: number }
+// One look at the whole cut by the AI (selfcheck.py), priced before it's asked.
+export type CheckEstimate = { on: boolean; available: boolean; model: string; shots: number; dollars: number; spent: number }
 
 export type MakeJob = { id: string; stage: string; line: string; done: number; total: number; error: string | null; elapsed: number }
 
@@ -102,6 +104,8 @@ export const api = {
   ai: () => j<AIState>(fetch('/api/ai')),
   setAI: (on: boolean) => j<AIState>(post('/api/ai', { on })),
   makeEstimate: () => j<AIEstimate>(fetch('/api/make/estimate')),
+  checkEstimate: () => j<CheckEstimate>(fetch('/api/check/estimate')),
+  check: (ai_ok: number, rid: string) => j<ChatResult>(post('/api/check', { ai_ok, rid })),
   makeStatus: (id: string) => j<MakeJob>(fetch(`/api/make/${id}`)),
   format: (format: string) => j<Session>(post('/api/format', { format })),
   pile: (clip: string, into: boolean) => j<Session>(post('/api/pile', { clip, into })),

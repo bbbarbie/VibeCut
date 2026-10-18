@@ -70,7 +70,7 @@ export function Setup({ data, busy, progress, onDone, onCancel, ai, estimate, on
                 : ai.on && chosenVibe ? 'Cutting it like a vibe follows that vibe, so AI doesn’t plan this one. Free.'
                 : !aiOn ? 'Off: the usual rules make the edit, free.'
                 : cost == null ? 'Working out what this edit costs…'
-                : <>AI plans this edit into chapters: about <b>{usd(cost)}</b> ({estimate!.moments} moments, {estimate!.model}). Nothing is spent until you press Make.</>}
+                : <>AI plans this edit into chapters, then looks over the finished cut and fixes it: about <b>{usd(cost)}</b> ({estimate!.moments} moments, {estimate!.model}). Nothing is spent until you press Make.</>}
             </p>
           </div>
         )}

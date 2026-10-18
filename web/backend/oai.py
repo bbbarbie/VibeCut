@@ -99,12 +99,14 @@ def cost(usage: dict, name: str | None = None) -> float:
     return ((prompt - cached) * p_in + cached * p_cached + out * p_out) / 1e6
 
 
-def image(jpeg: bytes) -> dict:
-    return image_b64(base64.b64encode(jpeg).decode())
+def image(jpeg: bytes, detail: str = "low") -> dict:
+    return image_b64(base64.b64encode(jpeg).decode(), detail)
 
 
-def image_b64(b64: str) -> dict:
-    return {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + b64, "detail": "low"}}
+def image_b64(b64: str, detail: str = "low") -> dict:
+    """"low" for one frame of a moment; "high" for a contact sheet, whose
+    small stills must stay readable (selfcheck.py)."""
+    return {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + b64, "detail": detail}}
 
 
 def ask_json(system: str, content: list[dict], schema: dict, name: str, max_tokens: int = 12000,

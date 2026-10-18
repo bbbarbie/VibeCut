@@ -45,6 +45,8 @@ const hello: Msg = {
   text: 'Your edit is ready. Tell me what to change: “the opening is too slow”, “take out the market”, “end on the sunset”. Everything can be undone.',
 }
 const EMPTY_TL: TimelineData = { fps: 30, total: 0, items: [], targets: [], grid: null }
+const CHECK_ASK = 'Check my whole edit'
+
 const EMPTY_OVERLAYS: OverlayData = {
   items: [], findings: [], style: { font: 'Clean', color: '#ffffff', accent: '#b9d9eb', captions: 'bottom', backing: 'shadow' },
 }
@@ -330,6 +332,31 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       // a failed answer can still have been paid for: the total moves
       if (extra) api.session().then(setSession, () => {})
     } finally {
+      if (chatRid.current === rid) { chatRid.current = null; setPending(null) }
+    }
+  }
+  // Check my edit: the AI looks over every shot of the cut at once and fixes
+  // what's clearly wrong, as one undoable turn. aiOk is the price the button showed.
+  const [checking, setChecking] = useState(false)
+  const checkEdit = async (aiOk: number) => {
+    const rid = uid()
+    chatRid.current = rid
+    setPending(CHECK_ASK)
+    setChecking(true)
+    try {
+      const r = await api.check(aiOk, rid)
+      setSession(r)
+      if (stopped.current.delete(rid)) {
+        if (!r.stopped) say('It had already made its changes when you pressed Stop. Their Undo is right above.')
+        else if (r.stop_cost) say(`The stopped check cost ${cents(r.stop_cost)}.`)
+      }
+    } catch (e) {
+      if (stopped.current.delete(rid)) { api.session().then(setSession, () => {}); return }
+      setLocal((ms) => [...ms, { id: uid(), role: 'user', text: CHECK_ASK, at: Date.now() },
+        { id: uid(), role: 'app', at: Date.now(), text: `That didn’t work: ${(e as Error).message} Nothing in your edit changed.` }])
+      api.session().then(setSession, () => {})
+    } finally {
+      setChecking(false)
       if (chatRid.current === rid) { chatRid.current = null; setPending(null) }
     }
   }
@@ -1057,6 +1084,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const chat = (
     <Chat items={chatItems} pending={pending} onSend={(text, extra) => send(text, undefined, extra)}
           onStop={stopChat} onToggle={toggle}
+          onCheck={session?.board ? checkEdit : undefined} pendingLine={checking ? 'Looking over every shot of your cut…' : undefined}
           disabled={!!pending} who={chatWho} turnsKey={turnsKey} spent={session?.ai_spent ?? 0}
           aiSwitch={chatWho ? undefined : <AISwitch ai={ai} onToggle={toggleAI} />} aiKey={!!ai?.available}
           hasBoard={!!session?.board || !!session?.proposals}

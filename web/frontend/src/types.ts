@@ -123,10 +123,11 @@ export type Diff = {
   replaced: boolean
 }
 export type Turn = {
-  id: number; kind: 'chat' | 'direct'; text: string; reply: string
+  id: number; kind: 'chat' | 'direct' | 'check'; text: string; reply: string   // check: the AI checking its own edit
   question: string | null; choices: string[]; lines: DiffLine[]; skipped: string[]
   undone: boolean; at: number; has_ops: boolean; direction: { themes: string[] } | null
   cost?: number | null    // dollars, when an AI answered this turn
+  sheets?: string[]       // the contact sheets a check looked at (/api/check/sheet/<name>)
 }
 import type { SeqItem } from './sequence'
 import type { Trans } from './joinView'

@@ -347,6 +347,28 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   answer landing on another video changes nothing; a failed one offers Try
   again. The app's own first story (no board, no `ai_ok`) is the free rules'.
   `tests/test_chat_ai.py` (stand-in replies). Not yet run live.
+- **The AI checks its own edit** (`web/backend/selfcheck.py`, `/api/check`,
+  `/api/check/estimate`, `/api/check/sheet/{name}`; sarah, 2026-10-18: "lets
+  do AI checks own edit"). The story editor sees one frame per moment and
+  never the finished cut, so after an AI-planned Make (inside the job, stage
+  `checking`) and on "Check my whole edit · ¢" in AI Edit, one call on the
+  course key looks at contact sheets of the cut: one still per shot from the
+  middle of the seconds it uses, 16 to a sheet at high detail, numbered as
+  the timeline numbers them, a strip coloured by chapter (drawn in numpy: no
+  drawtext here), plus a list (chapters with seconds and share; each shot's
+  clip, time, labels, talking; the phone's look-alike and same-seconds
+  hints). It answers with issues (repeat, drags, back_and_forth, opening,
+  ending) and fixes (drop / shorten / move), checked in code: at most a
+  quarter dropped, none from 5 shots or fewer, a talking shot dropped only
+  as a repeat, shortening on whole half-beats and never under 0.6 s. One
+  turn of kind `check` (its own Undo, its cost, "What it looked at"); one
+  round, never a loop. Make's estimate covers planning + the check (`plan` /
+  `check`); a button press carries its price (`ai_ok`); Stop by `rid` like
+  the chat; a failed check is a turn that says so and changes nothing.
+  Research of open tools (oh-my-cassette, ffmpeg-skill, OpenStoryline,
+  ai-video-editing-skill): sheets there are for people or layout checks,
+  none has a model review its own cut. `tests/test_selfcheck.py` (stand-in
+  replies). Every number is a prior; not yet run live.
 - **Two picks up front** (plan of 2026-10-10, step 2; `Setup.tsx`,
   `/api/brief/setup`, `/api/brief/auto {format, look}`, `/api/format`):
   after Footage's "Looks good" one popup asks the **frame** (short ·

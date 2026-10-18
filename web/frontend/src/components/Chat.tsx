@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { api, type ChatEstimate, type ChatProvider } from '../api'
+import { api, type ChatEstimate, type ChatProvider, type CheckEstimate } from '../api'
 import { cents, centsRange } from '../format'
 import { locate, type SeqItem } from '../sequence'
 import { phStore, useStore } from '../transport'
@@ -72,13 +72,16 @@ function About({ timeline, paused, selected, whole, onWhole, onKey }: {
 // it's about the clicked or paused shot unless "Whole video" is picked;
 // Send shows what the message costs before it goes; while it thinks, Stop;
 // each answer shows what it cost and has its Undo; the header keeps what AI
-// has cost on this video.
-export function Chat({ items, pending, onSend, onStop, onToggle, disabled, who, turnsKey, spent, aiSwitch, aiKey, hasBoard,
+// has cost on this video. Check my edit: the AI looks over every shot of the
+// cut at once and fixes what's clearly wrong, priced on the button first.
+export function Chat({ items, pending, pendingLine, onSend, onStop, onCheck, onToggle, disabled, who, turnsKey, spent, aiSwitch, aiKey, hasBoard,
   timeline, paused, selected, prefs, onClassify, onRule, review }: {
   items: ChatItem[]
   pending: string | null
+  pendingLine?: string            // what it's doing while it thinks
   onSend: (text: string, extra: SendExtra) => void
   onStop?: () => void
+  onCheck?: (aiOk: number) => void   // the price the button showed
   onToggle: (turn: number) => void
   disabled: boolean
   who: ChatProvider
@@ -127,6 +130,16 @@ export function Chat({ items, pending, onSend, onStop, onToggle, disabled, who, 
     api.chatEstimate(aboutT()).then((e) => live && setCost(e), () => live && setCostErr(true))
     return () => { live = false }
   }, [who, turnsKey, target, ask]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // What one look over the whole cut costs (free to ask), again when the edit changes.
+  const [checkCost, setCheckCost] = useState<CheckEstimate | null>(null)
+  useEffect(() => {
+    setCheckCost(null)
+    if (who !== 'openai' || !onCheck) return
+    let live = true
+    api.checkEstimate().then((e) => live && setCheckCost(e), () => {})
+    return () => { live = false }
+  }, [who, turnsKey, !!onCheck]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // What a message of n characters costs: the estimate counts a short one,
   // each character past that adds its share (both ends of the range).
@@ -190,7 +203,7 @@ export function Chat({ items, pending, onSend, onStop, onToggle, disabled, who, 
             <div className="flex justify-end">
               <div className="max-w-[85%] rounded-2xl rounded-br-md bg-accent px-3 py-2 font-serif text-[16px] leading-snug text-accent-ink">{pending}</div>
             </div>
-            <div className="font-serif text-[15px] text-zinc-300"><span className="mr-2 inline-block size-2 animate-pulse rounded-full bg-accent align-middle" />Working out the edit…</div>
+            <div className="font-serif text-[15px] text-zinc-300"><span className="mr-2 inline-block size-2 animate-pulse rounded-full bg-accent align-middle" />{pendingLine ?? 'Working out the edit…'}</div>
           </>
         )}
         <div ref={end} />
@@ -206,6 +219,15 @@ export function Chat({ items, pending, onSend, onStop, onToggle, disabled, who, 
                 {c}
               </button>
             ))}
+          </div>
+        )}
+        {hasBoard && who === 'openai' && onCheck && checkCost?.on && !pending && (
+          <div className="px-1 pb-2.5">
+            <button type="button" onClick={() => onCheck(checkCost.dollars)} disabled={disabled}
+                    title="The AI looks over every shot of your cut at once and fixes repeats, slow parts, the opening and the ending. One Undo takes it all back."
+                    className="rounded-full border border-accent/60 px-3 py-1 font-serif text-[15px] text-accent hover:bg-accent hover:text-accent-ink disabled:opacity-30">
+              ✦ Check my whole edit · {cents(checkCost.dollars)}
+            </button>
           </div>
         )}
         {hasBoard && who && timeline && (
@@ -292,7 +314,7 @@ function TurnView({ t, onToggle, onChoice, candidate, onClassify, review }: {
   candidate?: PrefCandidate; onClassify: (r: ClassifyReq) => Promise<void>
   review?: Review[]
 }) {
-  const remember = candidate && !t.undone && <Remember c={candidate} onClassify={onClassify} />
+  const remember = candidate && !t.undone && t.kind !== 'check' && <Remember c={candidate} onClassify={onClassify} />
   const faded = t.undone ? 'opacity-40' : ''
   const paid = t.cost != null && t.cost > 0 && (
     <span className="shrink-0 font-serif text-[15px] text-zinc-300" title="What the AI's answer cost">{cents(t.cost)}</span>
@@ -320,7 +342,7 @@ function TurnView({ t, onToggle, onChoice, candidate, onClassify, review }: {
           {t.skipped.length > 0 && <span className="text-amber-200/80" title={t.skipped.join('\n')}>skipped</span>}
           {undo}
         </div>
-      ) : (
+      ) : t.kind === 'check' ? null : (
         <div className="flex justify-end">
           <div className={`max-w-[85%] rounded-2xl rounded-br-md bg-accent px-3 py-2 font-serif text-[16px] leading-snug text-accent-ink ${faded}`}>{t.text}</div>
         </div>
@@ -328,7 +350,7 @@ function TurnView({ t, onToggle, onChoice, candidate, onClassify, review }: {
       {t.kind === 'direct' && remember ? <div className="flex flex-wrap justify-end pl-5">{remember}</div> : null}
       {review && review.length > 0 && !t.undone && <ReviewLines items={review} />}
 
-      {t.kind === 'chat' && (t.reply || t.question || t.lines.length > 0 || t.skipped.length > 0 || t.direction) && (
+      {(t.kind === 'chat' || t.kind === 'check') && (t.reply || t.question || t.lines.length > 0 || t.skipped.length > 0 || t.direction) && (
         <div className={`rounded-lg border border-line bg-raised/60 px-2.5 py-2 ${t.undone ? 'opacity-50' : ''}`}>
           <div className="flex items-start gap-2">
             <div className={`min-w-0 flex-1 font-serif text-[16px] leading-snug ${t.undone ? 'line-through decoration-zinc-600' : ''}`}>
@@ -340,6 +362,20 @@ function TurnView({ t, onToggle, onChoice, candidate, onClassify, review }: {
             {paid}
             {undo}
           </div>
+
+          {t.kind === 'check' && !!t.sheets?.length && !t.undone && (
+            // what the AI looked at: one still from every shot, numbered as the timeline numbers them
+            <div className="mt-2">
+              <div className="mb-1 font-serif text-[15px] text-zinc-300">What it looked at</div>
+              <div className="flex flex-wrap gap-1.5">
+                {t.sheets.map((n) => (
+                  <a key={n} href={`/api/check/sheet/${n}`} target="_blank" rel="noreferrer" title="Open it full size">
+                    <img src={`/api/check/sheet/${n}`} alt="Every shot of the cut, numbered" className="h-16 rounded border border-line object-cover" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
 
           {t.question && t.choices.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">

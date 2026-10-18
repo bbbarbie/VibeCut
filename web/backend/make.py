@@ -54,7 +54,7 @@ LEVELS = {"short": {"gain": remix.MUSIC_GAIN, "original": remix.ORIGINAL_GAIN},
           "tall": {"gain": audiomix.MUSIC_GAIN, "original": 1.0},
           "wide": {"gain": audiomix.MUSIC_GAIN, "original": 1.0}}
 STAGES = {"choosing": "Choosing the moments…", "music": "Finding music and its drop…",
-          "words": "Writing the words…", "done": "Done", "error": "Failed"}
+          "words": "Writing the words…", "checking": "Checking its own edit…", "done": "Done", "error": "Failed"}
 
 
 def fingerprint(fmt: str, pace: str, seconds: float, styles: list[dict] | None = None,
@@ -385,11 +385,15 @@ JOBS: dict[str, Job] = {}
 
 def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, about: str, seconds: float,
           own: list[mu.Track] | None, styles: list[dict] | None, judge, on_done, want_music: bool = True,
-          register=None, vibe: dict | None = None, taste: str = "", words_ask=None, use_ai: bool = False) -> Job:
+          register=None, vibe: dict | None = None, taste: str = "", words_ask=None, use_ai: bool = False,
+          check=None) -> Job:
     """Run the pipeline in a thread; `on_done(job)` puts the ops on the session.
     Everything the thread needs is copied in now, so later edits can't move it.
     `register(job)` is called before the thread starts: a fast job (no music,
-    few clips) can finish before the caller has even seen it."""
+    few clips) can finish before the caller has even seen it. `check(ops,
+    beat period) -> dict`: the AI looks at the finished cut (selfcheck.py),
+    only when this edit's AI cost was agreed; its fixes land as a turn of
+    their own, so they undo on their own."""
     job = Job()
     JOBS[job.id] = job
     if register:
@@ -433,6 +437,9 @@ def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, ab
             job.result = {"ops": ops(plan, fp, mx, fmt, look, about, talking, lines=lines, chapters=chapters),
                           "music": mx, "fp": fp, "plan": plan, "taste": taste, "written": bool(lines), "ai": ai,
                           "reply": say(plan, fp, mx, source, judged, ai) + (" Claude wrote the lines, in your voice." if lines else "")}
+            if check:
+                job.stage = "checking"
+                job.result["check"] = check(job.result["ops"], mx["period"] if mx else None)
             job.stage = "done"
         except Exception as e:  # noqa: BLE001 -- the dialog shows it; nothing was changed
             job.stage, job.error = "error", str(e)[:300]
