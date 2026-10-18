@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { clock, locate, parseTimecode, readout, smpte, type SeqItem } from '../sequence'
 import { approaching, DEFAULT_THRESHOLD_PX, snap, type Target, type TargetType } from '../snap'
 import { phStore, snapStore, transport, transportStore, useStore } from '../transport'
@@ -6,6 +6,7 @@ import type { JoinInfo, Overlay, SoundStrip, TimelineData } from '../types'
 import { KIND_META } from '../overlayDraw'
 import { SHOT_MIME } from './Shelf'
 import { Icon, type IconName } from './icons'
+import { anchoredScroll, clampZoom, fromSlider, toSlider, wheelFactor } from '../zoom'
 
 const TL_MIME = 'application/x-vibecut-tl'
 const MIN_W = 56
@@ -113,7 +114,26 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   }, [items])
   const hasEdit = tl.total > 0
   useEffect(() => { if (hasEdit) setScale(fitNow()) }, [width, edit, hasEdit]) // eslint-disable-line react-hooks/exhaustive-deps
-  const zoomTo = (z: number) => { setScale(fitNow()); setZoom(z) }
+  // A zoom keeps one moment where it was on screen: the one under the
+  // pointer for scroll / pinch, the playhead for the buttons and slider.
+  const anchor = useRef<{ t: number; offset: number } | null>(null)
+  const zoomRef = useRef(zoom)
+  useLayoutEffect(() => { zoomRef.current = zoom }, [zoom])
+  const zoomTo = (z: number, at?: { t: number; offset: number }) => {
+    z = clampZoom(z)
+    if (z === zoomRef.current) return
+    const el = track.current
+    if (!anchor.current && el) {
+      if (at) anchor.current = at
+      else {
+        const x = xOf(ph) - el.scrollLeft
+        anchor.current = { t: ph, offset: x >= 0 && x <= el.clientWidth ? x : el.clientWidth / 2 }
+      }
+    } else if (anchor.current && at) anchor.current.offset = at.offset
+    zoomRef.current = z
+    setScale(fitNow())
+    setZoom(z)
+  }
   const pps = (scale ?? fitNow()) * zoom
   // Geometry: widths proportional to duration, with a floor so a short
   // shot stays hittable. Position <-> time is exact within each block.
@@ -180,6 +200,63 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
     const near = r.target ? null : approaching(tl.targets, t, opts)
     snapStore.set(r.target ? { target: r.target, snapped: true } : near ? { target: near, snapped: false } : null)
   }
+
+  useLayoutEffect(() => {
+    const el = track.current
+    const a = anchor.current
+    anchor.current = null
+    if (!el || !a) return
+    el.scrollLeft = anchoredScroll(xOf(a.t), a.offset, el.clientWidth, geo.end + 2 * PAD)
+  }, [pps]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ⌘ / Ctrl + scroll and a trackpad pinch zoom around the pointer; a plain
+  // up-down scroll moves along the edit (sideways scroll already does), as
+  // in CapCut. Safari reports a pinch as gesture events instead.
+  const wheelRef = useRef<(e: WheelEvent) => void>(() => {})
+  const onWheel = (e: WheelEvent) => {
+    const el = track.current
+    if (!el || !items.length) return
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault()
+      const offset = e.clientX - el.getBoundingClientRect().left
+      const t = anchor.current?.t ?? tOf(offset + el.scrollLeft).t
+      zoomTo(zoomRef.current * wheelFactor(e.deltaY, e.deltaMode), { t, offset })
+    } else if (!e.shiftKey && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      e.preventDefault()
+      el.scrollLeft += e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? el.clientWidth : 1)
+    }
+  }
+  const gestureRef = useRef<{ z: number } | null>(null)
+  const pinchRef = useRef<(e: Event & { scale?: number; clientX?: number }, phase: 'start' | 'change') => void>(() => {})
+  const onPinch = (e: Event & { scale?: number; clientX?: number }, phase: 'start' | 'change') => {
+    const el = track.current
+    if (!el || !items.length) return
+    e.preventDefault()
+    if (phase === 'start') { gestureRef.current = { z: zoomRef.current }; return }
+    if (!gestureRef.current || !e.scale) return
+    const offset = (e.clientX ?? el.getBoundingClientRect().left + el.clientWidth / 2) - el.getBoundingClientRect().left
+    const t = anchor.current?.t ?? tOf(offset + el.scrollLeft).t
+    zoomTo(gestureRef.current.z * e.scale, { t, offset })
+  }
+  useLayoutEffect(() => { wheelRef.current = onWheel; pinchRef.current = onPinch })
+  useEffect(() => {
+    const el = track.current
+    if (!el) return
+    const wheel = (e: WheelEvent) => wheelRef.current(e)
+    const start = (e: Event) => pinchRef.current(e, 'start')
+    const change = (e: Event) => pinchRef.current(e, 'change')
+    const end = (e: Event) => { e.preventDefault(); gestureRef.current = null }
+    el.addEventListener('wheel', wheel, { passive: false })
+    el.addEventListener('gesturestart', start)
+    el.addEventListener('gesturechange', change)
+    el.addEventListener('gestureend', end)
+    return () => {
+      el.removeEventListener('wheel', wheel)
+      el.removeEventListener('gesturestart', start)
+      el.removeEventListener('gesturechange', change)
+      el.removeEventListener('gestureend', end)
+    }
+  }, [])
 
   // Keep the playhead in view while it moves.
   useEffect(() => {
@@ -342,12 +419,12 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
             <i key={t} className="inline-block h-2.5 w-[3px] rounded-sm" style={{ background: TICK[t] }} title={t} />
           ))}
         </span>
-        <div className="flex shrink-0 items-center gap-1.5" title="Zoom the timeline">
-          <button type="button" aria-label="Zoom out" onClick={() => zoomTo(Math.max(1, zoom / 1.5))}
+        <div className="flex shrink-0 items-center gap-1.5" title="Zoom the timeline. You can also hold ⌘ (or Ctrl) and scroll, or pinch on the trackpad, over the timeline">
+          <button type="button" aria-label="Zoom out" onClick={() => zoomTo(zoom / 1.5)}
                   className="grid size-7 place-items-center rounded-md text-zinc-300 hover:bg-raised"><Icon name="minus" size={18} /></button>
-          <input type="range" min={1} max={40} step={0.5} value={zoom} aria-label="Zoom"
-                 onChange={(e) => zoomTo(Number(e.target.value))} className="w-24 accent-[#1f5f8b]" />
-          <button type="button" aria-label="Zoom in" onClick={() => zoomTo(Math.min(40, zoom * 1.5))}
+          <input type="range" min={0} max={1} step="any" value={toSlider(zoom)} aria-label="Zoom"
+                 onChange={(e) => zoomTo(fromSlider(Number(e.target.value)))} className="w-24 accent-[#1f5f8b]" />
+          <button type="button" aria-label="Zoom in" onClick={() => zoomTo(zoom * 1.5)}
                   className="grid size-7 place-items-center rounded-md text-zinc-300 hover:bg-raised"><Icon name="plus" size={18} /></button>
         </div>
         {onExport && (
