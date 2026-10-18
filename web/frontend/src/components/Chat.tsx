@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { DiffLine, Msg, PrefCandidate, Preferences, Review, Turn } from '../types'
+import type { PrefSuggestion, DiffLine, Msg, PrefCandidate, Preferences, Review, Turn } from '../types'
 import { Remember, Rules, type ClassifyReq } from './Remember'
 
 const EXAMPLE = 'three days in Tokyo, lean into the food'
@@ -19,7 +19,7 @@ const MARK: Record<DiffLine['kind'], { sym: string; cls: string }> = {
   none: { sym: '·', cls: 'text-zinc-500 bg-zinc-800/40' },
 }
 
-export function Chat({ items, pending, onSend, onToggle, disabled, llm, hasBoard, prefs, onClassify, onRule, review }: {
+export function Chat({ items, pending, onSend, onToggle, disabled, llm, hasBoard, prefs, onClassify, onRule, onSuggest, review }: {
   items: ChatItem[]
   pending: string | null
   onSend: (text: string) => void
@@ -30,6 +30,7 @@ export function Chat({ items, pending, onSend, onToggle, disabled, llm, hasBoard
   prefs: Preferences | null
   onClassify: (r: ClassifyReq) => Promise<void>
   onRule: (id: string, action: 'forget' | 'narrow') => void
+  onSuggest?: (r: { id: string; klass: 'long_term' | 'project' | 'rejected'; rule?: string; scope?: string; counter?: string }) => Promise<void>
   review?: { turn: number; items: Review[] } | null
 }) {
   const candidate = new Map((prefs?.candidates ?? []).map((c) => [c.turn, c]))
@@ -54,6 +55,7 @@ export function Chat({ items, pending, onSend, onToggle, disabled, llm, hasBoard
         {!llm && <span className="text-[10px] text-muted" title="Typed edits need a language model: add ANTHROPIC_API_KEY to web/.env. Everything else works without it.">typed edits are off</span>}
       </header>
       {prefs && <Rules rules={prefs.rules} onRule={onRule} />}
+      {prefs?.suggestions?.length ? <Suggested items={prefs.suggestions} onDone={onSuggest} /> : null}
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {items.map((it) => it.type === 'local'
@@ -218,5 +220,50 @@ function ReviewLines({ items }: { items: Review[] }) {
         </li>
       ))}
     </ul>
+  )
+}
+
+
+// What you undid or refused, offered once as a rule (preferences.suggestions).
+// Nothing is applied from here by itself: every video needs when / when not.
+function Suggested({ items, onDone }: { items: PrefSuggestion[]; onDone?: (r: { id: string; klass: 'long_term' | 'project' | 'rejected'; rule?: string; scope?: string; counter?: string }) => Promise<void> }) {
+  const [open, setOpen] = useState<string | null>(null)
+  const [rule, setRule] = useState('')
+  const [scope, setScope] = useState('')
+  const [counter, setCounter] = useState('')
+  const [err, setErr] = useState<string | null>(null)
+  const go = async (r: { id: string; klass: 'long_term' | 'project' | 'rejected'; rule?: string; scope?: string; counter?: string }) => {
+    setErr(null)
+    try { await onDone?.(r); setOpen(null) } catch (e) { setErr((e as Error).message) }
+  }
+  return (
+    <div className="border-b border-line px-4 py-2">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">From what you did</div>
+      <ul className="mt-1 space-y-1.5">
+        {items.map((s) => (
+          <li key={s.id} className="text-[12px] text-zinc-300">
+            <span className="text-muted">{s.said}</span> — remember “{s.rule}”?
+            {open === s.id ? (
+              <div className="mt-1 space-y-1">
+                <input value={rule} onChange={(e) => setRule(e.target.value)} className="w-full rounded border border-line bg-ink px-2 py-0.5 text-[12px]" />
+                <input value={scope} onChange={(e) => setScope(e.target.value)} placeholder="when it applies" className="w-full rounded border border-line bg-ink px-2 py-0.5 text-[12px]" />
+                <input value={counter} onChange={(e) => setCounter(e.target.value)} placeholder="when it doesn't" className="w-full rounded border border-line bg-ink px-2 py-0.5 text-[12px]" />
+                <div className="flex gap-1.5">
+                  <button type="button" className="rounded bg-accent px-2 py-0.5 text-[11px] font-semibold text-accent-ink" onClick={() => go({ id: s.id, klass: 'long_term', rule, scope, counter })}>Every video</button>
+                  <button type="button" className="rounded border border-line px-2 py-0.5 text-[11px]" onClick={() => setOpen(null)}>Cancel</button>
+                </div>
+                {err && <div className="text-[11px] text-rose-300">{err}</div>}
+              </div>
+            ) : (
+              <span className="ml-1 inline-flex gap-1">
+                <button type="button" className="rounded border border-line px-1.5 text-[11px] hover:bg-raised" onClick={() => { setOpen(s.id); setRule(s.rule); setScope(''); setCounter('') }}>Every video…</button>
+                <button type="button" className="rounded border border-line px-1.5 text-[11px] hover:bg-raised" onClick={() => go({ id: s.id, klass: 'project', rule: s.rule })}>Just this one</button>
+                <button type="button" className="rounded border border-line px-1.5 text-[11px] text-muted hover:bg-raised" onClick={() => go({ id: s.id, klass: 'rejected' })}>No</button>
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }

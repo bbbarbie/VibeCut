@@ -128,6 +128,47 @@ def fingerprint_for(choice: str | None) -> dict | None:
     return dict(v["fingerprint"]) if v else None
 
 
+# --------------------------------------------------------------------------
+# from inside the app: a job, polled, like a Remix
+# --------------------------------------------------------------------------
+
+class Job:
+    def __init__(self, niche: str, name: str | None, sources: list[str]) -> None:
+        import uuid
+        self.id = uuid.uuid4().hex[:10]
+        self.niche, self.name, self.sources = niche, name, sources
+        self.stage = "learning"      # learning | done | error
+        self.lines: list[str] = []
+        self.error: str | None = None
+        self.result: dict | None = None
+        self.started = time.time()
+
+    def public(self) -> dict:
+        return {"id": self.id, "stage": self.stage, "lines": self.lines[-4:], "error": self.error,
+                "done": sum(1 for l in self.lines if l.startswith("  learnt")), "total": len(self.sources),
+                "vibe": self.result["id"] if self.result else None, "elapsed": round(time.time() - self.started, 1)}
+
+
+JOBS: dict[str, Job] = {}
+
+
+def start(niche: str, name: str | None, sources: list[str], limit_s: float = 120.0) -> Job:
+    import threading
+    job = Job(niche, name, sources)
+    JOBS[job.id] = job
+
+    def run() -> None:
+        try:
+            reference.LIMIT_S = min(reference.LIMIT_S, limit_s)
+            job.result = learn_set(niche, sources, name, say=job.lines.append)
+            job.stage = "done"
+        except Exception as e:  # noqa: BLE001 -- shown in the dialog
+            job.stage, job.error = "error", str(e)[:300]
+
+    threading.Thread(target=run, daemon=True).start()
+    return job
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--niche", help="what these reels have in common, e.g. 'day in my life'")

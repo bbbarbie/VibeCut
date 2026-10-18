@@ -36,7 +36,7 @@ import uuid
 
 from cutgrammar import music as mu
 
-from . import audiomix, bed, remix, select as sel, storyboard as sb, tempo, timeline
+from . import audiomix, bed, habits, places, remix, select as sel, storyboard as sb, tempo, timeline
 
 # Shot length and hook by frame and pace [prior]. A short is cut like the
 # reels the creator brought on 2026-09-25 (0.7 s a shot, hook 1.4 s); a
@@ -76,7 +76,7 @@ def fingerprint(fmt: str, pace: str, seconds: float, styles: list[dict] | None =
         dur = min(dur, p["max_s"])
     med = p["median"][pace]
     return {"median_s": med, "curve": list(CURVE), "spread": SPREAD, "hook_s": p["hook_s"],
-            "bpm": bed.PACE_BPM[pace], "arc": "builds", "energy": None,
+            "bpm": bed.PACE_BPM[pace], "arc": "builds", "energy": None, "bright": None,
             "duration": round(max(15.0, dur), 1), "vertical": fmt != "wide", "refs": 0, "refs_used": False}
 
 
@@ -105,8 +105,40 @@ def taste_text(profile: dict | None, rules: str = "") -> str:
     return out
 
 
-def moments(clips: dict[str, dict], cut, fp: dict, judge=None, taste: str = "") -> sel.Plan:
-    plan = remix.plan_shots(clips, fp, length=fp["duration"], cut=cut, judge=judge, taste=taste)
+def time_of_day(when) -> str:
+    """How a person says the hour: not a clock stamp."""
+    if when is None:
+        return ""
+    h = when.hour
+    return ("late night" if h < 5 else "early morning" if h < 8 else "morning" if h < 11 else "around noon" if h < 14
+            else "afternoon" if h < 17 else "evening" if h < 20 else "night")
+
+
+def plain_lines(plan: sel.Plan, found: dict | None) -> list[str]:
+    """Without a key: one line per stop from where and when it was filmed --
+    "Morningside Heights, morning" -- the way a person would say it. The
+    place comes from the clip's GPS through Apple's geocoder (places.py);
+    nothing is guessed from labels. An empty line means the stop says nothing."""
+    out = []
+    for picks in plan.sessions:
+        if not picks:
+            out.append("")
+            continue
+        p0 = picks[0]
+        place = None
+        for p in picks:
+            g = getattr(p.shot, "gps", None)
+            if g and found:
+                place = places.short_name(found.get(places.key(g)))
+                if place:
+                    break
+        tod = time_of_day(p0.shot.when)
+        out.append(f"{place}, {tod}" if place and tod else (place or tod or ""))
+    return out
+
+
+def moments(clips: dict[str, dict], cut, fp: dict, judge=None, taste: str = "", bias: dict | None = None) -> sel.Plan:
+    plan = remix.plan_shots(clips, fp, length=fp["duration"], cut=cut, judge=judge, taste=taste, bias=bias)
     # The hook is lifted out of its stop, not copied: a Remix played the hook
     # shot again in its place (sarah: never the same shot twice). A stop that
     # was only its hook is not lost: it opens the video.
@@ -179,19 +211,21 @@ def music(clips: dict[str, dict], plan: sel.Plan, fp: dict, pace: str, own: list
     return mx, source
 
 
-def words(plan: sel.Plan, about: str, taste: str = "", ask=None) -> list[str] | None:
-    """One written line per stop (the clock stays in front of it): Claude,
-    with the creator's taste, from each stop's time and labels -- the same
-    writer the describe captions use (llm.day_phrases). None without a key
-    or when it fails: the label table's phrase stands. `ask(items, about,
-    taste)` stands in for tests."""
+def words(plan: sel.Plan, about: str, taste: str = "", ask=None, fp: dict | None = None,
+          found: dict | None = None, phrasing: list[str] | None = None) -> list[str] | None:
+    """One line per stop. With a key: Claude, with the creator's taste, from
+    each stop's place, time and labels -- the writer the describe captions
+    use (llm.day_phrases), lent the creator's own lines (`phrasing`) and the
+    reel's. Without one (or when it fails): place and time of day, plainly
+    (plain_lines). `ask(items, about, taste)` stands in for tests."""
+    plain = plain_lines(plan, found)
     if ask is None:
         from . import llm
         if not llm.available():
-            return None
+            return plain
         ask = llm.day_phrases
     items = []
-    for picks in plan.sessions:
+    for n_, picks in enumerate(plan.sessions):
         if not picks:
             items.append({"time": "", "labels": []})
             continue
@@ -200,12 +234,21 @@ def words(plan: sel.Plan, about: str, taste: str = "", ask=None) -> list[str] | 
             for k, v in (getattr(p.shot, "labels", None) or {}).items():
                 labels[k] = max(labels.get(k, 0.0), float(v))
         top = [k for k, _ in sorted(labels.items(), key=lambda kv: -kv[1])[:6]]
-        items.append({"time": remix._clock(picks[0].shot.when) if picks[0].shot.when else "", "labels": top})
+        where = plain[n_].split(",")[0] if plain[n_] and not plain[n_].startswith(time_of_day(picks[0].shot.when)) else ""
+        items.append({"time": remix._clock(picks[0].shot.when) if picks[0].shot.when else "",
+                      "labels": ([f"at {where}"] if where else []) + top})
+    if phrasing:
+        taste = (taste + "\n\n" if taste else "") + "LINES THE CREATOR WROTE THEMSELVES (their voice; match it): " + "; ".join(phrasing[:8])
+    samples = ((fp or {}).get("text") or {}).get("samples") or []
+    if samples:
+        # the reel's own lines, so the writer hears how they phrase things -- never copied
+        taste = (taste + "\n\n" if taste else "") + "LINES FROM THE REFERENCE REEL (their way of saying it; write new ones in that spirit, never these): " + "; ".join(samples[:8])
     try:
         lines = ask(items, about, taste)
-    except Exception:  # noqa: BLE001 -- the label table's phrase stands
-        return None
-    return [str(x).strip() for x in lines][:len(items)] + [""] * max(0, len(items) - len(lines))
+    except Exception:  # noqa: BLE001 -- place and time stand
+        return plain
+    got = [str(x).strip() for x in lines][:len(items)] + [""] * max(0, len(items) - len(lines))
+    return [g or plain[i] for i, g in enumerate(got)]
 
 
 def ops(plan: sel.Plan, fp: dict, mx: dict | None, fmt: str, look: str | None, about: str,
@@ -252,9 +295,11 @@ def ops(plan: sel.Plan, fp: dict, mx: dict | None, fmt: str, look: str | None, a
         hold = text.get("hold_s")
         with_title = text.get("first_s") is None or text["first_s"] <= fp.get("hook_s", 1.5) + 0.5
     title = (about or "").split(",")[0].strip()[:40] or None
+    if lines is None:
+        lines = plain_lines(plan, None)      # called without a writer: at least the time of day
     if lines and text and text.get("upper"):
         lines = [l.upper() for l in lines]
-    for c in remix.captions(plan, title, None, hold_s=hold, with_title=with_title, phrases=lines):
+    for c in remix.captions(plan, title, None, hold_s=hold, with_title=with_title, phrases=lines, clock=False):
         if c["kind"] == "title":
             out.append({"op": "add_overlay", "kind": "title", "text": c["text"], "sub": c.get("sub", ""),
                         "anchor": {"to": "edit"}, "at": 0.0, "dur": round(c["end"] - c["start"], 2), "anim": "rise"})
@@ -372,7 +417,8 @@ JOBS: dict[str, Job] = {}
 
 def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, about: str, seconds: float,
           own: list[mu.Track] | None, styles: list[dict] | None, judge, on_done, want_music: bool = True,
-          register=None, vibe: dict | None = None, taste: str = "", words_ask=None) -> Job:
+          register=None, vibe: dict | None = None, taste: str = "", words_ask=None,
+          bias: dict | None = None, found: dict | None = None, phrasing: list[str] | None = None) -> Job:
     """Run the pipeline in a thread; `on_done(job)` puts the ops on the session.
     Everything the thread needs is copied in now, so later edits can't move it.
     `register(job)` is called before the thread starts: a fast job (no music,
@@ -389,7 +435,7 @@ def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, ab
         try:
             job.stage = "choosing"
             fp = fingerprint(fmt, pace, seconds, styles, vibe)
-            plan = moments(clips, cut, fp, judge, taste)
+            plan = moments(clips, cut, fp, judge, taste, bias)
             if not plan.picks:
                 raise ValueError("none of the clips had a moment worth keeping — add more footage")
             end_strong(plan)
@@ -400,7 +446,7 @@ def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, ab
             pool, _ = sb.usable(sb.shots_from_clips(list(clips.values()), cut))
             talking = tempo.talking(list(clips.values()), pool)
             judged = any(n.startswith("Claude judged") for n in plan.notes)
-            lines = words(plan, about, taste, words_ask)
+            lines = words(plan, about, taste, words_ask, fp, found, phrasing)
             job.result = {"ops": ops(plan, fp, mx, fmt, look, about, talking, lines=lines), "music": mx, "fp": fp,
                           "plan": plan, "taste": taste, "written": bool(lines),
                           "reply": say(plan, fp, mx, source, judged) + (" Claude wrote the lines, in your voice." if lines else "")}

@@ -227,6 +227,74 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   describe the cut (`make.pace_of`), so the Frames chips tell the truth.
   Cuts sit on the half-beat grid (filler) with the hook and heroes on whole
   beats — `remix.quantise`'s rule, now pinned in `test_make`. All priors.
+- **Habits: the second video learns from the first** (`web/backend/
+  habits.py`, 2026-10-18; the user's ask "do everything now"). At export,
+  `habits.record` keeps the video's *signals* on its record (`events`
+  kind "signals": shots removed / kept / held by hand with their top
+  labels and hour, music switched off by hand, lines retyped; the
+  machine's own turns don't count). At Make, `habits.derive(pj.list_all())`
+  turns the same thing on ≥ `MIN_PROJECTS` 2 videos into a habit (`avoid:`
+  / `prefer:` a label at ±`LABEL_W` 0.2, `music_off`), kept in
+  `$VIBECUT_CACHE/habits.json` with evidence, use count and an off switch
+  that survives re-deriving; a label both removed and kept is no habit.
+  Habits only *bias*: `select.hero_score(bias=)` adds weight × confidence
+  per label (the "why" part `habit`), `music_default` sets the switch,
+  `phrases` (retyped lines, also `remember_phrase` from `edit_overlay`)
+  ride on the writer's prompt. The Make reply ends "Kept more food and
+  fewer whiteboard shots, as you did last time."; `session.habits` lists
+  what acted; the Watch screen's "Undo that" = `POST /api/habits/{id}
+  {off, remake}` (switch off, undo the Make turn, make again). Used
+  `SUGGEST_AFTER` 3 times without an undo → offered once as a rule
+  (`_prefs_public`, id `habit:…`). Profile page: "What VibeCut has learned
+  about you" with switches (`/api/habits`). Local only (not mirrored yet).
+  `tests/test_habits.py`.
+- **Lines from place and time** (`make.plain_lines`, `time_of_day`,
+  2026-10-18): without a key a stop's line is "Morningside Heights,
+  morning" from the clip's GPS (places.py) and hour — never a clock stamp
+  alone, and a stop with nothing to say says nothing
+  (`remix.captions(clock=False)`); with a key the writer gets the place as
+  a label and the creator's own retyped lines (`phrasing`), and any empty
+  answer falls back to the plain line.
+- **Posting** (2026-10-18): `POST /api/export/{jid}/photos` imports the
+  file into Photos by AppleScript (Mac only, says so elsewhere); the
+  export dialog has Save to Photos and "Copy caption + credit" (the title
+  line plus the track's licence credit, now on `session.music.credit`);
+  the no-music export is the dialog's Music switch; "Would you post this?"
+  stays the number.
+- **Watch, then Fine-tune** (2026-10-18, `App.tsx` `watching`): a made or
+  remixed video opens as the video, full-size, with four chips under it —
+  music (the bed switch), length (`LengthButton`), look (cycles the looks
+  as one `set_look` turn), words (the captions switch) — plus Download
+  (the export dialog) and one Fine-tune link that reveals the editor
+  (rail, inspector, timeline). A hand-cut video opens in the editor as
+  before. Same player wiring (`player(true)`), so nothing is duplicated.
+  `design/eval/2026-10-18-watch.png`.
+- **Music that matches a reel's feel** (2026-10-18): `music.brightness`
+  (median spectral centroid over the middle minute, Hz) joins every track's
+  features (`FEATURE_VERSION` 3: cached folders re-analyse once) and the
+  reel's `music.bright` (`style.music_feel`, "a bright, airy sound" /
+  "a warm, low sound"); `remix.fingerprint` carries the median as
+  `bright`; `remix.pick_from` scores timbre (an octave off = 0) at 0.15
+  when both are known, else the old weights. Priors. `tests/test_feel.py`.
+  **Learn a vibe in the app**: `POST /api/vibes {niche, name, links}` runs
+  `vibes.learn_set` as a job (`vibes.start`, `/api/vibes/jobs/{id}`); the
+  Setup dialog has "+ Learn a vibe from reels you love…" under Cut it
+  like, polls it, reloads the choices and selects the new vibe.
+- **What you undo and refuse** (layer 3, 2026-10-18; `Preferences.
+  suggestions` / `take`, `/api/preferences/suggest`, "From what you did"
+  in `Chat.tsx`): an undone turn of the machine's own (`MACHINE`: the bed,
+  the captions, the repeat check, smoother cuts) and a "no" at export with
+  a note are offered once as suggested rules; only the creator turns one
+  into a rule (every video needs when / when not; this video; or No), and
+  the decision is kept in the preferences file (`suggested`) so it never
+  comes back. Undone hand edits are not suggested (they're the creator's
+  own). Nothing is applied from a suggestion by itself. `tests/test_learn3.py`.
+  Also that day: the writer hears the reel's own lines (`words.samples`
+  from the OCR, ≤ 12, on `fp.text.samples`, appended to the taste as
+  "write new ones in that spirit, never these"); the setup's lengths
+  differ by frame (`brief.length_for`: a vlog takes the Medium mark);
+  Keyboard shortcuts and Polish left the name menu (the `?` in the timeline
+  bar and `#polish` still reach them).
 - **Taste in the loop** (layer 2 of preserving preference, 2026-10-18;
   key only). `make.taste_text(profile, PREFS.for_model())` renders the
   creator in their own words (name, what they make, the feeling, pace,

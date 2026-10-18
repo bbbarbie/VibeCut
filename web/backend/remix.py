@@ -111,9 +111,12 @@ def fingerprint(styles: list[dict]) -> dict:
                 "band": max(set(bands), key=bands.count) if bands else None,
                 "hold_s": round(float(np.median([w["hold_s"] for w in ws if w.get("hold_s")])), 2) if any(w.get("hold_s") for w in ws) else None,
                 "upper": bool(np.median([w.get("upper") or 0 for w in ws]) > 0.8),
+                "samples": [x for w in ws for x in (w.get("samples") or [])][:12],
                 "first_s": round(float(np.median([w["first_s"] for w in ws if w.get("first_s") is not None])), 2) if any(w.get("first_s") is not None for w in ws) else None}
     ends = [s["ending"]["last_s"] for s in styles if (s.get("ending") or {}).get("last_s")]
+    brights = [float(s["music"]["bright"]) for s in styles if (s.get("music") or {}).get("bright")]
     return {
+        "bright": round(float(np.median(brights)), 1) if brights else None,
         "text": text, "last_s": round(float(np.median(ends)), 2) if ends else None,
         "median_s": round(med, 3), "curve": [round(float(c), 3) for c in curve],
         "spread": (round(p10 / med, 2), round(p90 / med, 2)),
@@ -144,7 +147,8 @@ def load_shoot(folder: str) -> dict[str, dict]:
 
 
 def plan_shots(clips: dict[str, dict], fp: dict, length: float | None = None, hook_n: int = 1,
-               cut: tuple[set, dict] | None = None, judge=None, taste: str = "") -> sel.Plan:
+               cut: tuple[set, dict] | None = None, judge=None, taste: str = "",
+               bias: dict[str, float] | None = None) -> sel.Plan:
     """Pick the moments and give each its window, before any beat is known.
     `judge`: None = Claude when there is a key (select.judge), False = the
     rules alone, or a stand-in `ask(options, keep)` for tests."""
@@ -154,7 +158,7 @@ def plan_shots(clips: dict[str, dict], fp: dict, length: float | None = None, ho
     total = length or fp["duration"]
     body = max(1.0, total - fp["hook_s"] * hook_n)
     n = max(4, int(round(body / fp["median_s"])))
-    plan = sel.choose(shots, clips, n, hook_n)
+    plan = sel.choose(shots, clips, n, hook_n, bias)
     if judge is not False and os.environ.get("VIBECUT_REMIX_JUDGE", "1") != "0":
         plan = sel.judge(plan, shots, clips, ask=judge if callable(judge) else None, taste=taste)
     plan.notes = notes + plan.notes
@@ -286,7 +290,15 @@ def pick_from(pool: list[mu.Track], fp: dict, need_s: float, hook_s: float) -> d
         tempo = float(np.clip(1 - abs(np.log2(t.bpm / mid)) / 0.5, 0, 1))
         shape = max(mu.shape_score(t.energy[s:s + int(need_s)], want)
                     for s in range(0, max(1, int(t.duration - need_s)), 4))
-        scored.append((0.4 * tempo + 0.25 * shape + 0.25 * vibe(t) + 0.1 * continuity(t.path), t))
+        # timbre: how far the track's weight sits from the references' (an
+        # octave off is a different kind of music); only when both are known
+        tb, fb = t.meta.get("bright"), fp.get("bright")
+        if tb and fb:
+            timbre = float(np.clip(1 - abs(np.log2(float(tb) / float(fb))), 0, 1))
+            score = 0.35 * tempo + 0.2 * shape + 0.2 * vibe(t) + 0.1 * continuity(t.path) + 0.15 * timbre
+        else:
+            score = 0.4 * tempo + 0.25 * shape + 0.25 * vibe(t) + 0.1 * continuity(t.path)
+        scored.append((score, t))
     if not scored:
         return None
     scored.sort(key=lambda x: -x[0])
@@ -352,7 +364,7 @@ def _clock(dt: datetime) -> str:
 
 
 def captions(plan: sel.Plan, title: str | None, sub: str | None, hold_s: float | None = None,
-             with_title: bool = True, phrases: list[str] | None = None) -> list[dict]:
+             with_title: bool = True, phrases: list[str] | None = None, clock: bool = True) -> list[dict]:
     """What goes on screen, in sequence seconds. Built only from what the edit
     knows. `hold_s`: how long a stop's line stays (a reference's own hold);
     `with_title`: a reel with no words at the top gets no title."""
@@ -372,9 +384,11 @@ def captions(plan: sel.Plan, title: str | None, sub: str | None, hold_s: float |
         if not picks:
             continue
         p0 = picks[0]
-        words = _clock(p0.shot.when) if p0.shot.when else ""
+        words = _clock(p0.shot.when) if (p0.shot.when and clock) else ""
         # a written line for this stop (make.words, the model with the creator's taste) beats the label table
         phrase = (phrases[n_] if phrases and n_ < len(phrases) and phrases[n_] else None) or _phrase(picks)
+        if not clock and not phrase:
+            continue      # no clock stamps on their own (2026-10-18): a stop with nothing to say says nothing
         if phrase:
             words = f"{words} · {phrase}" if words else phrase
         if words:

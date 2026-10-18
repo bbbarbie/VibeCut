@@ -49,6 +49,9 @@ def main() -> int:
     w = st.text_style(ev, 20.0)
     check("share, first, band, hold, caps", w["share"] == 0.3 and w["first_s"] == 1.0 and w["band"] == "bottom"
           and abs(w["hold_s"] - 3.0) < 0.6 and w["upper"] == 1.0 and w["cards"] == 2, json.dumps({k: w[k] for k in ("share", "first_s", "band", "hold_s", "upper", "cards")}))
+    gap = [{"t": i / 2, "items": ([{"text": "HI", "box": [0.2, 0.1, 0.6, 0.06], "conf": 0.9}] if (1.0 <= i / 2 < 4.0 and i / 2 != 2.5) else [])} for i in range(20)]
+    g = st.text_style(gap, 10.0)
+    check("a one-frame miss inside a caption doesn't split it", g["cards"] == 1 and abs(g["hold_s"] - 3.0) < 0.6, json.dumps({"cards": g["cards"], "hold": g["hold_s"]}))
     check("no words at all is said plainly", st.text_style([{"t": 0, "items": []}, {"t": 0.5, "items": []}], 1.0)["share"] == 0.0)
     check("nothing sampled: nothing learnt", st.text_style([], 1.0) is None)
 

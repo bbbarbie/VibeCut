@@ -68,6 +68,16 @@ def main() -> int:
     with TestClient(backend.app) as c:
         r = c.get("/api/vibes").json()
         check("the route lists it", any(v["id"] == rec["id"] for v in r["vibes"]))
+        check("too few reels is refused in the app", c.post("/api/vibes", json={"niche": "x", "links": reels[:2]}).status_code == 400)
+        import time
+        job = c.post("/api/vibes", json={"niche": "cinematic", "name": "In-app", "links": reels}).json()
+        for _ in range(600):
+            if job["stage"] in ("done", "error"):
+                break
+            time.sleep(0.5)
+            job = c.get(f"/api/vibes/jobs/{job['id']}").json()
+        check("learnt from inside the app as a job", job["stage"] == "done" and job["vibe"] and job["done"] == 3, json.dumps(job))
+        check("…and it shows up under Cut it like", any(v["id"] == job["vibe"] for v in c.get("/api/vibes").json()["vibes"]))
         c.post("/api/projects", json={"name": "V"})
         backend._close_project()
     defaults.forget()

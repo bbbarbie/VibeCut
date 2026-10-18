@@ -89,11 +89,14 @@ def suggest_format(portrait_share: float, usable_s: float) -> str:
 
 
 def length_for(fmt: str | None, marks: dict) -> float:
-    """The length a format asks for: a short is its Short mark, capped; the
-    others take the suggested mark."""
+    """The length a format asks for: a short is its Short mark, capped; a
+    vlog (tall or wide) is the Medium mark when the footage has one, else the
+    suggestion -- so the three frames in the setup don't all read "about 1:00"."""
+    by = {m["key"]: m["seconds"] for m in marks["marks"]}
     if fmt == "short":
-        short = next((m["seconds"] for m in marks["marks"] if m["key"] == "short"), marks["seconds"])
-        return float(min(short, SHORT_MAX_S))
+        return float(min(by.get("short", marks["seconds"]), SHORT_MAX_S))
+    if fmt in ("tall", "wide") and "medium" in by:
+        return float(by["medium"])
     return float(marks["seconds"])
 
 # Focus choices, each a storyboard theme (storyboard.THEMES).

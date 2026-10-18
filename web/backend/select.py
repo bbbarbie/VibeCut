@@ -147,10 +147,18 @@ def subject(clips: dict[str, dict], s: sb.Shot) -> float:
     return float(np.clip(np.mean(x) / 0.5, 0, 1)) if x.size else 0.5
 
 
-def hero_score(s: sb.Shot, clips: dict[str, dict], weights: dict[str, float]) -> tuple[float, dict]:
+def hero_score(s: sb.Shot, clips: dict[str, dict], weights: dict[str, float],
+               bias: dict[str, float] | None = None) -> tuple[float, dict]:
     parts = {"craft": s.score, "distinct": distinctiveness(s, weights), "camera": camera(s),
              "subject": subject(clips, s), "motion": motion_ok(clips, s)}
-    return sum(W[k] * v for k, v in parts.items()), parts
+    score = sum(W[k] * v for k, v in parts.items())
+    if bias:
+        # the creator's habits (habits.py): a small push per label, on top of craft
+        h = sum(w * float(c) for l, w in bias.items() for ll, c in s.labels.items() if ll == l)
+        if h:
+            parts["habit"] = round(h, 3)
+            score += h
+    return score, parts
 
 
 def busiest(clips: dict[str, dict], s: sb.Shot, lo: float, hi: float) -> float:
@@ -251,11 +259,13 @@ def _novel(s: sb.Shot, taken: list[sb.Shot]) -> float:
     return 1.0 - max(sims) if sims else 1.0
 
 
-def choose(shots: list[sb.Shot], clips: dict[str, dict], n: int, hook_n: int = 1) -> Plan:
-    """n moments from the shoot, plus hook_n that open it."""
+def choose(shots: list[sb.Shot], clips: dict[str, dict], n: int, hook_n: int = 1,
+           bias: dict[str, float] | None = None) -> Plan:
+    """n moments from the shoot, plus hook_n that open it. `bias`: the
+    creator's label habits (habits.py), a nudge on top of craft."""
     shots, dropped = dedupe([s for s in shots if not s.utility and s.duration >= MIN_SHOT_S])
     weights = idf(shots)
-    scored = {s.id: hero_score(s, clips, weights) for s in shots}
+    scored = {s.id: hero_score(s, clips, weights, bias) for s in shots}
     groups = sessions_of(shots)
     q = quotas(groups, max(1, n))
     picked: list[list[sb.Shot]] = []
@@ -291,7 +301,7 @@ def choose(shots: list[sb.Shot], clips: dict[str, dict], n: int, hook_n: int = 1
 
     def mk(s: sb.Shot, role: str, sess: int) -> Pick:
         sc, parts = scored[s.id]
-        why = ", ".join(f"{k} {v:.2f}" for k, v in sorted(parts.items(), key=lambda kv: -W[kv[0]] * kv[1])[:3])
+        why = ", ".join(f"{k} {v:.2f}" for k, v in sorted(parts.items(), key=lambda kv: -W.get(kv[0], 1.0) * kv[1])[:3])
         return Pick(s, role, s.start, s.end, sc, why, sess)
 
     plan = Plan(

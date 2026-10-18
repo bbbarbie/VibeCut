@@ -31,7 +31,7 @@ from cutgrammar import grade
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, bed, brief, cloud, defaults, make, vibes, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, bed, brief, cloud, defaults, habits, make, vibes, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import GATE, Workflow, WorkflowError
 
@@ -224,6 +224,17 @@ def api_profile_put(req: ProfileReq) -> dict:
     return {"profile": rec["value"], "at": rec["at"], "cloud": cloud.status()}
 
 
+def _prefs_public() -> dict:
+    out = PREFS.public(SESSION, PROJECT["p"].exports if PROJECT["p"] else None)
+    # a habit used three times without an undo is offered once as a rule, in the creator's words
+    for h in habits.load():
+        if h.get("offered") and not h.get("off") and f"habit:{h['id']}" not in PREFS.suggested:
+            out["suggestions"].append({"id": f"habit:{h['id']}", "source": "habit",
+                                       "said": f"The app has kept {h['text']} on {h['n']} videos",
+                                       "rule": h["text"].capitalize(), "suggested": "long_term"})
+    return out
+
+
 def _capabilities() -> dict:
     """What this machine can do, so the UI says so instead of failing later."""
     return {
@@ -242,8 +253,8 @@ def _capabilities() -> dict:
 # they succeed the project is written to disk. Uploads, the finished-video
 # tool and the reference library stand apart: they are not project state.
 _NO_PROJECT_OK = ("/api/projects", "/api/upload", "/api/locate", "/api/polish", "/api/music/folder",
-                  "/api/references", "/api/profile")
-_NOT_SAVED = ("/api/projects", "/api/upload", "/api/locate", "/api/polish", "/api/music/folder", "/api/profile")
+                  "/api/references", "/api/profile", "/api/vibes")
+_NOT_SAVED = ("/api/projects", "/api/upload", "/api/locate", "/api/polish", "/api/music/folder", "/api/profile", "/api/vibes")
 
 
 @app.middleware("http")
@@ -340,7 +351,8 @@ def _session() -> dict:
         "music": _music_public(),
         "bed": BED["job"].public() if BED["job"] else None,
         "mix": _mix_public(b, tl),
-        "preferences": PREFS.public(SESSION),
+        "preferences": _prefs_public(),
+        "habits": MAKE.get("last_habits") or [],
         "voiceover": _voiceover_public(),
         "project": _meta(),
         "brief": PROJECT["p"].brief if PROJECT["p"] else None,
@@ -407,8 +419,14 @@ def _style(b: dict | None, for_export: bool = False) -> dict | None:
 
 def _music_public() -> dict | None:
     t = _track()
-    return None if t is None else {"id": t.id, "title": t.title, "duration": round(t.duration, 2),
-                                   "bpm": t.bpm, "audio": f"/api/music/audio/{t.id}"}
+    if t is None:
+        return None
+    from cutgrammar import openverse as ov
+    lic = (t.meta or {}).get("licence")
+    return {"id": t.id, "title": t.title, "duration": round(t.duration, 2),
+            "bpm": t.bpm, "audio": f"/api/music/audio/{t.id}",
+            # the licence's credit line, for the caption (pasted with it on Save)
+            "credit": ov.credit(lic) if lic else None}
 
 
 # Specs of mixes the UI has been told about, by key; the file is rendered
@@ -1063,7 +1081,15 @@ def api_make(req: BriefAutoReq | None = None) -> dict:
         clips = dict(CLIPS)
         cut_now = cut.for_story(PLAN["plan"])
         remembered = defaults.get()
-        want_music = req.music if (req and req.music is not None) else remembered.get("music", "on") != "off"
+        # the creator's habits, from every video so far (habits.py): a nudge
+        # on the picks, the music switch's default, their own phrasing
+        hab = habits.derive(pj.list_all())
+        h_music = habits.music_default(hab)
+        want_music = (req.music if (req and req.music is not None)
+                      else (h_music if h_music is not None else remembered.get("music", "on") != "off"))
+        h_bias = habits.bias(hab)
+        h_used = [h for h in habits.active(hab) if (h.get("label") and h["label"] in h_bias) or (h["id"] == "music_off" and not want_music)]
+        found = places.lookup([c.get("gps") for c in CLIPS.values()])
         # the creator's own picks follow them to the next video (defaults.py, layer 1)
         defaults.note(format=style.get("format"), look=style.get("look"), music="on" if want_music else "off",
                       vibe=style.get("vibe") or None)
@@ -1088,7 +1114,18 @@ def api_make(req: BriefAutoReq | None = None) -> dict:
             ops_ = list(job.result["ops"])
             if caption_style:
                 ops_.append({"op": "overlay_style", **caption_style, "source": "defaults"})   # as last time
-            SESSION.add({"kind": "direct", "text": MAKE_TEXT, "ops": ops_, "reply": job.result["reply"]},
+            acted = [h for h in h_used if (h.get("label") and any(h["label"] in (CATALOG["cat"].shots[e["id"]].labels if e["id"] in CATALOG["cat"].shots else {})
+                                                                       for bt in job.result["ops"][0]["snapshot"]["beats"] for e in bt["shots"]))
+                     or h["id"] == "music_off"]
+            said = habits.describe(acted)
+            job.result["habits"] = [{"id": h["id"], "text": h["text"]} for h in acted]
+            MAKE["last_habits"] = job.result["habits"]
+            if acted:
+                due = habits.used([h["id"] for h in acted])
+                for h in due:
+                    habits.mark_offered(h["id"])
+            SESSION.add({"kind": "direct", "text": MAKE_TEXT, "ops": ops_,
+                         "reply": job.result["reply"] + (" " + said if said else "")},
                         CATALOG["cat"], _make_proposals)
             pr_ = PROJECT["p"]
             if pr_ is not None and pr_.brief:
@@ -1111,14 +1148,69 @@ def api_make(req: BriefAutoReq | None = None) -> dict:
 
     job = make.start(clips, cut_now, style.get("format", "tall"), style.get("pace", "balanced"),
                      style.get("look"), about, float(style.get("seconds") or 60.0), own, None, None, on_done,
-                     want_music=want_music, register=register, vibe=vibe_fp, taste=taste)
+                     want_music=want_music, register=register, vibe=vibe_fp, taste=taste,
+                     bias=h_bias, found=found, phrasing=habits.phrases())
     return job.public()
+
+
+@app.get("/api/habits")
+def api_habits() -> dict:
+    """What the app has learned about the creator, each with its evidence and its switch."""
+    return {"habits": habits.load(), "phrases": habits.phrases(), "last": MAKE.get("last_habits") or []}
+
+
+class HabitReq(BaseModel):
+    off: bool
+    remake: bool = False
+
+
+@app.post("/api/habits/{hid}")
+def api_habit_switch(hid: str, req: HabitReq) -> dict:
+    """The one tap: a habit off (or on), recorded; `remake` makes the video again without it."""
+    h = habits.switch(hid, req.off)
+    if h is None:
+        raise HTTPException(404, "no such habit")
+    if req.remake and SESSION.board is not None:
+        pr = PROJECT["p"]
+        style = ((pr.brief or {}).get("style") or {}) if pr else {}
+        last = next((t for t in reversed(SESSION.turns) if t.text == MAKE_TEXT and not t.undone), None)
+        with LOCK:
+            if last:
+                SESSION.toggle(last.id, CATALOG["cat"], _make_proposals)
+        return api_make(BriefAutoReq(format=style.get("format"), look=style.get("look"),
+                                     music=None, vibe=style.get("vibe")))
+    return {"habit": h}
 
 
 @app.get("/api/vibes")
 def api_vibes() -> dict:
     """The library's vibes and the creator's own learnt reels, for "Cut it like"."""
     return {"vibes": vibes.choices()}
+
+
+class VibeReq(BaseModel):
+    niche: str
+    name: str | None = None
+    links: list[str]
+
+
+@app.post("/api/vibes")
+def api_vibe_start(req: VibeReq) -> dict:
+    """Learn a vibe from reels (links or files on this Mac), as a job."""
+    srcs = [x.strip() for x in req.links if x.strip()]
+    if len(srcs) < vibes.MIN_REELS:
+        raise HTTPException(400, f"A vibe needs at least {vibes.MIN_REELS} reels.")
+    if not req.niche.strip():
+        raise HTTPException(400, "Say what these reels have in common.")
+    return vibes.start(req.niche.strip(), (req.name or "").strip() or None, srcs).public()
+
+
+@app.get("/api/vibes/jobs/{jid}")
+def api_vibe_status(jid: str) -> dict:
+    job = vibes.JOBS.get(jid)
+    if not job:
+        raise HTTPException(404, "no such job")
+    return job.public()
 
 
 @app.get("/api/make/{jid}")
@@ -1376,6 +1468,25 @@ def api_pref_classify(req: ClassifyReq) -> dict:
         return _session()
 
 
+class SuggestReq(BaseModel):
+    id: str
+    klass: str
+    rule: str = ""
+    scope: str = ""
+    counter: str = ""
+
+
+@app.post("/api/preferences/suggest")
+def api_pref_suggest(req: SuggestReq) -> dict:
+    """A suggested rule (from an undo or a "no" at export) becomes a rule, or is dismissed."""
+    with LOCK:
+        try:
+            PREFS.take(req.id, req.klass, "user", req.rule, req.scope, req.counter)
+        except PreferenceError as e:
+            raise HTTPException(400, str(e)) from e
+        return _session()
+
+
 @app.post("/api/preferences/{rid}/{action}")
 def api_pref_change(rid: str, action: str) -> dict:
     with LOCK:
@@ -1449,6 +1560,8 @@ def api_ops(req: OpsReq) -> dict:
         for o in req.ops:   # picks made by hand follow the creator to the next video
             if o.get("op") == "set_look" and o.get("look"):
                 defaults.note(look=o["look"])
+            if o.get("op") == "edit_overlay" and isinstance(o.get("text"), str) and o["text"].strip():
+                habits.remember_phrase(o["text"])   # how they phrase things, for the writer
             if o.get("op") == "overlay_style" and o.get("source") != "defaults":
                 defaults.note(**{f"caption_{k}": o[k] for k in ("template", "enter") if k in o})
         if [o.get("op") for o in req.ops] == ["choose_option"]:
@@ -1797,6 +1910,8 @@ def api_export_status(jid: str) -> dict:
                            "turns": len(live), "undone": sum(t.undone for t in SESSION.turns),
                            "chat_turns": sum(1 for t in live if t.kind == "chat" and t.ops),
                            "default_path": not any(t.kind == "chat" and t.ops for t in live)})
+        # what this video's edits say, for the next one (habits.py)
+        habits.record(pr, SESSION.turns, CATALOG["cat"])
         _save()
     return pub
 
@@ -1847,6 +1962,22 @@ def api_export_file(jid: str) -> FileResponse:
     if job.stage != "done" or not job.path or not os.path.isfile(job.path):
         raise HTTPException(404, "not finished")
     return FileResponse(job.path, media_type="video/mp4", filename=Path(job.path).name)
+
+
+@app.post("/api/export/{jid}/photos")
+def api_export_photos(jid: str) -> dict:
+    """Save to Photos (macOS): the file goes into the Photos library through
+    AppleScript, where AirDrop and the phone find it. Elsewhere: 409 and why."""
+    job = _job(jid)
+    if job.stage != "done" or not job.path:
+        raise HTTPException(404, "not finished")
+    if sys.platform != "darwin":
+        raise HTTPException(409, "Save to Photos needs a Mac; the file is in your exports folder.")
+    script = f'tell application "Photos" to import POSIX file "{job.path}"'
+    p = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=120)
+    if p.returncode != 0:
+        raise HTTPException(500, "Photos didn't take it: " + (p.stderr.strip()[-200:] or "unknown error"))
+    return {"ok": True}
 
 
 @app.post("/api/export/{jid}/reveal")
