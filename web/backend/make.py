@@ -57,13 +57,15 @@ STAGES = {"choosing": "Choosing the moments…", "music": "Finding music and its
           "words": "Writing the words…", "done": "Done", "error": "Failed"}
 
 
-def fingerprint(fmt: str, pace: str, seconds: float, styles: list[dict] | None = None) -> dict:
-    """The shape the edit should take: the references' when there are any,
-    else the frame's prior. `seconds` is the length the brief asked for."""
+def fingerprint(fmt: str, pace: str, seconds: float, styles: list[dict] | None = None,
+                vibe: dict | None = None) -> dict:
+    """The shape the edit should take: a chosen vibe's (vibes.py), else the
+    references' when there are any, else the frame's prior. `seconds` is
+    the length the brief asked for."""
     fmt = fmt if fmt in PRIOR else "tall"
     pace = pace if pace in bed.PACE_BPM else "balanced"
-    if styles:
-        fp = remix.fingerprint(styles)
+    if styles or vibe:
+        fp = dict(vibe) if vibe else remix.fingerprint(styles)
         if PRIOR[fmt]["max_s"]:
             fp["duration"] = round(min(fp["duration"], PRIOR[fmt]["max_s"]), 1)
         fp["refs_used"] = True
@@ -314,7 +316,7 @@ JOBS: dict[str, Job] = {}
 
 def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, about: str, seconds: float,
           own: list[mu.Track] | None, styles: list[dict] | None, judge, on_done, want_music: bool = True,
-          register=None) -> Job:
+          register=None, vibe: dict | None = None) -> Job:
     """Run the pipeline in a thread; `on_done(job)` puts the ops on the session.
     Everything the thread needs is copied in now, so later edits can't move it.
     `register(job)` is called before the thread starts: a fast job (no music,
@@ -330,7 +332,7 @@ def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, ab
     def run() -> None:
         try:
             job.stage = "choosing"
-            fp = fingerprint(fmt, pace, seconds, styles)
+            fp = fingerprint(fmt, pace, seconds, styles, vibe)
             plan = moments(clips, cut, fp, judge)
             if not plan.picks:
                 raise ValueError("none of the clips had a moment worth keeping — add more footage")

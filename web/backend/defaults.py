@@ -22,7 +22,7 @@ import time
 from .indexer import CACHE
 
 SETTINGS = CACHE / "settings.json"
-KEYS = ("format", "look", "music", "caption_template", "caption_enter")
+KEYS = ("format", "look", "music", "caption_template", "caption_enter", "vibe")
 _lock = threading.Lock()
 
 

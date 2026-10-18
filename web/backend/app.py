@@ -31,7 +31,7 @@ from cutgrammar import grade
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, bed, brief, cloud, defaults, make, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, bed, brief, cloud, defaults, make, vibes, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import GATE, Workflow, WorkflowError
 
@@ -985,6 +985,7 @@ def api_brief_setup() -> dict:
                 "music": remembered.get("music", "on") != "off", "portrait_share": round(share, 2),
                 "formats": [{"key": k, "label": v, "seconds": round(brief.length_for(k, marks))} for k, v in brief.FORMATS.items()],
                 "look": (_direction() or {}).get("style", {}).get("look") or remembered.get("look") or "cozy",
+                "vibes": vibes.choices(), "vibe": remembered.get("vibe"),
                 "looks": looks.public(), "about": about}
 
 
@@ -992,6 +993,7 @@ class BriefAutoReq(BaseModel):
     format: str | None = None
     look: str | None = None
     music: bool | None = None       # None = as last time (defaults.py), else this time's switch
+    vibe: str | None = None         # "Cut it like": a library vibe id or ref:<rid> (vibes.py); None = the frame's prior
 
 
 @app.post("/api/brief/auto")
@@ -1015,7 +1017,7 @@ def api_brief_auto(req: BriefAutoReq | None = None) -> dict:
         feel = tempo.read(list(CLIPS.values()), cut.for_story(PLAN["plan"]))
         fmt = req.format or brief.suggest_format(_portrait_share(), marks["max"])
         style = {"seconds": brief.length_for(fmt, marks), "captions": "describe", "pace": feel["pace"],
-                 "format": fmt, "look": req.look or "cozy"}
+                 "format": fmt, "look": req.look or "cozy", "vibe": req.vibe or None}
         pr.brief = {"message": about, "style": brief.clean_style(style) or {}, "tempo": feel["why"],
                     "said": f"{brief.FORMATS[fmt].split(' ·')[0]} · about {brief.say_length(style['seconds'])} · "
                             f"{tempo.NAMES[feel['pace']].lower()} · {looks.get(style['look'])['name']} · captions",
@@ -1063,7 +1065,9 @@ def api_make(req: BriefAutoReq | None = None) -> dict:
         remembered = defaults.get()
         want_music = req.music if (req and req.music is not None) else remembered.get("music", "on") != "off"
         # the creator's own picks follow them to the next video (defaults.py, layer 1)
-        defaults.note(format=style.get("format"), look=style.get("look"), music="on" if want_music else "off")
+        defaults.note(format=style.get("format"), look=style.get("look"), music="on" if want_music else "off",
+                      vibe=style.get("vibe") or None)
+        vibe_fp = vibes.fingerprint_for(style.get("vibe"))
         caption_style = {k: remembered[f"caption_{k}"] for k in ("template", "enter") if remembered.get(f"caption_{k}")}
 
     def on_done(job: make.Job) -> None:
@@ -1102,8 +1106,14 @@ def api_make(req: BriefAutoReq | None = None) -> dict:
 
     job = make.start(clips, cut_now, style.get("format", "tall"), style.get("pace", "balanced"),
                      style.get("look"), about, float(style.get("seconds") or 60.0), own, None, None, on_done,
-                     want_music=want_music, register=register)
+                     want_music=want_music, register=register, vibe=vibe_fp)
     return job.public()
+
+
+@app.get("/api/vibes")
+def api_vibes() -> dict:
+    """The library's vibes and the creator's own learnt reels, for "Cut it like"."""
+    return {"vibes": vibes.choices()}
 
 
 @app.get("/api/make/{jid}")

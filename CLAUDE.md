@@ -227,6 +227,19 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   describe the cut (`make.pace_of`), so the Frames chips tell the truth.
   Cuts sit on the half-beat grid (filler) with the hook and heroes on whole
   beats — `remix.quantise`'s rule, now pinned in `test_make`. All priors.
+- **The viral library** (`web/backend/vibes.py`, `/api/vibes`, "Cut it
+  like" in `Setup.tsx`; the user's vision, 2026-10-18: learn from viral
+  vlogs). A vibe = `remix.fingerprint` over a *set* of reels learnt through
+  `reference.start` (so each has words / opening / ending too), saved as a
+  dated record under `$VIBECUT_CACHE/vibes/` naming its sources, mirrored
+  as kind `vibe` (`lib:<id>`). `MIN_REELS` 3. CLI: `python -m
+  web.backend.vibes --niche … --links file | --files …` (`--limit` 120 s of
+  each reel). The Setup dialog offers the library's vibes, then the
+  creator's own learnt reels as one-reel vibes (`ref:<rid>`); the pick
+  travels as `style.vibe`, is remembered (`defaults`), and
+  `make.fingerprint(vibe=…)` takes it over the frame's prior (duration
+  still capped by the frame). Popularity stands in for "well cut"; the
+  record names its reels so that can be judged. `tests/test_vibes.py`.
 - **The Supabase mirror** (`web/backend/cloud.py`, `supabase/migrations/
   0001_preferences.sql`; the user's decision, 2026-10-18: preferences in a
   backend connected to Supabase). One table, `preferences(device, kind,

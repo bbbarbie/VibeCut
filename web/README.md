@@ -105,6 +105,17 @@ so Undo takes it all back, and the three stories are still there under
 Other stories. Music is fetched the moment the clips are read, so by the
 time you press Make it's usually waiting.
 
+## Cut it like: the viral library
+
+A vibe is what a set of reels has in common: twenty day-in-my-life shorts
+that did well give one record (shot length and arc, hook, tempo, where the
+words sit and how long, how the ending lands), built with
+`python -m web.backend.vibes --niche "day in my life" --links links.txt`.
+The Setup dialog lists the library's vibes and your own learnt reels under
+*Cut it like*; pick one and Make cuts to its fingerprint instead of the
+frame's own pace. Only numbers are kept from a reel, and the record names
+its sources.
+
 ## The front door: a short like a reel you love
 
 On the home page, under the clips you picked, there is one more line:
