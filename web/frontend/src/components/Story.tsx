@@ -119,7 +119,7 @@ function OptionCard({ o, current, playing, onPlay, onUse }: {
             </div>
             <div className="mt-1 flex gap-0.5 overflow-hidden pl-4">
               {b.shots.slice(0, 8).map((s, k) => s.gap
-                ? <span key={`gap${k}`} title={s.why} className="h-8 w-14 shrink-0 rounded-sm bg-[repeating-linear-gradient(45deg,#18181b,#18181b_4px,#27272a_4px,#27272a_8px)]" />
+                ? <span key={`gap${k}`} title={s.why} className="h-8 w-14 shrink-0 rounded-sm bg-[repeating-linear-gradient(45deg,#efebe4,#efebe4_4px,#e2ddd4_4px,#e2ddd4_8px)]" />
                 : <img key={s.id} src={s.thumb} className="h-8 w-14 shrink-0 rounded-sm object-cover" />)}
               {b.shots.length > 8 && <span className="self-center pl-1 text-[10px] text-muted">+{b.shots.length - 8}</span>}
             </div>
@@ -282,7 +282,7 @@ function ShotThumb({ s, selected, now, ring, onClick }: {
             className={`relative h-[62px] shrink-0 overflow-hidden rounded-md bg-black ${selected ? 'ring-2 ring-accent' : now ? 'ring-2 ring-zinc-200' : ring}`}
             style={{ width: 110 }}>
       {s.gap ? (
-        <div className="grid size-full place-items-center bg-[repeating-linear-gradient(45deg,#18181b,#18181b_6px,#27272a_6px,#27272a_12px)] text-[10px] text-zinc-500">empty</div>
+        <div className="grid size-full place-items-center bg-[repeating-linear-gradient(45deg,#efebe4,#efebe4_6px,#e2ddd4_6px,#e2ddd4_12px)] text-[10px] text-zinc-500">empty</div>
       ) : (
         <img src={s.thumb} className="size-full object-cover" draggable={false} />
       )}
@@ -301,7 +301,7 @@ const JOIN_WORDS: Record<Exclude<JoinSound, 'default'>, { chip: string; menu: st
 
 // ---- smoother cuts: asked for, one undoable turn --------------------------------
 
-export function SmoothButton({ rough, onSmooth, small }: { rough: number; onSmooth: (order: boolean, nudge: boolean) => Promise<void>; small?: boolean }) {
+export function SmoothButton({ rough, onSmooth, small, wide }: { rough: number; onSmooth: (order: boolean, nudge: boolean) => Promise<void>; small?: boolean; wide?: boolean }) {
   const [open, setOpen] = useState(false)
   const [order, setOrder] = useState(true)
   const [nudge, setNudge] = useState(true)
@@ -325,7 +325,8 @@ export function SmoothButton({ rough, onSmooth, small }: { rough: number; onSmoo
     <div ref={box} className="relative">
       <button type="button" onClick={() => setOpen((o) => !o)}
               title="See which cuts feel rough, and try a smoother version you can undo"
-              className={small ? 'rounded-md border border-line px-2 py-1 text-[11px] text-zinc-300 hover:bg-raised'
+              className={wide ? 'w-full rounded-lg border border-line px-3 py-2 text-left font-serif text-[16px] text-zinc-100 hover:bg-raised'
+                : small ? 'rounded-md border border-line px-2 py-1 text-[11px] text-zinc-300 hover:bg-raised'
                 : 'rounded-lg border border-line px-3 py-1.5 text-[12px] text-zinc-300 hover:bg-raised'}>
         Smoother cuts{rough > 0 && <span className="ml-1.5 rounded bg-amber-300/15 px-1 text-[10px] text-amber-200">{rough}{small ? '' : ' rough'}</span>}
       </button>

@@ -193,6 +193,7 @@ def add_vision(recs: list[dict]) -> str:
             r["_vision"] = v
     # Faces on every sampled second (cached per clip): who is in frame, when.
     need = [r for r in recs if not (clip_dir(r["id"]) / "faces.json").exists()]
+    need += stale_faces([r for r in recs if r not in need])
     if need:
         paths = [str(clip_dir(r["id"]) / f) for r in need for f in r["samples"]["files"]]
         found = vision.faces(paths)
@@ -206,6 +207,38 @@ def add_vision(recs: list[dict]) -> str:
     for r in recs:
         _attach_vision(r, r.pop("_vision"))
     return backend if todo else "cached"
+
+
+def stale_faces(recs: list[dict]) -> list[dict]:
+    """Clips whose faces.json predates face direction and head count (two
+    columns a row), when Vision is here to read them again. Elsewhere the
+    old rows stay: they still say who is in frame, just not which way."""
+    old = []
+    for r in recs:
+        try:
+            track = json.loads((clip_dir(r["id"]) / "faces.json").read_text())
+        except (OSError, ValueError):
+            continue
+        if track and len(track[0]) < vision.TRACK_COLS:
+            old.append(r)
+    return old if old and vision.ensure_built() else []
+
+
+def refresh_faces(recs: list[dict]) -> int:
+    """Faces read again for clips indexed before face direction existed:
+    once, on project open (like sound.add_sound). Returns how many."""
+    need = [r for r in stale_faces(recs) if r.get("samples")]
+    if not need:
+        return 0
+    paths = [str(clip_dir(r["id"]) / f) for r in need for f in r["samples"]["files"]]
+    found = vision.faces(paths)
+    if not found:
+        return 0
+    for r in need:
+        boxes = [found.get(str(clip_dir(r["id"]) / f), []) for f in r["samples"]["files"]]
+        r["faces"] = vision.face_track(boxes, r["samples"]["times"], len(r["signals"]["quality"]))
+        (clip_dir(r["id"]) / "faces.json").write_text(json.dumps(r["faces"]))
+    return len(need)
 
 
 def _attach_vision(rec: dict, v: dict) -> None:

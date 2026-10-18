@@ -19,6 +19,8 @@ import copy
 import re
 from collections import Counter
 
+from . import worth
+
 # Rough target lengths. "long" keeps every usable shot. Only for answers
 # saved before the slider; the slider sends `seconds` (length_marks).
 LENGTH_S = {"short": 60.0, "medium": 180.0, "long": None}
@@ -30,6 +32,15 @@ MIN_LENGTH_S = 15.0
 # Longest a single shot may run at each pace, around its best frame.
 PACE_CAP_S = {"calm": 8.0, "balanced": 5.0, "fast": 2.5}
 MIN_SHOT_S = 1.5
+# A short (Reel, TikTok) holds no moment longer than this, whatever the
+# pace: her own 45 s day vlog cut every 2.5-3.5 s, where VibeCut's held
+# shots 5-14 s and showed half as much of the day. Talking to the audience
+# still keeps its sentence. [prior, from one edit of hers]
+SHORT_CAP_S = 3.5
+# Shots filmed this far apart (or this far away, SAME_PLACE_M) are
+# different stops of the day: a short covers every stop once before any
+# stop gets a second shot. [prior]
+SPOT_GAP_S = 20 * 60
 # A short or fast edit shows each moment once: several shots of the same
 # clip, or look-alikes (same cosine cut-off as remix's select.py), are one
 # moment, and only its strongest shot stays. Longer, calmer edits keep them.
@@ -366,6 +377,54 @@ def _close(a, b) -> bool:
     return abs((a.when - b.when).total_seconds()) <= RETAKE_WINDOW_S
 
 
+def spots(shots: list) -> dict[str, int]:
+    """Shot id -> which stop of the day it was filmed at: in filming order, a
+    new stop when the place moves on (GPS beyond SAME_PLACE_M) or time does
+    (SPOT_GAP_S); a clip with neither is a stop of its own."""
+    seq = sorted(shots, key=lambda s: (s.when is None, s.when or 0, s.order if hasattr(s, "order") else 0))
+    out: dict[str, int] = {}
+    n, prev = -1, None
+    for s in seq:
+        new = prev is None
+        if prev is not None:
+            far = bool(s.gps and prev.gps) and not _same_place(s, prev)
+            late = s.when is not None and prev.when is not None and \
+                abs((s.when - prev.when).total_seconds()) > SPOT_GAP_S
+            blind = not (s.gps and prev.gps) and (s.when is None or prev.when is None) and s.clip_id != prev.clip_id
+            new = far or late or blind
+        if new:
+            n += 1
+        out[s.id] = n
+        prev = s
+    return out
+
+
+def weakest(cands: list, ident, spot: dict[str, int], count, imp: dict[int, float] | None = None) -> tuple:
+    """Which of `cands` ((rank, part, shot) tuples) to let go first: from the
+    stop with the most shots for what it is worth (`imp`, worth.importance:
+    its best moment), then the weakest there. Screen time follows what
+    happened at a stop, not how much was filmed there. A stop's last shot
+    goes only when every stop is down to one (sarah, 2026-10-14: "a lot of
+    material was left out ... different locations")."""
+    imp = imp or {}
+
+    def key(c):
+        k = spot.get(ident(c[2]), -1)
+        n = count(k)
+        return (n == 1, -n / max(imp.get(k, 1.0), 0.05), c[0])
+    return min(cands, key=key)
+
+
+def cap_for(style: dict | None) -> float | None:
+    """The longest a shot may run: the pace's cap, and SHORT_CAP_S on a short."""
+    style = style or {}
+    cap = PACE_CAP_S.get(style.get("pace", ""))
+    target = target_s(style)
+    if style.get("format") == "short" or (target is not None and target <= SHORT_S):
+        cap = min(cap or SHORT_CAP_S, SHORT_CAP_S)
+    return cap
+
+
 def shape(options: list, style: dict | None, best: dict[str, float], keep: set | frozenset = frozenset()) -> None:
     """Reshape storyboard.Option objects in place to the creator's answers.
 
@@ -379,12 +438,12 @@ def shape(options: list, style: dict | None, best: dict[str, float], keep: set |
     style = clean_style(style)
     if not style:
         return
-    rank = lambda s: s.score + (0.15 if s.lean else 0.0)  # noqa: E731
+    rank = lambda s: worth.of(s) + (0.15 if s.lean else 0.0)  # noqa: E731
     for o in options:
         # Shots are shared between the proposals (and the voiceover one).
         for b in o.beats:
             b.shots = [copy.copy(s) for s in b.shots]
-        cap = PACE_CAP_S.get(style.get("pace", ""))
+        cap = cap_for(style)
         if cap:
             for b in o.beats:
                 for s in b.shots:
@@ -407,12 +466,16 @@ def shape(options: list, style: dict | None, best: dict[str, float], keep: set |
 
         if target:
             total = sum(s.end - s.start for b in o.beats for s in b.shots)
-            # Drop the weakest shot that isn't the last one left in its part.
+            where = spots([s for b in o.beats for s in b.shots])
+            imp = worth.importance([s for b in o.beats for s in b.shots], where)
+            # Drop the weakest shot that isn't the last one left in its part,
+            # from the stop of the day that has the most shots in.
             while total > target:
                 spare = [(rank(s), bi, s) for bi, b in enumerate(o.beats) if len(b.shots) > 1 for s in b.shots]
                 if not spare:
                     break
-                _, bi, s = min(spare, key=lambda t: t[0])
+                left = Counter(where.get(x.id, -1) for b in o.beats for x in b.shots)
+                _, bi, s = weakest(spare, lambda x: x.id, where, lambda k: left[k], imp)
                 o.beats[bi].shots.remove(s)
                 total -= s.end - s.start
             # Still over: whole parts go, weakest first, never the opening.
@@ -442,19 +505,23 @@ def length_ops(board: dict | None, cat, pool: list, target: float, vision: bool)
     beats = [{"id": bt["id"], "title": bt.get("title", ""),
               "shots": [{"key": bd.key(e), "id": e.get("id"), "len": e["end"] - e["start"], "gap": bool(e.get("gap"))}
                         for e in bt["shots"]]} for bt in (board or {}).get("beats", [])]
-    rank = lambda sid: cat.shots[sid].score + (0.15 if cat.shots[sid].lean else 0.0)  # noqa: E731
+    rank = lambda sid: worth.of(cat.shots[sid]) + (0.15 if cat.shots[sid].lean else 0.0)  # noqa: E731
     total = sum(e["len"] for bt in beats for e in bt["shots"])
     was = total
     tol = max(2.0, 0.03 * target)
     ops: list[dict] = []
     hook = 1 if beats and beats[0]["title"] == "Opening" and len(beats) > 1 else 0
+    where = spots([cat.shots[e["id"]] for bt in beats for e in bt["shots"] if e["id"] in cat.shots]
+                  + [s for s in pool if s.id in cat.shots])
+    imp = worth.importance([cat.shots[e["id"]] for bt in beats for e in bt["shots"] if e["id"] in cat.shots], where)
     if total > target + tol:
         while total > target + tol:
             spare = [(rank(e["id"]), bi, e) for bi, bt in enumerate(beats) if len(bt["shots"]) > 1
                      for e in bt["shots"] if not e["gap"] and e["id"] in cat.shots]
             if not spare:
                 break
-            _, bi, e = min(spare, key=lambda t: t[0])
+            left = Counter(where.get(x["id"], -1) for bt in beats for x in bt["shots"] if x["id"])
+            _, bi, e = weakest(spare, lambda x: x["id"], where, lambda k: left[k], imp)
             beats[bi]["shots"].remove(e)
             ops.append({"op": "drop_shot", "shot": e["key"]})
             total -= e["len"]
@@ -475,30 +542,24 @@ def length_ops(board: dict | None, cat, pool: list, target: float, vision: bool)
         on = {e["id"] for bt in beats for e in bt["shots"] if e["id"]}
         kept = [cat.shots[i] for i in on if i in cat.shots]
         added = 0
-        for s in sorted(pool, key=lambda s: rank(s.id) if s.id in cat.shots else s.score, reverse=True):
-            if total >= target - tol:
-                break
+        # stops of the day the edit doesn't show yet come back first
+        shown = {where.get(i, -1) for i in on}
+        left = list(pool)
+        while left and total < target - tol:
+            s = max(left, key=lambda s: (where.get(s.id, -1) not in shown,
+                                         rank(s.id) if s.id in cat.shots else worth.of(s)))
+            left.remove(s)
             d = s.end - s.start
             if s.id in on or s.id not in cat.shots or d <= 0 or total + d > target + max(tol, d / 2):
                 continue
             if vision and any(alike(s, k) for k in kept):
                 continue
-            # next to the shot filmed just before it, else before the first one filmed after it
-            when = lambda sid: cat.shots[sid].when if sid in cat.shots else None  # noqa: E731
-            spots = [(bi, i, when(e["id"])) for bi, bt in enumerate(beats) for i, e in enumerate(bt["shots"])
-                     if e["id"] and when(e["id"]) is not None and bi >= hook]
-            if s.when is not None and spots:
-                before = [t for t in spots if t[2] <= s.when]
-                bi, i = (max(before, key=lambda t: t[2])[:2] if before else min(spots, key=lambda t: t[2])[:2])
-                at = i + 1 if before else i
-            elif beats:
-                bi, at = len(beats) - 1, len(beats[-1]["shots"])
-            else:
+            op = _put_back(beats, hook, cat, s)
+            if op is None:
                 break
-            beats[bi]["shots"].insert(at, {"key": s.id, "id": s.id, "len": d, "gap": False})
-            ops.append({"op": "add_shot", "shot": s.id, "beat": beats[bi]["id"], "to_index": at,
-                        "start": round(s.start, 3), "end": round(s.end, 3)})
+            ops.append(op)
             on.add(s.id)
+            shown.add(where.get(s.id, -1))
             kept.append(s)
             total += d
             added += 1
@@ -508,6 +569,54 @@ def length_ops(board: dict | None, cat, pool: list, target: float, vision: bool)
         return ops, (f"Now about {say_length(total)} (was {say_length(was)}): put back {added} "
                      f"shot{'s' * (added != 1)}, each where it happened.{more} Undo takes them out again.")
     return [], f"It's already about {say_length(total)}."
+
+
+def _put_back(beats: list, hook: int, cat, s) -> dict | None:
+    """The add_shot that puts `s` (its window) back where it happened: next to
+    the shot filmed just before it, else before the first one filmed after it.
+    Updates `beats` (length_ops' light copy of the board) to match."""
+    when = lambda sid: cat.shots[sid].when if sid in cat.shots else None  # noqa: E731
+    spots = [(bi, i, when(e["id"])) for bi, bt in enumerate(beats) for i, e in enumerate(bt["shots"])
+             if e["id"] and when(e["id"]) is not None and bi >= hook]
+    if s.when is not None and spots:
+        before = [t for t in spots if t[2] <= s.when]
+        bi, i = (max(before, key=lambda t: t[2])[:2] if before else min(spots, key=lambda t: t[2])[:2])
+        at = i + 1 if before else i
+    elif beats:
+        bi, at = len(beats) - 1, len(beats[-1]["shots"])
+    else:
+        return None
+    beats[bi]["shots"].insert(at, {"key": s.id, "id": s.id, "len": s.end - s.start, "gap": False})
+    return {"op": "add_shot", "shot": s.id, "beat": beats[bi]["id"], "to_index": at,
+            "start": round(s.start, 3), "end": round(s.end, 3)}
+
+
+def _light(board: dict | None) -> tuple[list, int]:
+    from . import board as bd
+    beats = [{"id": bt["id"], "title": bt.get("title", ""),
+              "shots": [{"key": bd.key(e), "id": e.get("id"), "len": e["end"] - e["start"], "gap": bool(e.get("gap"))}
+                        for e in bt["shots"]]} for bt in (board or {}).get("beats", [])]
+    return beats, 1 if beats and beats[0]["title"] == "Opening" and len(beats) > 1 else 0
+
+
+def clip_ops(board: dict | None, cat, clip_id: str, into: bool, windows: list) -> list[dict]:
+    """One clip moved between the piles in Frames (sarah, 2026-10-13: just
+    Kept and Left out, like Footage). Out: every shot of it the edit has.
+    In: its rough-cut windows (`windows`, the pool's shots of this clip; else
+    its best-made shot whole), each where it happened in filming order."""
+    beats, hook = _light(board)
+    mine = lambda sid: bool(sid) and sid in cat.shots and cat.shots[sid].clip_id == clip_id  # noqa: E731
+    if not into:
+        return [{"op": "drop_shot", "shot": e["key"]} for bt in beats for e in bt["shots"] if mine(e["id"])]
+    on = {e["id"] for bt in beats for e in bt["shots"] if e["id"]}
+    shots = [s for s in windows if s.id not in on] or \
+        [max((s for sid, s in cat.shots.items() if mine(sid) and sid not in on), key=lambda s: s.score, default=None)]
+    ops = []
+    for s in sorted((s for s in shots if s is not None), key=lambda s: (s.when is None, s.when or 0, s.start)):
+        op = _put_back(beats, hook, cat, s)
+        if op:
+            ops.append(op)
+    return ops
 
 
 def reachable_s(board: dict | None, cat, pool: list, vision: bool) -> float:

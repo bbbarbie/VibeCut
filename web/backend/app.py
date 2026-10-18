@@ -81,6 +81,8 @@ def _open_project(pid: str) -> pj.Project:
         # Clips indexed before the voice reading existed get it once, here.
         sound.add_sound(list(clips.values()))
         ink.fill(list(clips.values()))
+        # and which way faces look (talking to the lens vs chatting), once
+        indexer.refresh_faces(list(clips.values()))
         CLIPS.clear()
         CLIPS.update(clips)
         VISION_USED["value"] = vision.status() == "ready" and any(
@@ -359,7 +361,7 @@ def _mix_spec(b: dict | None, items: list[dict]) -> dict | None:
     sp = export.spans(items)
     plan, _ = export.plan_transitions(sp, CLIPS, _style(b))
     music = export.music_spec(t.path if t else None, b.get("music"))
-    return audiomix.spec(sp, CLIPS, b.get("joins"), plan, music)
+    return audiomix.spec(sp, CLIPS, b.get("joins"), plan, music, audiomix.strips_of(b))
 
 
 def _mix_public(b: dict | None, tl: dict) -> dict | None:
@@ -375,9 +377,10 @@ def _mix_public(b: dict | None, tl: dict) -> dict | None:
     # The picture side of the same plan export renders (plan_transitions):
     # per shot, frames of handle for a dissolve and any dip or flash, so the
     # player can show the join the file will have. Only non-trivial entries.
-    trans = [{"key": it["key"], "head": p["head"], "tail": p["tail"],
+    trans = [{"key": it["key"], "head": p["head"], "tail": p["tail"], "blend": p.get("blend"),
               "fade_in": list(p["fade_in"]) if p["fade_in"] else None,
-              "fade_out": list(p["fade_out"]) if p["fade_out"] else None}
+              "fade_out": list(p["fade_out"]) if p["fade_out"] else None,
+              "swipe": bool(p.get("swipe"))}
              for it, p in zip(sp["items"], sp["transitions"] or [])
              if p["head"] or p["tail"] or p["fade_in"] or p["fade_out"]]
     size = tl.get("frame") or {"w": 1920, "h": 1080}
@@ -387,8 +390,25 @@ def _mix_public(b: dict | None, tl: dict) -> dict | None:
             # `fits`: False where a carry was asked for but the shot wasn't
             # filmed long enough past the cut -- it plays as a clean break, and says so
             "joins": [{"after": it["key"], "at": sp["items"][i + 1]["seq_start"], **j,
-                       "fits": audiomix.fits(sp["items"], CLIPS, i, j["sound"])}
+                       "fits": audiomix.fits(sp["items"], CLIPS, i, j["sound"]),
+                       **_picture_at(b, sp["transitions"] or [], i, it["key"])}
                       for i, (it, j) in enumerate(zip(sp["items"], joins))]}
+
+
+def _picture_at(b: dict, plan: list[dict], i: int, k: str) -> dict:
+    """What the picture does at the cut after item i (what will play), and
+    what the creator picked there, if anything (transitions.py)."""
+    p, q = (plan[i] if i < len(plan) else {}), (plan[i + 1] if i + 1 < len(plan) else {})
+    if p.get("blend"):
+        shown = p["blend"]
+    elif p.get("fade_out") and q.get("fade_in"):
+        shown = "flash" if p["fade_out"][1] == "white" else "dip_black"
+    else:
+        shown = "cut"
+    one = (b.get("picture_joins") or {}).get(k)
+    pick = one or b.get("picture_all") or {}
+    return {"picture": shown, "picked": pick.get("kind"), "picked_dur": pick.get("dur"),
+            "picked_all": bool(pick) and not one}
 
 
 @app.get("/api/mix/{name}")
@@ -971,7 +991,9 @@ def api_pace(req: PaceReq) -> dict:
         cat = CATALOG["cat"]
         _, windows = cut.for_story(PLAN["plan"])
         talk = tempo.talking(list(CLIPS.values()), _pool())
-        ops = tempo.pace_ops(SESSION.board, cat, windows, req.pace, talk)
+        pr = PROJECT["p"]
+        ops = tempo.pace_ops(SESSION.board, cat, windows, req.pace, talk,
+                             ((pr.brief or {}).get("style") if pr is not None else None))
         name = tempo.NAMES[req.pace]
         if ops:
             SESSION.add({"kind": "direct", "text": name, "ops": ops,
@@ -1061,7 +1083,7 @@ def api_length() -> dict:
     how long the edit is now. Free; nothing leaves the Mac."""
     with LOCK:
         b = SESSION.board
-        now = sum(e["end"] - e["start"] for bt in (b or {}).get("beats", []) for e in bt["shots"])
+        now = sum(bd.seq_dur(e) for bt in (b or {}).get("beats", []) for e in bt["shots"])
         return {**brief.length_marks(_usable_s(), _about()), "current": round(now, 1)}
 
 
@@ -1077,6 +1099,38 @@ def api_length_set(req: LengthReq) -> dict:
             SESSION.add({"kind": "direct", "text": f"Make it about {brief.say_length(target)}", "ops": ops,
                          "reply": said}, CATALOG["cat"], _make_proposals)
         return {**_session(), "length_note": said}
+
+
+class PileReq(BaseModel):
+    clip: str
+    into: bool
+
+
+@app.post("/api/pile")
+def api_pile(req: PileReq) -> dict:
+    """A clip moved between Frames' two piles, Kept (in the video) and Left
+    out: in or out of the edit as one undoable turn. The rough cut's call is
+    set to match, so Footage's stacks agree and the length slider never puts
+    back a clip the creator took out."""
+    with LOCK:
+        if not SESSION.board:
+            raise HTTPException(409, "Pick a story first.")
+        c = CLIPS.get(req.clip)
+        if c is None:
+            raise HTTPException(404, "no such clip")
+        d = PLAN["plan"].clips.get(req.clip) if PLAN["plan"] else None
+        if d and d["rejected"] == req.into:
+            action = ("keep" if d["auto_rejected"] else "auto") if req.into else ("auto" if d["auto_rejected"] else "reject")
+            PLAN["plan"] = cut.override(PLAN["plan"], req.clip, action, CLIPS)
+            WORKFLOW.revise("user", f"{action} {req.clip}")
+            SESSION.replay(CATALOG["cat"], _make_proposals)
+        windows = [s for s in _pool() if s.clip_id == req.clip]
+        ops = brief.clip_ops(SESSION.board, CATALOG["cat"], req.clip, req.into, windows)
+        if ops:
+            SESSION.add({"kind": "direct", "ops": ops,
+                         "text": f"You {'put' if req.into else 'left'} {c['name']} {'in the video' if req.into else 'out'}"},
+                        CATALOG["cat"], _make_proposals)
+        return _session()
 
 
 @app.post("/api/brief/questions")
@@ -1506,7 +1560,8 @@ def api_export(req: ExportReq) -> dict:
             title = next((o["text"] for o in SESSION.board.get("overlays", []) if o["kind"] == "title"), None)
             job = export.create(looks.camera(tl["items"], SESSION.board), dict(CLIPS), title or SESSION.board.get("name", ""),
                                 track.path if track else None, _style(SESSION.board, for_export=True),
-                                mix=SESSION.board.get("music"), joins=SESSION.board.get("joins"), want=_want())
+                                mix=SESSION.board.get("music"), joins=SESSION.board.get("joins"), want=_want(),
+                                sound=audiomix.strips_of(SESSION.board))
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
         return job.public()

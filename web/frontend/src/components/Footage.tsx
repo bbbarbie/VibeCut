@@ -16,7 +16,7 @@ import { Button, Notice, Progress, cx } from '../ui'
 
 export type Importing = { text: string; frac: number | null } | null
 
-type Side = 'kept' | 'out'
+export type Side = 'kept' | 'out'
 type Decide = 'keep' | 'reject' | 'auto'
 
 const side = (c: Clip): Side => (c.cut?.rejected ? 'out' : 'kept')
@@ -191,7 +191,7 @@ export function Footage({ clips, importing, errors, vision, onPick, onRetry, onD
 
 // A fanned pile like a photo stack in Messages: the last few clips dealt on
 // top, a count, and the whole pile opens on a click or a sideways swipe.
-function Stack({ side: s, clips, onOpen }: { side: Side; clips: Clip[]; onOpen: () => void }) {
+export function Stack({ side: s, clips, onOpen }: { side: Side; clips: Clip[]; onOpen: () => void }) {
   const down = useRef<number | null>(null)
   const top = clips.slice(-3)
   const tilt = ['-rotate-6 -translate-x-3', 'rotate-4 translate-x-3', 'rotate-0']
@@ -214,7 +214,7 @@ function Stack({ side: s, clips, onOpen }: { side: Side; clips: Clip[]; onOpen: 
           const thumb = c.shots[0]?.thumb
           return (
             <div key={c.id} style={{ zIndex: i }}
-                 className={cx('absolute inset-0 overflow-hidden rounded-2xl border-[3px] shadow-xl shadow-black/60 transition-transform duration-300',
+                 className={cx('on-video absolute inset-0 overflow-hidden rounded-2xl border-[3px] shadow-xl shadow-black/60 transition-transform duration-300',
                    red ? 'border-rose-950 bg-rose-950' : 'border-zinc-100 bg-zinc-900', tilt[k],
                    i === top.length - 1 && 'motion-safe:animate-[vc-deal_380ms_cubic-bezier(.2,.9,.3,1.2)] group-hover:-translate-y-1')}>
               {thumb && <img src={thumb} alt="" draggable={false} className="size-full object-cover" />}
@@ -224,7 +224,7 @@ function Stack({ side: s, clips, onOpen }: { side: Side; clips: Clip[]; onOpen: 
         })}
         {clips.length > 0 && (
           <span className={cx('absolute -right-3 -top-3 z-10 grid h-8 min-w-8 place-items-center rounded-full px-2 text-[14px] font-semibold tabular-nums shadow-lg',
-            red ? 'bg-rose-800 text-rose-50' : 'bg-zinc-100 text-zinc-900')}>{clips.length}</span>
+            red ? 'on-video bg-rose-800 text-rose-50' : 'bg-zinc-100 text-zinc-900')}>{clips.length}</span>
         )}
       </button>
       <div className="text-center">

@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { clock, locate, parseTimecode, readout, smpte, type SeqItem } from '../sequence'
 import { approaching, snap, type Target, type TargetType } from '../snap'
 import { phStore, snapStore, transport, transportStore, useStore } from '../transport'
-import type { Overlay, TimelineData } from '../types'
+import type { JoinInfo, Overlay, SoundStrip, TimelineData } from '../types'
 import { KIND_META } from '../overlayDraw'
 import { SHOT_MIME } from './Shelf'
+import { Icon, type IconName } from './icons'
 
 const TL_MIME = 'application/x-vibecut-tl'
 const MIN_W = 56
@@ -12,17 +13,26 @@ const GAP = 2
 const PAD = 12
 
 export const TICK: Record<TargetType, string> = {
-  shot: '#e4e4e7', silence: '#6ee7b7', motion: '#fcd34d', beat: '#b9d9eb', word: '#c4b5fd',
+  shot: '#44403c', silence: '#059669', motion: '#d97706', beat: '#1f5f8b', word: '#7c3aed',
 }
 const TICK_H: Record<TargetType, number> = { shot: 14, silence: 9, motion: 7, beat: 6, word: 8 }
 const MARK_CLS = { added: 'bg-emerald-400', moved: 'bg-amber-300', trimmed: 'bg-sky-400' } as const
 export type Marks = { in: number | null; out: number | null }
 
-const LANE_ROW = 17
+const LANE_ROW = 20
+const SOUND_H = 26   // a row of the Audio lane: sound taken off shots, the music
+// The lanes, top to bottom: the ruler, the parts' names, the picture (Video),
+// the captions, then the sound (Audio) -- as in her reference picture
+// (sarah, 2026-10-16), each named in a column on the left.
+const VIDEO_TOP = 48
+const LANE_GAP = 6
+const LABEL_W = 96
 type Drag = { id: string; mode: 'move' | 'end'; x0: number; grab: number; start: number; end: number; moved: boolean }
 
 export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, onReorder,
-  onInsertShot, onClear, onHelp, overlays = [], selectedOverlay = null, onSelectOverlay, onOverlayEdit, onExport, onTrimEdge }: {
+  onInsertShot, onClear, onHelp, overlays = [], selectedOverlay = null, onSelectOverlay, onOverlayEdit, onExport, onTrimEdge,
+  selectedAudio = null, onSelectAudio, onAudioMove, joins = [], selectedJoin = null, onSelectJoin,
+  music = null, onSelectMusic, onSplit, onDelete, height = 290 }: {
   tl: TimelineData
   marks: Marks
   marksOf: Record<string, 'added' | 'moved' | 'trimmed' | undefined>
@@ -42,6 +52,22 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   onExport?: () => void
   /** a shot's start ('in') or end ('out') dragged to this source time */
   onTrimEdge?: (key: string, edge: 'in' | 'out', to: number) => void
+  selectedAudio?: string | null
+  /** a sound strip clicked: its tools show in the bar below */
+  onSelectAudio?: (id: string, anchor: DOMRect) => void
+  /** a sound strip dragged to start at this point of the edit */
+  onAudioMove?: (id: string, at: number) => void
+  /** every cut (session.mix.joins): a dot between the two shots opens its transitions below */
+  joins?: JoinInfo[]
+  selectedJoin?: string | null
+  onSelectJoin?: (after: string) => void
+  /** the song under the edit, drawn along the Audio lane; clicking it opens its controls */
+  music?: { title: string } | null
+  onSelectMusic?: () => void
+  /** the toolbar's Split (at the playhead) and Delete (the selection) */
+  onSplit?: () => void
+  onDelete?: () => void
+  height?: number
 }) {
   const ph = useStore(phStore)
   const tr = useStore(transportStore)
@@ -154,7 +180,19 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
     }
     return { row, n: ends.length }
   }, [overlays])
-  const laneH = lanes.n ? lanes.n * LANE_ROW + 6 : 0
+  const strips: SoundStrip[] = tl.audio?.strips ?? []
+  const silent = useMemo(() => new Set(tl.audio?.off ?? []), [tl.audio])
+  // Measured from the bottom: Audio (strips, then the music), Captions, and
+  // the picture takes what is left.
+  const audioRows = (strips.length ? 1 : 0) + 1
+  const audioH = audioRows * SOUND_H + (audioRows - 1) * 4 + 8
+  const capH = Math.max(1, lanes.n) * LANE_ROW + 8
+  const audioBottom = 8
+  const capBottom = audioBottom + audioH + LANE_GAP
+  const shotsBottom = capBottom + capH + LANE_GAP
+  const musicBottom = audioBottom + 4
+  const stripBottom = musicBottom + SOUND_H + 4
+  const [moving, setMoving] = useState<{ id: string; x0: number; grab: number; at: number; moved: boolean } | null>(null)
   const overlayTime = (clientX: number, bypass: boolean) => {
     const el = track.current!
     const { t, localPps } = tOf(clientX - el.getBoundingClientRect().left + el.scrollLeft)
@@ -168,16 +206,20 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   const outX = marks.out != null ? xOf(marks.out) : null
 
   return (
-    <section className="flex h-[250px] shrink-0 flex-col border-t border-line bg-panel">
-      <header className="flex h-10 shrink-0 items-center gap-2.5 border-b border-line px-3">
+    <section className="flex min-h-0 shrink-0 flex-col" style={{ height }}>
+      <header className="flex h-12 shrink-0 items-center gap-2.5 border-b border-line px-3">
         <div className="flex items-center gap-1">
           <TB title="Play backwards (J — press again to go faster)" onClick={() => transport.play(rate < 0 ? Math.max(rate * 2, -8) : -1)}>◀◀</TB>
           <TB title="Play / pause (Space)" onClick={() => (tr.playing ? transport.stop() : transport.play(1))} wide>
-            {tr.playing ? '❚❚' : '▶'}
+            <Icon name={tr.playing ? 'pause' : 'play'} size={18} />
           </TB>
           <TB title="Play forwards (L — press again to go faster)" onClick={() => transport.play(rate > 0 ? Math.min(rate * 2, 8) : 1)}>▶▶</TB>
           {tr.playing && rate !== 1 && <span className="w-8 text-[11px] tabular-nums text-accent">{rate > 0 ? `${rate}×` : `−${-rate}×`}</span>}
         </div>
+        <span className="h-6 w-px bg-line" aria-hidden />
+        {onSplit && <Tool icon="split" label="Split" title="Split the shot at the playhead (B)" onClick={onSplit} disabled={!items.length} />}
+        {onDelete && <Tool icon="trash" label="Delete" title="Delete the selected shot, or the marked part (Delete)" onClick={onDelete} disabled={!items.length} />}
+        <span className="h-6 w-px bg-line" aria-hidden />
 
         <input
           value={tc ?? smpte(ph, tl.fps)}
@@ -214,11 +256,14 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
             <i key={t} className="inline-block h-2.5 w-[3px] rounded-sm" style={{ background: TICK[t] }} title={t} />
           ))}
         </span>
-        <label className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted">
-          Zoom
-          <input type="range" min={1} max={40} step={0.5} value={zoom}
-                 onChange={(e) => setZoom(Number(e.target.value))} className="w-20 accent-[#b9d9eb]" />
-        </label>
+        <div className="flex shrink-0 items-center gap-1.5" title="Zoom the timeline">
+          <button type="button" aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(1, z / 1.5))}
+                  className="grid size-7 place-items-center rounded-md text-zinc-300 hover:bg-raised"><Icon name="minus" size={18} /></button>
+          <input type="range" min={1} max={40} step={0.5} value={zoom} aria-label="Zoom"
+                 onChange={(e) => setZoom(Number(e.target.value))} className="w-24 accent-[#1f5f8b]" />
+          <button type="button" aria-label="Zoom in" onClick={() => setZoom((z) => Math.min(40, z * 1.5))}
+                  className="grid size-7 place-items-center rounded-md text-zinc-300 hover:bg-raised"><Icon name="plus" size={18} /></button>
+        </div>
         {onExport && (
           <button type="button" onClick={onExport} disabled={!items.length} title="Render the edit, its captions and its music to one video file"
                   className="shrink-0 rounded-md bg-accent px-2 py-0.5 text-[11px] font-semibold text-accent-ink disabled:opacity-30">Export…</button>
@@ -229,6 +274,14 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                 className="shrink-0 rounded-md px-1.5 py-1 text-[11px] text-muted hover:text-zinc-200 disabled:opacity-30">Clear</button>
       </header>
 
+      <div className="flex min-h-0 flex-1">
+      {items.length > 0 && (
+        <div className="relative shrink-0 border-r border-line" style={{ width: LABEL_W }} aria-hidden>
+          <LaneLabel icon="video" style={{ top: VIDEO_TOP, bottom: shotsBottom }}>Video</LaneLabel>
+          <LaneLabel icon="lines" style={{ bottom: capBottom, height: capH }}>Captions</LaneLabel>
+          <LaneLabel icon="music" style={{ bottom: audioBottom, height: audioH }}>Audio</LaneLabel>
+        </div>
+      )}
       <div
         ref={track}
         className="relative min-h-0 flex-1 select-none overflow-x-auto overflow-y-hidden"
@@ -268,16 +321,30 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
             >
               <svg className="absolute inset-0 h-full" width={geo.end + 2 * PAD}>
                 {inX != null && outX != null && outX > inX && (
-                  <rect x={inX} y={0} width={outX - inX} height={28} fill="#b9d9eb" opacity={0.18} />
+                  <rect x={inX} y={0} width={outX - inX} height={28} fill="#1f5f8b" opacity={0.18} />
                 )}
                 {tl.targets.map((g: Target, i) => (
                   <line key={i} x1={xOf(g.t)} x2={xOf(g.t)} y1={28 - TICK_H[g.type]} y2={28}
                         stroke={TICK[g.type]} strokeWidth={g.type === 'shot' ? 1.5 : 1} opacity={g === hl ? 1 : 0.55} />
                 ))}
-                {inX != null && <path d={`M${inX},2 v24 h5`} stroke="#b9d9eb" fill="none" strokeWidth={2} />}
-                {outX != null && <path d={`M${outX},2 v24 h-5`} stroke="#b9d9eb" fill="none" strokeWidth={2} />}
+                {inX != null && <path d={`M${inX},2 v24 h5`} stroke="#1f5f8b" fill="none" strokeWidth={2} />}
+                {outX != null && <path d={`M${outX},2 v24 h-5`} stroke="#1f5f8b" fill="none" strokeWidth={2} />}
               </svg>
             </div>
+
+            {/* the Captions and Audio lanes' bands */}
+            <div className="pointer-events-none absolute inset-x-0 rounded-md bg-violet-900/40" style={{ bottom: capBottom, height: capH }} />
+            <div className="pointer-events-none absolute inset-x-0 rounded-md bg-raised/70" style={{ bottom: audioBottom, height: audioH }} />
+            {music && (
+              <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={onSelectMusic}
+                      title={`${music.title}: click for the music's controls`}
+                      className="absolute flex items-center gap-2 overflow-hidden rounded-md px-2.5 font-serif text-[14px] text-[#1d5c46] hover:brightness-95"
+                      style={{ left: PAD, width: Math.max(40, geo.end), bottom: musicBottom, height: SOUND_H,
+                        background: 'repeating-linear-gradient(90deg, #bfe3d3 0 2px, #cdeadd 2px 5px)' }}>
+                <Icon name="music" size={16} />
+                <span className="truncate">{music.title}</span>
+              </button>
+            )}
 
             {overlays.map((o) => {
               const d = drag?.id === o.id ? drag : null
@@ -317,9 +384,9 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                        if (d.mode === 'move') onOverlayEdit?.(o.id, { start: Math.round(d.start * 1000) / 1000 })
                        else onOverlayEdit?.(o.id, { dur: Math.round((d.end - o.start) * 1000) / 1000 })
                      }}
-                     className={`absolute flex cursor-grab items-center gap-1 overflow-hidden rounded px-1 text-[10px] leading-none text-zinc-900 active:cursor-grabbing ${
-                       selectedOverlay === o.id ? 'ring-2 ring-white' : ''} ${d?.moved ? 'opacity-80' : ''}`}
-                     style={{ left: x, width: w, top: 31 + (lanes.row.get(o.id) ?? 0) * LANE_ROW, height: LANE_ROW - 3, background: meta.color }}>
+                     className={`absolute flex cursor-grab items-center gap-1 overflow-hidden rounded-md px-1.5 text-[12px] leading-none text-stone-900 active:cursor-grabbing ${
+                       selectedOverlay === o.id ? 'ring-2 ring-accent' : ''} ${d?.moved ? 'opacity-80' : ''}`}
+                     style={{ left: x, width: w, bottom: capBottom + capH - 4 - ((lanes.row.get(o.id) ?? 0) + 1) * LANE_ROW + 3, height: LANE_ROW - 3, background: meta.color }}>
                   <span className="shrink-0 font-semibold">{meta.icon}</span>
                   <span className="truncate">{o.kind === 'chapters' ? 'Chapter bar' : o.text}</span>
                   {edge && <span className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize bg-black/20" />}
@@ -329,7 +396,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
 
             {items.map((it: SeqItem, k) => (k === 0 || items[k - 1].beat_id !== it.beat_id) && (
               <div key={`beat-${it.beat_id}-${k}`} className="pointer-events-none absolute top-8 truncate text-[10px] font-medium text-zinc-400"
-                   style={{ left: geo.left[k] + PAD, maxWidth: 220, top: 32 + laneH }}>
+                   style={{ left: geo.left[k] + PAD, maxWidth: 220, top: 31 }}>
                 {it.beat_title}
               </div>
             ))}
@@ -339,7 +406,8 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
               const mark = marksOf[it.key]
               const ed = edge?.key === it.key ? edge : null
               const grow = ed ? (ed.edge === 'out' ? ed.to - it.src_end : it.src_start - ed.to) : 0
-              const w = Math.max(MIN_W, geo.w[k] + grow * (geo.w[k] / Math.max(it.seq_end - it.seq_start, 1e-6)))
+              const sp = it.speed ?? 1   // source seconds per second of the edit
+              const w = Math.max(MIN_W, geo.w[k] + (grow / sp) * (geo.w[k] / Math.max(it.seq_end - it.seq_start, 1e-6)))
               const lo = it.src_min ?? it.src_start
               const hi = it.src_max ?? it.src_end
               // Drag either end: shorter, or longer up to the whole shot as filmed.
@@ -351,7 +419,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                     if (e.button !== 0) return
                     e.stopPropagation(); e.preventDefault()
                     e.currentTarget.setPointerCapture(e.pointerId)
-                    edging.current = { x: e.clientX, base: side === 'in' ? it.src_start : it.src_end, pps: geo.w[k] / Math.max(it.seq_end - it.seq_start, 1e-6) }
+                    edging.current = { x: e.clientX, base: side === 'in' ? it.src_start : it.src_end, pps: geo.w[k] / Math.max(it.seq_end - it.seq_start, 1e-6) / sp }
                     setEdge({ key: it.key, edge: side, to: edging.current.base })
                   }}
                   onPointerMove={(e) => {
@@ -381,11 +449,11 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                     scrubTo(e.clientX, e.altKey)   // a click also puts the playhead there
                     onSelect(it.key, new DOMRect(e.clientX - 1, rect.top, 2, rect.height))
                   }}
-                  className={`group absolute bottom-3 cursor-pointer overflow-hidden rounded-md ${it.kind === 'gap'
-                    ? 'bg-[repeating-linear-gradient(45deg,#18181b,#18181b_6px,#27272a_6px,#27272a_12px)]' : 'bg-black'} ${
+                  className={`group absolute cursor-pointer overflow-hidden rounded-md ${it.kind === 'gap'
+                    ? 'bg-[repeating-linear-gradient(45deg,#efebe4,#efebe4_6px,#e2ddd4_6px,#e2ddd4_12px)]' : 'bg-black'} ${
                     selected === it.key ? 'ring-2 ring-accent' : 'ring-1 ring-zinc-800 hover:ring-zinc-600'}`}
                   style={{
-                    top: 50 + laneH, left: geo.left[k] + PAD, width: w, zIndex: ed ? 5 : undefined,
+                    top: VIDEO_TOP, bottom: shotsBottom, left: geo.left[k] + PAD, width: w, zIndex: ed ? 5 : undefined,
                     backgroundImage: thumb ? `url(${thumb})` : undefined,
                     backgroundSize: 'auto 100%', backgroundRepeat: 'repeat-x', backgroundPosition: 'center',
                   }}
@@ -394,17 +462,75 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                   {mark && <div className={`absolute inset-x-0 top-0 h-1 ${MARK_CLS[mark]}`} />}
                   {handle('in')}
                   {handle('out')}
-                  {ed && <div className="pointer-events-none absolute left-1/2 top-1 -translate-x-1/2 rounded bg-black/80 px-1.5 text-[12px] tabular-nums text-zinc-100">{(it.src_end - it.src_start + grow).toFixed(1)}s</div>}
+                  {ed && <div className="pointer-events-none absolute left-1/2 top-1 -translate-x-1/2 rounded bg-black/80 px-1.5 text-[12px] tabular-nums text-zinc-100">{((it.src_end - it.src_start + grow) / sp).toFixed(1)}s</div>}
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 pb-1 pt-3 text-[10px] tabular-nums text-zinc-200">
-                    {it.kind === 'gap' ? 'gap ' : it.n != null ? `${it.n} · ` : ''}{(it.seq_end - it.seq_start).toFixed(1)}s
+                    {it.kind === 'gap' ? 'gap ' : it.n != null ? `${it.n} · ` : ''}{(it.seq_end - it.seq_start).toFixed(1)}s{sp !== 1 ? ` · ${sp}×` : ''}{it.mute ? ' · muted' : it.gain != null ? ` · ${Math.round(it.gain * 100)}%` : ''}{silent.has(it.key) ? ' · sound below' : ''}
                   </div>
                 </div>
               )
             })}
 
+            {/* the cut between two shots: click to pick how the picture changes there */}
+            {onSelectJoin && items.map((it, k) => {
+              const nx = items[k + 1]
+              if (!nx || it.kind !== 'shot' || nx.kind !== 'shot') return null
+              const j = joins.find((x) => x.after === it.key)
+              if (!j) return null
+              const on = selectedJoin === it.key, styled = j.picture !== 'cut'
+              return (
+                <button key={`join-${it.key}`} type="button"
+                        title={styled ? 'How the picture changes here — click to change it' : 'A plain cut — click to pick a transition'}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => { e.stopPropagation(); onSelectJoin(it.key) }}
+                        className={`absolute z-20 flex size-[22px] -translate-x-1/2 items-center justify-center rounded-full border-2 text-[11px] leading-none shadow ${
+                          on ? 'border-accent bg-accent text-accent-ink ring-4 ring-accent/30'
+                            : styled ? 'border-accent bg-white text-accent' : 'border-stone-300 bg-white text-stone-400 hover:border-accent'}`}
+                        style={{ left: geo.left[k + 1] + PAD - GAP / 2, top: VIDEO_TOP + 4 }}>
+                  {styled ? '✦' : '·'}
+                </button>
+              )
+            })}
+
+            {strips.map((a) => {
+              const m = moving?.id === a.id ? moving : null
+              const at = m ? m.at : a.at
+              const x = xOf(Math.min(at, tl.total))
+              const w = Math.max(28, Math.min(geo.end + PAD, xOf(Math.min(at + a.dur, tl.total))) - x)
+              const label = `Sound of shot ${a.n ?? ''}`.trim()
+              return (
+                <div key={a.id}
+                     title={`${label} · ${a.mute ? 'muted' : `${Math.round(a.gain * 100)}%`}\nClick to change its volume and fades. Drag to move it (it sticks to cuts; hold ⌥ for exact).`}
+                     onPointerDown={(e) => {
+                       if (e.button !== 0) return
+                       e.stopPropagation()
+                       e.currentTarget.setPointerCapture(e.pointerId)
+                       setMoving({ id: a.id, x0: e.clientX, grab: e.clientX - e.currentTarget.getBoundingClientRect().left, at: a.at, moved: false })
+                     }}
+                     onPointerMove={(e) => {
+                       if (!m) return
+                       if (!m.moved && Math.abs(e.clientX - m.x0) < 4) return
+                       setMoving({ ...m, moved: true, at: Math.max(0, Math.min(tl.total - 0.1, overlayTime(e.clientX - m.grab, e.altKey))) })
+                     }}
+                     onPointerUp={(e) => {
+                       if (!m) return
+                       setMoving(null)
+                       if (!m.moved) { onSelectAudio?.(a.id, e.currentTarget.getBoundingClientRect()); return }
+                       if (Math.abs(m.at - a.at) > 1 / 60) onAudioMove?.(a.id, Math.round(m.at * 1000) / 1000)
+                     }}
+                     className={`absolute flex cursor-grab items-center gap-1.5 overflow-hidden rounded-md px-1.5 font-serif text-[12px] leading-none active:cursor-grabbing ${
+                       a.mute ? 'bg-stone-300 text-stone-600' : 'bg-teal-600 text-white'} ${
+                       selectedAudio === a.id ? 'ring-2 ring-accent' : ''} ${m?.moved ? 'opacity-80' : ''}`}
+                     style={{ left: x, width: w, bottom: stripBottom, height: SOUND_H,
+                       backgroundImage: a.mute ? undefined : 'repeating-linear-gradient(90deg, rgba(255,255,255,.18) 0 2px, transparent 2px 5px)' }}>
+                  <span className="shrink-0">{a.mute ? '🔇' : '♪'}</span>
+                  <span className="truncate">{label}{a.mute ? ' · muted' : a.gain !== 1 ? ` · ${Math.round(a.gain * 100)}%` : ''}</span>
+                </div>
+              )
+            })}
+
             {dropAt != null && (
-              <div className="pointer-events-none absolute bottom-2 w-0.5 rounded bg-accent"
-                   style={{ top: 46 + laneH, left: (dropAt < items.length ? geo.left[dropAt] : geo.end + GAP) + PAD - 2 }} />
+              <div className="pointer-events-none absolute w-0.5 rounded bg-accent"
+                   style={{ top: VIDEO_TOP - 4, bottom: shotsBottom - 4, left: (dropAt < items.length ? geo.left[dropAt] : geo.end + GAP) + PAD - 2 }} />
             )}
 
             {/* the snapped / approaching target, named */}
@@ -425,14 +551,32 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
           </div>
         )}
       </div>
+      </div>
     </section>
+  )
+}
+
+function LaneLabel({ icon, style, children }: { icon: IconName; style: React.CSSProperties; children: React.ReactNode }) {
+  return (
+    <div className="absolute inset-x-0 flex items-center gap-2 px-3 font-serif text-[15px] text-zinc-200" style={style}>
+      <Icon name={icon} size={18} className="shrink-0 text-zinc-400" />{children}
+    </div>
+  )
+}
+
+function Tool({ icon, label, title, onClick, disabled }: { icon: IconName; label: string; title: string; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button type="button" onClick={onClick} title={title} disabled={disabled}
+            className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 font-serif text-[15px] text-zinc-100 hover:bg-raised disabled:opacity-35">
+      <Icon name={icon} size={18} />{label}
+    </button>
   )
 }
 
 function TB({ children, onClick, title, wide }: { children: React.ReactNode; onClick: () => void; title: string; wide?: boolean }) {
   return (
     <button type="button" onClick={onClick} title={title}
-            className={`grid h-7 place-items-center rounded-md bg-raised text-[11px] text-zinc-100 hover:bg-zinc-700 ${wide ? 'w-9' : 'w-7'}`}>
+            className={`grid h-8 place-items-center rounded-md bg-raised text-[11px] text-zinc-100 hover:bg-zinc-700 ${wide ? 'w-10' : 'w-8'}`}>
       {children}
     </button>
   )

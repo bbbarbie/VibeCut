@@ -30,7 +30,7 @@ def layout(board: dict | None) -> list[dict]:
     items, t, n = [], 0.0, 0
     for b in (board or {}).get("beats", []):
         for e in b["shots"]:
-            d = e["end"] - e["start"]
+            d = bd.seq_dur(e)
             gap = bd.is_gap(e)
             if not gap:
                 n += 1
@@ -40,6 +40,8 @@ def layout(board: dict | None) -> list[dict]:
                 "src_start": e["start"], "src_end": e["end"],
                 "seq_start": round(t, 4), "seq_end": round(t + d, 4),
                 "beat_id": b["id"], "beat_title": b["title"], "n": None if gap else n,
+                # the shot fixes (board.set_shot), only where set
+                **{f: e[f] for f in bd.SHOT_FX if f in e},
             })
             t += d
     return items
@@ -136,4 +138,18 @@ def build(board: dict | None, clips: dict[str, dict], track: music.Track | None)
     total = items[-1]["seq_end"] if items else 0.0
     music_in = float(((board or {}).get("music") or {}).get("in") or 0.0)
     return {"fps": FPS, "total": round(total, 4), "items": items,
-            "targets": targets(items, clips, track, music_in), "grid": grid_of(track, music_in)}
+            "targets": targets(items, clips, track, music_in), "grid": grid_of(track, music_in),
+            "audio": audio_lane(board, items)}
+
+
+def audio_lane(board: dict | None, items: list[dict]) -> dict:
+    """Sound taken off shots (board.extract_audio), as the timeline draws it:
+    a strip under the picture at its place, and which shots now play silent."""
+    snd = (board or {}).get("sound") or {}
+    num = {it["key"]: it["n"] for it in items}
+    strips = [{"id": x["id"], "at": x["at"], "dur": round((x["end"] - x["start"]) / (x.get("speed") or 1.0), 4), "gain": x["gain"],
+               "mute": x["mute"], "clip_id": x["shot"].split(":")[0], "shot": x["shot"],
+               "src_start": x["start"], "n": num.get(x["from"]),
+               "fade_in": x.get("fade_in", 0.0), "fade_out": x.get("fade_out", 0.0)}
+              for x in snd.get("strips") or []]
+    return {"strips": strips, "off": [k for k in snd.get("off") or [] if k in num]}

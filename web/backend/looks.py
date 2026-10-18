@@ -230,6 +230,13 @@ def joins_of(look: dict | None) -> dict | None:
 
 
 def picture(b: dict | None, px: np.ndarray | None) -> dict | None:
+    """The look's picture, with the creator's own transition picks on top
+    (transitions.fold): those were chosen on this video, so they win."""
+    from . import transitions
+    return transitions.fold(b, _picture(b, px))
+
+
+def _picture(b: dict | None, px: np.ndarray | None) -> dict | None:
     """What the look adds to the board's `style` for rendering: a borrowed
     style's own look and transitions win (they were chosen on purpose);
     the look fills in whatever that left empty. `px` = the story's pixels

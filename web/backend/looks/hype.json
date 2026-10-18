@@ -61,9 +61,9 @@
     "black_ceiling": 6.0
   },
   "joins": {
-    "between": "cut",
+    "between": "swipe",
     "within": "cut",
-    "dur": 0.0,
+    "dur": 0.25,
     "open": false,
     "close": false
   },

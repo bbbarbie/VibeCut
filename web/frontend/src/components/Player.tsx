@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import type { Segment } from '../types'
 import { dur } from '../format'
-import { hideStill, swapSource } from '../hold'
+import { hideStill, settleStill, swapSource } from '../hold'
 import { OverlayCanvas, type OverlayEdit, type OverlayView } from './OverlayCanvas'
 
 // One <video> element. Two drivers share it: a preview (a span or a queue
@@ -12,7 +12,7 @@ import { OverlayCanvas, type OverlayEdit, type OverlayView } from './OverlayCanv
 // When the transport drives it, the picture sits in a stage with the
 // export's shape (scaled to fit and padded, as the export does) and the
 // words on screen are drawn over it -- so the preview is the export.
-export function Player({ videoRef, backRef, veilRef, bars, segment, label, gap, onTime, onEnd, onPlayingChange, overlay, frame, overlayEdit }: {
+export function Player({ videoRef, backRef, veilRef, bars, segment, label, gap, onTime, onEnd, onPlayingChange, overlay, frame, overlayEdit, dark, controls }: {
   videoRef: RefObject<HTMLVideoElement | null>
   // the next shot, waiting (transport.ts), and the dip/flash veil -- the join as the export renders it
   backRef?: RefObject<HTMLVideoElement | null>
@@ -27,6 +27,9 @@ export function Player({ videoRef, backRef, veilRef, bars, segment, label, gap, 
   overlay?: OverlayView | null
   overlayEdit?: OverlayEdit
   frame?: { w: number; h: number } | null
+  /** the edit screen: the picture on black, with `controls` under it instead of the label */
+  dark?: boolean
+  controls?: React.ReactNode
 }) {
   const seg = useRef<Segment | null>(null)
   const box = useRef<HTMLDivElement>(null)
@@ -47,14 +50,28 @@ export function Player({ videoRef, backRef, veilRef, bars, segment, label, gap, 
     const src = `/api/video/${segment.clipId}`
     hideStill()
     const go = () => {
+      if (seg.current !== segment) return // another preview took over while this one loaded
       el.currentTime = segment.start
-      if (segment.autoplay) el.play().catch(() => {})
+      // A paused element after the seek is what showed black (sarah, 2026-10-14,
+      // a left-out clip in Frames): if Safari won't start it with sound once the
+      // click is long past, start it muted rather than leave nothing playing,
+      // and keep the decoded frame up either way.
+      if (segment.autoplay) {
+        el.play().catch(() => {
+          el.muted = true
+          el.play().catch(() => settleStill(el))
+        })
+      } else settleStill(el)
     }
+    // Seek once a frame has arrived, not just the metadata: Safari paints
+    // black for a seek made before any frame data is in (transport.ts does the same).
     if (el.getAttribute('src') !== src) {
-      el.addEventListener('loadedmetadata', go, { once: true })
+      el.addEventListener('loadeddata', go, { once: true })
       swapSource(el, src)
-    } else {
+    } else if (el.readyState >= 2) {
       go()
+    } else {
+      el.addEventListener('loadeddata', go, { once: true })
     }
   }, [segment, videoRef])
 
@@ -69,9 +86,9 @@ export function Player({ videoRef, backRef, veilRef, bars, segment, label, gap, 
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-black">
-      <div ref={box} className="relative min-h-0 flex-1">
-        <div className="absolute overflow-hidden" style={staged
+    <div className={`flex min-h-0 flex-1 flex-col ${dark ? 'bg-[#121212]' : 'bg-raised'}`}>
+      <div ref={box} className={`relative min-h-0 flex-1 ${dark ? 'm-4 mb-2' : ''}`}>
+        <div className="absolute overflow-hidden bg-black" style={staged
           ? { left: stage.left, top: stage.top, width: stage.w, height: stage.h }
           : { inset: 0 }}>
           <video
@@ -94,7 +111,9 @@ export function Player({ videoRef, backRef, veilRef, bars, segment, label, gap, 
           {backRef && <video ref={backRef} muted playsInline aria-hidden
                              className={`pointer-events-none absolute inset-0 size-full object-contain ${gap ? 'invisible' : ''}`}
                              style={{ opacity: 0 }} />}
-          {veilRef && <div ref={veilRef} className="pointer-events-none absolute inset-0 z-[3]" style={{ opacity: 0, background: 'black' }} />}
+          {/* The edit's dips and flashes; never over a clip previewed from the shelf
+              (at a fade from black it covered the whole preview: sarah, 2026-10-14). */}
+          {veilRef && <div ref={veilRef} className={`pointer-events-none absolute inset-0 z-[3] ${segment ? 'invisible' : ''}`} style={{ opacity: 0, background: 'black' }} />}
           {staged && !!bars && <>
             <div className="pointer-events-none absolute inset-x-0 top-0 z-[3] bg-black" style={{ height: `${bars * 100}%` }} />
             <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[3] bg-black" style={{ height: `${bars * 100}%` }} />
@@ -105,10 +124,12 @@ export function Player({ videoRef, backRef, veilRef, bars, segment, label, gap, 
           {staged && overlay && overlay.items.length > 0 && <OverlayCanvas view={overlay} width={stage.w} height={stage.h} edit={overlayEdit} />}
         </div>
       </div>
-      <div className="flex h-7 shrink-0 items-center justify-between border-t border-line bg-panel px-3 text-[11px] text-muted">
-        <span className="truncate">{label}</span>
-        {segment && <span className="tabular-nums">{dur(segment.end - segment.start)}</span>}
-      </div>
+      {controls ?? (
+        <div className="flex h-7 shrink-0 items-center justify-between border-t border-line bg-panel px-3 text-[11px] text-muted">
+          <span className="truncate">{label}</span>
+          {segment && <span className="tabular-nums">{dur(segment.end - segment.start)}</span>}
+        </div>
+      )}
     </div>
   )
 }

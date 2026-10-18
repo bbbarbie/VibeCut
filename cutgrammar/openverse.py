@@ -35,6 +35,16 @@ PAGE = 20
 MIN_TRACK_S = 40.0                    # shorter than a short-form edit is no use
 MAX_TRACK_S = 420.0
 SEARCH_TTL_S = 7 * 24 * 3600          # a search is cached a week; the catalogue barely moves
+# Songs written for one day of the year. A mood search for "happy" returns
+# "Happy Birthday" covers among its first results (a Sep 22 vlog got one on
+# 2026-10-12); under footage of anything else the song names an occasion
+# that isn't there, and the viewer hears that before any mood. Matched as
+# whole words in the title, tags and genres.
+OCCASIONS = re.compile(
+    r"\b(birthdays?|bday|b-day|christmas|xmas|x-mas|navidad|noel|santa|jingle|carols?|"
+    r"halloween|easter|thanksgiving|hanukkah|valentines?|weddings?|bridal|anniversary|"
+    r"graduation|funeral|requiem|anthem|new year'?s?|feliz|cumplea\w*|geburtstag|anniversaire)\b",
+    re.I)
 
 
 def cache_dir() -> Path:
@@ -49,6 +59,12 @@ def _get(params: dict, timeout: float = 20.0) -> dict:
         return json.loads(r.read().decode("utf-8"))
 
 
+def occasion(rec: dict) -> bool:
+    """True when the catalogue's own words tie the track to an occasion."""
+    words = " ".join([rec.get("title") or "", *(rec.get("tags") or []), *(rec.get("genres") or [])])
+    return bool(OCCASIONS.search(words))
+
+
 def parse(results: list[dict], kind: str = "music") -> list[dict]:
     """API rows -> the few fields a remix needs, unusable licences dropped."""
     out = []
@@ -61,14 +77,17 @@ def parse(results: list[dict], kind: str = "music") -> list[dict]:
             continue
         if kind == "sfx" and not (0.1 <= dur <= 4.0):
             continue
-        out.append({
+        rec = {
             "id": r["id"], "title": r.get("title") or "", "creator": r.get("creator") or "",
             "license": lic, "license_version": r.get("license_version") or "",
             "source": r.get("source") or "", "duration": round(dur, 2), "url": r.get("url"),
             "page": r.get("foreign_landing_url") or "",
             "tags": [t.get("name") for t in (r.get("tags") or []) if t.get("name")][:10],
             "genres": r.get("genres") or [],
-        })
+        }
+        if kind == "music" and occasion(rec):
+            continue
+        out.append(rec)
     return out
 
 
@@ -76,18 +95,26 @@ def credit(rec: dict) -> str:
     """The line a CC BY / BY-SA licence asks for. CC0 needs none; it is listed anyway."""
     lic = rec["license"].upper().replace("BY", "CC BY").replace("CC0", "CC0")
     ver = f" {rec['license_version']}" if rec.get("license_version") else ""
-    return f"“{rec['title']}” by {rec['creator']} ({lic}{ver}) — {rec['page']}"
+    page = f" — {rec['page']}" if rec.get("page") else ""
+    return f"“{rec['title']}” by {rec['creator']} ({lic}{ver}){page}"
 
 
 def search(query: str, kind: str = "music", pages: int = 1, source: str | None = None) -> list[dict]:
-    """Search once per query (cached on disk), keeping only usable licences."""
+    """Search once per query (cached on disk), keeping only usable licences.
+
+    Only an answer is cached. A search that failed (offline, a certificate
+    the machine can't check) is not "no results": caching it as one kept
+    music off for a week after the network came back."""
     d = cache_dir() / "search"
     d.mkdir(parents=True, exist_ok=True)
     key = re.sub(r"[^a-z0-9]+", "_", f"{kind}_{source or ''}_{query}".lower())[:80]
     f = d / f"{key}.json"
     if f.exists() and time.time() - f.stat().st_mtime < SEARCH_TTL_S:
-        return json.loads(f.read_text())
+        cached = json.loads(f.read_text())
+        if cached:
+            return cached
     rows: list[dict] = []
+    failed = False
     for page in range(1, pages + 1):
         params = {"q": query, "license": ",".join(USABLE), "page_size": PAGE, "page": page}
         if kind == "music":
@@ -99,8 +126,14 @@ def search(query: str, kind: str = "music", pages: int = 1, source: str | None =
         try:
             rows += _get(params).get("results", [])
         except Exception:  # noqa: BLE001 -- offline or rate-limited: return what the cache has
+            failed = True
             break
     out = parse(rows, kind)
+    if failed and not out:
+        try:   # an older answer beats none, however stale
+            return json.loads(f.read_text())
+        except (OSError, ValueError):
+            return []
     f.write_text(json.dumps(out))
     return out
 
@@ -158,7 +191,9 @@ class OpenverseSource(music.TrackSource):
         out = []
         for t in tracks:
             rec = self.records.get(t.path) or _sidecar(t.path)
-            if rec is None:
+            # the folder holds every track ever fetched, including ones from
+            # searches cached before occasion songs were dropped
+            if rec is None or occasion(rec):
                 continue
             t.meta = {**t.meta, "licence": rec}
             # the catalogue's title, not the file's tags -- those are often mis-encoded

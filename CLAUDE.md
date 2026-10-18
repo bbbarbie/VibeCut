@@ -59,6 +59,21 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   "Start with your clips", "Drag clips / folder here", Add clips + Add folder (a
   browser picker can't take both; a phone version only needs Add clips).
   Footage has no preview panel: an opened stack is a vertical column on its own side (Kept left, Left out right), the other stack shrinks opposite as the drop target; a clicked clip plays in place with a "Move to …" button (no double-click). See `web/README.md`.
+  **The edit screen** (sarah, 2026-10-16: "change the layout to this
+  reference photo", same colours; `App.tsx` frames view, `Inspector.tsx`,
+  `Shelf.tsx`, `PreviewBar.tsx`, `Split.tsx`): top bar = name ▾ (rename, back
+  to Footage, Other stories, Reference, Remix, Start over…), undo / redo,
+  "Draft saved", Export. Left: a rail (Media · Text · Music · AI Edit, called
+  History while the AI is off) opening one panel; Media is the clip grid with
+  All / Kept / Left out tabs. Middle: the preview on black with play, time,
+  a scrub bar, the frame (cycles short / vlog / wide) and full screen. Right:
+  an inspector with Edit (trim bar, speed, rotate, mirror, fit / fill; with
+  nothing clicked, Length / Tempo / Smoother cuts), Captions (style +
+  animation for every caption), Effects (transition at the clicked cut, else
+  every cut), Audio (shot / strip sound, else music), Adjust (the look).
+  Bottom: the timeline with Video / Captions / Audio lanes (music drawn as a
+  strip). Clicking something opens its tab. Every border drags (sizes saved
+  in this browser). The old bottom tool bar (ShotBar) is gone.
 - Chat editing rule: a turn applies operations to the working storyboard
   (`web/backend/board.py`), never regenerates it. The LLM only emits ops;
   the diff is computed, not reported by the model. Keep it that way.
@@ -189,7 +204,7 @@ The promise to a user is therefore *not* "this will be beautiful." It is
 - **Style questions** (`web/backend/brief.py`, `StyleQuestions.tsx`,
   `web/frontend/src/brief.ts`): straight after Footage's "Looks good" (no
   "What's this video about?" box since 2026-10-06, sarah; the description is
-  guessed from the shoot, `pitch.guess`, never the model). Since 2026-10-07 (sarah: "build") the popup isn't shown on the main path either: `/api/brief/auto` writes the brief itself (suggested length from `length_marks`, captions = describe, no pace question any more) and the stories are built, the one the shoot suggests is taken and the edit opens in Frames (sarah, 2026-10-07: no story choice for now; the others stay under Story). **Tempo** (`web/backend/tempo.py`, `PaceButton.tsx`; sarah: "you should be able to realize what kind of editing tempo we want"): quick / steady / calm read from the shoot (share of moving vs still shots by `activity`, talking and music from sound.json, median clip length), travels as `style.pace`; talking shots keep their whole window at any pace. The story: on camera most of the time → subject, several days over ≥3 places → place, else time. The top bar is Footage · Edit only, there is no Story / Frames switch (Other stories is under More and closes back into Frames), Media cards are thumbnail + length (+ a dark-red reason when left out), one Export button (sarah, 2026-10-07). Both shown with their reason under the tempo button in Frames, changeable there (`/api/pace`, one undoable turn). MOVING 30 / STILL 10 were set on her one shoot; the rest are priors. `tests/test_tempo.py`; Length and a Captions on/off switch (`/api/captions`, one undoable turn) sit in Frames. The popup code remains for the chat's first message: a
+  guessed from the shoot, `pitch.guess`, never the model). Since 2026-10-07 (sarah: "build") the popup isn't shown on the main path either: `/api/brief/auto` writes the brief itself (suggested length from `length_marks`, captions = describe, no pace question any more) and the stories are built, the one the shoot suggests is taken and the edit opens in Frames (sarah, 2026-10-07: no story choice for now; the others stay under Story). **Tempo** (`web/backend/tempo.py`, `PaceButton.tsx`; sarah: "you should be able to realize what kind of editing tempo we want"): quick / steady / calm read from the shoot (share of moving vs still shots by `activity`, talking and music from sound.json, median clip length), travels as `style.pace`; talking shots keep their whole window at any pace. The story: on camera most of the time → subject, several days over ≥3 places → place, else time. The top bar is Footage · Edit only, there is no Story / Frames switch (Other stories is under More and closes back into Frames), Media in Frames is two piles like Footage's, Kept = in the video / Left out (sarah, 2026-10-13; `Shelf.tsx`, `/api/pile`, `brief.clip_ops`): a clicked clip plays, says why it's out, and "Move to …" puts its rough-cut window in where it was filmed or takes every shot of it out, one undoable turn, the rough cut's call set to match, one Export button (sarah, 2026-10-07). Both shown with their reason under the tempo button in Frames, changeable there (`/api/pace`, one undoable turn). MOVING 30 / STILL 10 were set on her one shoot; the rest are priors. `tests/test_tempo.py`; Length and a Captions on/off switch (`/api/captions`, one undoable turn) sit in Frames. The popup code remains for the chat's first message: a
   popup asks length / pace / opening / focus, one question at a time, before
   the rough cut is shown. Length, pace and opening travel as `style` on the
   direction and reshape each proposal (`brief.shape`); focus and any
@@ -244,6 +259,42 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   morning→night, themes, faces, talking, rough GPS; `guess` = the first
   template line, so `kind_of` sees day / weekend / days away).
   `tests/test_pitch.py`.
+- **About the day, not the face** (sarah, 2026-10-14, after comparing
+  VibeCut's edit of her school day with her own: half of it was her face,
+  one chat with a friend held 14 s, food / stairs / night campus were left
+  out). `tests/test_day_picking.py`. **Talk said to the audience vs talk
+  overheard** (`trim.addressed`): faces.json rows are now `[presence, edge,
+  people, facing]` (`vision.face_track`; the Swift helper adds each face's
+  yaw, looking in = |yaw| ≤ 25°; older 2-column caches are re-read once on
+  project open, `indexer.refresh_faces`, Mac only). Talking while looking
+  into the lens keeps its sentence; talking turned away, or two people with
+  no direction read, is chatter: `CHATTER_S` 3 s in the rough cut, cut by the
+  pace like any shot, not counted as talking by `tempo.read`. No face at all
+  (narration from behind the camera) changes nothing. **Every stop first**
+  (`brief.spots`, `weakest`): a new stop when GPS moves > 150 m or 20 min
+  pass; shortening (`shape`, `length_ops`) drops from the stop with the most
+  shots, lengthening brings back stops not shown yet. **Shorts** hold no
+  moment over `SHORT_CAP_S` 3.5 s (`brief.cap_for`, also `/api/pace`). **Lit
+  night** shots (after 6 pm, contrast ≥ 0.4) are never left out for quality
+  (`storyboard.lit_night`). **Swipe**: cozy and hype join parts with a whip
+  (xfade slideleft + sideways smear, `export.swipe_blur`; the player slides
+  both pictures, `joinView.swipeAt`); needs a dissolve's handles, else a cut.
+  All numbers are priors from one of her edits. Not yet run on her clips.
+- **What a moment is worth** (`web/backend/worth.py`; outside evaluation of
+  the Oct 16 demo, sarah: "implement"). Every Shot gets `worth` (0..1) and
+  `worth_why` in `shots_from_clips`: craft (`score`) plus feeling (laughter
+  ≥2 heard seconds, singing, talking to the lens, from sound.json, which
+  nothing used for picking before), label rarity across the shoot, the
+  first face-free shot at a new stop ("first look at a new place"), minus a
+  little for a face with nothing said. `shape` and `length_ops` rank by it
+  (hook = the strongest moment, not the best-exposed), and `weakest` drops
+  from the stop with the most shots *per its importance* (its best worth),
+  so screen time follows what happened at a stop, not how much was filmed;
+  a stop's last shot still goes last. Look-alike collapsing stays on craft.
+  Weights are priors. `tests/test_worth.py`.
+- **Music at social volume**: the bed's `set_music` asks for levelling
+  (-14 LUFS, `audiomix.write_wav`), preview and export alike; the Oct 14
+  school-day edit was -20 LUFS against her own -15. `tests/test_loudness.py`.
 - HDR (HLG/PQ) footage: thumbnails and samples are tone-mapped to SDR in
   `media.to_sdr` so they look like the phone showed them; measurement frames
   are untouched. `tests/test_hdr.py`.
@@ -285,6 +336,13 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   edit time and `keep` = talking shots (`restyle.retime` gained `keep`);
   `set_music` at `audiomix.MUSIC_GAIN`, original 1.0, ducked to
   `TALK_DUCK` under talking. Not for remix / talk / voiceover boards.
+  **Backup songs** (`cutgrammar/songpack.py`; sarah, 2026-10-11: "only
+  used if users link fail"): 24 songs VibeCut composes itself (8 per pace,
+  CC0, no audio in the repo; rendered once into `$VIBECUT_CACHE/music/
+  pack/`, ~20 s each, then measured like any track). Used only when
+  Openverse hands back nothing or nothing that fits; never preferred. A
+  failed Openverse search is no longer cached as "no songs".
+  `tests/test_songpack.py`.
   `timeline.grid_of` now subtracts the music in-point (every Remix grid was
   off before). `VIBECUT_BED=0` keeps tests offline. `tests/test_bed.py`.
   Measured 2026-10-10 on this Mac: a cold online pick took 195 s (36 tracks
@@ -312,6 +370,36 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   30 frames were wrong). CARRY_S 0.5 s and MICRO_S are priors — calibrate.
   Tests: `tests/test_audiomix.py`, additions in `test_export.py`,
   `test_brief.py`, `test_remix.py`.
+- **Extract audio** (`board.SOUND_OPS`: `extract_audio` / `edit_audio` /
+  `drop_audio`; `audiomix.strips_of`, `timeline.audio_lane`; sarah,
+  2026-10-14: "at least have the basic functions for most video editing
+  apps"). The shot bar's Sound › "Take the sound off" puts the shot's sound
+  on its own strip in a Sound lane under the picture (`sound.off` +
+  `sound.strips` on the board), sounding as the shot did (its speed, volume
+  and fades come along): the strip sits at a place in the edit (unlinked,
+  like CapCut), drag to move it (sticks to the same targets), click it for
+  its own bar (Volume 0–200%, Fade in / out, Mute, Delete this sound).
+  Deleting leaves the shot silent; a cut through a silenced shot keeps both
+  pieces silent. Preview and export hear it through the same mixer.
+  `tests/test_extract_audio.py`.
+- **Shot bar** (`ShotBar.tsx`; `board.set_shot`, fields `speed` / `gain` /
+  `mute` / `rotate` / `fill` / `mirror` / `fade_in` / `fade_out` on the
+  entry, kept through a cut except the fade on the cut side; sarah,
+  2026-10-14: the stepped menus were "very not user friendly", one click to
+  a tool then a slider). Clicking a shot in Frames opens a bar along the
+  bottom, no pop-up menu: Split · Sound (Volume slider 0–200%, Fade in /
+  out 0–3 s, Mute, Take the sound off) · Speed (doubling slider ¼×–4×,
+  0.5 / 1 / 2 / 4 presets) · Turn & crop (quarter turns, Mirror, Fill the
+  frame = cover and crop instead of bars, Show it all) · Swap · Delete.
+  A slider is one undoable turn when let go. A shot lasts `bd.seq_dur` =
+  source seconds / speed; `timeline.layout`, the board's own arithmetic and
+  overlays use it, the player plays the file at rate × speed and dresses
+  the picture with the same turn / mirror / fill as `export._shot`. Sound
+  at a speed is stretched with atempo (pitch kept, `audiomix.stretched`); a
+  sped-up or slowed shot never carries sound or dissolves across its cuts.
+  Known: the length slider, the bed's beat snap and restyle still count
+  source seconds, so they're approximate on a shot that isn't at 1×.
+  `tests/test_shot_fixes.py`.
 - **Every cut checked** (`cutgrammar/joins.py`, `web/backend/seams.py`;
   research 08 P2). Report only: per cut, brightness jump, colour change
   (best-frame proxy), same view again, energy step, loudness step, going
@@ -352,6 +440,28 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   flashes are a colour veil at the same opacity as the export's fade, and
   cinematic bars are drawn. The grade (LUT) still appears only in export.
 
+- **Caption and transition templates** (sarah, 2026-10-15: "build";
+  mockups in the project's `templates/` folder). Opt-in: nothing changes
+  until picked. Click a caption → the bottom bar's **Style** (8 templates,
+  `overlays.TEMPLATES`: outlined = her own hand edit, serif + black edge +
+  the time on its own line; bold, label, highlight, handwritten, tape, pop,
+  quiet) and **Animation** (6 entrances, `overlays.ENTERS`: fade, pop,
+  slide, stamp, type, word). Both are `overlay_style` fields (`template`,
+  `enter`; None = the look's own), one per video, kept when the look
+  changes, drawn by `overlayDraw.ts` (TEMPLATES, motionFor) for preview and
+  export alike; Mac system fonts only. Click the dot between two shots →
+  **transitions** (`transitions.py`, `set_transition {shot | all, kind,
+  dur}`): cut, fade, dip, flash, zoom through, slide up, blur, light leak;
+  board `picture_joins` / `picture_all`, folded into the style's
+  transitions policy (`at`) that `export.plan_transitions` reads. The four
+  new ones are ffmpeg xfades over footage past the cut (light leak a custom
+  expression), else a cut, said at export and in the bar; the player draws
+  the same with CSS (`joinView.blendLook`; its blur is a plain blur where
+  ffmpeg's hblur smears sideways). Tiles move the way the result will.
+  Tests: `test_transitions.py` (each blend really at its cut, centred,
+  length kept, all different), `test_caption_templates.py`,
+  `overlayTemplates.test.ts` (safe area every intro frame, every template ×
+  entrance). Sizes, durations and the glow are priors.
 - **polish/** (`polish/`, `web/backend/polish_api.py`, `Polish.tsx`,
   `polishDraw.ts`; page `#polish`). Assisting an edit that is already cut:
   input is one finished video, never raw clips; no auto-editing, no
