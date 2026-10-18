@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { clock, locate, parseTimecode, readout, smpte, type SeqItem } from '../sequence'
-import { approaching, snap, type Target, type TargetType } from '../snap'
+import { approaching, DEFAULT_THRESHOLD_PX, snap, type Target, type TargetType } from '../snap'
 import { phStore, snapStore, transport, transportStore, useStore } from '../transport'
 import type { JoinInfo, Overlay, SoundStrip, TimelineData } from '../types'
 import { KIND_META } from '../overlayDraw'
@@ -27,7 +27,11 @@ const SOUND_H = 26   // a row of the Audio lane: sound taken off shots, the musi
 const VIDEO_TOP = 48
 const LANE_GAP = 6
 const LABEL_W = 96
-type Drag = { id: string; mode: 'move' | 'end'; x0: number; grab: number; start: number; end: number; moved: boolean }
+// A caption being dragged: where it started, where it is, the line it's
+// stuck to, and whether it's been let go and waits for the edit to come back.
+type Drag = { id: string; mode: 'move' | 'start' | 'end'; x0: number; start0: number; end0: number; start: number; end: number
+  moved: boolean; guide: number | null; pending: boolean }
+const MIN_CAPTION_S = 0.5
 
 export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, onReorder,
   onInsertShot, onClear, onHelp, overlays = [], selectedOverlay = null, onSelectOverlay, onOverlayEdit, onExport, onTrimEdge,
@@ -208,6 +212,49 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
 
   // Words on screen get their own lane above the shots, stacked when they overlap.
   const [drag, setDrag] = useState<Drag | null>(null)
+  useEffect(() => { setDrag((d) => (d?.pending ? null : d)) }, [overlays])
+  // Moving a caption, as in CapCut: it follows the pointer one to one, and
+  // only its edges stick, only to what you'd line it up with (a cut, the
+  // playhead, the start or end, another caption), never to beats or movement.
+  const dragOverlay = (d: Drag, clientX: number, bypass: boolean) => {
+    if (!d.moved && Math.abs(clientX - d.x0) < 3) return
+    const el = track.current!
+    const base = el.getBoundingClientRect().left - el.scrollLeft
+    // the time under a point, through the same picture the pill is drawn on
+    const at = (cx: number) => tOf(cx - base).t
+    const dt = at(clientX) - at(d.x0)
+    const len = d.end0 - d.start0
+    const reach = DEFAULT_THRESHOLD_PX / Math.max(pps, 1e-6)
+    const lines = bypass ? [] : [0, tl.total, ph,
+      ...tl.targets.filter((g) => g.type === 'shot').map((g) => g.t),
+      ...overlays.filter((x) => x.id !== d.id).flatMap((x) => [x.start, x.shown_end])]
+    const near = (t: number) => {
+      let best: number | null = null
+      for (const l of lines) if (Math.abs(l - t) <= reach && (best == null || Math.abs(l - t) < Math.abs(best - t))) best = l
+      return best
+    }
+    let start = d.start0
+    let end = d.end0
+    let guide: number | null = null
+    if (d.mode === 'move') {
+      start = Math.max(0, Math.min(d.start0 + dt, tl.total - len))
+      const a = near(start)
+      const b = near(start + len)
+      if (a != null && (b == null || Math.abs(a - start) <= Math.abs(b - start - len))) { start = a; guide = a }
+      else if (b != null) { start = b - len; guide = b }
+      start = Math.max(0, Math.min(start, tl.total - len))
+      end = start + len
+    } else if (d.mode === 'start') {
+      start = Math.max(0, Math.min(d.start0 + dt, d.end0 - MIN_CAPTION_S))
+      const a = near(start)
+      if (a != null && a <= d.end0 - MIN_CAPTION_S) { start = a; guide = a }
+    } else {
+      end = Math.min(tl.total, Math.max(d.end0 + dt, d.start0 + MIN_CAPTION_S))
+      const b = near(end)
+      if (b != null && b >= d.start0 + MIN_CAPTION_S) { end = b; guide = b }
+    }
+    setDrag({ ...d, moved: true, start, end, guide })
+  }
   const lanes = useMemo(() => {
     const ends: number[] = []
     const row = new Map<string, number>()
@@ -392,46 +439,57 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
               const x = xAt(a)
               const w = Math.max(12, xAt(Math.min(z, tl.total)) - x)
               const meta = KIND_META[o.kind]
-              const edge = o.dur != null || o.anchor.to === 'edit'
+              const ends = o.kind !== 'chapters'   // both ends drag, as in CapCut / iMovie
+              const sel = selectedOverlay === o.id
               return (
                 <div key={o.id}
-                     title={`${meta.label}: ${o.kind === 'chapters' ? 'chapter bar' : o.text}\nDrag to move (it sticks to cuts; hold ⌥ for exact), drag the right edge to change its length`}
+                     title={`${meta.label}: ${o.kind === 'chapters' ? 'chapter bar' : o.text}\nDrag to move it, drag either end to change how long it shows. It sticks to cuts, the playhead and other captions; hold ⌥ to place it exactly.`}
                      onPointerDown={(e) => {
-                       if (e.button !== 0) return
-                       e.stopPropagation()
+                       if (e.button !== 0 || drag?.pending) return
+                       e.stopPropagation(); e.preventDefault()
                        e.currentTarget.setPointerCapture(e.pointerId)
                        const box = e.currentTarget.getBoundingClientRect()
-                       const mode = edge && e.clientX > box.right - 7 ? 'end' : 'move'
-                       // where on the pill it was grabbed, so the pill doesn't jump under the pointer
-                       setDrag({ id: o.id, mode, x0: e.clientX, grab: e.clientX - box.left, start: o.start, end: o.shown_end, moved: false })
+                       const grip = Math.min(10, box.width / 4)
+                       const mode = ends && e.clientX < box.left + grip ? 'start' : ends && e.clientX > box.right - grip ? 'end' : 'move'
+                       setDrag({ id: o.id, mode, x0: e.clientX, start0: o.start, end0: o.shown_end, start: o.start, end: o.shown_end, moved: false, guide: null, pending: false })
                      }}
-                     onPointerMove={(e) => {
-                       if (!d) return
-                       if (!d.moved && Math.abs(e.clientX - d.x0) < 4) return
-                       if (d.mode === 'move') {
-                         const t = Math.max(0, overlayTime(e.clientX - d.grab, e.altKey))
-                         setDrag({ ...d, moved: true, start: t, end: t + (o.shown_end - o.start) })
-                       } else {
-                         const t = Math.max(o.start + 0.5, overlayTime(e.clientX, e.altKey))
-                         setDrag({ ...d, moved: true, end: t })
-                       }
-                     }}
+                     onPointerMove={(e) => { if (d && !d.pending) dragOverlay(d, e.clientX, e.altKey) }}
                      onPointerUp={() => {
-                       if (!d) return
-                       setDrag(null)
-                       if (!d.moved) { onSelectOverlay?.(o.id); return }
-                       if (d.mode === 'move') onOverlayEdit?.(o.id, { start: Math.round(d.start * 1000) / 1000 })
-                       else onOverlayEdit?.(o.id, { dur: Math.round((d.end - o.start) * 1000) / 1000 })
+                       if (!d || d.pending) return
+                       if (!d.moved) { setDrag(null); onSelectOverlay?.(o.id); return }
+                       const r3 = (v: number) => Math.round(v * 1000) / 1000
+                       const same = Math.abs(d.start - d.start0) < 1e-3 && Math.abs(d.end - d.end0) < 1e-3
+                       if (same) { setDrag(null); return }
+                       // Its length is sent as well, so it lands exactly as drawn: a caption
+                       // that lasted to the end of its shot would otherwise take the length
+                       // of whatever shot it was dropped on.
+                       const patch = d.mode === 'end' ? { dur: r3(d.end - d.start) } : { start: r3(d.start), dur: r3(d.end - d.start) }
+                       setDrag({ ...d, guide: null, pending: true })   // held where it was dropped until the edit comes back
+                       window.setTimeout(() => setDrag((x) => (x?.pending && x.id === d.id ? null : x)), 3000)
+                       onOverlayEdit?.(o.id, patch)
                      }}
-                     className={`absolute flex cursor-grab items-center gap-1 overflow-hidden rounded-md px-1.5 text-[12px] leading-none text-stone-900 active:cursor-grabbing ${
-                       selectedOverlay === o.id ? 'ring-2 ring-accent' : ''} ${d?.moved ? 'opacity-80' : ''}`}
-                     style={{ left: x, width: w, bottom: capBottom + capH - 4 - ((lanes.row.get(o.id) ?? 0) + 1) * LANE_ROW + 3, height: LANE_ROW - 3, background: meta.color }}>
+                     onPointerCancel={() => setDrag(null)}
+                     className={`absolute flex touch-none items-center gap-1 overflow-hidden rounded-md px-2 text-[12px] leading-none text-stone-900 ${
+                       d?.moved && !d.pending ? 'cursor-grabbing shadow-lg ring-2 ring-white' : 'cursor-grab'} ${sel ? 'ring-2 ring-accent' : ''}`}
+                     style={{ left: x, width: w, bottom: capBottom + capH - 4 - ((lanes.row.get(o.id) ?? 0) + 1) * LANE_ROW + 3, height: LANE_ROW - 3,
+                       background: meta.color, zIndex: d ? 6 : undefined }}>
                   <span className="shrink-0 font-semibold">{meta.icon}</span>
                   <span className="truncate">{o.kind === 'chapters' ? 'Chapter bar' : o.text}</span>
-                  {edge && <span className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize bg-black/20" />}
+                  {ends && <span className={`absolute inset-y-0 left-0 w-1.5 cursor-ew-resize ${sel || d ? 'bg-black/25' : 'hover:bg-black/20'}`} />}
+                  {ends && <span className={`absolute inset-y-0 right-0 w-1.5 cursor-ew-resize ${sel || d ? 'bg-black/25' : 'hover:bg-black/20'}`} />}
                 </div>
               )
             })}
+            {drag?.moved && !drag.pending && (
+              // where it is, while it moves: start and length, readable
+              <div className="pointer-events-none absolute z-20 -translate-x-1/2 whitespace-nowrap rounded bg-black/80 px-1.5 py-0.5 text-[12px] tabular-nums text-zinc-100"
+                   style={{ left: xAt((drag.start + drag.end) / 2), bottom: capBottom + capH + 2 }}>
+                {clock(drag.start)} · {(drag.end - drag.start).toFixed(1)}s
+              </div>
+            )}
+            {drag?.guide != null && !drag.pending && (
+              <div className="pointer-events-none absolute top-0 bottom-0 z-20 w-px bg-amber-400" style={{ left: xAt(drag.guide) }} />
+            )}
 
             {items.map((it: SeqItem, k) => (k === 0 || items[k - 1].beat_id !== it.beat_id) && (
               <div key={`beat-${it.beat_id}-${k}`} className="pointer-events-none absolute top-8 truncate text-[10px] font-medium text-zinc-400"
