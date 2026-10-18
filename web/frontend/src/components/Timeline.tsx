@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { clock, locate, parseTimecode, readout, smpte, type SeqItem } from '../sequence'
-import { approaching, snap, type Target, type TargetType } from '../snap'
+import { approaching, DEFAULT_THRESHOLD_PX, snap, type Target, type TargetType } from '../snap'
 import { phStore, snapStore, transport, transportStore, useStore } from '../transport'
 import type { JoinInfo, Overlay, SoundStrip, TimelineData } from '../types'
 import { KIND_META } from '../overlayDraw'
@@ -27,7 +27,11 @@ const SOUND_H = 26   // a row of the Audio lane: sound taken off shots, the musi
 const VIDEO_TOP = 48
 const LANE_GAP = 6
 const LABEL_W = 96
-type Drag = { id: string; mode: 'move' | 'end'; x0: number; grab: number; start: number; end: number; moved: boolean }
+// A caption being dragged: where it started, where it is, the line it's
+// stuck to, and whether it's been let go and waits for the edit to come back.
+type Drag = { id: string; mode: 'move' | 'start' | 'end'; x0: number; start0: number; end0: number; start: number; end: number
+  moved: boolean; guide: number | null; pending: boolean }
+const MIN_CAPTION_S = 0.5
 
 export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, onReorder,
   onInsertShot, onClear, onHelp, overlays = [], selectedOverlay = null, onSelectOverlay, onOverlayEdit, onExport, onTrimEdge,
@@ -83,6 +87,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   const [edge, setEdge] = useState<{ key: string; edge: 'in' | 'out'; to: number } | null>(null)
   const edging = useRef<{ x: number; base: number; pps: number } | null>(null)
   const items = tl.items
+  useEffect(() => { if (!edging.current) setEdge(null) }, [items])
 
   useEffect(() => {
     const el = track.current
@@ -92,24 +97,62 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
     return () => ro.disconnect()
   }, [])
 
+  // The scale (pixels per second) stays put while the edit changes under it,
+  // as in CapCut: trimming a shot grows or shrinks that shot and slides the
+  // ones after it, it doesn't squeeze every shot to fit again (sarah,
+  // 2026-10-17). It is fitted to the edit only when the timeline's width
+  // changes, a different edit is shown, or she zooms herself.
+  const fitNow = () => tl.total > 0 ? Math.max(0.5, (width - 2 * PAD - items.length * GAP) / tl.total) : 10
+  const [scale, setScale] = useState<number | null>(null)
+  const seen = useRef<{ keys: Set<string>; edit: number }>({ keys: new Set(), edit: 0 })
+  const edit = useMemo(() => {
+    const s = seen.current
+    if (!items.some((it) => s.keys.has(it.key))) s.edit += 1   // nothing in common: another edit
+    s.keys = new Set(items.map((it) => it.key))
+    return s.edit
+  }, [items])
+  const hasEdit = tl.total > 0
+  useEffect(() => { if (hasEdit) setScale(fitNow()) }, [width, edit, hasEdit]) // eslint-disable-line react-hooks/exhaustive-deps
+  const zoomTo = (z: number) => { setScale(fitNow()); setZoom(z) }
+  const pps = (scale ?? fitNow()) * zoom
   // Geometry: widths proportional to duration, with a floor so a short
   // shot stays hittable. Position <-> time is exact within each block.
-  const fit = tl.total > 0 ? Math.max(0.5, (width - 2 * PAD - items.length * GAP) / tl.total) : 10
-  const pps = fit * zoom
-  const geo = useMemo(() => {
-    const w = items.map((it) => Math.max(MIN_W, (it.seq_end - it.seq_start) * pps))
+  // A shot whose end is being dragged is drawn at its new length while the
+  // drag lasts: dragging the end pushes the later shots along, dragging the
+  // start moves that edge with the pointer.
+  const layout = (edge: { key: string; edge: 'in' | 'out'; to: number } | null) => {
+    const dur = (it: SeqItem) => {
+      const d = it.seq_end - it.seq_start
+      if (edge?.key !== it.key) return d
+      const grow = edge.edge === 'out' ? edge.to - it.src_end : it.src_start - edge.to
+      return Math.max(0, d + grow / (it.speed ?? 1))
+    }
+    const w = items.map((it) => Math.max(MIN_W, dur(it) * pps))
     const left: number[] = []
     w.forEach((_, k) => left.push(k ? left[k - 1] + w[k - 1] + GAP : 0))
-    return { w, left, end: (left.at(-1) ?? 0) + (w.at(-1) ?? 0) }
-  }, [items, pps])
+    const k = edge?.edge === 'in' ? items.findIndex((it) => it.key === edge.key) : -1
+    if (k >= 0) {
+      // the start follows the pointer; the shots after stay until it's let go
+      const was = Math.max(MIN_W, (items[k].seq_end - items[k].seq_start) * pps)
+      for (let j = k; j < left.length; j++) left[j] -= w[k] - was
+    }
+    const end = Math.max(...w.map((x, j) => left[j] + x), 0)
+    return { w, left, end }
+  }
+  const geo = useMemo(() => layout(edge), [items, pps, edge]) // eslint-disable-line react-hooks/exhaustive-deps
+  // The timeline as it was before the drag: captions and sound strips keep
+  // their real times while a shot is being trimmed, instead of stretching
+  // with it and jumping back when it's let go (sarah, 2026-10-18).
+  const still = useMemo(() => (edge ? layout(null) : geo), [items, pps, edge == null, geo]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const xOf = (t: number) => {
+  const xOf = (t: number, g = geo) => {
     const k = locate(items, t)
     if (k < 0) return PAD
     const it = items[k]
     const d = Math.max(it.seq_end - it.seq_start, 1e-6)
-    return PAD + geo.left[k] + Math.min(1, (t - it.seq_start) / d) * geo.w[k]
+    return PAD + g.left[k] + Math.min(1, (t - it.seq_start) / d) * g.w[k]
   }
+  const xAt = (t: number) => xOf(t, still)
   const tOf = (x: number): { t: number; localPps: number } => {
     x -= PAD
     let lo = 0
@@ -169,6 +212,49 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
 
   // Words on screen get their own lane above the shots, stacked when they overlap.
   const [drag, setDrag] = useState<Drag | null>(null)
+  useEffect(() => { setDrag((d) => (d?.pending ? null : d)) }, [overlays])
+  // Moving a caption, as in CapCut: it follows the pointer one to one, and
+  // only its edges stick, only to what you'd line it up with (a cut, the
+  // playhead, the start or end, another caption), never to beats or movement.
+  const dragOverlay = (d: Drag, clientX: number, bypass: boolean) => {
+    if (!d.moved && Math.abs(clientX - d.x0) < 3) return
+    const el = track.current!
+    const base = el.getBoundingClientRect().left - el.scrollLeft
+    // the time under a point, through the same picture the pill is drawn on
+    const at = (cx: number) => tOf(cx - base).t
+    const dt = at(clientX) - at(d.x0)
+    const len = d.end0 - d.start0
+    const reach = DEFAULT_THRESHOLD_PX / Math.max(pps, 1e-6)
+    const lines = bypass ? [] : [0, tl.total, ph,
+      ...tl.targets.filter((g) => g.type === 'shot').map((g) => g.t),
+      ...overlays.filter((x) => x.id !== d.id).flatMap((x) => [x.start, x.shown_end])]
+    const near = (t: number) => {
+      let best: number | null = null
+      for (const l of lines) if (Math.abs(l - t) <= reach && (best == null || Math.abs(l - t) < Math.abs(best - t))) best = l
+      return best
+    }
+    let start = d.start0
+    let end = d.end0
+    let guide: number | null = null
+    if (d.mode === 'move') {
+      start = Math.max(0, Math.min(d.start0 + dt, tl.total - len))
+      const a = near(start)
+      const b = near(start + len)
+      if (a != null && (b == null || Math.abs(a - start) <= Math.abs(b - start - len))) { start = a; guide = a }
+      else if (b != null) { start = b - len; guide = b }
+      start = Math.max(0, Math.min(start, tl.total - len))
+      end = start + len
+    } else if (d.mode === 'start') {
+      start = Math.max(0, Math.min(d.start0 + dt, d.end0 - MIN_CAPTION_S))
+      const a = near(start)
+      if (a != null && a <= d.end0 - MIN_CAPTION_S) { start = a; guide = a }
+    } else {
+      end = Math.min(tl.total, Math.max(d.end0 + dt, d.start0 + MIN_CAPTION_S))
+      const b = near(end)
+      if (b != null && b >= d.start0 + MIN_CAPTION_S) { end = b; guide = b }
+    }
+    setDrag({ ...d, moved: true, start, end, guide })
+  }
   const lanes = useMemo(() => {
     const ends: number[] = []
     const row = new Map<string, number>()
@@ -257,11 +343,11 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
           ))}
         </span>
         <div className="flex shrink-0 items-center gap-1.5" title="Zoom the timeline">
-          <button type="button" aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(1, z / 1.5))}
+          <button type="button" aria-label="Zoom out" onClick={() => zoomTo(Math.max(1, zoom / 1.5))}
                   className="grid size-7 place-items-center rounded-md text-zinc-300 hover:bg-raised"><Icon name="minus" size={18} /></button>
           <input type="range" min={1} max={40} step={0.5} value={zoom} aria-label="Zoom"
-                 onChange={(e) => setZoom(Number(e.target.value))} className="w-24 accent-[#1f5f8b]" />
-          <button type="button" aria-label="Zoom in" onClick={() => setZoom((z) => Math.min(40, z * 1.5))}
+                 onChange={(e) => zoomTo(Number(e.target.value))} className="w-24 accent-[#1f5f8b]" />
+          <button type="button" aria-label="Zoom in" onClick={() => zoomTo(Math.min(40, zoom * 1.5))}
                   className="grid size-7 place-items-center rounded-md text-zinc-300 hover:bg-raised"><Icon name="plus" size={18} /></button>
         </div>
         {onExport && (
@@ -339,7 +425,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
               <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={onSelectMusic}
                       title={`${music.title}: click for the music's controls`}
                       className="absolute flex items-center gap-2 overflow-hidden rounded-md px-2.5 font-serif text-[14px] text-[#1d5c46] hover:brightness-95"
-                      style={{ left: PAD, width: Math.max(40, geo.end), bottom: musicBottom, height: SOUND_H,
+                      style={{ left: PAD, width: Math.max(40, still.end), bottom: musicBottom, height: SOUND_H,
                         background: 'repeating-linear-gradient(90deg, #bfe3d3 0 2px, #cdeadd 2px 5px)' }}>
                 <Icon name="music" size={16} />
                 <span className="truncate">{music.title}</span>
@@ -350,49 +436,60 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
               const d = drag?.id === o.id ? drag : null
               const a = d ? d.start : o.start
               const z = d ? d.end : o.shown_end
-              const x = xOf(a)
-              const w = Math.max(12, xOf(Math.min(z, tl.total)) - x)
+              const x = xAt(a)
+              const w = Math.max(12, xAt(Math.min(z, tl.total)) - x)
               const meta = KIND_META[o.kind]
-              const edge = o.dur != null || o.anchor.to === 'edit'
+              const ends = o.kind !== 'chapters'   // both ends drag, as in CapCut / iMovie
+              const sel = selectedOverlay === o.id
               return (
                 <div key={o.id}
-                     title={`${meta.label}: ${o.kind === 'chapters' ? 'chapter bar' : o.text}\nDrag to move (it sticks to cuts; hold ⌥ for exact), drag the right edge to change its length`}
+                     title={`${meta.label}: ${o.kind === 'chapters' ? 'chapter bar' : o.text}\nDrag to move it, drag either end to change how long it shows. It sticks to cuts, the playhead and other captions; hold ⌥ to place it exactly.`}
                      onPointerDown={(e) => {
-                       if (e.button !== 0) return
-                       e.stopPropagation()
+                       if (e.button !== 0 || drag?.pending) return
+                       e.stopPropagation(); e.preventDefault()
                        e.currentTarget.setPointerCapture(e.pointerId)
                        const box = e.currentTarget.getBoundingClientRect()
-                       const mode = edge && e.clientX > box.right - 7 ? 'end' : 'move'
-                       // where on the pill it was grabbed, so the pill doesn't jump under the pointer
-                       setDrag({ id: o.id, mode, x0: e.clientX, grab: e.clientX - box.left, start: o.start, end: o.shown_end, moved: false })
+                       const grip = Math.min(10, box.width / 4)
+                       const mode = ends && e.clientX < box.left + grip ? 'start' : ends && e.clientX > box.right - grip ? 'end' : 'move'
+                       setDrag({ id: o.id, mode, x0: e.clientX, start0: o.start, end0: o.shown_end, start: o.start, end: o.shown_end, moved: false, guide: null, pending: false })
                      }}
-                     onPointerMove={(e) => {
-                       if (!d) return
-                       if (!d.moved && Math.abs(e.clientX - d.x0) < 4) return
-                       if (d.mode === 'move') {
-                         const t = Math.max(0, overlayTime(e.clientX - d.grab, e.altKey))
-                         setDrag({ ...d, moved: true, start: t, end: t + (o.shown_end - o.start) })
-                       } else {
-                         const t = Math.max(o.start + 0.5, overlayTime(e.clientX, e.altKey))
-                         setDrag({ ...d, moved: true, end: t })
-                       }
-                     }}
+                     onPointerMove={(e) => { if (d && !d.pending) dragOverlay(d, e.clientX, e.altKey) }}
                      onPointerUp={() => {
-                       if (!d) return
-                       setDrag(null)
-                       if (!d.moved) { onSelectOverlay?.(o.id); return }
-                       if (d.mode === 'move') onOverlayEdit?.(o.id, { start: Math.round(d.start * 1000) / 1000 })
-                       else onOverlayEdit?.(o.id, { dur: Math.round((d.end - o.start) * 1000) / 1000 })
+                       if (!d || d.pending) return
+                       if (!d.moved) { setDrag(null); onSelectOverlay?.(o.id); return }
+                       const r3 = (v: number) => Math.round(v * 1000) / 1000
+                       const same = Math.abs(d.start - d.start0) < 1e-3 && Math.abs(d.end - d.end0) < 1e-3
+                       if (same) { setDrag(null); return }
+                       // Its length is sent as well, so it lands exactly as drawn: a caption
+                       // that lasted to the end of its shot would otherwise take the length
+                       // of whatever shot it was dropped on.
+                       const patch = d.mode === 'end' ? { dur: r3(d.end - d.start) } : { start: r3(d.start), dur: r3(d.end - d.start) }
+                       setDrag({ ...d, guide: null, pending: true })   // held where it was dropped until the edit comes back
+                       window.setTimeout(() => setDrag((x) => (x?.pending && x.id === d.id ? null : x)), 3000)
+                       onOverlayEdit?.(o.id, patch)
                      }}
-                     className={`absolute flex cursor-grab items-center gap-1 overflow-hidden rounded-md px-1.5 text-[12px] leading-none text-stone-900 active:cursor-grabbing ${
-                       selectedOverlay === o.id ? 'ring-2 ring-accent' : ''} ${d?.moved ? 'opacity-80' : ''}`}
-                     style={{ left: x, width: w, bottom: capBottom + capH - 4 - ((lanes.row.get(o.id) ?? 0) + 1) * LANE_ROW + 3, height: LANE_ROW - 3, background: meta.color }}>
+                     onPointerCancel={() => setDrag(null)}
+                     className={`absolute flex touch-none items-center gap-1 overflow-hidden rounded-md px-2 text-[12px] leading-none text-stone-900 ${
+                       d?.moved && !d.pending ? 'cursor-grabbing shadow-lg ring-2 ring-white' : 'cursor-grab'} ${sel ? 'ring-2 ring-accent' : ''}`}
+                     style={{ left: x, width: w, bottom: capBottom + capH - 4 - ((lanes.row.get(o.id) ?? 0) + 1) * LANE_ROW + 3, height: LANE_ROW - 3,
+                       background: meta.color, zIndex: d ? 6 : undefined }}>
                   <span className="shrink-0 font-semibold">{meta.icon}</span>
                   <span className="truncate">{o.kind === 'chapters' ? 'Chapter bar' : o.text}</span>
-                  {edge && <span className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize bg-black/20" />}
+                  {ends && <span className={`absolute inset-y-0 left-0 w-1.5 cursor-ew-resize ${sel || d ? 'bg-black/25' : 'hover:bg-black/20'}`} />}
+                  {ends && <span className={`absolute inset-y-0 right-0 w-1.5 cursor-ew-resize ${sel || d ? 'bg-black/25' : 'hover:bg-black/20'}`} />}
                 </div>
               )
             })}
+            {drag?.moved && !drag.pending && (
+              // where it is, while it moves: start and length, readable
+              <div className="pointer-events-none absolute z-20 -translate-x-1/2 whitespace-nowrap rounded bg-black/80 px-1.5 py-0.5 text-[12px] tabular-nums text-zinc-100"
+                   style={{ left: xAt((drag.start + drag.end) / 2), bottom: capBottom + capH + 2 }}>
+                {clock(drag.start)} · {(drag.end - drag.start).toFixed(1)}s
+              </div>
+            )}
+            {drag?.guide != null && !drag.pending && (
+              <div className="pointer-events-none absolute top-0 bottom-0 z-20 w-px bg-amber-400" style={{ left: xAt(drag.guide) }} />
+            )}
 
             {items.map((it: SeqItem, k) => (k === 0 || items[k - 1].beat_id !== it.beat_id) && (
               <div key={`beat-${it.beat_id}-${k}`} className="pointer-events-none absolute top-8 truncate text-[10px] font-medium text-zinc-400"
@@ -407,7 +504,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
               const ed = edge?.key === it.key ? edge : null
               const grow = ed ? (ed.edge === 'out' ? ed.to - it.src_end : it.src_start - ed.to) : 0
               const sp = it.speed ?? 1   // source seconds per second of the edit
-              const w = Math.max(MIN_W, geo.w[k] + (grow / sp) * (geo.w[k] / Math.max(it.seq_end - it.seq_start, 1e-6)))
+              const w = geo.w[k]
               const lo = it.src_min ?? it.src_start
               const hi = it.src_max ?? it.src_end
               // Drag either end: shorter, or longer up to the whole shot as filmed.
@@ -419,7 +516,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                     if (e.button !== 0) return
                     e.stopPropagation(); e.preventDefault()
                     e.currentTarget.setPointerCapture(e.pointerId)
-                    edging.current = { x: e.clientX, base: side === 'in' ? it.src_start : it.src_end, pps: geo.w[k] / Math.max(it.seq_end - it.seq_start, 1e-6) / sp }
+                    edging.current = { x: e.clientX, base: side === 'in' ? it.src_start : it.src_end, pps: pps / sp }
                     setEdge({ key: it.key, edge: side, to: edging.current.base })
                   }}
                   onPointerMove={(e) => {
@@ -433,8 +530,11 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                     const g = edging.current
                     edging.current = null
                     const cur = edge
-                    setEdge(null)
-                    if (g && cur && Math.abs(cur.to - g.base) > 1 / 30) onTrimEdge(it.key, side, cur.to)
+                    if (g && cur && Math.abs(cur.to - g.base) > 1 / 30) {
+                      // hold the new length until the trimmed edit comes back, so the shot doesn't flick back first
+                      onTrimEdge(it.key, side, cur.to)
+                      window.setTimeout(() => setEdge((x) => (x === cur ? null : x)), 3000)
+                    } else setEdge(null)
                   }}
                 />
               )
@@ -494,8 +594,8 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
             {strips.map((a) => {
               const m = moving?.id === a.id ? moving : null
               const at = m ? m.at : a.at
-              const x = xOf(Math.min(at, tl.total))
-              const w = Math.max(28, Math.min(geo.end + PAD, xOf(Math.min(at + a.dur, tl.total))) - x)
+              const x = xAt(Math.min(at, tl.total))
+              const w = Math.max(28, Math.min(still.end + PAD, xAt(Math.min(at + a.dur, tl.total))) - x)
               const label = `Sound of shot ${a.n ?? ''}`.trim()
               return (
                 <div key={a.id}
