@@ -2,8 +2,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { clock, locate, parseTimecode, readout, smpte, type SeqItem } from '../sequence'
 import { approaching, DEFAULT_THRESHOLD_PX, snap, type Target, type TargetType } from '../snap'
 import { phStore, snapStore, transport, transportStore, useStore } from '../transport'
-import type { JoinInfo, Overlay, SoundStrip, TimelineData } from '../types'
+import type { Graphic, JoinInfo, Overlay, SoundStrip, TimelineData } from '../types'
 import { KIND_META } from '../overlayDraw'
+import { PIECES } from '../graphicDraw'
 import { SHOT_MIME } from './Shelf'
 import { Icon, type IconName } from './icons'
 import { LABEL_GAP_PX, rulerFps, rulerLabel, rulerMarks, rulerScale, TICK_GAP_PX } from '../ruler'
@@ -38,6 +39,8 @@ const LABEL_W = 96
 type Drag = { id: string; mode: 'move' | 'start' | 'end'; x0: number; start0: number; end0: number; start: number; end: number
   moved: boolean; guide: number | null; pending: boolean }
 const MIN_CAPTION_S = 0.5
+// a graphic animation's pill, beside the captions' own colours
+const ART = { icon: '✦', color: '#f9c5de' }
 
 /** How much longer (source seconds) a shot gets with one end dragged to `to`.
  *  `edge` is the end that plays first ('in') or last; backwards, the first to
@@ -48,7 +51,7 @@ function growOf(it: SeqItem, ed: { edge: 'in' | 'out'; to: number }): number {
 }
 
 export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, onReorder,
-  onInsertShot, onClear, onHelp, overlays = [], selectedOverlay = null, onSelectOverlay, onOverlayEdit, onExport, onTrimEdge,
+  onInsertShot, onClear, onHelp, overlays = [], graphics = [], selectedOverlay = null, onSelectOverlay, onOverlayEdit, onExport, onTrimEdge,
   selectedAudio = null, onSelectAudio, onAudioMove, joins = [], selectedJoin = null, onSelectJoin,
   music = null, onSelectMusic, onSplit, onDelete, height = 290 }: {
   tl: TimelineData
@@ -64,6 +67,8 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   onClear: () => void
   onHelp: () => void
   overlays?: Overlay[]
+  /** the graphic animations: pills in the same lane, in their own colour; picked and edited by id like a caption */
+  graphics?: Graphic[]
   selectedOverlay?: string | null
   onSelectOverlay?: (id: string) => void
   onOverlayEdit?: (id: string, patch: { start?: number; dur?: number }) => void
@@ -359,7 +364,14 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
 
   // Words on screen get their own lane above the shots, stacked when they overlap.
   const [drag, setDrag] = useState<Drag | null>(null)
-  useEffect(() => { setDrag((d) => (d?.pending ? null : d)) }, [overlays])
+  useEffect(() => { setDrag((d) => (d?.pending ? null : d)) }, [overlays, graphics])
+  // what the lane draws: every caption, then every graphic animation
+  const pills = useMemo(() => [
+    ...overlays.map((o) => ({ id: o.id, start: o.start, shown_end: o.shown_end, meta: KIND_META[o.kind], ends: o.kind !== 'chapters',
+      text: o.kind === 'chapters' ? 'Chapter bar' : o.text })),
+    ...graphics.map((g) => ({ id: g.id, start: g.start, shown_end: g.shown_end, meta: { ...ART, label: PIECES[g.piece].name }, ends: true,
+      text: PIECES[g.piece].name + (g.text ? ` · ${g.text}` : '') })),
+  ], [overlays, graphics])
   // Moving a caption, as in CapCut: it follows the pointer one to one, and
   // only its edges stick, only to what you'd line it up with (a cut, the
   // playhead, the start or end, another caption), never to beats or movement.
@@ -374,7 +386,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
     const reach = DEFAULT_THRESHOLD_PX / Math.max(pps, 1e-6)
     const lines = bypass ? [] : [0, tl.total, ph,
       ...tl.targets.filter((g) => g.type === 'shot').map((g) => g.t),
-      ...overlays.filter((x) => x.id !== d.id).flatMap((x) => [x.start, x.shown_end])]
+      ...pills.filter((x) => x.id !== d.id).flatMap((x) => [x.start, x.shown_end])]
     const near = (t: number) => {
       let best: number | null = null
       for (const l of lines) if (Math.abs(l - t) <= reach && (best == null || Math.abs(l - t) < Math.abs(best - t))) best = l
@@ -405,14 +417,14 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   const lanes = useMemo(() => {
     const ends: number[] = []
     const row = new Map<string, number>()
-    for (const o of overlays) {
+    for (const o of pills) {
       let r = ends.findIndex((e) => e <= o.start + 1e-3)
       if (r < 0) { r = Math.min(ends.length, 2); if (r === ends.length) ends.push(0) }
       ends[r] = Math.max(ends[r], o.shown_end)
       row.set(o.id, r)
     }
     return { row, n: ends.length }
-  }, [overlays])
+  }, [pills])
   const strips: SoundStrip[] = tl.audio?.strips ?? []
   const silent = useMemo(() => new Set(tl.audio?.off ?? []), [tl.audio])
   // Measured from the bottom: Audio (strips, then the music), Captions, and
@@ -597,18 +609,17 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
               </button>
             )}
 
-            {overlays.map((o) => {
+            {pills.map((o) => {
               const d = drag?.id === o.id ? drag : null
               const a = d ? d.start : o.start
               const z = d ? d.end : o.shown_end
               const x = xAt(a)
               const w = Math.max(12, xAt(Math.min(z, tl.total)) - x)
-              const meta = KIND_META[o.kind]
-              const ends = o.kind !== 'chapters'   // both ends drag, as in CapCut / iMovie
+              const { meta, ends } = o   // both ends drag, as in CapCut / iMovie (not the chapter bar)
               const sel = selectedOverlay === o.id
               return (
                 <div key={o.id}
-                     title={`${meta.label}: ${o.kind === 'chapters' ? 'chapter bar' : o.text}\nDrag to move it, drag either end to change how long it shows. It sticks to cuts, the playhead and other captions; hold ⌥ to place it exactly.`}
+                     title={`${meta.label}: ${o.text}\nDrag to move it, drag either end to change how long it shows. It sticks to cuts, the playhead and other captions; hold ⌥ to place it exactly.`}
                      onPointerDown={(e) => {
                        if (e.button !== 0 || drag?.pending) return
                        e.stopPropagation(); e.preventDefault()
@@ -639,7 +650,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                      style={{ left: x, width: w, bottom: capBottom + capH - 4 - ((lanes.row.get(o.id) ?? 0) + 1) * LANE_ROW + 3, height: LANE_ROW - 3,
                        background: meta.color, zIndex: d ? 6 : undefined }}>
                   <span className="shrink-0 font-semibold">{meta.icon}</span>
-                  <span className="truncate">{o.kind === 'chapters' ? 'Chapter bar' : o.text}</span>
+                  <span className="truncate">{o.text}</span>
                   {ends && <span className={`absolute inset-y-0 left-0 w-1.5 cursor-ew-resize ${sel || d ? 'bg-black/25' : 'hover:bg-black/20'}`} />}
                   {ends && <span className={`absolute inset-y-0 right-0 w-1.5 cursor-ew-resize ${sel || d ? 'bg-black/25' : 'hover:bg-black/20'}`} />}
                 </div>

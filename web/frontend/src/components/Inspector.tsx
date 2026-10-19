@@ -11,15 +11,16 @@ import { EffectTiles } from './Effects'
 import { effectName } from '../effectView'
 
 // The right-hand inspector of the edit screen (sarah, 2026-10-16: the layout
-// of her reference picture). Five tabs: Edit (the clicked shot: trim, speed,
+// of her reference picture). Six tabs: Edit (the clicked shot: trim, speed,
 // turn, fit or fill; with nothing clicked, the whole video), Captions (the
 // clicked caption's words, then one style and entrance for every caption),
 // Effects (the clicked shot's effect, else every shot's; the transition at a cut),
-// Audio (the shot's or a sound strip's volume and fades, and the music) and
-// Adjust (the look). Clicking something on the timeline opens its tab.
+// Audio (the shot's or a sound strip's volume and fades, and the music),
+// Adjust (the look) and Graphic animations (graphics.py: pieces drawn over
+// the video, Graphics.tsx). Clicking something on the timeline opens its tab.
 // Every change is one undoable turn, sent when a slider is let go.
 
-export type InspectorTab = 'edit' | 'captions' | 'effects' | 'audio' | 'adjust'
+export type InspectorTab = 'edit' | 'captions' | 'effects' | 'audio' | 'adjust' | 'graphics'
 type Patch = Record<string, unknown>
 
 const TABS: { id: InspectorTab; icon: IconName; label: string }[] = [
@@ -28,6 +29,8 @@ const TABS: { id: InspectorTab; icon: IconName; label: string }[] = [
   { id: 'effects', icon: 'spark', label: 'Effects' },
   { id: 'audio', icon: 'music', label: 'Audio' },
   { id: 'adjust', icon: 'adjust', label: 'Adjust' },
+  // sarah, 2026-10-19: "an extra tool on the right called graphic animations"
+  { id: 'graphics', icon: 'shapes', label: 'Graphic animations' },
 ]
 
 export type JoinPick = { join: JoinInfo; before: number | null; after: number | null; from: string | null; to: string | null }
@@ -60,6 +63,8 @@ export function Inspector(p: {
   music: ReactNode
   /** Length, tempo, frame, smoother cuts: the whole video's own controls */
   video: ReactNode
+  /** the Graphic animations tab (Graphics.tsx) */
+  graphics?: ReactNode
   onFix: (patch: Patch, label: string) => void
   onTrim: (edge: 'in' | 'out', to: number) => void
   onSplit: () => void
@@ -98,7 +103,9 @@ export function Inspector(p: {
       <nav className="flex shrink-0 gap-0.5 border-b border-line px-2 pt-2" role="tablist">
         {TABS.filter((t) => t.id !== 'adjust' || p.looks?.all.length).map((t) => (
           <button key={t.id} type="button" role="tab" aria-selected={p.tab === t.id} onClick={() => p.onTab(t.id)}
-                  className={cx('-mb-px flex min-w-0 flex-1 flex-col items-center gap-1 rounded-t-lg border-b-2 px-1 pb-2 pt-2 font-serif text-[15px]',
+                  // a two-word name (Graphic animations) goes on two tighter lines
+                  className={cx('-mb-px flex min-w-0 flex-1 flex-col items-center gap-1 rounded-t-lg border-b-2 px-1 pb-2 pt-2 text-center font-serif',
+                    t.label.includes(' ') ? 'text-[13.5px] leading-[1.1]' : 'text-[15px]',
                     p.tab === t.id ? 'border-accent bg-accent/8 text-accent' : 'border-transparent text-zinc-300 hover:text-zinc-100')}>
             <Icon name={t.icon} size={22} />
             {t.label}
@@ -239,6 +246,8 @@ export function Inspector(p: {
               </>}
           </Section>
         ) : <Section title="Music">{p.music}{!p.saveWhy.song && save('song', 'song')}<Hint>Click a shot on the timeline to change its own sound.</Hint></Section>)}
+
+        {p.tab === 'graphics' && p.graphics}
 
         {p.tab === 'adjust' && p.looks && (
           <Section title="Look">
@@ -621,7 +630,7 @@ function TrimBar({ item, thumb, onTrim }: { item: SeqItem; thumb: string | null;
 
 // "Save to My resources", where the thing was made (CapCut's "Save as preset").
 // Always there; with nothing to keep yet it's quieter, and a click says what to do first.
-function SaveChip({ what, ready, onClick }: { what: string; ready: boolean; onClick: () => void }) {
+export function SaveChip({ what, ready, onClick }: { what: string; ready: boolean; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick} title={`Keep this ${what} in My resources, to use on any video`}
             className={cx('inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-dashed px-3 py-1.5 font-serif text-[15px] hover:bg-raised',

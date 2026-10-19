@@ -1,5 +1,5 @@
 import type { SetupData } from './components/Setup'
-import type { Habit, Capabilities, ProfileStart, Resource, ResourceFolder, ResourceKind, StartPicks, CutData, ExportJob, Job, LengthSlider, LookFit, PrefClass, Project, ProjectMeta, RefCard, RefJob, RefSummary, Session, StyleAnswers, StyleQuestion, TalkState } from './types'
+import type { Habit, Capabilities, GraphicPiece, ProfileStart, StickerKind, Resource, ResourceFolder, ResourceKind, StartPicks, CutData, ExportJob, Job, LengthSlider, LookFit, PrefClass, Project, ProjectMeta, RefCard, RefJob, RefSummary, Session, StyleAnswers, StyleQuestion, TalkState } from './types'
 
 export type MomentInfo = { header: string; key: string; llm: boolean; provider: ChatProvider
   estimate: { tokens_in: number; usd: [number, number] } }
@@ -179,10 +179,13 @@ export const api = {
   // My resources: logged out, the folder is empty and saving or using one answers 401.
   // ?visitor in the address shows the folder as someone without an account sees it.
   resources: () => j<ResourceFolder>(fetch('/api/resources', { headers: asVisitor() })),
-  saveResource: (kind: ResourceKind, where: { shot?: string | null; after?: string | null } = {}) =>
-    j<{ item: Resource; items: Resource[] }>(sendAs('POST', '/api/resources', { kind, shot: where.shot ?? null, after: where.after ?? null })),
-  useResource: (id: string, where: { shot?: string | null; after?: string | null } = {}) =>
-    j<Session>(sendAs('POST', `/api/resources/${encodeURIComponent(id)}/use`, { shot: where.shot ?? null, after: where.after ?? null })),
+  saveResource: (kind: ResourceKind, where: { shot?: string | null; after?: string | null; graphic?: string | null } = {}) =>
+    j<{ item: Resource; items: Resource[] }>(sendAs('POST', '/api/resources', { kind, shot: where.shot ?? null, after: where.after ?? null, graphic: where.graphic ?? null })),
+  useResource: (id: string, where: { shot?: string | null; after?: string | null; t?: number } = {}) =>
+    j<Session>(sendAs('POST', `/api/resources/${encodeURIComponent(id)}/use`, { shot: where.shot ?? null, after: where.after ?? null, t: where.t ?? null })),
+  // a piece from the Graphic animations tab at the playhead (backend graphics.py)
+  addGraphic: (piece: GraphicPiece, t: number, picked: { tint?: string | null; sticker?: StickerKind | null } = {}) =>
+    j<Session & { added: string }>(post('/api/graphics', { piece, t, ...picked })),
   renameResource: (id: string, name: string) => j<{ items: Resource[] }>(sendAs('PATCH', `/api/resources/${encodeURIComponent(id)}`, { name })),
   deleteResource: (id: string) => j<{ items: Resource[] }>(sendAs('DELETE', `/api/resources/${encodeURIComponent(id)}`)),
   // your profile's start: asked once after an export, where every next video starts

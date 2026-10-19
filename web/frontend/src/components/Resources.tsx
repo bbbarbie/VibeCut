@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { api } from '../api'
 import { fontById } from '../captionFonts'
-import type { Resource, ResourceFolder, ResourceKind } from '../types'
+import { drawGraphics, ensureGraphicFonts, PIECES, tilePiece } from '../graphicDraw'
+import type { GraphicPiece, Resource, ResourceFolder, ResourceKind, StickerKind } from '../types'
 import { Button, cx } from '../ui'
 import { Icon, type IconName } from './icons'
 
@@ -13,7 +14,7 @@ import { Icon, type IconName } from './icons'
 // a card that asks to log in or make an account, and so is every Save.
 
 const ICON: Record<ResourceKind, IconName> = {
-  caption: 'text', animation: 'spark', transition: 'split', effect: 'spark', shot: 'adjust', song: 'music',
+  caption: 'text', animation: 'spark', transition: 'split', effect: 'spark', shot: 'adjust', song: 'music', graphic: 'shapes',
 }
 // where one goes when clicked, said once at the top of its section
 const GOES: Record<ResourceKind, string> = {
@@ -23,9 +24,11 @@ const GOES: Record<ResourceKind, string> = {
   effect: 'On the clicked shot, or every shot',
   shot: 'On the clicked shot',
   song: 'Under the whole video',
+  graphic: 'At the playhead',
 }
 const SAVE_LABEL: Record<ResourceKind, string> = {
   caption: 'Caption look', animation: 'Animation', transition: 'Transition', effect: 'Effect', shot: 'Shot settings', song: 'Song',
+  graphic: 'Graphic animation',
 }
 
 /** What can be saved off the video right now: null = ready, else what to do first. */
@@ -219,9 +222,30 @@ function Tile({ r }: { r: Resource }) {
       </span>
     )
   }
+  if (r.kind === 'graphic' && (r.value.piece as string) in PIECES) return <GraphicTile v={r.value} />
   return (
     <span className={cx('grid size-11 shrink-0 place-items-center rounded-lg bg-accent/10 text-accent')}>
       <Icon name={ICON[r.kind]} size={20} />
     </span>
   )
+}
+
+// a saved graphic animation, still, as it looks once it's in
+function GraphicTile({ v }: { v: Record<string, unknown> }) {
+  const ref = useRef<HTMLCanvasElement>(null)
+  useEffect(() => {
+    let alive = true
+    const draw = () => {
+      const c = ref.current
+      const ctx = c?.getContext('2d')
+      if (!c || !ctx || !alive) return
+      const g = tilePiece(v.piece as GraphicPiece, 1.35, v.tint as string | undefined, v.sticker as StickerKind | undefined)
+      ctx.clearRect(0, 0, c.width, c.height)
+      drawGraphics(ctx, c.width, c.height, [g], PIECES[g.piece].life * 0.55)
+    }
+    draw()
+    ensureGraphicFonts().then(draw)
+    return () => { alive = false }
+  }, [v])
+  return <canvas ref={ref} width={88} height={88} className="size-11 shrink-0 rounded-lg bg-[#3a3f47]" />
 }

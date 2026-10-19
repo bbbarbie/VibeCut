@@ -29,6 +29,9 @@ import { Timeline, type Marks } from './components/Timeline'
 import { Inspector, Slider, type InspectorTab, type JoinPick } from './components/Inspector'
 import { PreviewBar, type FrameChoice } from './components/PreviewBar'
 import { Handle, useLayout } from './components/Split'
+import { GraphicAnimations, type GraphicPatch } from './components/Graphics'
+import { PIECES } from './graphicDraw'
+import type { Graphic, GraphicPiece } from './types'
 import { Icon, type IconName } from './components/icons'
 import { Footage, type Importing } from './components/Footage'
 import { fromDataTransfer, fromInput, takeHandoff, takeRefs, type Picked } from './drop'
@@ -52,6 +55,7 @@ const CHECK_ASK = 'Check my whole edit'
 const EMPTY_OVERLAYS: OverlayData = {
   items: [], findings: [], style: { font: 'Clean', color: '#ffffff', accent: '#b9d9eb', captions: 'bottom', backing: 'shadow' },
 }
+const NO_ART: Graphic[] = []
 const NO_CAPS: Capabilities = { llm: false, speech: false, vision: 'unavailable', links: false, music_folder: null, platform: '' }
 const shortDate = (iso: string | null | undefined) => {
   const m = iso?.match(/^(\d{4})-(\d\d)-(\d\d)/)
@@ -149,11 +153,12 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const tl = session?.timeline ?? EMPTY_TL
   const fr = 1 / tl.fps
   const ovData = session?.overlays ?? EMPTY_OVERLAYS
+  const art = session?.graphics?.items ?? NO_ART      // the graphic animations, drawn under the captions
   const caps = session?.capabilities ?? NO_CAPS
   const brief = session?.brief ?? null
   const parts = useMemo(() => partsOf(tl.items), [tl.items])
   const inEdit = useMemo(() => new Set(tl.items.flatMap((x) => (x.clip_id ? [x.clip_id] : []))), [tl.items])
-  const overlayView = useMemo(() => ({ items: ovData.items, style: ovData.style, parts }), [ovData, parts])
+  const overlayView = useMemo(() => ({ items: ovData.items, style: ovData.style, parts, graphics: art }), [ovData, parts, art])
   const profileInitial = useMemo(() => {
     try { return loadProfile(window.localStorage).profile.name.trim().charAt(0).toUpperCase() || '☺' } catch { return '☺' }
   }, [])
@@ -531,6 +536,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       return { shot: tl.items.find((x) => x.kind === 'shot')?.key ?? null, after: cut }
     }
     if (kind === 'transition' && !cut) return { shot, after: session?.mix?.joins?.[0]?.after ?? null }
+    if (kind === 'graphic') return { graphic: artSel?.id ?? null }
     return { shot, after: cut }
   }
   const saveResource = async (kind: ResourceKind, why: string | null) => {
@@ -546,7 +552,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   }
   const applyResource = async (r: Resource) => {
     try {
-      const s = await api.useResource(r.id, { shot: selItem?.kind === 'shot' ? selItem.key : null, after: selJoin ?? null })
+      const s = await api.useResource(r.id, { shot: selItem?.kind === 'shot' ? selItem.key : null, after: selJoin ?? null, t: phStore.get() })
       setSession(s)
       offerUndo(s)
     } catch (e) {
@@ -845,6 +851,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       if (s) { setMarks({ in: null, out: null }); transport.seek(a) }
       return
     }
+    if (artSel) { dropArt(artSel); return }
     if (selected) {
       const it = items.find((i) => i.key === selected)
       await run([{ op: 'drop_shot', shot: selected, leave_gap: leaveGap || undefined }],
@@ -1066,8 +1073,15 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   // Words dragged on the picture: one undoable edit per drop.
   const overlayEdit: OverlayEdit | undefined = session?.board ? {
     selected: selOverlay,
-    onSelect: (id) => { setSelOverlay(id); if (id) { setSelected(null); setSelAudio(null); setSelJoin(null); setInsTab('captions') } },
+    onSelect: (id) => { setSelOverlay(id); if (id) { setSelected(null); setSelAudio(null); setSelJoin(null); setInsTab(isArt(id) ? 'graphics' : 'captions') } },
     onPlace: (id, place) => {
+      const g = art.find((x) => x.id === id)
+      // a graphic's size is its own field, so moving it never resizes it (and the reverse)
+      if (g) {
+        editArt(g, place ? { place: { x: place.x, y: place.y, scale: 1 }, ...(place.scale !== (g.size ?? 1) ? { size: place.scale } : {}) } : { place: null },
+          !place ? `You put the ${artName(g)} back in its usual place` : place.scale !== (g.size ?? 1) ? `You made the ${artName(g)} ${place.scale > (g.size ?? 1) ? 'bigger' : 'smaller'}` : `You moved the ${artName(g)}`)
+        return
+      }
       const o = ovData.items.find((x) => x.id === id)
       const name = o ? KIND_META[o.kind].label.toLowerCase() : 'words'
       run([{ op: 'edit_overlay', overlay: id, place }], place ? `You moved the ${name}` : `You put the ${name} back in its usual place`)
@@ -1076,7 +1090,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       const ops = ovData.items.filter((o) => o.kind === 'caption').map((o) => ({ op: 'edit_overlay', overlay: o.id, place }))
       if (ops.length) run(ops, 'You put every caption in the same place')
     },
-    onOpen: (id) => selectOverlay(id),
+    onOpen: (id) => (isArt(id) ? selectArt(id) : selectOverlay(id)),
     onWords: (id, patch) => {
       const o = ovData.items.find((x) => x.id === id)
       run([{ op: 'edit_overlay', overlay: id, ...patch }], `You changed the words of the ${o ? KIND_META[o.kind].label.toLowerCase() : 'caption'}`)
@@ -1086,6 +1100,58 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     <Overlays data={ovData} items={tl.items} level={level} selected={selOverlay} busy={!!pending}
               onSelect={selectOverlay} onRun={runOverlay} onSuggest={suggestOverlays} onWatch={watchOverlay} newAt={newOverlayAt} />
   ) : null
+  // ---- graphic animations (graphics.py) ---------------------------------------
+  const isArt = (id: string | null) => !!id && art.some((g) => g.id === id)
+  const artSel = selOverlay ? art.find((g) => g.id === selOverlay) ?? null : null
+  const artName = (g: Graphic) => PIECES[g.piece].name.toLowerCase()
+  const editArt = (g: Graphic, patch: GraphicPatch & { start?: number }, label: string) =>
+    run([{ op: 'edit_graphic', graphic: g.id, ...patch }], label)
+  const dropArt = (g: Graphic) => {
+    run([{ op: 'drop_graphic', graphic: g.id }], `You removed the ${artName(g)}`)
+    setSelOverlay(null)
+  }
+  const selectArt = (id: string | null) => {
+    setSelOverlay(id)
+    if (!id) return
+    setSelected(null); setSelAudio(null); setSelJoin(null); setInsTab('graphics')
+    const g = art.find((x) => x.id === id)
+    if (g && level === 'frames') {
+      timelineOwns()
+      const t = phStore.get()
+      if (t < g.start || t >= g.shown_end) transport.seek(Math.min(g.start + 0.8, (g.start + g.shown_end) / 2))
+    }
+  }
+  // plays a graphic through once, then stops (a long one: its first seconds)
+  const playArt = (g: Graphic, from: number) => {
+    timelineOwns()
+    transport.seek(from)
+    transport.play(1)
+    const until = Math.min(g.shown_end + 0.3, from + 6, tl.total)
+    const off = phStore.subscribe(() => {
+      const playing = transportStore.get().playing
+      if (!playing || phStore.get() >= until) { off(); if (playing) transport.stop() }
+    })
+  }
+  const addArt = async (piece: GraphicPiece) => {
+    try {
+      const s = await api.addGraphic(piece, phStore.get())
+      setSession(s)
+      offerUndo(s)
+      setSelOverlay(s.added)
+      const g = s.graphics?.items.find((x) => x.id === s.added)
+      // played from its start, so it's seen arriving
+      if (g) playArt(g, g.start)
+    } catch (e) { note((e as Error).message.replace(/^./, (c) => c.toUpperCase())) }
+  }
+  const artThumb = shotThumb(tl.items[locate(tl.items, Math.min(artSel?.start ?? phStore.get(), Math.max(0, tl.total - 1e-3)))])
+  const graphicsTab = session?.board ? (
+    <GraphicAnimations data={session.graphics ?? null} selected={artSel} thumb={artThumb}
+                       onAdd={addArt} onSelect={(id) => (id ? selectArt(id) : setSelOverlay(null))}
+                       onEdit={(patch, label) => artSel && editArt(artSel, patch, label)}
+                       onDelete={() => artSel && dropArt(artSel)}
+                       onWatch={() => artSel && playArt(artSel, Math.max(0, artSel.start - 0.5))}
+                       saveReady={!!artSel} onSave={() => saveResource('graphic', artSel ? null : 'Click a graphic animation on the picture or the timeline first')} />
+  ) : <p className="font-serif text-[15px] leading-snug text-zinc-300">Make your video first, then put graphic animations on it here.</p>
   const applyTalk = async (captions: boolean) => {
     const { profile } = loadProfile(window.localStorage)
     const s = await api.talkApply(captions, profile)
@@ -1287,6 +1353,8 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       : SHOT_SETTINGS.some(([k, plain]) => shotSel[k] != null && shotSel[k] !== plain) ? null
         : `Shot ${shotSel.n} is as filmed: change its speed, turn, crop, effect or sound first, then save it`,
     song: session?.music ? null : 'There’s no music under this video',
+    graphic: artSel ? null : art.length ? 'Click a graphic animation on the picture or the timeline first'
+      : 'Put a graphic animation on your video first (Graphic animations tab), then save it',
   }
   const inspector = (
     <Inspector tab={insTab} onTab={setInsTab}
@@ -1345,7 +1413,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                onJoin={(op, label) => run([{ op: 'set_transition', ...(op.all || !pickedJoin ? {} : { shot: pickedJoin.after }), ...op }], label)}
                onLook={(id, name) => run([{ op: 'set_look', look: id }], `The video now has the ${name} look`)}
                allEffect={allEffect}
-               onSave={saveResource} saveWhy={saveWhy}
+               onSave={saveResource} saveWhy={saveWhy} graphics={graphicsTab}
                onEffect={(patch, all, label) => {
                  const keys = all ? tl.items.filter((x) => x.kind === 'shot').map((x) => x.key) : selItem ? [selItem.key] : []
                  if (keys.length) run(keys.map((k) => ({ op: 'set_shot', shot: k, ...patch })), label)
@@ -1624,8 +1692,13 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                         }}
                         onReorder={reorder} onInsertShot={insertShot} onClear={clear} onHelp={() => setHelp(true)}
                         onSplit={cut} onDelete={() => deleteSelection(false)}
-                        overlays={ovData.items} selectedOverlay={selOverlay} onSelectOverlay={selectOverlay}
-                        onOverlayEdit={editOverlayOnTimeline}
+                        overlays={ovData.items} graphics={art} selectedOverlay={selOverlay}
+                        onSelectOverlay={(id) => (isArt(id) ? selectArt(id) : selectOverlay(id))}
+                        onOverlayEdit={(id, patch) => {
+                          const g = art.find((x) => x.id === id)
+                          if (!g) { editOverlayOnTimeline(id, patch); return }
+                          editArt(g, patch, `You ${patch.start != null ? 'moved' : 'changed the length of'} the ${artName(g)}`)
+                        }}
                         selectedAudio={selAudio}
                         onSelectAudio={(id) => { timelineOwns(); setSelected(null); setSelJoin(null); setSelAudio(id); setInsTab('audio') }}
                         joins={allJoins} selectedJoin={selJoin}
@@ -1674,7 +1747,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       {session?.mix && <audio ref={mixRef} src={session.mix.audio} preload="auto"
                               onError={() => { transport.mixBroken = true }} />}
       {help && <Keys onClose={() => setHelp(false)} />}
-      {exporting && <Export tl={tl} overlays={ovData} parts={parts} music={session?.music?.title ?? null} credit={session?.music?.credit ?? null} style={session?.board?.style}
+      {exporting && <Export tl={tl} overlays={ovData} graphics={art} parts={parts} music={session?.music?.title ?? null} credit={session?.music?.credit ?? null} style={session?.board?.style}
                             history={session?.exports ?? []} onFinished={() => { exported.current = true }}
                             onClose={() => { setExporting(false); api.session().then(setSession).catch(() => {}); afterExport() }} />}
       {askProfile && <ProfileAsk start={askProfile} current={profileNow} style={ovData.style} from={shotThumb(shotItems[0])} to={shotThumb(shotItems[1])}

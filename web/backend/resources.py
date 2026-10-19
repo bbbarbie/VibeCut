@@ -33,9 +33,9 @@ from .indexer import CACHE
 
 FILE = CACHE / "resources.json"
 # the folder's sections, in the order they are shown
-KINDS = ("caption", "animation", "transition", "effect", "shot", "song")
+KINDS = ("caption", "animation", "transition", "effect", "shot", "song", "graphic")
 TITLES = {"caption": "Caption looks", "animation": "Animations", "transition": "Transitions",
-          "effect": "Effects", "shot": "Shot settings", "song": "Songs"}
+          "effect": "Effects", "shot": "Shot settings", "song": "Songs", "graphic": "Graphic animations"}
 NAME_MAX = 60
 LIMIT = 300            # a folder, not a dump: oldest of a kind go first past this
 # what a caption look carries: only what the creator picks by hand
@@ -189,7 +189,7 @@ def _entry(b: dict, k: str | None) -> dict:
 
 
 def capture(kind: str, board: dict | None, shot: str | None = None, after: str | None = None,
-            title_of=None) -> dict:
+            title_of=None, graphic: str | None = None) -> dict:
     """What's on the video now, as a resource's value. Raises when there's
     nothing of that kind to keep (a plain cut, no effect, the look's own captions)."""
     b = board or {}
@@ -225,6 +225,18 @@ def capture(kind: str, board: dict | None, shot: str | None = None, after: str |
             raise ResourceError("there's no music under this video")
         t = title_of(m["track"]) if title_of else None
         return {"track": m["track"], "in": float(m.get("in") or 0.0), "title": t or "A song"}
+    if kind == "graphic":
+        # the piece as it's dressed: colour, sticker, where and how big;
+        # its words belong to the video it's on, so they're filled anew
+        g = next((x for x in b.get("graphics") or [] if x["id"] == graphic), None) if graphic else None
+        if g is None:
+            raise ResourceError("click a graphic animation on the picture or the timeline first")
+        from . import graphics
+        v = {"piece": g["piece"], "tint": g.get("tint") or graphics.PIECES[g["piece"]]["tint"]}
+        for k in ("sticker", "place", "size"):
+            if g.get(k):
+                v[k] = g[k]
+        return v
     raise ResourceError(f"can't keep a {kind!r}")
 
 
@@ -259,6 +271,9 @@ def default_name(kind: str, v: dict) -> str:
         return ", ".join(bits[:3]).capitalize() or "My shot settings"
     if kind == "song":
         return v.get("title") or "A song"
+    if kind == "graphic":
+        from . import graphics
+        return " · ".join(x for x in (graphics.label(v.get("piece", "")), (v.get("sticker") or "").capitalize()) if x)
     return "Saved"
 
 
@@ -266,7 +281,7 @@ def default_name(kind: str, v: dict) -> str:
 # put back on a video
 
 def ops_for(item: dict, board: dict | None, shot: str | None = None, after: str | None = None,
-            have_track=None) -> tuple[list[dict], str]:
+            have_track=None, graphic_op=None) -> tuple[list[dict], str]:
     """The ops that put a resource on the video, and the turn's words. An
     effect or a transition goes on the clicked shot / cut, else everywhere;
     shot settings need a clicked shot."""
@@ -301,4 +316,7 @@ def ops_for(item: dict, board: dict | None, shot: str | None = None, after: str 
             m = {"gain": audiomix.MUSIC_GAIN, "original": 1.0, "fade_out": 2.0, "duck": [], "sfx": [], "level": True}
         m.update(track=v["track"], **{"in": v.get("in") or 0.0})
         return [{"op": "set_music", **{k: m[k] for k in bd.MUSIC_KEYS if k in m}}], f"“{name}” is under the video"
+    if kind == "graphic" and graphic_op is not None:
+        # at the playhead, with words from this video (app._graphic_op)
+        return [graphic_op(v)], f"“{name}” is on the video at the playhead"
     raise ResourceError(f"can't use a {kind!r}")

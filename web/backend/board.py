@@ -55,6 +55,10 @@ OVERLAY_OPS = ("add_overlay", "edit_overlay", "drop_overlay", "overlay_style")
 # quieter, muted or deleted on its own. From the timeline, never chat.
 SOUND_OPS = ("extract_audio", "edit_audio", "drop_audio")
 OPS = OPS + SOUND_OPS
+# Graphic animations drawn over the footage (graphics.py): same log, same
+# undo, anchored like captions. From the Graphic animations tab, never chat.
+GRAPHIC_OPS = ("add_graphic", "edit_graphic", "drop_graphic")
+OPS = OPS + GRAPHIC_OPS
 AUDIO_GAIN_MAX = 2.0   # 200%: louder than filmed, short of distorting most phone sound
 # The everyday shot fixes every editor has, on the shot itself: speed (slow
 # motion, fast forward), its own volume or mute, a quarter turn for a clip
@@ -419,7 +423,7 @@ def apply(board: dict | None, op: dict, cat: Catalog, proposals: dict | None,
     # null means "not given" -- except an overlay's length, where it means
     # "as long as what it hangs off" (a caption filling its spoken line) and its
     # place, where it means "back where it usually goes" (undoing a drag).
-    op = {k: v for k, v in op.items() if v is not None or (k in ("dur", "place") and kind in OVERLAY_OPS)
+    op = {k: v for k, v in op.items() if v is not None or (k in ("dur", "place") and kind in OVERLAY_OPS + GRAPHIC_OPS)
           or (k in ("template", "enter", "text_color", "typeface", "outline", "shadow", "backdrop", "thick")
               and kind == "overlay_style")   # None = back to the look's own
           or (k == "effect" and kind == "set_shot")}   # None = no effect
@@ -447,6 +451,14 @@ def apply(board: dict | None, op: dict, cat: Catalog, proposals: dict | None,
             {"add_overlay": lambda: ov.add(b, op, new_id), "edit_overlay": lambda: ov.edit(b, op),
              "drop_overlay": lambda: ov.drop(b, op), "overlay_style": lambda: ov.set_style(b, op)}[kind]()
         except (ov.OverlayError, ValueError, TypeError) as e:
+            raise OpError(str(e)) from e
+        return b, op
+
+    if kind in GRAPHIC_OPS:
+        from . import graphics
+        try:
+            graphics.apply(b, op, new_id)
+        except (graphics.GraphicError, ValueError, TypeError) as e:
             raise OpError(str(e)) from e
         return b, op
 
@@ -926,6 +938,8 @@ def describe(d: dict, a: dict | None, b: dict | None, ops: list[dict] | None = N
     lines += looks.describe(a, b)
     from . import transitions
     lines += transitions.describe(a, b)
+    from . import graphics
+    lines += graphics.describe(a, b)
     if not lines:
         lines.append({"kind": "none", "text": "No change"})
     return lines

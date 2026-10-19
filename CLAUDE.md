@@ -712,6 +712,31 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   for every cut); a skip learns nothing. The profile page's "How your videos
   start" saves each tap. Logged out (`?visitor`) it asks for an account
   instead, once per browser. `tests/test_profile_start.py`.
+- **Graphic animations** (sarah, 2026-10-19: "make it an extra tool on the
+  right called graphic animations"; `web/backend/graphics.py`,
+  `web/frontend/src/graphicDraw.ts`, `Graphics.tsx`, the inspector's
+  Graphic animations tab). Ten pieces drawn in code over her own frames,
+  opt-in, free: Title card, Chapter opener, Route map, Place pin, Camcorder,
+  Clock, Beat sticker, Sparkles, Circle it, Progress bar. They are board
+  `graphics` (`add_graphic` / `edit_graphic` / `drop_graphic`, anchored like
+  overlays, undone like any turn), kept apart from captions so the Captions
+  switch, caption checks and the writer never touch them. Words come only
+  from what the edit knows (name, days, part titles, places, recording
+  time); the beat, camcorder clock, clock time and route are derived per
+  request (`graphics.public`), and a piece with nothing true to show says
+  why (`can`); the clock with no recording time shows no time. Editable:
+  words, colour (muted swatches), sticker, length, `size` (0.4–3, apart
+  from `place`), dragged on the picture like a caption (camcorder and
+  progress are frame-wide). One function draws preview, tab tiles and
+  export: each piece is a pure function of time; the export renders them
+  as an under-layer beneath the captions (`renderSchedule` `under`, one PNG
+  per run of equal `graphicsKey`s). Thin type and readouts use Montserrat
+  400/500 and Playfair 400 italic (OFL, in `public/fonts`, added by
+  FontFace so fonts.css is untouched). Saved to My resources as kind
+  `graphic`. Each piece was scored by a separate reviewer pass (7 areas,
+  redone below 7.5). Sizes, timings and colours are priors.
+  `tests/test_graphics.py`, `graphicDraw.test.ts` (safe area, frame
+  bounds, purity, export keys).
 - **Every cut checked** (`cutgrammar/joins.py`, `web/backend/seams.py`;
   research 08 P2). Report only: per cut, brightness jump, colour change
   (best-frame proxy), same view again, energy step, loudness step, going

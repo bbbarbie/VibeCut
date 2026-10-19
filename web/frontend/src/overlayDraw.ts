@@ -838,20 +838,27 @@ function setTracking(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingCon
 
 export type ScheduleEntry = { frame: number | null; start: number; end: number }
 
+/** A layer drawn under the words in the same frames (the graphic
+ *  animations, graphicDraw.ts): which frames it's on, a key that changes
+ *  when its pixels do, and how to draw it at t onto a cleared canvas. */
+export type UnderLayer = { frames: number[]; key: (t: number) => string; draw: (ctx: OffscreenCanvasRenderingContext2D, t: number) => void }
+
 /** Render every distinct overlay frame of the edit, hand each PNG to
  *  `upload`, and return when each frame is on screen. Equal keys -> one
  *  frame; frames nothing is on are left out (transparent). */
 export async function renderSchedule(opts: {
   items: Overlay[]; style: OverlayStyle; parts: Part[]; fps: number; total: number; w: number; h: number
+  under?: UnderLayer
   upload: (n: number, png: Blob) => Promise<void>
   onProgress?: (done: number, of: number) => void
   cancelled?: () => boolean
 }): Promise<ScheduleEntry[]> {
-  const { items, style, parts, fps, total, w, h } = opts
+  const { items, style, parts, fps, total, w, h, under } = opts
   await ensureFonts(style)
-  const frames = busyFrames(items, fps, total)
+  const frames = under ? [...new Set([...busyFrames(items, fps, total), ...under.frames])].sort((a, b) => a - b) : busyFrames(items, fps, total)
   const canvas = new OffscreenCanvas(w, h)
   const ctx = canvas.getContext('2d')!
+  const below = under ? new OffscreenCanvas(w, h) : null
   const schedule: ScheduleEntry[] = []
   const seen = new Map<string, number>()
   const pending = new Set<Promise<void>>()
@@ -862,7 +869,9 @@ export async function renderSchedule(opts: {
     if (opts.cancelled?.()) throw new Error('cancelled')
     const f = frames[i]
     const t = f / fps
-    const key = frameKey(items, parts, t, style.motion, style)
+    const words = frameKey(items, parts, t, style.motion, style)
+    const art = under ? under.key(t) : ''
+    const key = art ? `${words}#${art}` : words
     if (!key) { prevF = f; prevKey = ''; continue }
     if (key === prevKey && f === prevF + 1) {
       schedule[schedule.length - 1].end = (f + 1) / fps
@@ -872,6 +881,15 @@ export async function renderSchedule(opts: {
         id = n++
         seen.set(key, id)
         drawOverlays(ctx, w, h, items, style, parts, t)
+        if (below && art) {
+          // the layer goes under the words: drawn on its own, then slid beneath
+          const bctx = below.getContext('2d')!
+          bctx.clearRect(0, 0, w, h)
+          under!.draw(bctx, t)
+          ctx.globalCompositeOperation = 'destination-over'
+          ctx.drawImage(below, 0, 0)
+          ctx.globalCompositeOperation = 'source-over'
+        }
         const blob = await canvas.convertToBlob({ type: 'image/png' })
         const p: Promise<void> = opts.upload(id, blob).finally(() => pending.delete(p))
         pending.add(p)

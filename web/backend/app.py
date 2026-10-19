@@ -34,7 +34,7 @@ from . import projects as pj
 from . import audiomix, bed, brief, cloud, defaults, habits, make, vibes, tempo, ink, moment, cut, export, looks, pitch, seams, selfcheck, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, oai, overlays, reference, remix, speech, story, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import GATE, Workflow, WorkflowError
-from . import resources, reverse, transitions
+from . import graphics, resources, reverse, transitions
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -260,6 +260,7 @@ class ResourceSaveReq(BaseModel):
     name: str | None = None
     shot: str | None = None     # the clicked shot (effect, shot settings)
     after: str | None = None    # the clicked cut: the shot before it (transition)
+    graphic: str | None = None  # the clicked graphic animation
 
 
 @app.post("/api/resources")
@@ -268,7 +269,7 @@ def api_resources_save(req: ResourceSaveReq, request: Request) -> dict:
     _owner(request)
     with LOCK:
         try:
-            value = resources.capture(req.kind, SESSION.board, req.shot, req.after, title_of=_song_title)
+            value = resources.capture(req.kind, SESSION.board, req.shot, req.after, title_of=_song_title, graphic=req.graphic)
         except resources.ResourceError as e:
             raise HTTPException(409, str(e)) from e
     try:
@@ -302,6 +303,7 @@ def api_resources_delete(rid: str, request: Request) -> dict:
 class ResourceUseReq(BaseModel):
     shot: str | None = None
     after: str | None = None
+    t: float | None = None      # the playhead, where a graphic animation goes
 
 
 @app.post("/api/resources/{rid}/use")
@@ -314,14 +316,58 @@ def api_resources_use(rid: str, req: ResourceUseReq, request: Request) -> dict:
     with LOCK:
         try:
             ops, said = resources.ops_for(item, SESSION.board, req.shot, req.after,
-                                          have_track=lambda t: musiclib.find(t) is not None)
-        except resources.ResourceError as e:
+                                          have_track=lambda t: musiclib.find(t) is not None,
+                                          graphic_op=lambda v: _graphic_op(v["piece"], req.t or 0.0,
+                                                                          **{k: x for k, x in v.items() if k != "piece"}))
+        except (resources.ResourceError, graphics.GraphicError) as e:
             raise HTTPException(409, str(e)) from e
         if item["kind"] == "song":
             musiclib.use(item["value"]["track"])
         SESSION.add({"kind": "direct", "text": f"From My resources: {item['name']}", "ops": ops,
                      "reply": said + "."}, CATALOG["cat"], _make_proposals)
         return _session()
+
+
+# --------------------------------------------------------------------------
+# graphic animations (graphics.py): a piece from the tab goes on at the
+# playhead, filled from what the edit knows, as one undoable turn
+# --------------------------------------------------------------------------
+
+def _graphic_op(piece: str, t: float, **picked) -> dict:
+    b = SESSION.board
+    gps = [c.get("gps") for c in CLIPS.values()]
+    found = places.lookup(gps) if piece in ("route", "pin", "title") else None   # the Mac's geocoder, cached
+    name = PROJECT["p"].name if PROJECT["p"] else ""
+    return graphics.op_for(piece, b or {}, CATALOG["cat"], t, name, found,
+                           **{k: picked.get(k) for k in ("tint", "sticker", "place", "size")})
+
+
+class GraphicReq(BaseModel):
+    piece: str
+    t: float = 0.0
+    tint: str | None = None
+    sticker: str | None = None
+
+
+@app.post("/api/graphics")
+def api_graphics_add(req: GraphicReq) -> dict:
+    """A tile in the Graphic animations tab: that piece at the playhead."""
+    with LOCK:
+        if not SESSION.board:
+            raise HTTPException(409, "Make your video first.")
+        try:
+            op = _graphic_op(req.piece, req.t, tint=req.tint, sticker=req.sticker)
+        except graphics.GraphicError as e:
+            raise HTTPException(409, str(e)) from e
+        op["id"] = "g" + uuid.uuid4().hex[:8]
+        try:   # tried on a copy first, so a piece that can't go on leaves no turn behind
+            bd.apply(SESSION.board, copy.deepcopy(op), CATALOG["cat"], SESSION.proposals, new_id=lambda: "x")
+        except bd.OpError as e:
+            raise HTTPException(409, str(e)) from e
+        what = graphics.label(req.piece).lower()
+        SESSION.add({"kind": "direct", "text": f"You added the {what}", "ops": [op],
+                     "reply": f"Added the {what}. Undo takes it away."}, CATALOG["cat"], _make_proposals)
+        return {**_session(), "added": op["id"]}
 
 
 # --------------------------------------------------------------------------
@@ -558,6 +604,7 @@ def _session() -> dict:
         "ai_spent": _ai_spent(),
         "timeline": tl,
         "overlays": _overlays_public(b, cat, tl),
+        "graphics": graphics.public(b, cat, tl.get("grid"), graphics.cached_places()),
         "workflow": WORKFLOW.public(),
         "cut": cut.summary(PLAN["plan"]) if PLAN["plan"] else None,
         "music": _music_public(),
