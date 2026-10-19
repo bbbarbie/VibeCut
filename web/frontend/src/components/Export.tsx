@@ -12,7 +12,7 @@ type Phase = { kind: 'ready' } | { kind: 'drawing'; done: number; of: number } |
 // words are drawn here, by the same code as the preview, then composited
 // by the server -- so the file shows exactly what the player showed.
 // Past exports of this project are listed underneath (they're on the project).
-export function Export({ tl, overlays, parts, music, credit, style, history = [], onClose }: {
+export function Export({ tl, overlays, parts, music, credit, style, history = [], onClose, onFinished }: {
   tl: TimelineData
   overlays: Overlays
   parts: Part[]
@@ -21,6 +21,8 @@ export function Export({ tl, overlays, parts, music, credit, style, history = []
   style?: BoardStyle | null
   history?: ExportRecord[]
   onClose: () => void
+  /** a video came out (App asks for the profile once it's closed) */
+  onFinished?: () => void
 }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'ready' })
   const [withMusic, setWithMusic] = useState(!!music)
@@ -59,7 +61,7 @@ export function Export({ tl, overlays, parts, music, credit, style, history = []
         s = await api.exportStatus(job.id)
         setPhase({ kind: 'rendering', job: s })
       }
-      if (s.stage === 'done') setPhase({ kind: 'done', job: s })
+      if (s.stage === 'done') { setPhase({ kind: 'done', job: s }); onFinished?.() }
       else if (s.stage === 'error') setPhase({ kind: 'error', message: s.error ?? 'The export failed.' })
       else setPhase({ kind: 'ready' })
     } catch (e) {

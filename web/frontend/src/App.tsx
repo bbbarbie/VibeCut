@@ -3,7 +3,7 @@ import { api, type AIEstimate, type AIState, type ChatProvider, type MakeJob, sa
 import { AISwitch } from './components/AISwitch'
 import { Chat, type ChatItem, type SendExtra } from './components/Chat'
 import { KIND_META, partsOf } from './overlayDraw'
-import { loadProfile } from './profile'
+import { askedHere, loadProfile } from './profile'
 import { StyleQuestions } from './components/StyleQuestions'
 import { composeBrief, sayPicks, type Picks } from './brief'
 import { Export } from './components/Export'
@@ -22,6 +22,7 @@ import { Menu, SwapPicker, type MenuItem } from './components/Menus'
 import { Music } from './components/Music'
 import type { ClassifyReq } from './components/Remember'
 import { Resources, type SaveWhy } from './components/Resources'
+import { ProfileAsk, type Picks as ProfilePicks } from './components/ProfileAsk'
 import { Shelf } from './components/Shelf'
 import { SmoothButton, Story, type PlayItem, type Selection } from './components/Story'
 import { Timeline, type Marks } from './components/Timeline'
@@ -39,7 +40,7 @@ import { go } from './router'
 import { deriveStage, reached, STAGES, type Stage } from './stage'
 import { phStore, snapStore, transport, transportStore, useStore } from './transport'
 import { Button, Confirm, cx, Wordmark } from './ui'
-import type { Capabilities, Clip, Msg, Option, Overlay, OverlayKind, Overlays as OverlayData, Resource, ResourceFolder, ResourceKind, Segment, Session, StyleAnswers, StyleQuestion, TimelineData } from './types'
+import type { Capabilities, Clip, Msg, Option, Overlay, OverlayKind, Overlays as OverlayData, ProfileStart, Resource, ResourceFolder, ResourceKind, Segment, Session, StyleAnswers, StyleQuestion, TimelineData } from './types'
 
 const hello: Msg = {
   id: 'hello', role: 'app', at: 0,
@@ -122,6 +123,9 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const stageRef = useRef<HTMLDivElement>(null)
   const isSaving = useSyncExternalStore(saving.subscribe, saving.get)
   const [exporting, setExporting] = useState(false)
+  // your profile, asked once a video has come out (ProfileAsk.tsx)
+  const exported = useRef(false)
+  const [askProfile, setAskProfile] = useState<ProfileStart | null>(null)
   const [remixing, setRemixing] = useState(false)
   const [referencing, setReferencing] = useState(false)
   const [talkOpen, setTalkOpen] = useState(false)
@@ -549,6 +553,24 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       if ((e as { status?: number }).status === 401) loadFolder()
       else note((e as Error).message.replace(/^./, (c) => c.toUpperCase()))
     }
+  }
+
+  // ---- your profile, after a video comes out ---------------------------------
+  const afterExport = () => {
+    if (!exported.current) return
+    exported.current = false
+    Promise.all([api.profileStart(), api.resources().catch(() => null)]).then(([p, f]) => {
+      if (f) setFolder(f)
+      // logged out (a shared link) it asks for an account instead, once in this browser
+      if (p.signed_in ? p.ask : !askedHere()) setAskProfile(p)
+    }).catch(() => {})
+  }
+  const keepResource = async (kind: ResourceKind) => {
+    try {
+      const r = await api.saveResource(kind, resourceWhere(kind))
+      setFolder((f) => (f ? { ...f, items: r.items } : f))
+      return true
+    } catch (e) { note((e as Error).message); return false }
   }
 
   const toggle = async (turn: number) => { setSession(await api.toggle(turn)) }
@@ -1246,6 +1268,14 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const st = ovData.style
   const shotSel = selItem?.kind === 'shot' ? selItem : null
   const joinShown = pickedJoin ?? allJoins[0]
+  // what the video just exported used: where the profile's questions start
+  const profileNow: ProfilePicks = {
+    makes: 'vlog',
+    pace: (['fast', 'balanced', 'calm'] as const).find((p) => p === brief?.style?.pace) ?? null,
+    transition: allJoins.length && allJoins.every((j) => j.picked_all) ? allJoins[0].picked : null,
+    captions: ovData.items.length > 0,
+    template: st.template ?? null,
+  }
   const saveWhy: SaveWhy = {
     caption: st.template || st.text_color || st.typeface || st.outline || st.shadow || st.backdrop || st.thick != null ? null
       : 'Pick a font, colour, outline or word art for your captions first (Captions tab), then save it',
@@ -1645,7 +1675,10 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                               onError={() => { transport.mixBroken = true }} />}
       {help && <Keys onClose={() => setHelp(false)} />}
       {exporting && <Export tl={tl} overlays={ovData} parts={parts} music={session?.music?.title ?? null} credit={session?.music?.credit ?? null} style={session?.board?.style}
-                            history={session?.exports ?? []} onClose={() => { setExporting(false); api.session().then(setSession).catch(() => {}) }} />}
+                            history={session?.exports ?? []} onFinished={() => { exported.current = true }}
+                            onClose={() => { setExporting(false); api.session().then(setSession).catch(() => {}); afterExport() }} />}
+      {askProfile && <ProfileAsk start={askProfile} current={profileNow} style={ovData.style} from={shotThumb(shotItems[0])} to={shotThumb(shotItems[1])}
+                                 folder={folder} keepWhy={saveWhy} onKeep={keepResource} onDone={() => setAskProfile(null)} />}
       {remixing && <Remix onClose={() => { setRemixing(false); setFrontLinks(null) }} onDone={remixDone} canLinks={caps.links}
                           initialLinks={frontLinks ?? ''} autoStart={!!frontLinks} />}
       {referencing && <BorrowStyle onClose={() => setReferencing(false)} onRemix={openRemix}

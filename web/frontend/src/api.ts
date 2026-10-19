@@ -1,5 +1,5 @@
 import type { SetupData } from './components/Setup'
-import type { Habit, Capabilities, Resource, ResourceFolder, ResourceKind, CutData, ExportJob, Job, LengthSlider, LookFit, PrefClass, Project, ProjectMeta, RefCard, RefJob, RefSummary, Session, StyleAnswers, StyleQuestion, TalkState } from './types'
+import type { Habit, Capabilities, ProfileStart, Resource, ResourceFolder, ResourceKind, StartPicks, CutData, ExportJob, Job, LengthSlider, LookFit, PrefClass, Project, ProjectMeta, RefCard, RefJob, RefSummary, Session, StyleAnswers, StyleQuestion, TalkState } from './types'
 
 export type MomentInfo = { header: string; key: string; llm: boolean; provider: ChatProvider
   estimate: { tokens_in: number; usd: [number, number] } }
@@ -185,5 +185,9 @@ export const api = {
     j<Session>(sendAs('POST', `/api/resources/${encodeURIComponent(id)}/use`, { shot: where.shot ?? null, after: where.after ?? null })),
   renameResource: (id: string, name: string) => j<{ items: Resource[] }>(sendAs('PATCH', `/api/resources/${encodeURIComponent(id)}`, { name })),
   deleteResource: (id: string) => j<{ items: Resource[] }>(sendAs('DELETE', `/api/resources/${encodeURIComponent(id)}`)),
+  // your profile's start: asked once after an export, where every next video starts
+  profileStart: () => j<ProfileStart>(fetch('/api/profile/start', { headers: asVisitor() })),
+  profileStartSave: (picks: StartPicks) => j<ProfileStart>(sendAs('POST', '/api/profile/start', picks)),
+  profileSkip: () => j<ProfileStart>(sendAs('POST', '/api/profile/skip', {})),
   useTrack: (trackId: string | null) => j<Session>(post('/api/music/use', { track_id: trackId })),
 }

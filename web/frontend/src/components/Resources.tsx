@@ -110,17 +110,19 @@ export function Resources({ folder, error, onUse, onChange, onRetry, saveWhy, on
 
 // Logged out (sarah, 2026-10-19: "you need to login to save your resources,
 // no account? create one now"). Both buttons go where the Launch work points
-// them; until accounts exist they say so.
-function LogIn({ login, signup }: { login: string | null; signup: string | null }) {
+// them; until accounts exist they say so. The popup after an export asks the
+// same, in its own words.
+export function LogIn({ login, signup, title = 'You need to log in to save your resources',
+  text = 'Keep your caption looks, animations, transitions, effects and songs, and use them on every video.' }: {
+  login: string | null; signup: string | null; title?: string; text?: string
+}) {
   const [soon, setSoon] = useState(false)
   const go = (url: string | null) => { if (url) window.location.href = url; else setSoon(true) }
   return (
     <div className="flex flex-col items-center gap-3 rounded-2xl border border-line bg-raised px-5 py-6 text-center">
       <span className="grid size-14 place-items-center rounded-2xl bg-accent/12 text-accent"><Icon name="resources" size={30} /></span>
-      <h3 className="font-serif text-[20px] leading-tight text-zinc-100">You need to log in to save your resources</h3>
-      <p className="font-serif text-[15px] leading-snug text-zinc-300">
-        Keep your caption looks, animations, transitions, effects and songs, and use them on every video.
-      </p>
+      <h3 className="font-serif text-[20px] leading-tight text-zinc-100">{title}</h3>
+      <p className="font-serif text-[15px] leading-snug text-zinc-300">{text}</p>
       <Button variant="primary" size="lg" onClick={() => go(login)}><Icon name="user" size={18} /> Log in</Button>
       <p className="font-serif text-[16px] text-zinc-100">
         No account? <button type="button" onClick={() => go(signup)} className="font-serif text-accent underline underline-offset-2 hover:brightness-110">Create one now</button>

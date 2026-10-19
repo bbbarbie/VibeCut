@@ -34,7 +34,7 @@ from . import projects as pj
 from . import audiomix, bed, brief, cloud, defaults, habits, make, vibes, tempo, ink, moment, cut, export, looks, pitch, seams, selfcheck, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, oai, overlays, reference, remix, speech, story, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import GATE, Workflow, WorkflowError
-from . import resources, reverse
+from . import resources, reverse, transitions
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -322,6 +322,110 @@ def api_resources_use(rid: str, req: ResourceUseReq, request: Request) -> dict:
         SESSION.add({"kind": "direct", "text": f"From My resources: {item['name']}", "ops": ops,
                      "reply": said + "."}, CATALOG["cat"], _make_proposals)
         return _session()
+
+
+# --------------------------------------------------------------------------
+# your profile's start: asked once after an export (sarah, 2026-10-14; back
+# 2026-10-19: "there isnt any page for me to build my own profile after my
+# export"), the start of every next video. The name and email live with the
+# profile page's profile; the picks live with the defaults (defaults.py).
+# --------------------------------------------------------------------------
+
+MAKES = ("vlog", "lesson")
+
+
+def _start_public(request: Request) -> dict:
+    me = _who(request)
+    if not me["signed_in"]:
+        return {"signed_in": False, "ask": False, "made": False}
+    d, how = defaults.get(), defaults.asked()
+    return {"signed_in": True, "ask": how is None, "made": how == "made", "makes": d.get("makes"),
+            "pace": d.get("pace"), "transition": d.get("transition"),
+            "captions": d.get("captions") != "off", "template": d.get("caption_template")}
+
+
+@app.get("/api/profile/start")
+def api_profile_start(request: Request) -> dict:
+    return _start_public(request)
+
+
+class StartReq(BaseModel):
+    makes: str | None = None
+    pace: str | None = None
+    transition: str | None = None
+    captions: bool | None = None
+    template: str | None = None     # a caption style (overlays.TEMPLATES); None = Soft
+
+
+@app.post("/api/profile/start")
+def api_profile_start_save(req: StartReq, request: Request) -> dict:
+    """Saved from the popup after an export, or one tap on the profile page:
+    only the picks sent change."""
+    _owner(request)
+    sent = req.model_fields_set
+    allowed = {"makes": MAKES, "pace": tuple(tempo.NAMES), "transition": tuple(transitions.KINDS),
+               "template": tuple(overlays.TEMPLATES)}
+    for k, ok in allowed.items():
+        v = getattr(req, k)
+        if k in sent and v is not None and v not in ok:
+            raise HTTPException(422, f"{k} is one of {', '.join(ok)}")
+    picks: dict = {k: getattr(req, k) for k in ("makes", "pace", "transition") if k in sent}
+    if "transition" in picks and picks["transition"] == "cut":
+        picks["transition"] = None          # a plain cut is what every video starts with anyway
+    if "captions" in sent:
+        picks["captions"] = None if req.captions is not False else "off"
+    if "template" in sent:
+        picks["caption_template"] = req.template
+    defaults.note(**picks)
+    defaults.answer("made")
+    return _start_public(request)
+
+
+@app.post("/api/profile/skip")
+def api_profile_skip(request: Request) -> dict:
+    """Not now: the question isn't asked again."""
+    _owner(request)
+    defaults.answer("skipped")
+    return _start_public(request)
+
+
+def _from_profile(captions: bool, about: str = "") -> None:
+    """A video was just made (or a story chosen): what the creator's profile
+    says their videos start with, as its own turn so Undo takes only that away
+    -- no captions, or for lessons subtitles of what's said, in place of the
+    lines Make wrote; their transition at every cut; on a chosen story, their
+    caption style (Make brings that itself). `captions` False when the words
+    were already put on as the brief asked (_words_as_asked). Nothing without
+    a profile."""
+    if defaults.asked() != "made":
+        return
+    mine, b, cat = defaults.get(), SESSION.board, CATALOG["cat"]
+    if not b:
+        return
+    ops: list[dict] = []
+    said: list[str] = []
+    if captions and mine.get("captions") == "off":
+        gone = [{"op": "drop_overlay", "overlay": o["id"]} for o in b.get("overlays") or []]
+        if gone:
+            ops += gone
+            said.append("no captions")
+    elif captions and mine.get("makes") == "lesson":
+        subs, _ = subtitles.caption_ops(b, cat, CLIPS, about)
+        if subs:
+            ops += [{"op": "drop_overlay", "overlay": o["id"]} for o in b.get("overlays") or [] if o.get("kind") == "part"]
+            ops += subs
+            said.append("subtitles of what's said")
+    if not captions and mine.get("caption_template") and b.get("overlays"):
+        ops.append({"op": "overlay_style", "template": mine["caption_template"], "source": "defaults"})
+        said.append(f"{overlays.TEMPLATES[mine['caption_template']]} captions")
+    kind = mine.get("transition")
+    if kind in transitions.KINDS and sum(len(bt.get("shots") or []) for bt in b.get("beats") or []) > 1:
+        ops.append({"op": "set_transition", "all": True, "kind": kind})
+        said.append(f"{transitions.KINDS[kind]['name'].lower()} at every cut")
+    if ops:
+        SESSION.add({"kind": "direct", "text": "From your profile", "ops": ops,
+                     "reply": "From your profile: " + " and ".join(said) + ". Undo takes it away."},
+                    cat, _make_proposals)
 
 
 def _prefs_public() -> dict:
@@ -1285,12 +1389,21 @@ def api_brief_auto(req: BriefAutoReq | None = None) -> dict:
         marks = brief.length_marks(_usable_s(), about)
         # the tempo the footage asks for (sarah, 2026-10-07), not a question
         feel = tempo.read(list(CLIPS.values()), cut.for_story(PLAN["plan"]))
+        # ... unless the creator's profile says how they like it (asked after an export)
+        mine = defaults.get() if defaults.asked() == "made" else {}
+        if mine.get("pace") in tempo.NAMES:
+            feel = {**feel, "pace": mine["pace"], "why": f"{tempo.NAMES[mine['pace']]}, as in your profile."}
+        said_words = ("none" if mine.get("captions") == "off" else "transcribe" if mine.get("makes") == "lesson"
+                      else "describe")
+        if said_words == "transcribe":
+            subtitles.prefetch(list(CLIPS.values()), about)
         fmt = req.format or brief.suggest_format(_portrait_share(), marks["max"])
-        style = {"seconds": brief.length_for(fmt, marks), "captions": "describe", "pace": feel["pace"],
+        style = {"seconds": brief.length_for(fmt, marks), "captions": said_words, "pace": feel["pace"],
                  "format": fmt, "look": req.look or "cozy", "vibe": req.vibe or None}
         pr.brief = {"message": about, "style": brief.clean_style(style) or {}, "tempo": feel["why"],
                     "said": f"{brief.FORMATS[fmt].split(' ·')[0]} · about {brief.say_length(style['seconds'])} · "
-                            f"{tempo.NAMES[feel['pace']].lower()} · {looks.get(style['look'])['name']} · captions",
+                            f"{tempo.NAMES[feel['pace']].lower()} · {looks.get(style['look'])['name']} · "
+                            f"{dict(none='no captions', transcribe='subtitles').get(said_words, 'captions')}",
                     "at": time.time()}
         # the pace is known now: start fetching the free tracks for it, so the
         # bed under the story lands in seconds rather than minutes (bed.py)
@@ -1381,6 +1494,7 @@ def api_make(req: BriefAutoReq | None = None) -> dict:
                         CATALOG["cat"], _make_proposals)
             if job.result.get("check"):
                 _check_landed(job.result["check"], PROJECT["p"], "make")     # its fixes undo on their own
+            _from_profile(True, about)      # its own Undo, like the check
             pr_ = PROJECT["p"]
             if pr_ is not None and pr_.brief:
                 # the chips read the brief: after Make it must describe the cut, not the guess
@@ -1694,6 +1808,8 @@ def api_pace(req: PaceReq) -> dict:
         if pr is not None and pr.brief:
             pr.brief = {**pr.brief, "style": {**(pr.brief.get("style") or {}), "pace": req.pace},
                         "tempo": f"{name}, as you chose."}
+        if defaults.asked() == "made":
+            defaults.note(pace=req.pace)        # the profile keeps up
         return _session()
 
 
@@ -1715,9 +1831,13 @@ def api_captions(req: CaptionsReq) -> dict:
             if ops:
                 SESSION.add({"kind": "direct", "text": "Captions off", "ops": ops,
                              "reply": "Captions off. Undo puts them back."}, CATALOG["cat"], _make_proposals)
+            if defaults.asked() == "made":
+                defaults.note(captions="off")
             return _session()
         if not b.get("overlays"):
             _words_as_asked(force=True)
+        if defaults.asked() == "made":
+            defaults.note(captions=None)
         return _session()
 
 
@@ -2007,9 +2127,12 @@ def api_ops(req: OpsReq) -> dict:
                 habits.remember_phrase(o["text"])   # how they phrase things, for the writer
             if o.get("op") == "overlay_style" and o.get("source") != "defaults":
                 defaults.note(**{f"caption_{k}": o[k] for k in ("template", "enter") if k in o})
+            if o.get("op") == "set_transition" and o.get("all") and defaults.asked() == "made":
+                defaults.note(transition=None if o.get("kind") == "cut" else o.get("kind"))
         if [o.get("op") for o in req.ops] == ["choose_option"]:
             _drop_repeats()
             _words_as_asked()
+            _from_profile(False)
             _bed_start()
         return _session()
 

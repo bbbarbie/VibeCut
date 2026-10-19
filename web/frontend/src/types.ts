@@ -187,6 +187,14 @@ export type MusicTrack = { id: string; title: string; duration: number; bpm: num
   volume?: number }   // the Volume slider: 1 = as placed, up to 2
 // My resources: a caption look, animation, transition, effect, shot settings
 // or song the creator saved off a video to use again (web/backend/resources.py)
+/** Your profile's start (backend /api/profile/start): asked once after an export,
+ *  where every next video starts. Logged out, only `signed_in`, `ask`, `made`. */
+export type ProfileStart = {
+  signed_in: boolean; ask: boolean; made: boolean
+  makes?: 'vlog' | 'lesson' | null; pace?: 'fast' | 'balanced' | 'calm' | null
+  transition?: string | null; captions?: boolean; template?: CaptionTemplate | null
+}
+export type StartPicks = Partial<Pick<ProfileStart, 'makes' | 'pace' | 'transition' | 'captions' | 'template'>>
 export type ResourceKind = 'caption' | 'animation' | 'transition' | 'effect' | 'shot' | 'song'
 export type Resource = { id: string; kind: ResourceKind; name: string; value: Record<string, unknown>; at: number }
 export type ResourceFolder = { signed_in: boolean; as?: string; signin_url: string | null; signup_url?: string | null

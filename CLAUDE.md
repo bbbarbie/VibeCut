@@ -693,6 +693,25 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   `VIBECUT_SIGNIN_URL` / `VIBECUT_SIGNUP_URL` are where they will go. The
   app's `?visitor` (header `x-vibecut-visitor`, can only take rights away)
   shows the owner what a visitor sees. `tests/test_resources.py`.
+- **Your profile, after an export** (sarah, 2026-10-14, draft #26 never
+  merged; rebuilt 2026-10-19: "there isnt any page for me to build my own
+  profile after my export"; `ProfileAsk.tsx`, `/api/profile/start`,
+  `/api/profile/skip`, `defaults.asked` / `answer`). Closing Export after a
+  video came out asks once: the email (the only typing; on the profile
+  page's profile, never sent anywhere) and name, then taps preset to what
+  that video used: Vlogs / Lessons, Quick / Steady / Calm, the transition for
+  every cut, the caption style (Soft, a template, or No captions), plus "Keep
+  this video's looks in My resources" for what it has. Not now = never asked
+  again. The picks are defaults keys (`makes`, `pace`, `transition`,
+  `captions` "off", `caption_template`): `/api/brief/auto` takes the pace
+  ("…, as in your profile.") and, for lessons, captions "transcribe"; after
+  Make (and on a chosen story) `_from_profile` adds one undoable "From your
+  profile" turn: no captions, or a lesson's subtitles in place of Make's
+  lines, the transition at every cut, on a chosen story the caption style.
+  Once made, Frames keeps it up (the pace, the Captions switch, a transition
+  for every cut); a skip learns nothing. The profile page's "How your videos
+  start" saves each tap. Logged out (`?visitor`) it asks for an account
+  instead, once per browser. `tests/test_profile_start.py`.
 - **Every cut checked** (`cutgrammar/joins.py`, `web/backend/seams.py`;
   research 08 P2). Report only: per cut, brightness jump, colour change
   (best-frame proxy), same view again, energy step, loudness step, going
