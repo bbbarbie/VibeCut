@@ -90,7 +90,12 @@ test('each template draws what it says', () => {
   const bold = draw({ ...BASE, template: 'bold' }, cap('lunch'), held)
   assert.equal(bold.drawn[0].text, 'LUNCH', 'big & bold is capitals')
   const plain = draw(BASE, o, held)
-  assert.equal(plain.drawn.length, 1, 'no template: the look\'s own one line')
+  // no template = Soft, the quiet vlog caption: lowercase, no edge, low and to the left
+  const soft = draw(BASE, cap('Matcha Break', { sub: 'Butler Library' }), held)
+  assert.deepEqual(soft.drawn.map((d) => d.text), ['butler library', 'matcha break'], 'soft: lowercase, the place small above')
+  assert.ok(soft.drawn.every((d) => !d.stroked), 'soft: no edge')
+  assert.ok(soft.drawn.every((d) => d.pts[0][0] < 1080 * 0.2), 'soft: starts at the left of the frame')
+  assert.ok(plain.drawn.every((d) => !d.stroked && d.text === d.text.toLowerCase()))
 })
 
 test('typewriter writes the caption out; word by word adds whole words', () => {

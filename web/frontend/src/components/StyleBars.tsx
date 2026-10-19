@@ -78,7 +78,7 @@ export function CaptionStyles({ style, thumb, onPick }: { style: OverlayStyle; t
   const held = 2.0   // the caption fully in
   return (
     <div className={GRID}>
-      <Tile on={!style.template} label="The look's own" onClick={() => style.template && onPick({ template: null, ...PLAIN }, 'Captions back to the look\'s own')}>
+      <Tile on={!style.template} label="Soft" onClick={() => style.template && onPick({ template: null, ...PLAIN }, 'Every caption is now Soft')}>
         <span className="absolute inset-0" style={bg} />
         <CaptionSample style={{ ...style, ...PLAIN, template: null, enter: null }} text="Aa" t={held} />
       </Tile>

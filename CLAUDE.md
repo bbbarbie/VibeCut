@@ -725,6 +725,13 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   click away or Cmd/Ctrl+Enter = one undoable edit, Escape = no change.
   The box wears the caption's own look while typing (`overlayDraw.typeLook`:
   each line's font, size, colour, edge, band; the place name small above).
+  **Soft is the default caption** (sarah, 2026-10-19, after a look at how
+  day-in-my-life vlogs and Shorts caption): no template = `softTpl` in
+  overlayDraw: the look's lettering at its regular weight, lowercase, small
+  (0.05 of the short side), a soft shadow, low left; the place name in the
+  same case above. A picked template keeps the centre. The Style tab calls
+  it Soft. The words themselves (a thought or what's happening, never a
+  scene description) belong to the story writer, not here.
   **Colour** is `overlay_style.text_color` (None = automatic, ink.py picks
   one that reads; never set by a look): a picked colour is kept as picked,
   ink.py only adds a glow where it would blend in; a template takes it as

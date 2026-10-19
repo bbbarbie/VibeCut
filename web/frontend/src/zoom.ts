@@ -11,7 +11,13 @@ const PAGE_PX = 400
 const PER_PX = 0.008
 const STEP_CAP = 60
 
-export const clampZoom = (z: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z))
+export const clampZoom = (z: number, max = ZOOM_MAX) => Math.min(max, Math.max(ZOOM_MIN, z))
+
+// How far in the zoom goes: like Final Cut and CapCut, all the way down to
+// single frames, each about FRAME_PX wide at the deepest zoom.
+const FRAME_PX = 100
+export const maxZoom = (fitPxPerSec: number, fps: number) =>
+  Math.max(ZOOM_MAX, (FRAME_PX * Math.max(1, fps)) / Math.max(1e-6, fitPxPerSec))
 
 // WheelEvent.deltaMode: 0 pixels, 1 lines (Firefox with a mouse), 2 pages.
 export function wheelFactor(deltaY: number, deltaMode = 0): number {
@@ -21,8 +27,8 @@ export function wheelFactor(deltaY: number, deltaMode = 0): number {
 
 // The slider moves along a log scale, so going from "whole edit" to "two
 // shots" takes the same hand movement as from "two shots" to "frames".
-export const toSlider = (z: number) => Math.log(clampZoom(z)) / Math.log(ZOOM_MAX)
-export const fromSlider = (v: number) => clampZoom(Math.exp(v * Math.log(ZOOM_MAX)))
+export const toSlider = (z: number, max = ZOOM_MAX) => Math.log(clampZoom(z, max)) / Math.log(max)
+export const fromSlider = (v: number, max = ZOOM_MAX) => clampZoom(Math.exp(v * Math.log(max)), max)
 
 // Where the content should scroll to so that the moment at `x` (content
 // pixels) sits `offset` pixels from the timeline's left edge again.

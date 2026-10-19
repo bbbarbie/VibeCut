@@ -64,7 +64,8 @@ DEFAULT_STYLE = {"font": "Clean", "color": "#ffffff", "accent": "#b9d9eb", "capt
 
 # Caption templates (the Style tab when a caption is clicked): how every
 # caption in the video is dressed -- lettering, edge, backing -- drawn by
-# overlayDraw.ts for preview and export alike. None = the look's own words.
+# overlayDraw.ts for preview and export alike. None = Soft, the quiet vlog
+# caption: small, lowercase, the look's lettering, a soft shadow, low left.
 # "outlined" is sarah's own hand edit: serif, black edge, the time on top.
 # The last five are word art (sarah, 2026-10-18): neon, glow, a gradient, 3D
 # letters and a retro hard drop, the kinds CapCut offers.
@@ -477,8 +478,9 @@ def describe(a: dict | None, b: dict | None) -> list[dict]:
                                ("typeface", TYPEFACES, "Caption font")):
             if sa_.get(k) != sb2.get(k):
                 v = sb2.get(k)
-                lines.append({"kind": "retitled", "text": f"{what}: {names[v]}" if v
-                              else f"{what}: back to the look's own"})
+                # no template = the quiet vlog caption, called Soft in the Style tab
+                none = "Soft" if k == "template" else "back to the look's own"
+                lines.append({"kind": "retitled", "text": f"{what}: {names[v]}" if v else f"{what}: {none}"})
         dressed = [DRESS_NAMES[k] for k in DRESS_NAMES if sa_.get(k) != sb2.get(k)]
         if dressed:
             lines.append({"kind": "retitled", "text": f"Changed the captions' {what_list(dressed)}"})
