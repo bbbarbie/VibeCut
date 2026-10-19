@@ -227,14 +227,15 @@ def turn_to_dict(t: bd.Turn) -> dict:
     """Only what replay needs: the diff and lines are recomputed."""
     return {"id": t.id, "kind": t.kind, "text": t.text, "ops": t.ops, "reply": t.reply,
             "question": t.question, "choices": t.choices, "direction": t.direction,
-            "undone": t.undone, "at": t.at}
+            "undone": t.undone, "at": t.at, "cost": t.cost, **({"sheets": t.sheets} if t.sheets else {})}
 
 
 def turn_from_dict(d: dict) -> bd.Turn:
     return bd.Turn(id=int(d["id"]), kind=d.get("kind", "direct"), text=d.get("text", ""),
                    ops=list(d.get("ops") or []), reply=d.get("reply", ""), question=d.get("question"),
                    choices=list(d.get("choices") or []), direction=d.get("direction"),
-                   undone=bool(d.get("undone")), at=float(d.get("at") or time.time()))
+                   undone=bool(d.get("undone")), at=float(d.get("at") or time.time()),
+                   cost=d.get("cost"), sheets=list(d.get("sheets") or []))
 
 
 def capture(project: Project, clips: dict[str, dict], session: bd.Session, workflow: Workflow,

@@ -5,7 +5,7 @@ import type { Overlay, OverlayFinding, OverlayKind, OverlayPos, Overlays as Over
 
 type Ops = (ops: Record<string, unknown>[], label: string) => Promise<unknown>
 
-const ADDABLE: OverlayKind[] = ['title', 'part', 'name', 'caption', 'date', 'end', 'chapters']
+const ADDABLE: OverlayKind[] = ['title', 'heading', 'part', 'name', 'caption', 'date', 'end', 'chapters']
 const GRID: OverlayPos[] = ['top-left', 'top', 'top-right', 'left', 'center', 'right', 'bottom-left', 'bottom', 'bottom-right']
 const ANIMS = [['fade', 'Fade'], ['rise', 'Rise'], ['slide', 'Slide'], ['type', 'Type on']] as const
 const r2 = (x: number) => Math.round(x * 100) / 100
@@ -183,7 +183,7 @@ function Item({ o, where, open, findings, level, onToggle, onRun, onWatch, picke
           {o.kind !== 'chapters' && <>
             <Words key={'t' + o.text} label="Words" value={o.text} onCommit={(v) => v.trim() && edit({ text: v }, 'words')} />
             {!['caption', 'date'].includes(o.kind) && (
-              <Words key={'s' + o.sub} label={o.kind === 'part' ? 'Small line above' : o.kind === 'name' ? 'Handle or role' : 'Second line'} value={o.sub}
+              <Words key={'s' + o.sub} label={o.kind === 'part' ? 'Small line above' : o.kind === 'heading' ? 'Line under it' : o.kind === 'name' ? 'Handle or role' : 'Second line'} value={o.sub}
                      onCommit={(v) => edit({ sub: v }, 'second line')} />
             )}
           </>}

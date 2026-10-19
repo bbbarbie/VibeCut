@@ -86,8 +86,9 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   are only previewed (diff computed on a copy of the log) until Apply sends
   them to `/api/ops` as one undoable turn. `/api/moment` never calls the model
   and returns a per-message cost estimate (Opus 5 list price, output 600–2500
-  tokens, priors). No key: the box says so and sends nothing.
-  `tests/test_moment.py` (mocked model).
+  tokens, priors; since 2026-10-18 priced for whoever answers, see AI Edit on
+  the course key, and shown on Send). No AI: the box says so, offers the
+  switch and sends nothing. `tests/test_moment.py` (mocked model).
 
 - `cutgrammar/music.py` — energy-shape matching of the user's own tracks to
   the storyboard. Built, synthetic-tested; **not yet judged on a real music
@@ -369,6 +370,73 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   added first). On her 42 clips: 27 moments, 25 s, hook first, cuts on the
   beat, music under it — see `design/eval/` screenshots 23–25. Every number
   in `PRIOR` / `LEVELS` is a guess. `tests/test_make.py`.
+- **The story editor** (`web/backend/story.py`, `oai.py`; sarah, 2026-10-18,
+  after comparing VibeCut with a London day vlog: named chapters, each a
+  setup → steps → payoff, a designed title over a plain line). Inside Make,
+  one OpenAI call (her course's team key, $25 for the term; **not Claude**)
+  sees up to 60 rough-cut moments (one index frame each, low detail, plus
+  time / stop / labels / faces / talking / worth) and returns chapters named
+  by what happens, what's kept, its order, each shot's job and length
+  (`ROLE_S` by frame, priors), a hook and a title look per chapter. The
+  rules still cut each window, the beat and the music. Chapter titles are
+  overlay kind `heading` with their own `look` (script / spaced / bold /
+  serif, `overlayDraw.HEADINGS`), independent of the captions' one style.
+  Runs only with `OPENAI_API_KEY` in web/.env **and** the AI switch on (the
+  "AI" pill in the top bar and in the two-picks popup, `/api/ai`, kept in
+  `$VIBECUT_CACHE/ai.json`, off by default; sarah, 2026-10-18), and only for
+  a Make that carries the estimate she saw (`/api/make/estimate` → `ai_ok`):
+  the popup shows "this edit will cost about $…" before Make. A key is not a
+  yes to spend it. `OPENAI_MODEL` overrides `oai.MODEL`.
+  Cost is read from each reply's usage, said in the reply and kept in
+  `Project.events`. Any failure → the rules' edit, and the reply says so.
+  urllib only (no SDK on her Mac). `tests/test_story.py` (stand-in replies).
+  Not yet run against the live model.
+- **AI Edit on the course key** (sarah, 2026-10-18: "Build it" on putting the
+  chat on the course key so it shows when AI is on). `llm.chat_provider()`:
+  OpenAI (`oai.enabled()`: key + AI switch) else Claude (its key) else
+  nobody; only the chat moves (`interpret`, so the left-rail chat and Chat on
+  pause), every other call in llm.py stays on Claude's key. Same SYSTEM,
+  state text, history and SCHEMA (strict) on OpenAI, the paused frame at low
+  detail. Before sending: `/api/chat/estimate` (free; `llm.estimate`, priced
+  for whoever answers, output 600–2500 tokens, priors) puts "Send · 1–3¢" on
+  the button, and on the course key a message is answered only when it
+  carries that estimate (`ai_ok`, `_chat_gate`). After: the cost is on the
+  turn (`Turn.cost`, persisted), in `Project.events` (kind `chat`, also for a
+  paid answer that failed) and in the panel's "6¢ spent" (`_ai_spent`: chat
+  + AI-planned Makes). The rail reads AI Edit whenever someone answers, else
+  History, which then offers the switch (no key: says so, no switch). Idea
+  chips above the box fill it, never send. Like other editors' assistants: an
+  "About [Shot 3 · 0:12] / Whole video" chip (the clicked shot, else the one
+  under the paused playhead) sends that moment's text + frame with the
+  message (`ChatReq.t`, `_target`; never a `choose_option`); the AI is asked
+  outside LOCK (`llm.prepare` → `llm.ask` → apply), so the app keeps
+  working; Stop (`/api/chat/stop`, by the box's `rid`) frees the box at once
+  and the answer changes nothing when it lands, its cost still counted; an
+  answer landing on another video changes nothing; a failed one offers Try
+  again. The app's own first story (no board, no `ai_ok`) is the free rules'.
+  `tests/test_chat_ai.py` (stand-in replies). Not yet run live.
+- **The AI checks its own edit** (`web/backend/selfcheck.py`, `/api/check`,
+  `/api/check/estimate`, `/api/check/sheet/{name}`; sarah, 2026-10-18: "lets
+  do AI checks own edit"). The story editor sees one frame per moment and
+  never the finished cut, so after an AI-planned Make (inside the job, stage
+  `checking`) and on "Check my whole edit · ¢" in AI Edit, one call on the
+  course key looks at contact sheets of the cut: one still per shot from the
+  middle of the seconds it uses, 16 to a sheet at high detail, numbered as
+  the timeline numbers them, a strip coloured by chapter (drawn in numpy: no
+  drawtext here), plus a list (chapters with seconds and share; each shot's
+  clip, time, labels, talking; the phone's look-alike and same-seconds
+  hints). It answers with issues (repeat, drags, back_and_forth, opening,
+  ending) and fixes (drop / shorten / move), checked in code: at most a
+  quarter dropped, none from 5 shots or fewer, a talking shot dropped only
+  as a repeat, shortening on whole half-beats and never under 0.6 s. One
+  turn of kind `check` (its own Undo, its cost, "What it looked at"); one
+  round, never a loop. Make's estimate covers planning + the check (`plan` /
+  `check`); a button press carries its price (`ai_ok`); Stop by `rid` like
+  the chat; a failed check is a turn that says so and changes nothing.
+  Research of open tools (oh-my-cassette, ffmpeg-skill, OpenStoryline,
+  ai-video-editing-skill): sheets there are for people or layout checks,
+  none has a model review its own cut. `tests/test_selfcheck.py` (stand-in
+  replies). Every number is a prior; not yet run live.
 - **Two picks up front** (plan of 2026-10-10, step 2; `Setup.tsx`,
   `/api/brief/setup`, `/api/brief/auto {format, look}`, `/api/format`):
   after Footage's "Looks good" one popup asks the **frame** (short ·
@@ -527,6 +595,9 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   `tests/test_songpack.py`.
   `timeline.grid_of` now subtracts the music in-point (every Remix grid was
   off before). `VIBECUT_BED=0` keeps tests offline. `tests/test_bed.py`.
+  A picked track (Openverse download or backup song) is found again by id
+  in the music cache after a restart (`musiclib.find`); before, the edit
+  lost its song. `tests/test_music_restart.py`.
   Measured 2026-10-10 on this Mac: a cold online pick took 195 s (36 tracks
   fetched + analysed), so `/api/brief/auto` calls `bed.prefetch(pace)` as
   soon as the pace is read and the chip shows done/total. Openverse's

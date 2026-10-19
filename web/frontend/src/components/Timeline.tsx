@@ -27,6 +27,10 @@ const SOUND_H = 26   // a row of the Audio lane: sound taken off shots, the musi
 // the captions, then the sound (Audio) -- as in her reference picture
 // (sarah, 2026-10-16), each named in a column on the left.
 const VIDEO_TOP = 48
+// The picture never gets squeezed out: with many caption rows in a short
+// panel the lanes scroll up and down instead (sarah, 2026-10-18: "where are
+// my frames" -- three caption rows had left the Video row 0 px tall).
+const MIN_VIDEO_H = 56
 const LANE_GAP = 6
 const LABEL_W = 96
 // A caption being dragged: where it started, where it is, the line it's
@@ -411,6 +415,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   const audioBottom = 8
   const capBottom = audioBottom + audioH + LANE_GAP
   const shotsBottom = capBottom + capH + LANE_GAP
+  const lanesH = VIDEO_TOP + MIN_VIDEO_H + shotsBottom
   const musicBottom = audioBottom + 4
   const stripBottom = musicBottom + SOUND_H + 4
   const [moving, setMoving] = useState<{ id: string; x0: number; grab: number; at: number; moved: boolean } | null>(null)
@@ -500,9 +505,9 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                 className="shrink-0 rounded-md px-1.5 py-1 text-[11px] text-muted hover:text-zinc-200 disabled:opacity-30">Clear</button>
       </header>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 overflow-y-auto">
       {items.length > 0 && (
-        <div className="relative shrink-0 border-r border-line" style={{ width: LABEL_W }} aria-hidden>
+        <div className="relative shrink-0 border-r border-line" style={{ width: LABEL_W, minHeight: lanesH }} aria-hidden>
           <LaneLabel icon="video" style={{ top: VIDEO_TOP, bottom: shotsBottom }}>Video</LaneLabel>
           <LaneLabel icon="lines" style={{ bottom: capBottom, height: capH }}>Captions</LaneLabel>
           <LaneLabel icon="music" style={{ bottom: audioBottom, height: audioH }}>Audio</LaneLabel>
@@ -511,6 +516,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
       <div
         ref={track}
         className="relative min-h-0 flex-1 select-none overflow-x-auto overflow-y-hidden"
+        style={items.length ? { minHeight: lanesH } : undefined}
         onDragOver={(e) => {
           if (!accepts(e)) return
           e.preventDefault()
