@@ -24,7 +24,7 @@ const WORDS: Partial<Record<GraphicPiece, [string, string?]>> = {
 }
 // soft colours, like a quiet vlog's (every piece's own colour is one of them)
 const COLOURS: [string, string][] = [['#ffffff', 'White'], ['#f6ead7', 'Cream'], ['#ffe08a', 'Butter'], ['#e8b4b8', 'Blush'],
-  ['#c97b84', 'Dusty rose'], ['#d9826b', 'Terracotta'], ['#a8c3a0', 'Sage'], ['#a9c8e0', 'Sky blue'], ['#b9a8d6', 'Lavender'], ['#141414', 'Black']]
+  ['#c97b84', 'Dusty rose'], ['#c96f58', 'Terracotta'], ['#a8c3a0', 'Sage'], ['#a9c8e0', 'Sky blue'], ['#b9a8d6', 'Lavender'], ['#141414', 'Black']]
 const STICKERS = Object.keys(STICKER_NAMES) as StickerKind[]
 export type GraphicPatch = Partial<Pick<Graphic, 'text' | 'sub' | 'tint' | 'sticker' | 'size' | 'dur' | 'place'>>
 

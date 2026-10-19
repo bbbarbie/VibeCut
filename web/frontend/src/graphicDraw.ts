@@ -181,7 +181,7 @@ const wordShadow = (ctx: Ctx, u: number) => soft(ctx, u, 0.55, 0.022, 0.004)
 /** Light or thin words: a tight dark edge first, so the strokes hold over
  *  pale stone, then the soft shadow over it. */
 function edged(ctx: Ctx, u: number, draw: () => void) {
-  soft(ctx, u, 0.5, 0.005, 0.0015)
+  soft(ctx, u, 0.75, 0.003, 0.001)
   draw()
   wordShadow(ctx, u)
   draw()
@@ -289,6 +289,26 @@ const chapter: Draw = (ctx, W, H, g, t) => {
   const c = spot(g, W, H, { x: m.l + blockW / 2, y: H * 0.42 })
   const left = c.x - blockW / 2 - gone * 0.05 * u
   const top = c.y - blockH / 2
+  // a soft shade behind the block: nothing on dark footage, something for
+  // light words to sit on over pale stone (the export can't see the pixels
+  // behind, so it's built in); kept inside the frame
+  const sx = left + blockW * 0.45, sy = top + blockH * 0.55
+  const rx = Math.min(0.75 * blockW, sx, W - sx), ry = Math.min(0.9 * blockH, sy, H - sy)
+  if (rx > 0 && ry > 0) {
+    ctx.save()
+    ctx.globalAlpha = out3(win(el, 0, 0.4)) * (1 - gone)
+    ctx.translate(sx, sy)
+    ctx.scale(1, ry / rx)
+    const shade = ctx.createRadialGradient(0, 0, 0, 0, 0, rx)
+    shade.addColorStop(0, 'rgba(0,0,0,0.26)')
+    shade.addColorStop(0.6, 'rgba(0,0,0,0.12)')
+    shade.addColorStop(1, 'rgba(0,0,0,0)')
+    ctx.fillStyle = shade
+    ctx.beginPath()
+    ctx.arc(0, 0, rx, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
+  }
   ctx.fillStyle = g.tint
   ctx.textAlign = 'left'
   ctx.textBaseline = 'top'
@@ -302,7 +322,7 @@ const chapter: Draw = (ctx, W, H, g, t) => {
     ctx.rect(left - numPx * 0.1, top - numPx * 0.12, numW + numPx * 0.4, numH + numPx * 0.18)
     ctx.clip()
     ctx.font = numFont
-    ctx.fillText(num, left, top + (1 - np) * numH)
+    edged(ctx, u, () => ctx.fillText(num, left, top + (1 - np) * numH))
     ctx.restore()
   }
   // the name, each letter fading up into place
@@ -634,7 +654,7 @@ const camcorder: Draw = (ctx, W, H, g, t) => {
   // never under an app's buttons (the safe area), the marks to the frame's edge
   const pad = 0.028 * u
   const tl = { x: Math.max(L + pad, m.l), y: Math.max(T + pad, m.t) }
-  const bl = { x: tl.x, y: Math.min(B - pad, H - m.b) }
+  const bl = { x: tl.x, y: H > W ? B - arm - 0.01 * u : Math.min(B - pad, H - m.b) }
   const on = el % 1 < 0.62
   if (on) {
     ctx.beginPath()
@@ -814,10 +834,10 @@ function sticker(ctx: Ctx, kind: StickerKind, tint: string, px: number) {
   ctx.lineCap = 'round'
   // the white edge, with the shadow under it (cast once: the fill goes on
   // after the shadow is off, or the shadow doubles)
-  ctx.shadowColor = 'rgba(0,0,0,0.32)'
+  ctx.shadowColor = 'rgba(0,0,0,0.38)'
   ctx.shadowBlur = 0.07 * px
   ctx.shadowOffsetX = 0
-  ctx.shadowOffsetY = 0.025 * px
+  ctx.shadowOffsetY = 0.035 * px
   ctx.lineWidth = 0.11
   ctx.strokeStyle = '#ffffff'
   ctx.fillStyle = '#ffffff'
@@ -946,13 +966,15 @@ const sparkles: Draw = (ctx, W, H, g, t) => {
     }
     at.push(best)
   })
+  // a glint: long up and down, shorter across, pinched thin
   const star = (s: number) => {
+    const h = s * 0.72, k = s * 0.05
     ctx.beginPath()
     ctx.moveTo(0, -s)
-    ctx.quadraticCurveTo(s * 0.12, -s * 0.12, s, 0)
-    ctx.quadraticCurveTo(s * 0.12, s * 0.12, 0, s)
-    ctx.quadraticCurveTo(-s * 0.12, s * 0.12, -s, 0)
-    ctx.quadraticCurveTo(-s * 0.12, -s * 0.12, 0, -s)
+    ctx.quadraticCurveTo(k, -k, h, 0)
+    ctx.quadraticCurveTo(k, k, 0, s)
+    ctx.quadraticCurveTo(-k, k, -h, 0)
+    ctx.quadraticCurveTo(-k, -k, 0, -s)
     ctx.fill()
   }
   ctx.save()
@@ -961,7 +983,7 @@ const sparkles: Draw = (ctx, W, H, g, t) => {
     const f = 0.6 + 0.6 * rnd(), ph0 = rnd()
     const pop = back(win(el, i * 0.07, 0.35))
     const tw = Math.abs(Math.sin(Math.PI * (raw * f + ph0))) ** 1.4
-    const s = p.size * pop * (0.45 + 0.55 * tw) * (1 - gone)
+    const s = p.size * pop * (0.65 + 0.35 * tw) * (1 - gone)
     if (s <= 0.2) return
     ctx.save()
     ctx.translate(c.x + p.x, c.y + p.y)
@@ -973,6 +995,16 @@ const sparkles: Draw = (ctx, W, H, g, t) => {
     ctx.shadowColor = g.tint
     ctx.shadowBlur = s * 0.9
     star(s)
+    // a bright core, so it reads as light rather than a cut-out
+    noShadow(ctx)
+    const core = ctx.createRadialGradient(0, 0, 0, 0, 0, s * 0.45)
+    core.addColorStop(0, 'rgba(255,255,255,0.85)')
+    core.addColorStop(1, 'rgba(255,255,255,0)')
+    ctx.fillStyle = core
+    ctx.beginPath()
+    ctx.arc(0, 0, s * 0.45, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = g.tint
     ctx.restore()
   })
   ctx.restore()
@@ -998,9 +1030,6 @@ const circle: Draw = (ctx, W, H, g, t) => {
   ctx.globalAlpha = 1 - gone
   ctx.translate(c.x, c.y)
   ctx.rotate(-0.12)
-  ctx.strokeStyle = g.tint
-  ctx.lineCap = 'round'
-  ctx.lineJoin = 'round'
   soft(ctx, u, 0.35, 0.012, 0.003)
   const th0 = -Math.PI * 0.62
   const pt = (i: number) => {
@@ -1009,23 +1038,36 @@ const circle: Draw = (ctx, W, H, g, t) => {
     const k = 1 + 0.035 * Math.sin(3 * th + wob) + 0.06 * f
     return [Math.cos(th) * rx * k, Math.sin(th) * ry * k]
   }
+  // the loop as one filled ribbon with round ends, full width until the last
+  // tenth, then thinning: one shape casts one shadow and fades out cleanly
   const last = Math.floor(N * p), taper = Math.floor(N * 0.9)
-  ctx.lineWidth = lw
-  ctx.beginPath()
-  for (let i = 0; i <= Math.min(last, taper); i++) {
-    const [x, y] = pt(i)
-    if (i) ctx.lineTo(x, y)
-    else ctx.moveTo(x, y)
-  }
-  ctx.stroke()
-  // the last tenth of the loop thins out as the marker lifts
-  for (let i = taper + 1; i <= last; i++) {
-    const [x0, y0] = pt(i - 1), [x1, y1] = pt(i)
-    ctx.lineWidth = lw * lerp(1, 0.55, (i - taper) / (N - taper))
+  if (last >= 1) {
+    const half = (i: number) => (lw / 2) * (i <= taper ? 1 : lerp(1, 0.55, (i - taper) / (N - taper)))
+    const L: number[][] = [], Rt: number[][] = [], dirs: number[][] = []
+    for (let i = 0; i <= last; i++) {
+      const [x, y] = pt(i), [ax, ay] = pt(Math.max(0, i - 1)), [bx, by] = pt(Math.min(last, i + 1))
+      const len = Math.hypot(bx - ax, by - ay) || 1
+      const dx = (bx - ax) / len, dy = (by - ay) / len, w = half(i)
+      dirs.push([dx, dy])
+      L.push([x - dy * w, y + dx * w])
+      Rt.push([x + dy * w, y - dx * w])
+    }
+    const cap = (i: number, back: boolean) => {
+      const [x, y] = pt(i), [dx, dy] = dirs[i], w = half(i), sg = back ? -1 : 1
+      for (let j = 1; j < 8; j++) {
+        const a = (j / 8) * Math.PI
+        ctx.lineTo(x + w * (Math.cos(a) * -dy * sg + Math.sin(a) * dx * sg), y + w * (Math.cos(a) * dx * sg + Math.sin(a) * dy * sg))
+      }
+    }
+    ctx.fillStyle = g.tint
     ctx.beginPath()
-    ctx.moveTo(x0, y0)
-    ctx.lineTo(x1, y1)
-    ctx.stroke()
+    ctx.moveTo(L[0][0], L[0][1])
+    for (let i = 1; i <= last; i++) ctx.lineTo(L[i][0], L[i][1])
+    cap(last, false)
+    for (let i = last; i >= 0; i--) ctx.lineTo(Rt[i][0], Rt[i][1])
+    cap(0, true)
+    ctx.closePath()
+    ctx.fill()
   }
   ctx.restore()
   let box = { id: g.id, x: c.x - rx * 1.1, y: c.y - ry * 1.1, w: rx * 2.2, h: ry * 2.2 }
@@ -1052,7 +1094,7 @@ const circle: Draw = (ctx, W, H, g, t) => {
     ctx.rotate(-0.06)
     ctx.scale(lp, lp)
     ctx.textAlign = 'center'
-    soft(ctx, u, 0.5, 0.005, 0.0015)
+    soft(ctx, u, 0.75, 0.003, 0.001)
     ctx.fillText(lab.rows[0], 0, 0)
     soft(ctx, u, 0.55, 0.016, 0.003)
     ctx.fillText(lab.rows[0], 0, 0)
@@ -1177,5 +1219,5 @@ export function tilePiece(piece: GraphicPiece, k = 1, tint?: string, sticker?: S
 }
 export const DEFAULT_TINT: Record<GraphicPiece, string> = {
   title: '#ffffff', chapter: '#f6ead7', route: '#c97b84', pin: '#c97b84', camcorder: '#ffffff',
-  clock: '#c97b84', stickers: '#e8b4b8', sparkles: '#ffe08a', circle: '#d9826b', progress: '#ffffff',
+  clock: '#c97b84', stickers: '#e8b4b8', sparkles: '#ffe08a', circle: '#c96f58', progress: '#ffffff',
 }

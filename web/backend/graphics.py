@@ -46,7 +46,7 @@ PIECES: dict[str, dict] = {
     "clock":     {"label": "Clock",          "hang": "shot",  "dur": 3.5,  "tint": "#c97b84", "words": True},
     "stickers":  {"label": "Beat sticker",   "hang": "shot",  "dur": 3.0,  "tint": "#e8b4b8", "words": False},
     "sparkles":  {"label": "Sparkles",       "hang": "shot",  "dur": 3.0,  "tint": "#ffe08a", "words": False},
-    "circle":    {"label": "Circle it",      "hang": "shot",  "dur": 2.5,  "tint": "#d9826b", "words": True},
+    "circle":    {"label": "Circle it",      "hang": "shot",  "dur": 2.5,  "tint": "#c96f58", "words": True},
     "progress":  {"label": "Progress bar",   "hang": "edit",  "dur": None, "tint": "#ffffff", "words": False},
 }
 STICKERS = ("heart", "star", "smile", "sun", "flower", "bolt", "note", "sparkle")
