@@ -310,6 +310,22 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   the one mirrored from the profile page (`/api/profile`). Not tried
   against the live model (no key on this Mac). `tests/test_taste.py`.
   Layer 3 (undo and verdicts as candidate rules) is not built.
+- **Recipes** (`web/backend/recipes.py`, `/api/recipes`, `SaveRecipe.tsx`;
+  idea 4 of the open-tools research, built on barbie's vibes and Watch
+  screen once merged, 2026-10-19). "Save as my recipe" (next to Download on
+  the Watch screen, and in the name menu) measures the finished board, not
+  the clips: pace and arc from `timeline.layout`'s shot ends, words from the
+  resolved overlays (share, band by time held, hold, samples), the music's
+  BPM and energy arc from its in-point, the ending; plus its dress (frame,
+  look, music on/off, the caption `overlay_style`, a transition on every
+  join, an effect on ≥ 75% of shots). Saved under a name (the same name
+  replaces it) in `$VIBECUT_CACHE/recipes/`, mirrored as kind `vibe`, key
+  `recipe:<id>`. Listed first under "Cut it like" (♥, renamed or deleted
+  there; picking one preselects its frame, look and music). A Make with
+  one: `make.fingerprint(vibe=…)` like any vibe, its caption samples ride
+  as phrasing, and `recipes.dress_ops` lands on the same Make turn (one
+  Undo; `board.applied` gives the trial board). A recipe is a vibe: no AI,
+  nothing spent. `tests/test_recipes.py`.
 - **The viral library** (`web/backend/vibes.py`, `/api/vibes`, "Cut it
   like" in `Setup.tsx`; the user's vision, 2026-10-18: learn from viral
   vlogs). A vibe = `remix.fingerprint` over a *set* of reels learnt through
