@@ -324,6 +324,13 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const autoBrief = useRef(false)
   const [setup, setSetup] = useState<{ data: SetupData | null; busy: boolean; progress?: MakeJob | null } | null>(null)
   const playOnLand = useRef(false)   // the first thing after Make my video is the video, playing
+  // Watch: the video full-size with four chips and Download; the editor
+  // (rail, inspector, timeline) waits behind one Fine-tune link. A made
+  // video opens here; a hand-cut one opens in the editor.
+  const [watching, setWatching] = useState<boolean | null>(null)
+  useEffect(() => {
+    if (watching === null && session?.board) setWatching(session.board.option === 'made' || session.board.option === 'remix')
+  }, [session?.board, watching])
   const startQuestions = () => {
     if (asking || autoBrief.current || setup || frontDoor.current || remixing) return
     setSetup({ data: null, busy: false })
@@ -331,12 +338,12 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   }
   // Make my video (2026-10-17): the one pipeline runs as a job; the dialog
   // shows where it is; when it lands the edit opens in Frames and plays.
-  const makeIt = async (format: string, look: string) => {
+  const makeIt = async (format: string, look: string, music: boolean = true, vibe: string | null = null) => {
     if (autoBrief.current) return
     autoBrief.current = true
     setSetup((x) => x && { ...x, busy: true })
     try {
-      let job = await api.make({ format, look })
+      let job = await api.make({ format, look, music, vibe })
       setSetup((x) => x && { ...x, progress: job })
       while (job.stage !== 'done' && job.stage !== 'error') {
         await new Promise((r) => window.setTimeout(r, 700))
@@ -347,6 +354,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       playOnLand.current = true
       setSession(await api.session())
       setSetup(null)
+      setWatching(true)
       setLevel('frames')
     } catch (e) {
       note((e as Error).message)
@@ -884,7 +892,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const openTalk = () => { transport.stop(); stopQueue(); setMenu(null); setLevel('story'); setTalkOpen(true) }
   const openExport = () => { transport.stop(); videoRef.current?.pause(); stopQueue(); setMenu(null); setExporting(true) }
   const openRemix = () => { transport.stop(); videoRef.current?.pause(); stopQueue(); setMenu(null); setReferencing(false); setRemixing(true) }
-  const remixDone = async () => { await refresh(); setPeek(null); setLevel('frames') }
+  const remixDone = async () => { await refresh(); setPeek(null); setWatching(true); setLevel('frames') }
   const startOver = async () => {
     setRestart(false)
     try { await api.clear(); await refresh(); setLocal([hello]); setPeek(null); setLevel('story') }
@@ -989,7 +997,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const chat = (
     <Chat items={chatItems} pending={pending} onSend={send} onToggle={toggle}
           disabled={!!pending} llm={caps.llm} hasBoard={!!session?.board || !!session?.proposals}
-          prefs={session?.preferences ?? null} onClassify={classify} onRule={changeRule}
+          prefs={session?.preferences ?? null} onClassify={classify} onRule={changeRule} onSuggest={async (r) => { const s = await api.suggest(r); setSession(s) }}
           review={session?.last ? { turn: session.last.turn, items: session.last.review ?? [] } : null} />
   )
 
@@ -1184,7 +1192,8 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
 
   return (
     <>
-    {setup && <Setup data={setup.data} busy={setup.busy} progress={setup.progress} onDone={makeIt} onCancel={() => { if (!setup.busy) setSetup(null) }} />}
+    {setup && <Setup data={setup.data} busy={setup.busy} progress={setup.progress} onDone={makeIt} onCancel={() => { if (!setup.busy) setSetup(null) }}
+                     onReload={async () => { const d = await api.setup(); setSetup((x) => x && { ...x, data: d }) }} />}
     {asking && <StyleQuestions questions={asking.questions} tailored={asking.tailored}
                                onDone={answered} onCancel={() => setAsking(null)} />}
     <div className="grid h-full grid-rows-[56px_1fr] bg-ink">
@@ -1213,8 +1222,6 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                 { label: 'Feel like a video you love…', hint: 'Its pace, cuts and colour, never its frames', disabled: !clips.length || shown !== 'story', onClick: () => { transport.stop(); setMenu(null); setReferencing(true) } },
                 { label: 'Talking to camera…', hint: caps.speech ? 'Transcribe on this Mac, cut pauses and retakes' : 'Needs macOS 26 with the Xcode command-line tools', disabled: !caps.speech || !clips.length, onClick: openTalk },
                 { label: 'Build a short from reference reels…', hint: caps.links ? 'Their pace and length, your clips, free music' : 'Links need yt-dlp; files work', disabled: !clips.length, onClick: openRemix },
-                { label: 'Keyboard shortcuts', onClick: () => setHelp(true) },
-                { label: 'Polish a finished video', hint: 'A separate tool for a video you already cut', onClick: () => go({ kind: 'polish' }) },
                 { label: 'All your videos', onClick: () => go({ kind: 'projects' }) },
                 { label: 'Start this video over…', hint: 'Clears the footage list and the story; files stay', danger: true, disabled: !clips.length, onClick: () => setRestart(true) },
               ]} />
@@ -1253,7 +1260,59 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
           <div className="absolute inset-y-0 left-0 z-30 w-[min(360px,90vw)] shadow-2xl shadow-black/60" onKeyDown={(e) => { if (e.key === 'Escape') setChatOpen(false) }}>{chat}</div>
         )) : chat)}
 
-        {framesView ? (
+        {framesView && watching ? (
+          <main className="relative flex min-h-0 min-w-0 flex-col items-center px-3 pb-3">
+            <div ref={stageRef} className="mt-3 flex min-h-0 w-full max-w-[1100px] flex-1 flex-col overflow-hidden rounded-2xl bg-[#121212]">
+              {player(true)}
+            </div>
+            <div className="mt-3 flex w-full max-w-[1100px] flex-wrap items-center justify-center gap-2">
+              <button type="button" disabled={session?.bed?.stage === 'looking'}
+                      title={session?.music ? 'Take the music out' : 'Find a track that fits and put the cuts on its beat'}
+                      onClick={async () => { try { const r = await api.bed(!session?.music); setSession(r); if (session?.music) offerUndo(r) } catch (e) { note((e as Error).message) } }}
+                      className="max-w-[18rem] truncate rounded-full border border-line bg-panel px-3 py-1.5 text-[13px] text-zinc-200 hover:bg-raised disabled:opacity-60">
+                ♪ {session?.bed?.stage === 'looking' ? 'Finding music…' : session?.music ? session.music.title : 'Music off'}
+              </button>
+              <LengthButton total={tl.total} onDone={(r) => { setSession(r); offerUndo(r); note(r.length_note) }} />
+              <button type="button" title="The look: the words, the colour, how parts join. Click for the next one."
+                      onClick={() => {
+                        const lk = session?.overlays?.look
+                        if (!lk?.all?.length) return
+                        const i = lk.all.findIndex((l) => l.id === lk.id)
+                        const next = lk.all[(i + 1) % lk.all.length]
+                        run([{ op: 'set_look', look: next.id }], `You chose the ${next.name} look`)
+                      }}
+                      className="rounded-full border border-line bg-panel px-3 py-1.5 text-[13px] text-zinc-200 hover:bg-raised">
+                ◐ {session?.overlays?.look?.all?.find((l) => l.id === session?.overlays?.look?.id)?.name ?? 'No look'}
+              </button>
+              <button type="button" title="Words on the video: a title and a line per stop"
+                      onClick={async () => { try { const r = await api.captions(!ovData.items.length); setSession(r); offerUndo(r) } catch (e) { note((e as Error).message) } }}
+                      className="rounded-full border border-line bg-panel px-3 py-1.5 text-[13px] text-zinc-200 hover:bg-raised">
+                ¶ Words {ovData.items.length ? 'on' : 'off'}
+              </button>
+              <span className="mx-1 h-6 w-px bg-line" aria-hidden />
+              <Button variant="primary" size="md" onClick={() => { transport.stop(); setExporting(true) }}>Download</Button>
+              <Button variant="ghost" size="md" onClick={() => setWatching(false)} title="The editor: every shot, caption, join and sound">Fine-tune</Button>
+            </div>
+            {undoable && <p className="mt-2 text-[12px] text-muted">{undoable.text} · <button type="button" className="underline" onClick={() => toggle(undoable.turn)}>Undo</button></p>}
+            {session?.habits?.length ? (
+              <p className="mt-1 text-[12px] text-muted">
+                Kept {session.habits.map((h) => h.text).join(' and ')}, as you did last time ·{' '}
+                <button type="button" className="underline" title="Switch this habit off and make the video again without it"
+                        onClick={async () => {
+                          try {
+                            let job = await api.habitSwitch(session.habits![0].id, true, true)
+                            while (job.stage && job.stage !== 'done' && job.stage !== 'error') {
+                              await new Promise((r) => window.setTimeout(r, 700))
+                              job = await api.makeStatus(job.id)
+                            }
+                            playOnLand.current = true
+                            setSession(await api.session())
+                          } catch (e) { note((e as Error).message) }
+                        }}>Undo that</button>
+              </p>
+            ) : null}
+          </main>
+        ) : framesView ? (
           <main className="relative flex min-h-0 min-w-0 flex-col px-3 pb-3">
             <div className="relative flex min-h-0 flex-1 pt-3">
               <nav aria-label="Panels" className="flex w-[80px] shrink-0 flex-col gap-1 pr-2">
@@ -1354,7 +1413,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       {session?.mix && <audio ref={mixRef} src={session.mix.audio} preload="auto"
                               onError={() => { transport.mixBroken = true }} />}
       {help && <Keys onClose={() => setHelp(false)} />}
-      {exporting && <Export tl={tl} overlays={ovData} parts={parts} music={session?.music?.title ?? null} style={session?.board?.style}
+      {exporting && <Export tl={tl} overlays={ovData} parts={parts} music={session?.music?.title ?? null} credit={session?.music?.credit ?? null} style={session?.board?.style}
                             history={session?.exports ?? []} onClose={() => { setExporting(false); api.session().then(setSession).catch(() => {}) }} />}
       {remixing && <Remix onClose={() => { setRemixing(false); setFrontLinks(null) }} onDone={remixDone} canLinks={caps.links}
                           initialLinks={frontLinks ?? ''} autoStart={!!frontLinks} />}

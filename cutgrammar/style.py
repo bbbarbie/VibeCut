@@ -24,7 +24,7 @@ from . import evidence, features, grade, music
 from . import shots as shots_mod
 from .media import Media
 
-VERSION = 1
+VERSION = 2          # 2: opening, ending, words
 
 # transitions
 DARK = 6.0             # mean luma below this is black (a fade reaches true black; a night shot rarely does)
@@ -447,7 +447,10 @@ def music_feel(media: Media) -> dict | None:
                  + (" (upbeat)" if bpm >= 115 else " (relaxed)" if bpm < 90 else ""))
     else:
         w.append("no steady beat")
-    return {"bpm": bpm, "energy": [round(float(x), 3) for x in curve], "arc": arc, "words": w}
+    bright = music.brightness(media)
+    if bright:
+        w.append("a bright, airy sound" if bright > 2500 else "a warm, low sound" if bright < 1200 else "a full, even sound")
+    return {"bpm": bpm, "energy": [round(float(x), 3) for x in curve], "arc": arc, "bright": bright, "words": w}
 
 
 # --------------------------------------------------------------------------
@@ -499,6 +502,9 @@ def look(media: Media, bars: tuple[int, int], skip: np.ndarray | None = None) ->
 # --------------------------------------------------------------------------
 
 NEEDS = {
+    "opening": [evidence.MOTION],
+    "ending": [evidence.MOTION],
+    "words": [evidence.STILL],
     "pace": [evidence.STILL],
     "transitions": [evidence.MOTION],
     "beat": [evidence.MOTION, evidence.AUDIO],
@@ -508,8 +514,109 @@ NEEDS = {
 }
 
 
-def learn(media: Media, shot_list: list[shots_mod.Shot] | None = None) -> dict:
-    """Everything a reference video can teach, each trait with its evidence."""
+# --------------------------------------------------------------------------
+# the reel's ideas: where its words sit and for how long, how it opens, how
+# it ends. Rhythm alone (pace, beat, look) made a copy that marched like the
+# reference and said nothing like it (2026-10-18).
+# --------------------------------------------------------------------------
+
+TEXT_BANDS = ((0.0, 0.33, "bottom"), (0.33, 0.66, "middle"), (0.66, 1.01, "top"))   # of frame height, origin bottom
+TEXT_MIN_CONF = 0.3
+EDGE_S = 2.0              # the opening and the ending are judged on their first / last two seconds
+
+
+def text_style(events: list[dict], duration: float) -> dict | None:
+    """`events` = [{"t": s, "items": [{"text", "box": [x, y, w, h], "conf"}]}] at a
+    steady sample rate -> when and where a reel puts words on screen."""
+    if not events:
+        return None
+    ts = sorted(e["t"] for e in events)
+    step = float(np.median(np.diff(ts))) if len(ts) > 1 else 0.5
+    on = []
+    bands = {"bottom": 0, "middle": 0, "top": 0}
+    heights, cards_words, letters, upper = [], [], 0, 0
+    samples: list[str] = []            # the reel's own lines, a few, for the writer's ear
+    for e in sorted(events, key=lambda e: e["t"]):
+        items = [i for i in e.get("items", []) if i.get("conf", 1) >= TEXT_MIN_CONF and i.get("text", "").strip()]
+        on.append(bool(items))
+        for i in items:
+            x, y, w, h = i["box"]
+            cy = y + h / 2
+            for lo, hi, name in TEXT_BANDS:
+                if lo <= cy < hi:
+                    bands[name] += 1
+            heights.append(h)
+            cards_words.append(len(i["text"].split()))
+            line = " ".join(i["text"].split())
+            if 2 <= len(line) <= 48 and line.lower() not in {x.lower() for x in samples} and len(samples) < 12:
+                samples.append(line)
+            for ch in i["text"]:
+                if ch.isalpha():
+                    letters += 1
+                    upper += ch.isupper()
+    on_arr = np.array(on, dtype=bool)
+    # the recogniser misses a frame now and then; a one-sample hole inside a
+    # caption is the same caption, not two short ones (held 0.8 s read on a
+    # reel whose captions plainly held 2–3 s, 2026-10-18)
+    if len(on_arr) > 2:
+        holes = (~on_arr[1:-1]) & on_arr[:-2] & on_arr[2:]
+        on_arr[1:-1] |= holes
+    runs = _runs(on_arr)
+    share = float(on_arr.mean())
+    if share == 0:
+        return {"share": 0.0, "first_s": None, "band": None, "hold_s": None, "cards": 0, "upper": None,
+                "size": None, "words_per_card": None, "words": ["no words on screen"]}
+    first = float(ts[int(np.flatnonzero(on_arr)[0])])
+    hold = float(np.median([(b - a) * step for a, b in runs])) if runs else step
+    band = max(bands, key=bands.get)
+    up = upper / letters if letters else 0.0
+    words = [f"words on screen {share:.0%} of the time", f"usually at the {band}", f"each held about {hold:.1f} s"]
+    words.append("first words at the start" if first <= 1.0 else f"first words at {first:.0f} s")
+    if up > 0.8:
+        words.append("ALL CAPS")
+    return {"share": round(share, 3), "first_s": round(first, 2), "band": band, "hold_s": round(hold, 2),
+            "cards": len(runs), "upper": round(up, 2), "size": round(float(np.median(heights)), 3),
+            "words_per_card": round(float(np.median(cards_words)), 1), "samples": samples,
+            "bands": {k: round(v / max(1, sum(bands.values())), 2) for k, v in bands.items()}, "words": words}
+
+
+def _motion_per_s(media: Media) -> np.ndarray:
+    f = media.frames.astype(np.float32)
+    d = np.abs(np.diff(f, axis=0)).mean(axis=(1, 2, 3)) if len(f) > 1 else np.zeros(1)
+    fps = int(round(media.fps or 30))
+    n = max(1, len(d) // fps)
+    return np.array([d[k * fps:(k + 1) * fps].mean() for k in range(n)])
+
+
+def opening(media: Media, bounds: list[float]) -> dict:
+    """How the reel opens: how long before the first cut, and whether the
+    first seconds move more than the rest (a hook on action)."""
+    m = _motion_per_s(media)
+    k = max(1, int(EDGE_S))
+    ratio = float(m[:k].mean() / (m.mean() + 1e-6)) if len(m) else 1.0
+    first_cut = float(min(bounds)) if bounds else media.duration
+    words = [f"first cut at {first_cut:.1f} s", "opens on action" if ratio > 1.25 else "opens still" if ratio < 0.75 else "opens at its own pace"]
+    return {"first_cut_s": round(first_cut, 2), "motion_ratio": round(ratio, 2), "words": words}
+
+
+def ending(media: Media, bounds: list[float], trans: list[dict]) -> dict:
+    """How the reel ends: the last shot's length, whether it fades, whether
+    the last seconds calm down or keep moving."""
+    inside = [b for b in bounds if 0 < b < media.duration]
+    last = media.duration - (max(inside) if inside else 0.0)
+    m = _motion_per_s(media)
+    k = max(1, int(EDGE_S))
+    ratio = float(m[-k:].mean() / (m.mean() + 1e-6)) if len(m) else 1.0
+    fades = any(x["kind"] == "fade_out" for x in trans)
+    words = [f"last shot held {last:.1f} s", "fades out" if fades else "ends on a cut",
+             "ends still" if ratio < 0.75 else "ends on action" if ratio > 1.25 else "ends at its own pace"]
+    return {"last_s": round(last, 2), "fade_out": fades, "motion_ratio": round(ratio, 2), "words": words}
+
+
+def learn(media: Media, shot_list: list[shots_mod.Shot] | None = None, text: list[dict] | None = None) -> dict:
+    """Everything a reference video can teach, each trait with its evidence.
+    `text` = sampled words-on-screen events (web/backend/vision.text over
+    frames of the source), when the Mac's Vision could read them."""
     have = evidence.available(media)
     sh = shot_list if shot_list is not None else shots_mod.detect(media)
     trans = transitions(media, sh)
@@ -532,9 +639,15 @@ def learn(media: Media, shot_list: list[shots_mod.Shot] | None = None) -> dict:
         "music": music_feel(media),
         "look": look(media, bars, skip) or None,
         "frame": frame_style(media, bars),
+        "opening": opening(media, bounds),
+        "ending": ending(media, bounds, trans),
+        "words": text_style(text, media.duration) if text is not None else None,
     }
     for k, v in traits.items():
         if v is None:
+            if k == "words":
+                traits[k] = {"pending": ["vision"], "evidence": [evidence.STILL],
+                             "words": ["not checked — reading words on screen needs the Mac's Vision"]}
             continue
         lacking = evidence.missing(NEEDS[k], have)
         v["evidence"] = list(NEEDS[k])
@@ -548,7 +661,7 @@ def learn(media: Media, shot_list: list[shots_mod.Shot] | None = None) -> dict:
 def summary(style: dict) -> list[str]:
     """One line per trait, for a terminal or a card."""
     out = []
-    for k in ("pace", "transitions", "beat", "music", "look", "frame"):
+    for k in ("pace", "transitions", "beat", "music", "look", "frame", "opening", "ending", "words"):
         v = style.get(k)
         if v and v.get("words"):
             out.append(f"{k:<12} " + ", ".join(v["words"]))

@@ -12,11 +12,12 @@ type Phase = { kind: 'ready' } | { kind: 'drawing'; done: number; of: number } |
 // words are drawn here, by the same code as the preview, then composited
 // by the server -- so the file shows exactly what the player showed.
 // Past exports of this project are listed underneath (they're on the project).
-export function Export({ tl, overlays, parts, music, style, history = [], onClose }: {
+export function Export({ tl, overlays, parts, music, credit, style, history = [], onClose }: {
   tl: TimelineData
   overlays: Overlays
   parts: Part[]
   music: string | null
+  credit?: string | null     // the track's licence line, copied with the caption
   style?: BoardStyle | null
   history?: ExportRecord[]
   onClose: () => void
@@ -73,6 +74,7 @@ export function Export({ tl, overlays, parts, music, style, history = [], onClos
   }
 
   const [verdict, setVerdict] = useState<null | 'sending' | 'sent'>(null)
+  const [saved, setSaved] = useState<string | null>(null)
   const [note, setNote] = useState('')
   const pct = phase.kind === 'drawing' ? phase.done / Math.max(1, phase.of)
     : phase.kind === 'rendering' ? phase.job.progress : phase.kind === 'done' ? 1 : 0
@@ -165,6 +167,16 @@ export function Export({ tl, overlays, parts, music, style, history = [], onClos
 
         <div className="mt-5 flex justify-end gap-2">
           {phase.kind === 'done' ? <>
+            {navigator.platform.startsWith('Mac') && <button type="button" onClick={async () => { setSaved('…'); try { await api.exportPhotos(phase.job.id); setSaved('In Photos.') } catch (e) { setSaved((e as Error).message) } }}
+                                                             className="rounded-lg bg-accent/20 px-3 py-1.5 text-[12px] text-zinc-100 hover:bg-accent/30">Save to Photos</button>}
+            {saved && <span className="self-center text-[11px] text-muted">{saved}</span>}
+            <button type="button" title="The caption to paste: the title line, and the music credit its licence asks for"
+                    onClick={() => {
+                      const title = overlays.items.find((o) => o.kind === 'title')?.text ?? ''
+                      const text = [title, credit ? `Music: ${credit}` : ''].filter(Boolean).join('\n')
+                      navigator.clipboard?.writeText(text).then(() => setSaved('Caption copied.')).catch(() => setSaved('Copy failed.'))
+                    }}
+                    className="rounded-lg border border-line px-3 py-1.5 text-[12px] text-zinc-200 hover:bg-raised">Copy caption{credit ? ' + credit' : ''}</button>
             {navigator.platform.startsWith('Mac') && <button type="button" onClick={() => api.exportReveal(phase.job.id)} className="rounded-lg border border-line px-3 py-1.5 text-[12px] text-zinc-200 hover:bg-raised">Show in Finder</button>}
             <a href={`/api/export/${phase.job.id}/file`} download className="rounded-lg border border-line px-3 py-1.5 text-[12px] text-zinc-200 hover:bg-raised">Download</a>
             <button type="button" onClick={onClose} className="rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-accent-ink">Done</button>

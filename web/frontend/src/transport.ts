@@ -464,12 +464,25 @@ export function dress(el: HTMLVideoElement | null, it: SeqItem | null | undefine
     const k = fill ? Math.max(W / w, H / h) : Math.min(W / w, H / h)
     transform = `rotate(${r}deg) scale(${k})${flip}`
   }
+  // the push over the shot (board punch; export's zoompan): a slow scale, + in, - out
+  const push = it?.kind === 'shot' ? (it.punch ?? 0) : 0
+  const dur = it ? Math.max(0.2, it.seq_end - it.seq_start) : 0
   // the held frame laid over the picture (hold.ts) is the same picture: dress it alike
   const still = hold ? el.parentElement?.querySelector<HTMLCanvasElement>('canvas[data-hold]') : null
   for (const x of still ? [el, still] : [el]) {
     x.dataset.dress = transform   // paint() puts the shot's effect in front of it
     x.style.transform = transform
     x.style.objectFit = fit
+    if (push) {
+      x.style.setProperty('--push-from', String(push > 0 ? 1 : 1 - push))
+      x.style.setProperty('--push-to', String(push > 0 ? 1 + push : 1))
+      x.style.animation = 'none'
+      void x.offsetWidth   // restart the animation at each cut
+      x.style.animation = `vc-push ${dur.toFixed(3)}s linear forwards`
+    } else {
+      x.style.animation = ''
+      x.style.removeProperty('scale')
+    }
   }
 }
 

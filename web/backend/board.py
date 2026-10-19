@@ -61,10 +61,11 @@ AUDIO_GAIN_MAX = 2.0   # 200%: louder than filmed, short of distorting most phon
 OPS = OPS + ("set_shot",)
 SPEEDS = (0.25, 4.0)           # the slowest and fastest a shot may play
 SHOT_FX = ("speed", "gain", "mute", "rotate", "fill", "mirror", "fade_in", "fade_out",
-           "effect", "effect_amount")
+           "punch", "effect", "effect_amount")
+PUNCH_MAX = 0.25     # a push into (or out of) the frame over the shot, as a share of its size
 # effect: one of effects.KINDS (Shake, Glitch, VHS...), picked in the Effects tab
 FX_PLAIN = {"speed": 1.0, "gain": 1.0, "mute": False, "rotate": 0, "fill": False, "mirror": False,
-            "fade_in": 0.0, "fade_out": 0.0, "effect": None, "effect_amount": 1.0}
+            "fade_in": 0.0, "fade_out": 0.0, "punch": 0.0, "effect": None, "effect_amount": 1.0}
 FADE_MAX = 5.0   # a shot's own sound fading in or out, seconds
 
 FRAME = 1 / 30  # sequence frame; the smallest piece a cut or trim may leave
@@ -257,6 +258,9 @@ def _shot_fx(b: dict, op: dict) -> None:
     for f in ("fade_in", "fade_out"):
         if f in op:
             e[f] = round(max(0.0, min(FADE_MAX, float(op[f]))), 2)
+    if "punch" in op:
+        # the camera's push over the shot: + in, - out (export's zoompan; the player's scale)
+        e["punch"] = round(max(-PUNCH_MAX, min(PUNCH_MAX, float(op["punch"]))), 3)
     if "effect" in op:
         from . import effects
         if op["effect"] is not None and op["effect"] not in effects.KINDS:
