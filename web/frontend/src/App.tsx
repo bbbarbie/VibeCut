@@ -21,6 +21,7 @@ import type { OverlayEdit } from './components/OverlayCanvas'
 import { Menu, SwapPicker, type MenuItem } from './components/Menus'
 import { Music } from './components/Music'
 import type { ClassifyReq } from './components/Remember'
+import { Resources } from './components/Resources'
 import { Shelf } from './components/Shelf'
 import { SmoothButton, Story, type PlayItem, type Selection } from './components/Story'
 import { Timeline, type Marks } from './components/Timeline'
@@ -38,7 +39,7 @@ import { go } from './router'
 import { deriveStage, reached, STAGES, type Stage } from './stage'
 import { phStore, snapStore, transport, transportStore, useStore } from './transport'
 import { Button, Confirm, cx, Wordmark } from './ui'
-import type { Capabilities, Clip, Msg, Option, Overlay, OverlayKind, Overlays as OverlayData, Segment, Session, StyleAnswers, StyleQuestion, TimelineData } from './types'
+import type { Capabilities, Clip, Msg, Option, Overlay, OverlayKind, Overlays as OverlayData, Resource, ResourceFolder, ResourceKind, Segment, Session, StyleAnswers, StyleQuestion, TimelineData } from './types'
 
 const hello: Msg = {
   id: 'hello', role: 'app', at: 0,
@@ -111,7 +112,10 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const [help, setHelp] = useState(false)
   const [selOverlay, setSelOverlay] = useState<string | null>(null)
   // Frames: the panel beside the rail on the left (closed by clicking its item again)
-  const [side, setSide] = useState<'media' | 'text' | 'music' | 'chat' | null>(() => (window.innerWidth < 1100 ? null : 'media'))
+  const [side, setSide] = useState<'media' | 'text' | 'music' | 'chat' | 'resources' | null>(() => (window.innerWidth < 1100 ? null : 'media'))
+  // My resources: the creator's saved looks, effects, songs... (null until the folder is first opened)
+  const [folder, setFolder] = useState<ResourceFolder | null>(null)
+  const [folderError, setFolderError] = useState<string | null>(null)
   const [layout, setSize] = useLayout()
   const stageRef = useRef<HTMLDivElement>(null)
   const isSaving = useSyncExternalStore(saving.subscribe, saving.get)
@@ -504,6 +508,44 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     } catch (e) {
       note(`Couldn’t apply that: ${(e as Error).message}`)
       return null
+    }
+  }
+
+  // ---- My resources ---------------------------------------------------------
+  const loadFolder = useCallback(() => {
+    api.resources().then((f) => { setFolderError(null); setFolder(f) }).catch((e) => setFolderError((e as Error).message))
+  }, [])
+  useEffect(() => { if (side === 'resources') loadFolder() }, [side, loadFolder])
+  // where a saved thing is taken from or put: the clicked shot, the clicked cut
+  const resourceWhere = (kind: ResourceKind) => {
+    const shot = selItem?.kind === 'shot' ? selItem.key : null
+    const cut = selJoin ?? null
+    if (kind === 'effect' && !shot) {
+      // the Effects tab shows every shot's effect when nothing is clicked: take it off the first
+      return { shot: tl.items.find((x) => x.kind === 'shot')?.key ?? null, after: cut }
+    }
+    if (kind === 'transition' && !cut) return { shot, after: session?.mix?.joins?.[0]?.after ?? null }
+    return { shot, after: cut }
+  }
+  const saveResource = async (kind: ResourceKind, why: string | null) => {
+    if (why) { note(why); return }
+    try {
+      const r = await api.saveResource(kind, resourceWhere(kind))
+      setFolder((f) => (f ? { ...f, items: r.items } : f))
+      note(`Saved “${r.item.name}” to My resources`)
+    } catch (e) {
+      // signed out: the folder opens on its sign-in card
+      if ((e as { status?: number }).status === 401) { setSide('resources'); loadFolder() } else note((e as Error).message)
+    }
+  }
+  const applyResource = async (r: Resource) => {
+    try {
+      const s = await api.useResource(r.id, { shot: selItem?.kind === 'shot' ? selItem.key : null, after: selJoin ?? null })
+      setSession(s)
+      offerUndo(s)
+    } catch (e) {
+      if ((e as { status?: number }).status === 401) loadFolder()
+      else note((e as Error).message.replace(/^./, (c) => c.toUpperCase()))
     }
   }
 
@@ -1255,6 +1297,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                onJoin={(op, label) => run([{ op: 'set_transition', ...(op.all || !pickedJoin ? {} : { shot: pickedJoin.after }), ...op }], label)}
                onLook={(id, name) => run([{ op: 'set_look', look: id }], `The video now has the ${name} look`)}
                allEffect={allEffect}
+               onSave={saveResource} songOn={!!session?.music}
                onEffect={(patch, all, label) => {
                  const keys = all ? tl.items.filter((x) => x.kind === 'shot').map((x) => x.key) : selItem ? [selItem.key] : []
                  if (keys.length) run(keys.map((k) => ({ op: 'set_shot', shot: k, ...patch })), label)
@@ -1266,6 +1309,8 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     { id: 'music', icon: 'music', label: 'Music' },
     // the chat is the AI's way in; with the AI off it still holds every change, each with its Undo
     { id: 'chat', icon: chatWho ? 'spark' : 'history', label: chatWho ? 'AI Edit' : 'History' },
+    // what the creator saved to keep, for every video (sarah, 2026-10-19)
+    { id: 'resources', icon: 'resources', label: 'My resources' },
   ]
   const panelHead = (title: string, extra?: React.ReactNode) => (
     <header className="flex h-14 shrink-0 items-center gap-2 px-4">
@@ -1302,6 +1347,12 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     </div>
   </> : side === 'chat' ? <>
     <div className="flex min-h-0 flex-1 flex-col [&>aside]:min-h-0 [&>aside]:flex-1 [&>aside]:border-r-0">{chat}</div>
+  </> : side === 'resources' ? <>
+    {panelHead('My resources')}
+    <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+      <Resources folder={folder} error={folderError} onRetry={loadFolder} onUse={applyResource}
+                 onChange={(items) => setFolder((f) => (f ? { ...f, items } : f))} />
+    </div>
   </> : null
   const card = 'flex min-h-0 shrink-0 flex-col overflow-hidden rounded-2xl border border-line bg-panel'
 

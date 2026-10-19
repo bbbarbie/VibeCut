@@ -1,5 +1,5 @@
 import type { SetupData } from './components/Setup'
-import type { Habit, Capabilities, CutData, ExportJob, Job, LengthSlider, LookFit, PrefClass, Project, ProjectMeta, RefCard, RefJob, RefSummary, Session, StyleAnswers, StyleQuestion, TalkState } from './types'
+import type { Habit, Capabilities, Resource, ResourceFolder, ResourceKind, CutData, ExportJob, Job, LengthSlider, LookFit, PrefClass, Project, ProjectMeta, RefCard, RefJob, RefSummary, Session, StyleAnswers, StyleQuestion, TalkState } from './types'
 
 export type MomentInfo = { header: string; key: string; llm: boolean; provider: ChatProvider
   estimate: { tokens_in: number; usd: [number, number] } }
@@ -164,5 +164,14 @@ export const api = {
   refApply: (rid: string, traits: string[], strength: 'subtle' | 'full') =>
     j<Session>(post(`/api/references/${rid}/apply`, { traits, strength })),
   refForget: (rid: string) => j<{ references: RefSummary[]; links: boolean }>(fetch(`/api/references/${rid}`, { method: 'DELETE' })),
+  // My resources: signed out, the folder is empty and saving or using one answers 401
+  resources: () => j<ResourceFolder>(fetch('/api/resources')),
+  saveResource: (kind: ResourceKind, where: { shot?: string | null; after?: string | null } = {}) =>
+    j<{ item: Resource; items: Resource[] }>(post('/api/resources', { kind, shot: where.shot ?? null, after: where.after ?? null })),
+  useResource: (id: string, where: { shot?: string | null; after?: string | null } = {}) =>
+    j<Session>(post(`/api/resources/${encodeURIComponent(id)}/use`, { shot: where.shot ?? null, after: where.after ?? null })),
+  renameResource: (id: string, name: string) =>
+    j<{ items: Resource[] }>(fetch(`/api/resources/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }) })),
+  deleteResource: (id: string) => j<{ items: Resource[] }>(fetch(`/api/resources/${encodeURIComponent(id)}`, { method: 'DELETE' })),
   useTrack: (trackId: string | null) => j<Session>(post('/api/music/use', { track_id: trackId })),
 }

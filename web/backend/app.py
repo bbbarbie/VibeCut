@@ -31,7 +31,7 @@ from cutgrammar import grade
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, bed, brief, cloud, defaults, habits, make, vibes, tempo, ink, moment, cut, export, looks, pitch, seams, selfcheck, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, oai, overlays, reference, remix, reverse, speech, story, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, bed, brief, cloud, defaults, habits, make, vibes, tempo, ink, moment, cut, export, looks, pitch, seams, selfcheck, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, oai, overlays, reference, remix, resources, reverse, speech, story, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import GATE, Workflow, WorkflowError
 
@@ -180,6 +180,7 @@ def _cloud_pull() -> None:
     prof = [r for r in rows if r.get("kind") == "profile" and r.get("key") == "me"]
     if prof:
         _profile_store(prof[-1]["value"], prof[-1].get("at") or 0, sync=False)
+    resources.absorb([r for r in rows if r.get("kind") == "resource"])
 
 
 def _profile_store(profile: dict, at: float, sync: bool = True) -> dict:
@@ -224,6 +225,104 @@ def api_profile_put(req: ProfileReq) -> dict:
     return {"profile": rec["value"], "at": rec["at"], "cloud": cloud.status()}
 
 
+# --------------------------------------------------------------------------
+# My resources: what the creator saved to keep, in the left rail and the profile
+# --------------------------------------------------------------------------
+
+SIGN_IN = "Sign in to keep your resources."
+
+
+def _who(request: Request) -> dict:
+    return resources.who(request.client.host if request.client else None, request.headers)
+
+
+def _owner(request: Request) -> None:
+    if not _who(request)["signed_in"]:
+        raise HTTPException(401, SIGN_IN)
+
+
+def _song_title(track_id: str) -> str | None:
+    t = musiclib.find(track_id)
+    return t.title if t else None
+
+
+@app.get("/api/resources")
+def api_resources(request: Request) -> dict:
+    me = _who(request)
+    return {**me, "signin_url": resources.signin_url(),
+            "kinds": [{"id": k, "title": resources.TITLES[k]} for k in resources.KINDS],
+            "items": resources.all_items() if me["signed_in"] else []}
+
+
+class ResourceSaveReq(BaseModel):
+    kind: str
+    name: str | None = None
+    shot: str | None = None     # the clicked shot (effect, shot settings)
+    after: str | None = None    # the clicked cut: the shot before it (transition)
+
+
+@app.post("/api/resources")
+def api_resources_save(req: ResourceSaveReq, request: Request) -> dict:
+    """A Save button: what's on the video now, kept in the folder."""
+    _owner(request)
+    with LOCK:
+        try:
+            value = resources.capture(req.kind, SESSION.board, req.shot, req.after, title_of=_song_title)
+        except resources.ResourceError as e:
+            raise HTTPException(409, str(e)) from e
+    try:
+        item = resources.add(req.kind, value, req.name)
+    except resources.ResourceError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"item": item, "items": resources.all_items()}
+
+
+class ResourceNameReq(BaseModel):
+    name: str
+
+
+@app.patch("/api/resources/{rid}")
+def api_resources_rename(rid: str, req: ResourceNameReq, request: Request) -> dict:
+    _owner(request)
+    try:
+        resources.rename(rid, req.name)
+    except resources.ResourceError as e:
+        raise HTTPException(404 if "no longer" in str(e) else 400, str(e)) from e
+    return {"items": resources.all_items()}
+
+
+@app.delete("/api/resources/{rid}")
+def api_resources_delete(rid: str, request: Request) -> dict:
+    _owner(request)
+    resources.remove(rid)
+    return {"items": resources.all_items()}
+
+
+class ResourceUseReq(BaseModel):
+    shot: str | None = None
+    after: str | None = None
+
+
+@app.post("/api/resources/{rid}/use")
+def api_resources_use(rid: str, req: ResourceUseReq, request: Request) -> dict:
+    """One click in the folder: it goes on the video as one undoable turn."""
+    _owner(request)
+    item = next((x for x in resources.all_items() if x["id"] == rid), None)
+    if item is None:
+        raise HTTPException(404, "That's no longer in your resources.")
+    with LOCK:
+        try:
+            ops, said = resources.ops_for(item, SESSION.board, req.shot, req.after,
+                                          have_track=lambda t: musiclib.find(t) is not None)
+        except resources.ResourceError as e:
+            raise HTTPException(409, str(e)) from e
+        if item["kind"] == "song":
+            musiclib.use(item["value"]["track"])
+        SESSION.add({"kind": "direct", "text": f"From My resources: {item['name']}", "ops": ops,
+                     "reply": said + "."}, CATALOG["cat"], _make_proposals)
+        return _session()
+
+
 def _prefs_public() -> dict:
     out = PREFS.public(SESSION, PROJECT["p"].exports if PROJECT["p"] else None)
     # a habit used three times without an undo is offered once as a rule, in the creator's words
@@ -255,7 +354,7 @@ def _capabilities() -> dict:
 # they succeed the project is written to disk. Uploads, the finished-video
 # tool and the reference library stand apart: they are not project state.
 _NO_PROJECT_OK = ("/api/projects", "/api/upload", "/api/locate", "/api/polish", "/api/music/folder",
-                  "/api/references", "/api/profile", "/api/vibes")
+                  "/api/references", "/api/profile", "/api/vibes", "/api/resources")
 _NOT_SAVED = ("/api/projects", "/api/upload", "/api/locate", "/api/polish", "/api/music/folder", "/api/profile", "/api/vibes")
 
 

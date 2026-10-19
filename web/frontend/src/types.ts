@@ -185,6 +185,12 @@ export type Overlays = { items: Overlay[]; style: OverlayStyle; findings: Overla
   look?: { id: string | null; overrides: string[]; all: LookInfo[] } }
 export type MusicTrack = { id: string; title: string; duration: number; bpm: number | null; audio: string; credit?: string | null
   volume?: number }   // the Volume slider: 1 = as placed, up to 2
+// My resources: a caption look, animation, transition, effect, shot settings
+// or song the creator saved off a video to use again (web/backend/resources.py)
+export type ResourceKind = 'caption' | 'animation' | 'transition' | 'effect' | 'shot' | 'song'
+export type Resource = { id: string; kind: ResourceKind; name: string; value: Record<string, unknown>; at: number }
+export type ResourceFolder = { signed_in: boolean; as?: string; signin_url: string | null
+  kinds: { id: ResourceKind; title: string }[]; items: Resource[] }
 export type Habit = { id: string; kind: 'avoid' | 'prefer' | 'music_off'; label: string | null; weight: number; n: number; evidence: string[]; text: string; used: number; off: boolean }
 
 export type CutSummary = { clips: number; kept: number; rejected: number; raw: number; cut: number; ratio: number | null; line_en: string }

@@ -29,6 +29,10 @@ const PATHS = {
   paste: 'M9 4h6v3H9zM7 5.5H5V21h14V5.5h-2M9 13h6M9 17h4',
   freeze: 'M12 2v20M4.5 6.5l15 11M19.5 6.5l-15 11M9.5 3.5 12 6l2.5-2.5M9.5 20.5 12 18l2.5 2.5',
   reverse: 'M9 5 4 10l5 5M4 10h11a5 5 0 0 1 0 10h-3',
+  // My resources: a folder with a heart in it (Media is the plain folder)
+  resources: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM12 16.2l-2.5-2.4a1.55 1.55 0 0 1 2.5-1.8 1.55 1.55 0 0 1 2.5 1.8z',
+  pencil: 'M4 20h4L19 9l-4-4L4 16zM14 6l4 4',
+  user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0',
 } as const
 
 export type IconName = keyof typeof PATHS

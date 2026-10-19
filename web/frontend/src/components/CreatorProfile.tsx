@@ -1,8 +1,9 @@
-import type { Habit } from '../types'
+import type { Habit, ResourceFolder } from '../types'
 import { api } from '../api'
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { emptyProfile, FONTS, loadProfile, PACES, PLATFORMS, safeReference, saveProfile, VIBES, type CreatorProfile as Profile } from '../profile'
 import { Button, Confirm, Field, inputCls, Notice, Pills, Wordmark } from '../ui'
+import { Resources } from './Resources'
 
 // Your profile: the things that stay the same across videos -- your name
 // and handle (for name tags and end cards), your caption font, colour and
@@ -11,7 +12,8 @@ import { Button, Confirm, Field, inputCls, Notice, Pills, Wordmark } from '../ui
 //
 // Honest about reach: today the editor reads the name, handle, font,
 // colour and caption placement. Pace, vibes and bookmarks are kept for
-// you but don't steer the edit yet.
+// you but don't steer the edit yet. My resources (what was saved with
+// "Save to My resources") is listed here too, to rename or delete.
 
 export function CreatorProfile({ onClose }: { onClose: () => void }) {
   const [initial] = useState(() => {
@@ -27,6 +29,10 @@ export function CreatorProfile({ onClose }: { onClose: () => void }) {
   const [referenceNote, setReferenceNote] = useState('')
   const [referenceError, setReferenceError] = useState('')
   const heading = useRef<HTMLHeadingElement>(null)
+  const [folder, setFolder] = useState<ResourceFolder | null>(null)
+  const [folderError, setFolderError] = useState<string | null>(null)
+  const loadFolder = () => { api.resources().then((f) => { setFolderError(null); setFolder(f) }).catch((e) => setFolderError((e as Error).message)) }
+  useEffect(loadFolder, [])
   const dirty = JSON.stringify(profile) !== JSON.stringify(saved)
   const pendingReference = !!(url.trim() || referenceNote.trim())
   const unsaved = dirty || pendingReference
@@ -95,7 +101,13 @@ export function CreatorProfile({ onClose }: { onClose: () => void }) {
               <Field label="Where you share"><Pills values={PLATFORMS} selected={profile.platforms} onPick={v => toggle('platforms', v)} /></Field>
             </Section>
 
-            <Section n="02" title="Captions" text="The default font, colour and placement for titles, captions and name tags. Each video can still change them.">
+            <Section n="02" title="My resources" text="The caption looks, animations, transitions, effects, shot settings and songs you saved. Use them from My resources on the left of the edit screen.">
+              <div className="max-w-[560px]">
+                <Resources folder={folder} error={folderError} onRetry={loadFolder} onChange={(items) => setFolder((f) => (f ? { ...f, items } : f))} />
+              </div>
+            </Section>
+
+            <Section n="03" title="Captions" text="The default font, colour and placement for titles, captions and name tags. Each video can still change them.">
               <Field label="Font"><Pills values={FONTS} selected={[profile.font]} onPick={v => update('font', v as Profile['font'])} /></Field>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Accent colour">
@@ -108,7 +120,7 @@ export function CreatorProfile({ onClose }: { onClose: () => void }) {
               </div>
             </Section>
 
-            <Section n="03" title="Taste" text="Kept for you. Not yet read by the editor — say it in the brief for now.">
+            <Section n="04" title="Taste" text="Kept for you. Not yet read by the editor — say it in the brief for now.">
               <Field label="The feeling · pick a few"><Pills values={VIBES} selected={profile.vibes} onPick={v => toggle('vibes', v)} /></Field>
               <Field label="Pacing"><Pills values={PACES} selected={[profile.pace]} onPick={v => update('pace', v as Profile['pace'])} /></Field>
               <Field label="Things to avoid"><textarea value={profile.avoid} rows={2} maxLength={1000} placeholder="No heavy filters. Keep natural sound. Go easy on zooms." onChange={e => update('avoid', e.target.value)} className={inputCls + ' resize-y'} /></Field>
@@ -117,7 +129,7 @@ export function CreatorProfile({ onClose }: { onClose: () => void }) {
             <Section n="05" title="What VibeCut has learned about you" text="From what you cut, kept and switched off on more than one video. Each one is a small nudge, never a decision; switch any off here or with one tap on the video.">
               <Habits />
             </Section>
-            <Section n="04" title="Videos you look up to" text="Bookmarks with a note. To actually borrow a video's feel, use Reference inside a project.">
+            <Section n="06" title="Videos you look up to" text="Bookmarks with a note. To actually borrow a video's feel, use Reference inside a project.">
               {profile.references.length > 0 && (
                 <ul className="space-y-2">
                   {profile.references.map((r, i) => (
@@ -160,6 +172,7 @@ export function CreatorProfile({ onClose }: { onClose: () => void }) {
               <div className="flex justify-between"><dt className="text-muted">Words</dt><dd className="text-zinc-200">{profile.font} · {profile.captionPosition.toLowerCase()}</dd></div>
               <div className="flex justify-between"><dt className="text-muted">Pacing</dt><dd className="text-zinc-200">{profile.pace}</dd></div>
               <div className="flex justify-between"><dt className="text-muted">References</dt><dd className="text-zinc-200">{profile.references.length}</dd></div>
+              {folder?.signed_in && <div className="flex justify-between"><dt className="text-muted">My resources</dt><dd className="text-zinc-200">{folder.items.length} saved</dd></div>}
             </dl>
           </aside>
         </form>
