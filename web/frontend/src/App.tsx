@@ -24,7 +24,7 @@ import type { ClassifyReq } from './components/Remember'
 import { Shelf } from './components/Shelf'
 import { SmoothButton, Story, type PlayItem, type Selection } from './components/Story'
 import { Timeline, type Marks } from './components/Timeline'
-import { Inspector, type InspectorTab, type JoinPick } from './components/Inspector'
+import { Inspector, Slider, type InspectorTab, type JoinPick } from './components/Inspector'
 import { PreviewBar, type FrameChoice } from './components/PreviewBar'
 import { Handle, useLayout } from './components/Split'
 import { Icon, type IconName } from './components/icons'
@@ -58,6 +58,12 @@ const shortDate = (iso: string | null | undefined) => {
   return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/,/g, '').toUpperCase()
 }
 const r3 = (x: number) => Math.round(x * 1000) / 1000
+// a shot's own settings (backend board.SHOT_FX) and their defaults, for Copy / Paste settings
+const FX_PLAIN = { speed: 1, gain: 1, mute: false, rotate: 0, fill: false, mirror: false, fade_in: 0, fade_out: 0,
+  punch: 0, effect: null, effect_amount: 1, reverse: false } as const
+const FX_KEYS = Object.keys(FX_PLAIN) as (keyof typeof FX_PLAIN)[]
+const SEEN_FX = ['rotate', 'fill', 'mirror', 'effect', 'effect_amount']   // what a held frame can take
+const pick = (o: Record<string, unknown>, keys: string[]) => Object.fromEntries(Object.entries(o).filter(([k]) => keys.includes(k)))
 
 type Queue = { source: string; items: PlayItem[]; index: number }
 
@@ -87,6 +93,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const [dragging, setDragging] = useState(false)
   const [pending, setPending] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)   // Frames: timeline entry
+  const [copiedFx, setCopiedFx] = useState<{ n: number | null; fx: Record<string, unknown> } | null>(null)   // Copy settings
   const [storySel, setStorySel] = useState<Selection>(null)
   const [menu, setMenu] = useState<{ kind: 'story-shot' | 'frames-shot' | 'gap'; key: string; anchor: DOMRect } | null>(null)
   const [selAudio, setSelAudio] = useState<string | null>(null)   // Frames: a sound strip (extract audio)
@@ -686,6 +693,42 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     if (s) note(why || `Cut at ${clock(t)}`)
   }
 
+  // The clip tools next to Split, as every editor has them: Duplicate (the
+  // shot again right after itself), Freeze frame (the frame under the
+  // playhead held, CapCut's 3 s), and Copy / Paste settings (CapCut's paste
+  // attributes: speed, backwards, turn, crop, effect, push and sound).
+  const toolShot = (): SeqItem | null => {
+    const it = selItem ?? here(phStore.get())
+    if (!it || it.kind !== 'shot') { note('Click a shot first'); return null }
+    return it
+  }
+  const duplicate = () => {
+    const it = toolShot()
+    if (it) run([{ op: 'duplicate_shot', shot: it.key }], `You duplicated shot ${it.n}`)
+  }
+  const freeze = () => {
+    const it = toolShot()
+    if (!it) return
+    if (it.freeze) { note('This is already a held frame: drag its end to hold it longer'); return }
+    const t = phStore.get()
+    const at = t >= it.seq_start && t <= it.seq_end ? t : it.seq_start
+    run([{ op: 'freeze_frame', shot: it.key, at: r3(toSource(it, at)) }], `You froze a frame of shot ${it.n} at ${clock(at)}`)
+  }
+  const copyFx = () => {
+    const it = toolShot()
+    if (!it) return
+    const fx = Object.fromEntries(FX_KEYS.map((k) => [k, it[k] ?? FX_PLAIN[k]]))
+    setCopiedFx({ n: it.n, fx: it.freeze ? pick(fx, SEEN_FX) : fx })
+    note(`Copied shot ${it.n}'s settings. Click another shot and Paste settings.`)
+  }
+  const pasteFx = () => {
+    const it = toolShot()
+    if (!it || !copiedFx) return
+    // a held frame takes only what it can show: no speed, no sound, nothing backwards
+    const fx = it.freeze ? pick(copiedFx.fx, SEEN_FX) : copiedFx.fx
+    run([{ op: 'set_shot', shot: it.key, ...fx }], `You gave shot ${it.n} the settings of shot ${copiedFx.n ?? ''}`)
+  }
+
   const cut = () => {
     const t = phStore.get()
     if (transportStore.get().playing) {
@@ -715,7 +758,8 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     if (unit === 'beat' && !g) { note('No beat grid — pick a track with a steady tempo under “Music”'); return }
     const size = unit === 'frame' ? fr : unit === 'second' ? 1 : 60 / g!.bpm
     const word = unit === 'frame' ? 'frame' : unit === 'second' ? 'second' : 'beat'
-    run([{ op: 'trim', shot: it.key, edge: 'out', to: r3(it.src_end + units * size) }],
+    // the end that plays last: backwards, that's the source's start
+    run([{ op: 'trim', shot: it.key, edge: 'out', to: r3(it.reverse ? it.src_start - units * size : it.src_end + units * size) }],
       `You made shot ${it.n} one ${word} ${units < 0 ? 'shorter' : 'longer'}`)
   }
 
@@ -768,6 +812,9 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
 
       if (mod && k === 'z') undoRedo(e.shiftKey)
       else if ((mod && k === 'k') || (k === 'b' && !mod)) cut()
+      else if (mod && k === 'd') duplicate()
+      else if (mod && e.altKey && e.code === 'KeyC') copyFx()
+      else if (mod && e.altKey && e.code === 'KeyV') pasteFx()
       else if (e.code === 'Space') { timelineOwns(); if (playing) transport.stop(); else { snapStore.set(null); transport.play(1) } }
       else if (k === 'l' && !mod) { timelineOwns(); snapStore.set(null); transport.play(playing && rate > 0 ? Math.min(rate * 2, 8) : 1) }
       else if (k === 'j' && !mod) { timelineOwns(); snapStore.set(null); transport.play(playing && rate < 0 ? Math.max(rate * 2, -8) : -1) }
@@ -1115,6 +1162,13 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
           : session.music ? <>Playing under the video: <b className="font-medium">{session.music.title}</b></> : 'No music under this video.'}
       </p>
       {!session.music && !looking && session.bed?.why && <p className="font-serif text-[15px] leading-snug text-zinc-300">{session.bed.why}</p>}
+      {session.music && (
+        <Slider label="Volume" value={Math.round((session.music.volume ?? 1) * 100)} min={0} max={200} step={5} unit="%"
+                onCommit={async (v) => {
+                  try { const r = await api.musicVolume(v / 100); setSession(r); offerUndo(r) }
+                  catch (e) { note((e as Error).message) }
+                }} />
+      )}
       <Button variant={session.music ? 'secondary' : 'primary'} disabled={looking}
               title={session.music ? 'Take the music out' : 'Find a free song that fits this edit and put the cuts on its beat'}
               onClick={async () => {
@@ -1176,7 +1230,9 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                onTrim={(edge, to) => {
                  if (!selItem) return
                  const longer = edge === 'out' ? to > selItem.src_end : to < selItem.src_start
-                 run([{ op: 'trim', shot: selItem.key, edge, to: r3(to) }],
+                 // the bar is the shot as filmed; backwards, its source end plays first ('in')
+                 const side = selItem.reverse ? (edge === 'in' ? 'out' : 'in') : edge
+                 run([{ op: 'trim', shot: selItem.key, edge: side, to: r3(to) }],
                    `You made shot ${selItem.n ?? ''} ${longer ? 'longer' : 'shorter'} at the ${edge === 'in' ? 'start' : 'end'}`)
                }}
                onSplit={() => {
@@ -1184,6 +1240,10 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                  const t = phStore.get()
                  cutAt(t > selItem.seq_start + fr && t < selItem.seq_end - fr ? t : (selItem.seq_start + selItem.seq_end) / 2)
                }}
+               onDuplicate={duplicate}
+               onFreeze={freeze}
+               onCopyFx={copyFx}
+               onPasteFx={copiedFx ? pasteFx : null}
                onSwap={() => { const e = selItem && entry(selItem.key); if (selItem && e) setSwap({ key: selItem.key, thumb: e.thumb, id: e.id }) }}
                onDelete={() => { if (!selItem) return; run([{ op: 'drop_shot', shot: selItem.key }], `You removed shot ${selItem.n}`); setSelected(null) }}
                onCloseGap={() => { if (!selItem) return; run([{ op: 'drop_shot', shot: selItem.key }], 'You closed up an empty space'); setSelected(null) }}

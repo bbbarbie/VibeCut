@@ -114,6 +114,7 @@ export const api = {
   pile: (clip: string, into: boolean) => j<Session>(post('/api/pile', { clip, into })),
   captions: (on: boolean) => j<Session>(post('/api/captions', { on })),
   bed: (on: boolean) => j<Session>(post('/api/bed', { on })),
+  musicVolume: (volume: number) => j<Session>(post('/api/music/volume', { volume })),   // 1 = as placed
   pace: (pace: string) => j<Session>(post('/api/pace', { pace })),
   guess: () => j<{ about: string }>(fetch('/api/brief/guess')),
   suggestions: () => j<{ suggestions: string[]; source: string }>(fetch('/api/brief/suggestions')),

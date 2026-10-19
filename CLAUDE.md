@@ -653,6 +653,22 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   Known: the length slider, the bed's beat snap and restyle still count
   source seconds, so they're approximate on a shot that isn't at 1×.
   `tests/test_shot_fixes.py`.
+- **Clip tools: Duplicate, Freeze frame, Reverse, Copy / Paste settings,
+  music Volume** (sarah, 2026-10-19, "Build it"; Inspector Edit tab, ⌘D,
+  ⌥⌘C / ⌥⌘V; `tests/test_clip_tools.py`). `duplicate_shot` puts a copy
+  right after the shot; `freeze_frame {shot, at, dur}` (default `FREEZE_S`
+  3 s, CapCut's) cuts in a held frame `{freeze: True}` whose span is its
+  length (start = the frame), silent, keeps turn / mirror / fill; its ends
+  only change how long it holds. `reverse` is a `set_shot` field: a cut or
+  trim on a reversed shot acts on what plays first / last (`board.
+  play_offset`; the frontend's `toSource` gives true source time).
+  `reverse.py` makes the backwards span in 2 s pieces (ffmpeg's reverse
+  holds every frame) for both the player (`/api/reversed`, 540p) and export
+  (output size); the mixer reverses the samples; no handles, no carries.
+  Copy / Paste settings is frontend only (one `set_shot`). Music volume is
+  `set_music volume` (1 = as placed, ≤2) folded into the gain by
+  `export.music_spec`; with `level` the loudnorm still levels the whole
+  mix, so on a short it mostly moves the balance.
 - **Every cut checked** (`cutgrammar/joins.py`, `web/backend/seams.py`;
   research 08 P2). Report only: per cut, brightness jump, colour change
   (best-frame proxy), same view again, energy step, loudness step, going

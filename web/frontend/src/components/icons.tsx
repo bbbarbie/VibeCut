@@ -25,6 +25,10 @@ const PATHS = {
   lines: 'M4 5h16v14H4zM8 10h8M8 14h5',
   turnL: 'M4 4v5h5M4.5 9A8 8 0 1 1 6 17',
   turnR: 'M20 4v5h-5M19.5 9A8 8 0 1 0 18 17',
+  copy: 'M9 9h10v10H9zM5 15V5h10',
+  paste: 'M9 4h6v3H9zM7 5.5H5V21h14V5.5h-2M9 13h6M9 17h4',
+  freeze: 'M12 2v20M4.5 6.5l15 11M19.5 6.5l-15 11M9.5 3.5 12 6l2.5-2.5M9.5 20.5 12 18l2.5 2.5',
+  reverse: 'M9 5 4 10l5 5M4 10h11a5 5 0 0 1 0 10h-3',
 } as const
 
 export type IconName = keyof typeof PATHS

@@ -63,6 +63,12 @@ export function Inspector(p: {
   onFix: (patch: Patch, label: string) => void
   onTrim: (edge: 'in' | 'out', to: number) => void
   onSplit: () => void
+  /** the clip tools next to Split: the shot again right after itself, the frame under the playhead held */
+  onDuplicate: () => void
+  onFreeze: () => void
+  /** the clicked shot's speed, turn, look, effect and sound settings, kept to put on another shot */
+  onCopyFx: () => void
+  onPasteFx: (() => void) | null
   onSwap: () => void
   onDelete: () => void
   onCloseGap: () => void
@@ -107,8 +113,17 @@ export function Inspector(p: {
               <Button size="sm" onClick={p.onSwap} title="Put a different shot in its place">Replace</Button>
             </div>
           </Section>
-          <Section title="Trim"><TrimBar item={shot} thumb={p.itemThumb} onTrim={p.onTrim} /></Section>
-          <SpeedLine speed={shot.speed ?? 1} onFix={(x) => p.onFix({ speed: x }, x === 1 ? `You put shot ${shot.n} back to normal speed` : `You set shot ${shot.n} to ${x}×`)} />
+          {shot.freeze ? (
+            <Slider label="Hold for" value={Math.round((shot.seq_end - shot.seq_start) * 10) / 10} min={0.5} max={10} step={0.1} unit=" s"
+                    onCommit={(v) => p.onTrim('out', shot.src_start + v)} />
+          ) : <>
+            <Section title="Trim"><TrimBar item={shot} thumb={p.itemThumb} onTrim={p.onTrim} /></Section>
+            <SpeedLine speed={shot.speed ?? 1} onFix={(x) => p.onFix({ speed: x }, x === 1 ? `You put shot ${shot.n} back to normal speed` : `You set shot ${shot.n} to ${x}×`)} />
+            <Line label="Reverse">
+              <Segmented options={[['off', 'Forwards'], ['on', 'Backwards']]} value={shot.reverse ? 'on' : 'off'}
+                         onPick={(v) => (v === 'on') !== !!shot.reverse && p.onFix({ reverse: v === 'on' }, v === 'on' ? `Shot ${shot.n} plays backwards` : `Shot ${shot.n} plays forwards again`)} />
+            </Line>
+          </>}
           <Line label="Rotate">
             <IconChip label="Turn left" icon="turnL" onClick={() => p.onFix({ rotate: ((shot.rotate ?? 0) + 270) % 360 }, `You turned shot ${shot.n} left`)} />
             <IconChip label="Turn right" icon="turnR" onClick={() => p.onFix({ rotate: ((shot.rotate ?? 0) + 90) % 360 }, `You turned shot ${shot.n} right`)} />
@@ -125,6 +140,10 @@ export function Inspector(p: {
           </Line>
           <div className="flex flex-wrap gap-2 pt-1">
             <Chip onClick={p.onSplit}><Icon name="split" size={17} /> Split at the playhead</Chip>
+            <Chip onClick={p.onDuplicate} title="The same shot again, right after this one (⌘D)"><Icon name="copy" size={17} /> Duplicate</Chip>
+            {!shot.freeze && <Chip onClick={p.onFreeze} title="Hold the frame under the playhead for 3 seconds"><Icon name="freeze" size={17} /> Freeze frame</Chip>}
+            <Chip onClick={p.onCopyFx} title="Keep this shot's speed, turn, crop, effect and sound settings (⌥⌘C)"><Icon name="adjust" size={17} /> Copy settings</Chip>
+            <Chip onClick={() => p.onPasteFx?.()} disabled={!p.onPasteFx} title="Give this shot the settings you copied (⌥⌘V)"><Icon name="paste" size={17} /> Paste settings</Chip>
             <Chip danger onClick={p.onDelete}><Icon name="trash" size={17} /> Delete</Chip>
             {!!(shot.rotate || shot.fill || shot.mirror) && <Chip onClick={() => p.onFix({ rotate: 0, fill: false, mirror: false }, `You put shot ${shot.n} back as filmed`)}>Back to as filmed</Chip>}
           </div>
@@ -584,10 +603,12 @@ function TrimBar({ item, thumb, onTrim }: { item: SeqItem; thumb: string | null;
   )
 }
 
-export function Chip({ children, onClick, on, danger }: { children: ReactNode; onClick: () => void; on?: boolean; danger?: boolean }) {
+export function Chip({ children, onClick, on, danger, disabled, title }: {
+  children: ReactNode; onClick: () => void; on?: boolean; danger?: boolean; disabled?: boolean; title?: string
+}) {
   return (
-    <button type="button" onClick={onClick}
-            className={cx('inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 py-1.5 font-serif text-[15px]',
+    <button type="button" onClick={onClick} disabled={disabled} title={title}
+            className={cx('inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 py-1.5 font-serif text-[15px] disabled:opacity-40 disabled:pointer-events-none',
               on ? 'border-accent bg-accent text-accent-ink' : danger ? 'border-rose-200/40 text-rose-200 hover:bg-rose-500/10'
                 : 'border-line bg-panel text-zinc-100 hover:bg-raised')}>
       {children}

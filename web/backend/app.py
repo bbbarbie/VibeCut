@@ -31,7 +31,7 @@ from cutgrammar import grade
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, bed, brief, cloud, defaults, habits, make, vibes, tempo, ink, moment, cut, export, looks, pitch, seams, selfcheck, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, oai, overlays, reference, remix, speech, story, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, bed, brief, cloud, defaults, habits, make, vibes, tempo, ink, moment, cut, export, looks, pitch, seams, selfcheck, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, oai, overlays, reference, remix, reverse, speech, story, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import GATE, Workflow, WorkflowError
 
@@ -429,6 +429,8 @@ def _music_public() -> dict | None:
     lic = (t.meta or {}).get("licence")
     return {"id": t.id, "title": t.title, "duration": round(t.duration, 2),
             "bpm": t.bpm, "audio": f"/api/music/audio/{t.id}",
+            # the Volume slider: 1 = as it was placed (board.set_music volume)
+            "volume": float(((SESSION.board or {}).get("music") or {}).get("volume", 1.0)),
             # the licence's credit line, for the caption (pasted with it on Save)
             "credit": ov.credit(lic) if lic else None}
 
@@ -1615,6 +1617,26 @@ def api_captions(req: CaptionsReq) -> dict:
         return _session()
 
 
+class MusicVolumeReq(BaseModel):
+    volume: float   # 1 = as placed, 0 = silent, 2 = twice as loud
+
+
+@app.post("/api/music/volume")
+def api_music_volume(req: MusicVolumeReq) -> dict:
+    """The music's Volume slider, let go: one undoable turn, the rest of the
+    bed (track, in-point, ducks) as it was."""
+    with LOCK:
+        b = SESSION.board
+        m = (b or {}).get("music") or {}
+        if not b or not m.get("track"):
+            raise HTTPException(409, "There's no music under this video.")
+        v = max(0.0, min(bd.MUSIC_VOLUME_MAX, float(req.volume)))
+        SESSION.add({"kind": "direct", "text": f"Music volume {round(v * 100)}%",
+                     "ops": [{"op": "set_music", **{**m, "volume": v}}],
+                     "reply": f"Music at {round(v * 100)}%."}, CATALOG["cat"], _make_proposals)
+        return _session()
+
+
 @app.get("/api/brief/guess")
 def api_brief_guess() -> dict:
     """What the video is, read from the footage (no model, no cost)."""
@@ -2568,6 +2590,21 @@ def api_video(clip_id: str) -> FileResponse:
         raise HTTPException(404)
     # Chrome plays HEVC/H.264 .mov happily when told it's mp4.
     return FileResponse(c["path"], media_type="video/mp4")
+
+
+@app.get("/api/reversed/{clip_id}")
+def api_reversed(clip_id: str, a: float, b: float) -> FileResponse:
+    """A reversed shot for the player: browsers can't play backwards, so it
+    gets a small copy of the span made backwards (reverse.py, as export)."""
+    c = CLIPS.get(clip_id)
+    if not c or not 0 <= a < b or b - a > 600:
+        raise HTTPException(404)
+    try:
+        p = reverse.reversed_span(c["path"], a, b)
+    except (subprocess.CalledProcessError, ValueError, OSError) as e:
+        raise HTTPException(500, f"couldn't play that shot backwards: {e}") from e
+    return FileResponse(p, media_type="video/mp4",
+                        headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
 @app.get("/api/thumbs/{clip_id}/{name}")

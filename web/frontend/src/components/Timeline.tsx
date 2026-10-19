@@ -39,6 +39,14 @@ type Drag = { id: string; mode: 'move' | 'start' | 'end'; x0: number; start0: nu
   moved: boolean; guide: number | null; pending: boolean }
 const MIN_CAPTION_S = 0.5
 
+/** How much longer (source seconds) a shot gets with one end dragged to `to`.
+ *  `edge` is the end that plays first ('in') or last; backwards, the first to
+ *  play is the source's end (board.trim). */
+function growOf(it: SeqItem, ed: { edge: 'in' | 'out'; to: number }): number {
+  const first = ed.edge === 'in'
+  return first !== !!it.reverse ? it.src_start - ed.to : ed.to - it.src_end
+}
+
 export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, onReorder,
   onInsertShot, onClear, onHelp, overlays = [], selectedOverlay = null, onSelectOverlay, onOverlayEdit, onExport, onTrimEdge,
   selectedAudio = null, onSelectAudio, onAudioMove, joins = [], selectedJoin = null, onSelectJoin,
@@ -151,7 +159,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
     const dur = (it: SeqItem) => {
       const d = it.seq_end - it.seq_start
       if (edge?.key !== it.key) return d
-      const grow = edge.edge === 'out' ? edge.to - it.src_end : it.src_start - edge.to
+      const grow = growOf(it, edge)
       return Math.max(0, d + grow / (it.speed ?? 1))
     }
     const w = items.map((it) => Math.max(MIN_W, dur(it) * pps))
@@ -659,7 +667,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
               const thumb = it.kind === 'shot' ? `/api/thumbs/${it.clip_id}/shot${String(Number(it.shot_id!.split(':')[1])).padStart(3, '0')}.jpg` : null
               const mark = marksOf[it.key]
               const ed = edge?.key === it.key ? edge : null
-              const grow = ed ? (ed.edge === 'out' ? ed.to - it.src_end : it.src_start - ed.to) : 0
+              const grow = ed ? growOf(it, ed) : 0
               const sp = it.speed ?? 1   // source seconds per second of the edit
               const w = geo.w[k]
               const lo = it.src_min ?? it.src_start
@@ -673,14 +681,16 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                     if (e.button !== 0) return
                     e.stopPropagation(); e.preventDefault()
                     e.currentTarget.setPointerCapture(e.pointerId)
-                    edging.current = { x: e.clientX, base: side === 'in' ? it.src_start : it.src_end, pps: pps / sp }
+                    // backwards, the left end is where the source ends, and dragging it left takes in more of it
+                    edging.current = { x: e.clientX, base: (side === 'in') !== !!it.reverse ? it.src_start : it.src_end,
+                                       pps: (it.reverse ? -pps : pps) / sp }
                     setEdge({ key: it.key, edge: side, to: edging.current.base })
                   }}
                   onPointerMove={(e) => {
                     const g = edging.current
                     if (!g) return
                     const t = g.base + (e.clientX - g.x) / g.pps
-                    const to = side === 'in' ? Math.max(lo, Math.min(t, it.src_end - 0.2)) : Math.min(hi, Math.max(t, it.src_start + 0.2))
+                    const to = (side === 'in') !== !!it.reverse ? Math.max(lo, Math.min(t, it.src_end - 0.2)) : Math.min(hi, Math.max(t, it.src_start + 0.2))
                     setEdge({ key: it.key, edge: side, to })
                   }}
                   onPointerUp={() => {
@@ -721,7 +731,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                   {handle('out')}
                   {ed && <div className="pointer-events-none absolute left-1/2 top-1 -translate-x-1/2 rounded bg-black/80 px-1.5 text-[12px] tabular-nums text-zinc-100">{((it.src_end - it.src_start + grow) / sp).toFixed(1)}s</div>}
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 pb-1 pt-3 text-[10px] tabular-nums text-zinc-200">
-                    {it.kind === 'gap' ? 'gap ' : it.n != null ? `${it.n} · ` : ''}{(it.seq_end - it.seq_start).toFixed(1)}s{sp !== 1 ? ` · ${sp}×` : ''}{it.mute ? ' · muted' : it.gain != null ? ` · ${Math.round(it.gain * 100)}%` : ''}{silent.has(it.key) ? ' · sound below' : ''}
+                    {it.kind === 'gap' ? 'gap ' : it.n != null ? `${it.n} · ` : ''}{(it.seq_end - it.seq_start).toFixed(1)}s{it.freeze ? ' · held frame' : ''}{it.reverse ? ' · backwards' : ''}{sp !== 1 ? ` · ${sp}×` : ''}{it.mute ? ' · muted' : it.gain != null ? ` · ${Math.round(it.gain * 100)}%` : ''}{silent.has(it.key) ? ' · sound below' : ''}
                   </div>
                 </div>
               )
