@@ -1,0 +1,16 @@
+.git
+node_modules
+web/frontend/node_modules
+web/frontend/dist
+__pycache__
+*.py[cod]
+.venv
+venv
+*.mp4
+*.mov
+*.wav
+*.m4a
+out
+.env
+web/.env
+design
