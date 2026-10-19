@@ -363,7 +363,7 @@ def add(b: dict, op: dict, new_id) -> None:
     if kind == "caption":
         o["pos"] = "bottom"     # captions follow the one caption position
     if kind == "heading":
-        o.setdefault("look", "bold")
+        o.setdefault("look", "spaced")    # thin, white, spaced capitals: the day-vlog chapter title
     if kind != "chapters" and not o["text"]:
         raise OverlayError("an overlay needs some text")
     b.setdefault("overlays", []).append(o)

@@ -5,10 +5,14 @@ without the key, the AI switch on, and that edit's estimate agreed; a call's cos
 comes from its usage; an answer is checked against what was offered (unknown
 numbers, repeats and the hook inside a chapter are dropped, lengths are held
 to their job's range and to what was filmed); payoffs sit on whole beats.
-Chapter titles are their own overlay kind with their own look. Through the
-API: Make with the stand-in lands chapters as the board's parts, a titled
-heading per chapter, and the cost in the reply; a broken answer falls back
-to the rules' edit and says so.
+Chapter titles are their own overlay kind with one look for the video (thin
+spaced capitals). The words are lines a person would type: a thought or what
+they're doing, never a list of what's in the picture (sarah, 2026-10-18);
+the clock is the app's, a caption never sits under the title and is held
+long enough to read. Through the API: Make with the stand-in lands chapters
+as the board's parts, a titled heading per chapter with its line, the
+captions on their moments, and the cost in the reply; a broken answer falls
+back to the rules' edit and says so.
 
     python tests/test_story.py
 """
@@ -57,10 +61,11 @@ def answer_for(n: int, hook: int | None = None) -> dict:
     nums = [k for k in range(1, n + 1) if k != hook]
     a, b = nums[:half], nums[half:]
     return {"video_title": "A day out", "hook": hook, "chapters": [
-        {"title": "Morning Routine", "subtitle": "slow start", "look": "script",
-         "shots": [{"n": k, "role": "setup" if j == 0 else "step", "seconds": 1.2} for j, k in enumerate(a)]},
-        {"title": "OOTD", "subtitle": "trying on everything", "look": "spaced",
-         "shots": [{"n": k, "role": "payoff" if j == len(b) - 1 else "step", "seconds": 1.5} for j, k in enumerate(b)]},
+        {"title": "Morning Routine", "subtitle": "slow start", "clock": True,
+         "shots": [{"n": k, "role": "setup" if j == 0 else "step", "seconds": 1.2, "caption": ""} for j, k in enumerate(a)]},
+        {"title": "OOTD", "subtitle": "trying on everything", "clock": False,
+         "shots": [{"n": k, "role": "payoff" if j == len(b) - 1 else "step", "seconds": 1.5,
+                    "caption": "obsessed with this one" if j == len(b) - 1 else ""} for j, k in enumerate(b)]},
     ]}
 
 
@@ -100,7 +105,7 @@ def unit() -> None:
     ans["chapters"][0]["shots"] += [{"n": 99, "role": "step", "seconds": 1}, {"n": 1, "role": "step", "seconds": 1},
                                     {"n": 8, "role": "step", "seconds": 1}]
     ans["chapters"][1]["shots"][0]["seconds"] = 30.0
-    ans["chapters"].append({"title": "Empty", "subtitle": "", "look": "bold", "shots": [{"n": 1, "role": "payoff", "seconds": 3}]})
+    ans["chapters"].append({"title": "Empty", "subtitle": "", "clock": False, "shots": [{"n": 1, "role": "payoff", "seconds": 3, "caption": "x"}]})
     plan, chapters, title = story.plan_from(ans, cands, {}, "tall")
     ids = [p.shot.id for p in plan.picks]
     check("unknown numbers, repeats and the hook twice are dropped", len(ids) == len(set(ids)) == 8 and "c7:0" == ids[0], str(ids))
@@ -119,13 +124,77 @@ def unit() -> None:
     except story.StoryError:
         check("an empty plan is refused", True)
 
+    print("the words: a line a person would type")
+    lo_ = story.line_of
+    check("a list of what's in the picture is dropped (the line sarah called AI)",
+          lo_("green spaces, a green drink, and sunny streets") == "" and lo_("coffee, croissant, view") == "")
+    check("a thought or what they're doing stands", lo_("this matcha is so good") == "this matcha is so good"
+          and lo_("walk to class") == "walk to class")
+    check("no clock from the model: the app writes the real one", lo_("7:40 am walk to class") == "walk to class"
+          and lo_("walk to class at 7:40 a.m.") == "walk to class", lo_("walk to class at 7:40 a.m."))
+    check("at most one emoji", lo_("so good ☕☕ 😍") == "so good ☕", lo_("so good ☕☕ 😍"))
+    check("a joined emoji counts once", lo_("girls night 👩‍👩‍👧 💅") == "girls night 👩‍👩‍👧", lo_("girls night 👩‍👩‍👧 💅"))
+    check("no full stop, no quotes", lo_('"Finally coffee."') == "Finally coffee" and lo_("why is it so cold?") == "why is it so cold?")
+    long_ = lo_("we walked all the way across the whole city today")
+    check("a few words, never a paragraph", len(long_.split()) <= story.MAX_WORDS and len(long_) <= story.MAX_CHARS, long_)
+
+    print("the line under a title, and the clock")
+    check("clock asked for: the real time from the chapter's first moment goes in front",
+          chapters[0]["subtitle"] == "9:00 am · slow start", chapters[0]["subtitle"])
+    check("no clock asked for: just the line", chapters[1]["subtitle"] == "trying on everything")
+    check("every chapter title wears the one look", {c["look"] for c in chapters} == {"spaced"})
+    nowords = story.plan_from({"video_title": "", "hook": None, "chapters": [
+        {"title": "Out", "subtitle": "sunny streets, green spaces, a green drink", "clock": False,
+         "shots": [{"n": 1, "role": "payoff", "seconds": 3, "caption": ""}]}]}, cands, {}, "tall")[1]
+    check("a list under a title leaves the line empty rather than say it", nowords[0]["subtitle"] == "")
+
+    print("captions on their moments")
+    cands2 = [shot(i, 8.0) for i in range(8)]
+    rich = {"video_title": "", "hook": None, "chapters": [
+        {"title": "Coffee Run", "subtitle": "finally coffee", "clock": False, "shots": [
+            {"n": 1, "role": "setup", "seconds": 1.2, "caption": "first moment"},         # the title is up: never
+            {"n": 2, "role": "step", "seconds": 1.0, "caption": "under the title"},       # starts at 1.2 s, title to 2.4 s: never
+            {"n": 3, "role": "step", "seconds": 2.0, "caption": "finally coffee"},        # same as the line: never
+            {"n": 4, "role": "payoff", "seconds": 4.0, "caption": "this matcha is so good"},
+            {"n": 5, "role": "step", "seconds": 1.5, "caption": "why is it so cold"},
+            {"n": 6, "role": "payoff", "seconds": 4.0, "caption": "ok one more"},          # a third: never
+        ]}]}
+    p2, ch2, _ = story.plan_from(rich, cands2, {}, "tall")
+    ops2 = story.heading_ops(p2, ch2)
+    caps = [o for o in ops2 if o["kind"] == "caption"]
+    check("never on the chapter's first moment, never while its title is up, never repeating its line, at most two",
+          [c["text"] for c in caps] == ["this matcha is so good", "why is it so cold"], json.dumps([c["text"] for c in caps]))
+    check("each hangs on its own moment, a beat after the cut",
+          [c["anchor"] for c in caps] == [{"to": "shot", "id": "c3:0"}, {"to": "shot", "id": "c4:0"}]
+          and all(c["at"] == story.CAPTION_AT for c in caps))
+    starts = {}
+    t_ = 0.0
+    for pk in p2.sessions[0]:
+        starts[pk.shot.id] = t_
+        t_ += pk.duration
+    ends = [starts[c["anchor"]["id"]] + c["at"] + c["dur"] for c in caps]
+    check("held long enough to read, gone before the next one, inside the chapter",
+          all(story.READ_S[0] <= c["dur"] <= story.READ_S[1] for c in caps)
+          and ends[0] <= starts["c4:0"] + story.CAPTION_AT + 1e-6 and ends[-1] <= t_ + 1e-6,
+          json.dumps([(c["dur"], round(e, 2)) for c, e in zip(caps, ends)]))
+    tight = story.heading_ops(*story.plan_from({"video_title": "", "hook": None, "chapters": [
+        {"title": "Quick", "subtitle": "", "clock": False, "shots": [
+            {"n": 1, "role": "payoff", "seconds": 2.5, "caption": ""},
+            {"n": 2, "role": "setup", "seconds": 0.8, "caption": "no time to read this"}]}]}, cands2, {}, "tall")[:2])
+    check("no caption where there's no time left to read it", not [o for o in tight if o["kind"] == "caption"])
+
     print("chapter titles have their own look")
     hs = story.heading_ops(plan, chapters)
-    check("one heading per chapter, at its start", [h["beat"] for h in hs] == ["r1", "r2"] and hs[0]["look"] == "script")
+    check("one heading per chapter, at its start", [h["beat"] for h in hs if h["kind"] == "heading"] == ["r1", "r2"]
+          and hs[0]["look"] == "spaced")
     b = {"beats": [{"id": "r1", "title": "x", "shots": [{"id": "c0:0", "start": 0, "end": 3}]}], "overlays": []}
     ov.add(b, dict(hs[0]), lambda: "o1")
     o = b["overlays"][0]
-    check("a heading keeps its words, line under it and look", o["kind"] == "heading" and o["sub"] == "slow start" and o["look"] == "script")
+    check("a heading keeps its words, line under it and look", o["kind"] == "heading" and o["sub"] == "9:00 am · slow start"
+          and o["look"] == "spaced")
+    ov.add(b, {"op": "add_overlay", "kind": "heading", "text": "By hand", "beat": "r1"}, lambda: "o3")
+    check("a chapter title added by hand wears the same thin spaced look", b["overlays"][-1]["look"] == "spaced")
+    b["overlays"].pop()
     try:
         ov.add(b, {"op": "add_overlay", "kind": "caption", "text": "hi", "look": "script", "beat": "r1"}, lambda: "o2")
         check("only a chapter title takes a look", False)
@@ -234,9 +303,16 @@ def api() -> None:
             check("the parts are the chapters, after the hook", titles == ["Hook", "Morning Routine", "OOTD"], str(titles))
             items = s["overlays"]["items"]
             heads = [o for o in items if o["kind"] == "heading"]
-            check("a designed title per chapter, each with its line under it",
-                  [(o["text"], o["look"]) for o in heads] == [("Morning Routine", "script"), ("OOTD", "spaced")]
+            check("a designed title per chapter in the one look, each with its line under it",
+                  [(o["text"], o["look"]) for o in heads] == [("Morning Routine", "spaced"), ("OOTD", "spaced")]
                   and heads[1]["sub"] == "trying on everything", json.dumps(heads)[:200])
+            import re as _re
+            check("the line asks for the clock: the real filming time in front",
+                  bool(_re.fullmatch(r"\d{1,2}:\d\d (am|pm) · slow start", heads[0]["sub"])), heads[0]["sub"])
+            caps = [o for o in items if o["kind"] == "caption"]
+            check("the payoff's thought is a caption on its moment, after the title",
+                  [o["text"] for o in caps] == ["obsessed with this one"]
+                  and caps[0]["start"] >= heads[1]["shown_end"] - 1e-6, json.dumps(caps)[:200])
             check("no clock-time stop lines on a planned edit", not any(o["kind"] == "part" for o in items))
             last = s["turns"][-1] if s.get("turns") else {}
             said = json.dumps(s)

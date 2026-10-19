@@ -458,7 +458,8 @@ def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, ab
                 # references or a chosen vibe set the cut themselves
                 job.line = "Planning the story…"
                 try:
-                    plan, chapters, _title, usage = story.plan(clips, cut, fmt, fp["duration"], about)
+                    plan, chapters, _title, usage = story.plan(clips, cut, fmt, fp["duration"], about,
+                                                               taste=taste, phrasing=phrasing)
                     ai = {"model": usage.get("model"), "cost": usage.get("cost", 0.0), "chapters": len(chapters),
                           "tokens_in": usage.get("prompt_tokens"), "tokens_out": usage.get("completion_tokens")}
                 except Exception as e:  # noqa: BLE001 -- the rules make the edit instead, and say so

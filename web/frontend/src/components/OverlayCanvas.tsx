@@ -196,7 +196,7 @@ export function OverlayCanvas({ view, width, height, edit }: { view: OverlayView
           </div>
         )}
         {typing && sel && <TypeBox key={typing.id} typing={typing} lines={multiline(sel)} width={width} height={height}
-                                   look={typeLook(sel, view.style, Math.min(width, height))}
+                                   look={typeLook(sel, view.style, Math.min(width, height), { W: width, H: height })}
                                    onChange={(value) => setTyping((t) => (t ? { ...t, value } : t))}
                                    onDone={stopTyping} />}
         {selBox && sel && !drag && !typing && (

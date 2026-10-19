@@ -377,10 +377,28 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   sees up to 60 rough-cut moments (one index frame each, low detail, plus
   time / stop / labels / faces / talking / worth) and returns chapters named
   by what happens, what's kept, its order, each shot's job and length
-  (`ROLE_S` by frame, priors), a hook and a title look per chapter. The
-  rules still cut each window, the beat and the music. Chapter titles are
-  overlay kind `heading` with their own `look` (script / spaced / bold /
-  serif, `overlayDraw.HEADINGS`), independent of the captions' one style.
+  (`ROLE_S` by frame, priors), a hook, a line under each chapter title and
+  a caption on the few moments that want one. The rules still cut each
+  window, the beat and the music. **The words** (sarah, 2026-10-18:
+  "captions usually convey 1. a thought ... 2. what we're doing at a
+  timestamp"; "green spaces, a green drink, and sunny streets" read as AI):
+  every line is the creator typing over their own clip, a first-person
+  thought or what they're doing, 3-5 words, lowercase, ≤ 1 emoji, never a
+  description or list of the picture (`story.VOICE`, also in the chat's
+  overlay rule and `llm.DAY_SYSTEM`); lines they typed before
+  (`habits.phrases`) and their taste ride along. Checked in code
+  (`story.line_of`: lists dropped, no model clock, one emoji, ≤ 6 words);
+  `clock` puts the real filming time in front ("7:40 am · walk to class").
+  Captions (kind `caption`, so the Soft look) hang on their shot once the
+  title has gone, ≤ 2 a chapter, held 1.4-3 s to read, never past the
+  chapter. Chapter titles are overlay kind `heading` with their own `look`,
+  independent of the captions' one style: every AI title, and any added by
+  hand, is `spaced` = thin white widely spaced capitals (Montserrat Light,
+  bundled) over an italic line in the same family, with its own calm
+  entrance (no card tilt or slam); a title always fits the frame on one
+  line by getting smaller (`fitTitle`, ≥ 40%), in the typing box too.
+  script / bold / serif stay pickable by hand. `tests/test_story.py`,
+  `headingLook.test.ts`.
   Runs only with `OPENAI_API_KEY` in web/.env **and** the AI switch on (the
   "AI" pill in the top bar and in the two-picks popup, `/api/ai`, kept in
   `$VIBECUT_CACHE/ai.json`, off by default; sarah, 2026-10-18), and only for
