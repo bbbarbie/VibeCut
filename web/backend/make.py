@@ -36,17 +36,21 @@ import uuid
 
 from cutgrammar import music as mu
 
-from . import audiomix, bed, habits, places, remix, select as sel, storyboard as sb, tempo, timeline
+from . import audiomix, bed, habits, places, remix, select as sel, storyboard as sb, tempo, timeline, vlog
 
 # Shot length and hook by frame and pace [prior]. A short is cut like the
 # reels the creator brought on 2026-09-25 (0.7 s a shot, hook 1.4 s); a
 # vlog breathes (2-3 s) but still opens on its strongest moment.
+# A short is cut like a reel. A vlog (tall or wide) is cut like the pretty
+# ones on YouTube (2026-10-19, vlog.py): 3–6 s a shot held where the action
+# ends, scenes of wide → medium → close, the stillest shots held longest.
 PRIOR = {
     "short": {"median": {"fast": 0.7, "balanced": 0.9, "calm": 1.2}, "hook_s": 1.5, "max_s": 60.0},
-    "tall": {"median": {"fast": 1.8, "balanced": 2.5, "calm": 3.2}, "hook_s": 2.5, "max_s": None},
-    "wide": {"median": {"fast": 1.8, "balanced": 2.5, "calm": 3.2}, "hook_s": 2.5, "max_s": None},
+    "tall": {"median": {"fast": 3.0, "balanced": 4.0, "calm": 5.5}, "hook_s": 3.0, "max_s": None},
+    "wide": {"median": {"fast": 3.0, "balanced": 4.0, "calm": 5.5}, "hook_s": 3.0, "max_s": None},
 }
 CURVE = [1.15, 1.0, 0.9, 0.9, 1.05]       # shots shorten through the middle, the ending breathes [prior]
+VLOG_CURVE = [1.1, 1.0, 1.0, 0.95, 1.15]  # a vlog breathes throughout and rests at the end [prior]
 SPREAD = (0.6, 1.5)                        # shot-to-shot variety around the median (p10 / p90 of the median)
 # Levels by frame [prior]: a short rides on the music (Remix's levels); a
 # vlog's own sounds stay up front (the bed's).
@@ -75,7 +79,7 @@ def fingerprint(fmt: str, pace: str, seconds: float, styles: list[dict] | None =
     if p["max_s"]:
         dur = min(dur, p["max_s"])
     med = p["median"][pace]
-    return {"median_s": med, "curve": list(CURVE), "spread": SPREAD, "hook_s": p["hook_s"],
+    return {"median_s": med, "curve": list(CURVE if fmt == "short" else VLOG_CURVE), "spread": SPREAD, "hook_s": p["hook_s"],
             "bpm": bed.PACE_BPM[pace], "arc": "builds", "energy": None, "bright": None,
             "duration": round(max(15.0, dur), 1), "vertical": fmt != "wide", "refs": 0, "refs_used": False}
 
@@ -137,8 +141,26 @@ def plain_lines(plan: sel.Plan, found: dict | None) -> list[str]:
     return out
 
 
-def moments(clips: dict[str, dict], cut, fp: dict, judge=None, taste: str = "", bias: dict | None = None) -> sel.Plan:
-    plan = remix.plan_shots(clips, fp, length=fp["duration"], cut=cut, judge=judge, taste=taste, bias=bias)
+def moments(clips: dict[str, dict], cut, fp: dict, judge=None, taste: str = "", bias: dict | None = None,
+            fmt: str = "short") -> sel.Plan:
+    if fmt == "short" or fp.get("refs_used"):
+        plan = remix.plan_shots(clips, fp, length=fp["duration"], cut=cut, judge=judge, taste=taste, bias=bias)
+    else:
+        # the vlog grammar (vlog.py): shots with room to rest in, scenes of
+        # wide -> medium -> close, the still shots held longest. Holds come
+        # out shorter than the median (walks are cut short, some shots were
+        # filmed short), so a vlog that lands well under its length asks for
+        # more moments once, in proportion.
+        length = fp["duration"]
+        for _ in range(2):
+            plan = remix.plan_shots(clips, fp, length=length, cut=cut, judge=judge, taste=taste, bias=bias,
+                                    min_s=vlog.MIN_PICK_S)
+            vlog.scenes(plan)
+            vlog.breathe(plan, clips, fp)
+            if plan.duration >= vlog.LENGTH_OK * fp["duration"] or plan.duration <= 0:
+                break
+            length = min(fp["duration"] * fp["duration"] / plan.duration, fp["duration"] * vlog.ASK_MORE_MAX)
+        plan.notes.append(vlog.describe(plan))
     # The hook is lifted out of its stop, not copied: a Remix played the hook
     # shot again in its place (sarah: never the same shot twice). A stop that
     # was only its hook is not lost: it opens the video.
@@ -269,14 +291,14 @@ def ops(plan: sel.Plan, fp: dict, mx: dict | None, fmt: str, look: str | None, a
         out.append(m)
     if look:
         out.append({"op": "set_look", "look": look})
-    out.extend(punches(plan, mx))
+    out.extend(punches(plan, mx, fmt == "short"))
     if ramp:
         hook_key, cut_at, second = ramp
         out.append({"op": "split", "shot": hook_key, "at": cut_at})
         out.append({"op": "set_shot", "shot": second, "speed": RAMP_SPEED})
         if look in FLASH_LOOKS:
             out.append({"op": "set_transition", "shot": second, "kind": "flash", "dur": FLASH_S})
-    elif look in FLASH_LOOKS and plan.hook and mx:
+    elif look in FLASH_LOOKS and plan.hook and mx and fmt == "short":
         out.append({"op": "set_transition", "shot": plan.hook[-1].shot.id, "kind": "flash", "dur": FLASH_S})
     # the references' words: where they sit, how long they hold, whether a
     # reel that opens on its footage gets a title at all, caps or not
@@ -317,7 +339,7 @@ PUSH_HOOK, PUSH_HIT, PUSH_BAR = 0.08, 0.14, 0.05
 BAR_BEATS = 4
 
 
-def punches(plan: sel.Plan, mx: dict | None) -> list[dict]:
+def punches(plan: sel.Plan, mx: dict | None, fmt_is_short: bool = True) -> list[dict]:
     """set_shot ops with a push per shot: the hook, the hit on the drop, the
     bars. With no beat known, only the hook and the first body shot move."""
     out: list[dict] = []
@@ -333,8 +355,8 @@ def punches(plan: sel.Plan, mx: dict | None) -> list[dict]:
     for h in plan.hook:
         push(h, PUSH_HOOK)
     body = [p for sess in plan.sessions for p in sess]
-    if not body:
-        return out
+    if not body or not fmt_is_short:
+        return out                 # a vlog rests; only the hook pushes
     push(body[0], PUSH_HIT)
     if mx:
         period, sign = mx["period"], 1
@@ -435,10 +457,11 @@ def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, ab
         try:
             job.stage = "choosing"
             fp = fingerprint(fmt, pace, seconds, styles, vibe)
-            plan = moments(clips, cut, fp, judge, taste, bias)
+            plan = moments(clips, cut, fp, judge, taste, bias, fmt)
             if not plan.picks:
                 raise ValueError("none of the clips had a moment worth keeping — add more footage")
-            end_strong(plan)
+            if fmt == "short" or fp.get("refs_used"):
+                end_strong(plan)          # a vlog's scene already ends on its detail or its face
             job.stage = "music"
             mx, source = (music(clips, plan, fp, pace, own, progress) if want_music
                           else (None, "off, as last time"))

@@ -481,6 +481,23 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   `media.to_sdr` so they look like the phone showed them; measurement frames
   are untouched. `tests/test_hdr.py`.
 
+- **The vlog grammar** (`web/backend/vlog.py`; 2026-10-19, after the creator
+  watched a made video: "the cut is too random, not those pretty vlogs on
+  YouTube"). A tall or wide Make, when no reel is being copied, is cut like
+  a vlog, not a reel: `make.PRIOR` holds 3–6 s a shot (hook 3 s), no speed
+  ramp, no flash, only the hook pushes; the picker refuses shots filmed
+  under 2.5 s (`select.choose(min_s)`) and a vlog that lands under 90% of
+  its length asks for more moments once. Picks are regrouped into *scenes*
+  (`brief.spots`: a place, twenty minutes; at most 7), each stop sequenced
+  wide → medium → close from face area + detail labels, look-alikes apart,
+  ending on a detail or a face; folded scenes keep the day's order. Holds
+  follow stillness (`activity` < 15 ×1.5, > 40 ×0.7, clamped 1.5–7 s), cut
+  in before the action (`select.window`). Shorts are unchanged. Judged on
+  the one real shoot (42 clips: 27 shots of 0.6–3.9 s in 45-min sessions →
+  20 shots of 2.6–6.8 s in 7 scenes, 73 s of the 90 asked: the footage is
+  short). Every number is a prior. Not done from the plan: cut on motion,
+  dissolves between scenes, a grade per vlog, captions thinned.
+
 - From montage-vlog-compiler (MIT; see NOTICE), four pieces:
   - **Evidence levels** (`cutgrammar/evidence.py`): every finding names
     what it rests on — meta / still / motion / audio. A finding whose
