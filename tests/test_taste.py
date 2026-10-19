@@ -63,15 +63,15 @@ def main() -> int:
     fp = make.fingerprint("short", "fast", 60.0)
     ops = make.ops(plan, fp, None, "short", "hype", "A day at uni", set(), lines=lines)
     parts = [o["text"] for o in ops if o.get("kind") == "part"]
-    clock = remix._clock(datetime(2026, 9, 22, 8, 35))
-    check("the written lines are on the board after the clock", parts == [f"{clock} · morning coffee", f"{clock} · up we go"], str(parts))
+    check("the written lines are on the board, no clock stamp in front", parts == ["morning coffee", "up we go"], str(parts))
     caps_fp = {**fp, "text": {"share": 0.5, "band": "bottom", "hold_s": 2.0, "upper": True, "first_s": 0.0}, "refs_used": True}
     parts = [o["text"] for o in make.ops(plan, caps_fp, None, "short", "hype", "A day at uni", set(), lines=lines) if o.get("kind") == "part"]
-    check("in caps when the reel's words were caps", parts and all(p.split("·")[-1].strip().isupper() for p in parts), str(parts))
+    check("in caps when the reel's words were caps", parts and all(p.isupper() for p in parts), str(parts))
     def broken(items, about, taste):
         raise RuntimeError("no")
-    check("a failing writer leaves the label table's phrases", make.words(plan, "A day", "", broken) is None)
-    check("no key: no written lines", make.words(plan, "A day", "") is None)
+    plain = make.plain_lines(plan, None)
+    check("a failing writer leaves place and time", make.words(plan, "A day", "", broken) == plain and plain == ["morning", "morning"], str(plain))
+    check("no key: place and time, plainly", make.words(plan, "A day", "") == plain)
     print("through the API")
     from fastapi.testclient import TestClient
     from tests.test_projects import TMP as PTMP, clip, wait

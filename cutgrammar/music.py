@@ -32,7 +32,9 @@ from . import features
 from .media import AUDIO_SR, load_audio
 
 AUDIO_EXT = {".mp3", ".m4a", ".wav", ".flac"}
-FEATURE_VERSION = 2  # 2: beat phase, for the snap grid
+FEATURE_VERSION = 3  # 2: beat phase, for the snap grid; 3: brightness (spectral centroid)
+BRIGHT_WIN = 2048    # spectral centroid frames at AUDIO_SR; the "feel" tempo and shape can't tell
+BRIGHT_EXCERPT_S = 60.0
 
 ENERGY_HZ = 1.0          # energy curve resolution: one value per second
 SMOOTH_S = 5.0           # music energy is felt over phrases, not hits
@@ -196,7 +198,36 @@ def analyse(path: str) -> Track:
         title = f"{tags['artist']} — {title}"
     bpm, tempo = estimate_bpm(m)
     return Track(path=path, duration=m.duration, bpm=bpm, energy=energy_curve(m),
-                 title=title, meta={"tempo": tempo})
+                 title=title, meta={"tempo": tempo, "bright": brightness(m)})
+
+
+def brightness(m) -> float | None:
+    """Where the sound's weight sits, in Hz: the median spectral centroid
+    over the middle minute. An acoustic ballad and a synth-pop bed can share
+    a tempo and an arc and still feel nothing alike; this is the one number
+    that tells them apart cheaply. None without audio."""
+    if not getattr(m, "has_audio", False) or m.audio is None or len(m.audio) < BRIGHT_WIN:
+        return None
+    a = np.asarray(m.audio, dtype=np.float32)
+    ex = int(BRIGHT_EXCERPT_S * AUDIO_SR)
+    if len(a) > ex:
+        s0 = (len(a) - ex) // 2
+        a = a[s0:s0 + ex]
+    hop = BRIGHT_WIN // 2
+    n = (len(a) - BRIGHT_WIN) // hop + 1
+    if n < 1:
+        return None
+    win = np.hanning(BRIGHT_WIN).astype(np.float32)
+    freqs = np.fft.rfftfreq(BRIGHT_WIN, 1.0 / AUDIO_SR)
+    cents = []
+    for k in range(n):
+        f = a[k * hop:k * hop + BRIGHT_WIN] * win
+        mag = np.abs(np.fft.rfft(f))
+        tot = float(mag.sum())
+        if tot < 1e-3:
+            continue              # silence has no colour
+        cents.append(float((freqs * mag).sum() / tot))
+    return round(float(np.median(cents)), 1) if cents else None
 
 
 def _smooth(x: np.ndarray, n: int) -> np.ndarray:

@@ -76,21 +76,27 @@ class Preferences:
 
     # ---- storage ---------------------------------------------------------
 
-    def _load(self) -> list[dict]:
+    def _read(self) -> dict:
         if not self.path:
-            return []
+            return {}
         try:
             data = json.loads(self.path.read_text())
         except (OSError, ValueError):
-            return []
-        return data.get("rules", []) if data.get("schema") == SCHEMA else []
+            return {}
+        return data if data.get("schema") == SCHEMA else {}
+
+    def _load(self) -> list[dict]:
+        data = self._read()
+        self.suggested: dict[str, dict] = data.get("suggested", {}) if data else {}
+        return data.get("rules", []) if data else []
 
     def _save(self) -> None:
         if not self.path:
             return
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(".tmp")
-        tmp.write_text(json.dumps({"schema": SCHEMA, "rules": self.rules}, indent=2, ensure_ascii=False))
+        tmp.write_text(json.dumps({"schema": SCHEMA, "rules": self.rules, "suggested": getattr(self, "suggested", {})},
+                                  indent=2, ensure_ascii=False))
         tmp.replace(self.path)
         from . import cloud
         cloud.push_rules(self.rules)
@@ -119,6 +125,65 @@ class Preferences:
     def new_project(self) -> None:
         """The shelf was cleared: this video's rules and sortings go with it."""
         self.project, self.decisions = [], {}
+
+    # ---- suggestions: what the creator undid or refused (layer 3) -------------
+    #
+    # An undone turn of the machine's own (the bed, the captions, the
+    # repeat check) and a "no" at export are the strongest signals there
+    # are, and before 2026-10-18 they went nowhere. They become *suggested*
+    # rules, shown once; only the creator turns one into a rule, or dismisses
+    # it. Nothing is applied from a suggestion by itself.
+
+    MACHINE = {
+        "Music and the beat": "No music under my videos unless I ask",
+        "Captions, as you asked": "No captions unless I ask",
+        "Took out shots that repeat another": "Keep shots that look alike; I'll choose",
+        "Smoother cuts": "Leave my cut order alone",
+    }
+
+    def suggestions(self, session: bd.Session, exports: list[dict] | None = None) -> list[dict]:
+        out = []
+        for t in session.turns:
+            if t.undone and t.kind == "direct" and t.text in self.MACHINE:
+                sid = f"undo:{t.id}"
+                if sid in self.suggested:
+                    continue
+                out.append({"id": sid, "source": "undo", "said": f"You undid “{t.text}”",
+                            "rule": self.MACHINE[t.text], "suggested": "long_term"})
+        for n, e in enumerate(exports or []):
+            v = e.get("verdict") or {}
+            if v.get("post") is False and v.get("note"):
+                sid = f"verdict:{n}"
+                if sid in self.suggested:
+                    continue
+                out.append({"id": sid, "source": "verdict", "said": f"At export you said: “{v['note']}”",
+                            "rule": v["note"].strip()[:120], "suggested": "long_term"})
+        return out
+
+    def take(self, sid: str, klass: str, actor: str, rule: str = "", scope: str = "", counter: str = "") -> dict:
+        """A suggestion becomes a rule (every video / this video) or is dismissed."""
+        if actor != "user":
+            raise PreferenceError("only the creator can decide what's learned")
+        if klass not in ("long_term", "project", "rejected"):
+            raise PreferenceError(f"unknown kind {klass!r}")
+        if sid in self.suggested:
+            raise PreferenceError("already decided")
+        rule, scope, counter = (x.strip() for x in (rule, scope, counter))
+        if klass in LEARNED and not rule:
+            raise PreferenceError("say the rule in your own words")
+        if klass == "long_term" and not (scope and counter):
+            raise PreferenceError("for every video, say when it applies and when it doesn't")
+        now = time.time()
+        decision = {"klass": klass, "at": now}
+        if klass in LEARNED:
+            rec = {"id": f"s{int(now * 1000):x}", "klass": klass, "rule": rule, "scope": scope, "counter": counter,
+                   "reason": "", "active": True, "evidence": {"said": sid, "changed": []},
+                   "history": [{"at": now, "action": "confirmed", "klass": klass, "actor": actor}]}
+            (self.rules if klass == "long_term" else self.project).append(rec)
+            decision["rule_id"] = rec["id"]
+        self.suggested[sid] = decision
+        self._save()
+        return decision
 
     # ---- candidates ------------------------------------------------------
 
@@ -237,8 +302,8 @@ class Preferences:
             out.append(f"- {r['rule']} ({where}{extra})")
         return "\n".join(out)
 
-    def public(self, session: bd.Session) -> dict:
-        return {"candidates": self.candidates(session),
+    def public(self, session: bd.Session, exports: list[dict] | None = None) -> dict:
+        return {"candidates": self.candidates(session), "suggestions": self.suggestions(session, exports),
                 "rules": [{k: r[k] for k in ("id", "klass", "rule", "scope", "counter", "reason",
                                              "active", "evidence", "history")}
                           for r in self.rules + self.project]}

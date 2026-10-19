@@ -1,5 +1,5 @@
 import type { SetupData } from './components/Setup'
-import type { Capabilities, CutData, ExportJob, Job, LengthSlider, LookFit, PrefClass, Project, ProjectMeta, RefCard, RefJob, RefSummary, Session, StyleAnswers, StyleQuestion, TalkState } from './types'
+import type { Habit, Capabilities, CutData, ExportJob, Job, LengthSlider, LookFit, PrefClass, Project, ProjectMeta, RefCard, RefJob, RefSummary, Session, StyleAnswers, StyleQuestion, TalkState } from './types'
 
 export type MomentInfo = { header: string; key: string; llm: boolean; provider: ChatProvider
   estimate: { tokens_in: number; usd: [number, number] } }
@@ -21,6 +21,7 @@ export type AIState = { available: boolean; on: boolean; model: string }
 export type AIEstimate = AIState & { moments: number; dollars: number; plan?: number; check?: number }
 // One look at the whole cut by the AI (selfcheck.py), priced before it's asked.
 export type CheckEstimate = { on: boolean; available: boolean; model: string; shots: number; dollars: number; spent: number }
+export type VibeJob = { id: string; stage: 'learning' | 'done' | 'error'; lines: string[]; error: string | null; done: number; total: number; vibe: string | null; elapsed: number }
 
 export type MakeJob = { id: string; stage: string; line: string; done: number; total: number; error: string | null; elapsed: number }
 
@@ -98,6 +99,8 @@ export const api = {
   chatEstimate: (t?: number | null) => j<ChatEstimate>(fetch(t == null ? '/api/chat/estimate' : `/api/chat/estimate?t=${t.toFixed(3)}`)),
   autoBrief: (picks?: { format: string; look: string }) => j<Session>(post('/api/brief/auto', picks ?? {})),
   setup: () => j<SetupData>(fetch('/api/brief/setup')),
+  vibeStart: (req: { niche: string; name?: string; links: string[] }) => j<VibeJob>(post('/api/vibes', req)),
+  vibeStatus: (id: string) => j<VibeJob>(fetch(`/api/vibes/jobs/${id}`)),
   profileGet: () => j<{ profile: Record<string, unknown> | null; at: number | null; cloud: { on: boolean } }>(fetch('/api/profile')),
   profilePut: (profile: Record<string, unknown>) => j<{ profile: Record<string, unknown>; at: number }>(post('/api/profile', { profile })),
   make: (picks: { format: string; look: string; music?: boolean; vibe?: string | null; ai_ok?: number | null }) => j<MakeJob>(post('/api/make', picks)),
@@ -125,6 +128,7 @@ export const api = {
     j<MomentAnswer>(post('/api/moment/chat', { t, message, history, ai_ok: ai_ok ?? null })),
   toggle: (turn: number) => j<Session>(post(`/api/turns/${turn}/toggle`, {})),
   voiceover: (text: string) => j<Session>(post('/api/voiceover', { text })),
+  suggest: (req: { id: string; klass: PrefClass | 'rejected'; rule?: string; scope?: string; counter?: string }) => j<Session>(post('/api/preferences/suggest', req)),
   classify: (req: { turn: number; klass: PrefClass; rule?: string; scope?: string; counter?: string; reason?: string }) =>
     j<Session>(post('/api/preferences/classify', req)),
   rule: (id: string, action: 'forget' | 'narrow') => j<Session>(post(`/api/preferences/${id}/${action}`, {})),
@@ -142,6 +146,9 @@ export const api = {
   talkToggle: (id: string) => j<TalkState>(post('/api/talk/toggle', { id })),
   talkApply: (captions: boolean, profile: Record<string, unknown>) => j<Session>(post('/api/talk/apply', { captions, profile })),
   exportReveal: (id: string) => fetch(`/api/export/${id}/reveal`, { method: 'POST' }),
+  exportPhotos: (id: string) => j<{ ok: boolean }>(post(`/api/export/${id}/photos`, {})),
+  habits: () => j<{ habits: Habit[]; phrases: string[]; last: { id: string; text: string }[] }>(fetch('/api/habits')),
+  habitSwitch: (id: string, off: boolean, remake = false) => j<MakeJob & { habit?: Habit }>(post(`/api/habits/${encodeURIComponent(id)}`, { off, remake })),
   exportVerdict: (n: number, wouldPost: boolean, note: string) => j<Session>(post(`/api/exports/${n}/verdict`, { post: wouldPost, note })),
   // Remix: reference reels + the shelf -> one finished short, then the board
   remixStart: (req: { refs: string[]; title?: string; sub?: string; length?: number }) =>

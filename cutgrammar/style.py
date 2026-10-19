@@ -447,7 +447,10 @@ def music_feel(media: Media) -> dict | None:
                  + (" (upbeat)" if bpm >= 115 else " (relaxed)" if bpm < 90 else ""))
     else:
         w.append("no steady beat")
-    return {"bpm": bpm, "energy": [round(float(x), 3) for x in curve], "arc": arc, "words": w}
+    bright = music.brightness(media)
+    if bright:
+        w.append("a bright, airy sound" if bright > 2500 else "a warm, low sound" if bright < 1200 else "a full, even sound")
+    return {"bpm": bpm, "energy": [round(float(x), 3) for x in curve], "arc": arc, "bright": bright, "words": w}
 
 
 # --------------------------------------------------------------------------
@@ -532,6 +535,7 @@ def text_style(events: list[dict], duration: float) -> dict | None:
     on = []
     bands = {"bottom": 0, "middle": 0, "top": 0}
     heights, cards_words, letters, upper = [], [], 0, 0
+    samples: list[str] = []            # the reel's own lines, a few, for the writer's ear
     for e in sorted(events, key=lambda e: e["t"]):
         items = [i for i in e.get("items", []) if i.get("conf", 1) >= TEXT_MIN_CONF and i.get("text", "").strip()]
         on.append(bool(items))
@@ -543,11 +547,20 @@ def text_style(events: list[dict], duration: float) -> dict | None:
                     bands[name] += 1
             heights.append(h)
             cards_words.append(len(i["text"].split()))
+            line = " ".join(i["text"].split())
+            if 2 <= len(line) <= 48 and line.lower() not in {x.lower() for x in samples} and len(samples) < 12:
+                samples.append(line)
             for ch in i["text"]:
                 if ch.isalpha():
                     letters += 1
                     upper += ch.isupper()
     on_arr = np.array(on, dtype=bool)
+    # the recogniser misses a frame now and then; a one-sample hole inside a
+    # caption is the same caption, not two short ones (held 0.8 s read on a
+    # reel whose captions plainly held 2–3 s, 2026-10-18)
+    if len(on_arr) > 2:
+        holes = (~on_arr[1:-1]) & on_arr[:-2] & on_arr[2:]
+        on_arr[1:-1] |= holes
     runs = _runs(on_arr)
     share = float(on_arr.mean())
     if share == 0:
@@ -563,7 +576,7 @@ def text_style(events: list[dict], duration: float) -> dict | None:
         words.append("ALL CAPS")
     return {"share": round(share, 3), "first_s": round(first, 2), "band": band, "hold_s": round(hold, 2),
             "cards": len(runs), "upper": round(up, 2), "size": round(float(np.median(heights)), 3),
-            "words_per_card": round(float(np.median(cards_words)), 1),
+            "words_per_card": round(float(np.median(cards_words)), 1), "samples": samples,
             "bands": {k: round(v / max(1, sum(bands.values())), 2) for k, v in bands.items()}, "words": words}
 
 

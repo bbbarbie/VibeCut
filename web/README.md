@@ -92,6 +92,13 @@ name, handle, font, colour and caption placement (words on screen, name
 tags, end cards). Taste and bookmarks are kept for you and not yet read by
 the editor — the page says so.
 
+## Watch, then fine-tune
+
+A made video opens as the video: full-size, playing, with four chips
+under it — the music, the length, the look, the words — and Download. One
+link, *Fine-tune*, opens the editor underneath: every shot, caption, join
+and sound, with undo. A video you cut by hand opens in the editor.
+
 ## Make my video
 
 Since 2026-10-17 the two picks run one pipeline — the same one a Remix

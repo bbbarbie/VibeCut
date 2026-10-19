@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { AIEstimate, AIState } from '../api'
+import { api, type AIEstimate, type AIState, type VibeJob } from '../api'
 import { Button, Dialog } from '../ui'
 import { AISwitch } from './AISwitch'
 
@@ -20,11 +20,12 @@ export type SetupData = {
 
 const GLYPH: Record<string, string> = { short: 'h-7 w-4', tall: 'h-7 w-4', wide: 'h-4 w-7' }
 
-export function Setup({ data, busy, progress, onDone, onCancel, ai, estimate, onAI }: {
+export function Setup({ data, busy, progress, onDone, onCancel, ai, estimate, onAI, onReload }: {
   data: SetupData | null
   ai?: AIState | null; estimate?: AIEstimate | null   // the AI switch, and what this edit would cost with it on
   onAI?: (on: boolean) => void
   busy: boolean
+  onReload?: () => Promise<void>        // after a vibe is learnt in place, so it appears under Cut it like
   progress?: { line: string; done: number; total: number; elapsed: number } | null   // where the making is
   onDone: (format: string, look: string, music: boolean, vibe: string | null, aiCost: number | null) => void   // aiCost: the price shown, null = no AI
   onCancel: () => void
@@ -35,6 +36,25 @@ export function Setup({ data, busy, progress, onDone, onCancel, ai, estimate, on
   const withMusic = music ?? data?.music ?? true
   const [vibe, setVibe] = useState<string | null | undefined>(undefined)   // undefined = not touched
   const chosenVibe = vibe === undefined ? (data?.vibe ?? null) : vibe
+  // learn a vibe from reels, right here (vibes.py as a job)
+  const [learning, setLearning] = useState<{ open: boolean; niche: string; links: string; job: VibeJob | null; error: string | null }>({ open: false, niche: '', links: '', job: null, error: null })
+  const learn = async () => {
+    const links = learning.links.split(/\s+/).map((x) => x.trim()).filter(Boolean)
+    setLearning((l) => ({ ...l, error: null }))
+    try {
+      let job = await api.vibeStart({ niche: learning.niche, links })
+      setLearning((l) => ({ ...l, job }))
+      while (job.stage === 'learning') {
+        await new Promise((r) => window.setTimeout(r, 1500))
+        job = await api.vibeStatus(job.id)
+        setLearning((l) => ({ ...l, job }))
+      }
+      if (job.stage === 'error') throw new Error(job.error ?? 'Could not learn from those reels')
+      await onReload?.()
+      setVibe(job.vibe)
+      setLearning({ open: false, niche: '', links: '', job: null, error: null })
+    } catch (e) { setLearning((l) => ({ ...l, job: null, error: (e as Error).message })) }
+  }
   const last = data?.remembered
   const first = useRef<HTMLButtonElement>(null)
   const fmt = format ?? data?.format ?? 'tall'
@@ -127,6 +147,33 @@ export function Setup({ data, busy, progress, onDone, onCancel, ai, estimate, on
               ))}
             </div>
             <p className="mt-1 font-serif text-[13px] text-zinc-300">{data.vibes!.find((v) => v.id === chosenVibe)?.line ?? 'Shot length, hook and words set by the frame you picked.'}</p>
+          </div>
+        )}
+        {data && (
+          <div>
+            {!learning.open ? (
+              <button type="button" className="text-[12px] text-accent hover:underline" onClick={() => setLearning((l) => ({ ...l, open: true }))}>
+                {(data.vibes?.length ?? 0) ? '+ Learn a vibe from reels you love…' : 'Cut it like reels you love: learn a vibe from three or more…'}
+              </button>
+            ) : (
+              <div className="rounded-lg border border-line p-2">
+                <input value={learning.niche} onChange={(e) => setLearning((l) => ({ ...l, niche: e.target.value }))} placeholder="What they have in common, e.g. day in my life"
+                       className="w-full rounded-md border border-line bg-panel px-2 py-1 text-[12px] text-zinc-100 outline-none focus:border-zinc-500" />
+                <textarea value={learning.links} onChange={(e) => setLearning((l) => ({ ...l, links: e.target.value }))} rows={3} spellCheck={false}
+                          placeholder={'Three or more links, one a line (TikTok, Reels, Shorts) — or files on this Mac'}
+                          className="mt-1 w-full resize-none rounded-md border border-line bg-panel px-2 py-1 font-mono text-[11px] text-zinc-100 outline-none focus:border-zinc-500" />
+                {learning.job ? (
+                  <p className="mt-1 text-[11px] text-muted">Learning {learning.job.done}/{learning.job.total}… {learning.job.lines.at(-1) ?? ''} · {Math.round(learning.job.elapsed)} s</p>
+                ) : (
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <Button size="sm" variant="primary" onClick={learn} disabled={!learning.niche.trim() || learning.links.split(/\s+/).filter(Boolean).length < 3}>Learn it</Button>
+                    <Button size="sm" variant="ghost" onClick={() => setLearning({ open: false, niche: '', links: '', job: null, error: null })}>Cancel</Button>
+                    <span className="text-[10px] text-muted">Only numbers are kept from a reel; the first two minutes of each are read.</span>
+                  </div>
+                )}
+                {learning.error && <p className="mt-1 text-[11px] text-rose-300">{learning.error}</p>}
+              </div>
+            )}
           </div>
         )}
         <label className="flex items-center gap-2 text-[12px] text-zinc-300">
