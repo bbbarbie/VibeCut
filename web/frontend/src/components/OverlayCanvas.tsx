@@ -295,8 +295,8 @@ function TypeBox({ typing, lines, width, height, look, onChange, onDone }: {
            if (e.key === 'Enter' && (!lines || e.metaKey || e.ctrlKey)) { e.preventDefault(); onDone(true) }
            if (e.key === 'Escape') { e.preventDefault(); onDone(false) }
          }}
-         className="absolute -translate-x-1/2 -translate-y-1/2 cursor-text whitespace-pre-wrap break-words rounded text-center outline-dashed outline-1 outline-offset-4 outline-white/70"
-         style={{ left: box.x + box.w / 2, top: box.y + box.h / 2, width: 'max-content', minWidth: 40,
+         className={`absolute -translate-y-1/2 cursor-text whitespace-pre-wrap break-words rounded outline-dashed outline-1 outline-offset-4 outline-white/70 ${look.align === 'left' ? 'text-left' : '-translate-x-1/2 text-center'}`}
+         style={{ left: look.align === 'left' ? box.x : box.x + box.w / 2, top: box.y + box.h / 2, width: 'max-content', minWidth: 40,
            maxWidth: Math.max(80, width - m.l - m.r), background: look.backing ?? undefined,
            padding: look.backing ? '0.3em 0.6em' : 0, caretColor: look.main.color }} />
   )
