@@ -84,18 +84,15 @@ export function Inspector(p: {
   onLook: (id: string, name: string) => void
   /** "Save to My resources": what's on the video now, kept in the folder (signed out: the sign-in card) */
   onSave: (kind: ResourceKind, why: string | null) => void
-  /** there's a song under the video to save */
-  songOn: boolean
+  /** what can be saved right now: null = ready, else what to do first (App works it out, for the folder too) */
+  saveWhy: Record<ResourceKind, string | null>
 }) {
   const it = p.item
   const shot = it && it.kind === 'shot' ? it : null
-  const save = (kind: ResourceKind, what: string, can: boolean, why: string) => (
-    <div><SaveChip what={what} ready={can} onClick={() => p.onSave(kind, can ? null : why)} /></div>
+  // at the top of what it saves, so it's seen without scrolling past the tiles
+  const save = (kind: ResourceKind, what: string) => (
+    <div><SaveChip what={what} ready={!p.saveWhy[kind]} onClick={() => p.onSave(kind, p.saveWhy[kind])} /></div>
   )
-  const st = p.style
-  const lookSet = !!(st.template || st.text_color || st.typeface || st.outline || st.shadow || st.backdrop || st.thick != null)
-  const fxSet = !!shot && SHOT_SETTINGS.some(([k, plain]) => shot[k] != null && shot[k] !== plain)
-  const pickedJoin = p.join?.join.picked
   return (
     <aside className="flex min-h-0 min-w-0 flex-1 flex-col">
       <nav className="flex shrink-0 gap-0.5 border-b border-line px-2 pt-2" role="tablist">
@@ -155,7 +152,7 @@ export function Inspector(p: {
             {!shot.freeze && <Chip onClick={p.onFreeze} title="Hold the frame under the playhead for 3 seconds"><Icon name="freeze" size={17} /> Freeze frame</Chip>}
             <Chip onClick={p.onCopyFx} title="Keep this shot's speed, turn, crop, effect and sound settings (⌥⌘C)"><Icon name="adjust" size={17} /> Copy settings</Chip>
             <Chip onClick={() => p.onPasteFx?.()} disabled={!p.onPasteFx} title="Give this shot the settings you copied (⌥⌘V)"><Icon name="paste" size={17} /> Paste settings</Chip>
-            <SaveChip what="settings" ready={fxSet} onClick={() => p.onSave('shot', fxSet ? null : 'Change this shot’s speed, turn, crop, effect or sound first, then save it')} />
+            <SaveChip what="settings" ready={!p.saveWhy.shot} onClick={() => p.onSave('shot', p.saveWhy.shot)} />
             <Chip danger onClick={p.onDelete}><Icon name="trash" size={17} /> Delete</Chip>
             {!!(shot.rotate || shot.fill || shot.mirror) && <Chip onClick={() => p.onFix({ rotate: 0, fill: false, mirror: false }, `You put shot ${shot.n} back as filmed`)}>Back to as filmed</Chip>}
           </div>
@@ -179,6 +176,7 @@ export function Inspector(p: {
             <Button onClick={p.onCaptionAdd}>+ Add a caption at the playhead</Button>
           </>}
           {p.captionsOn ? <>
+            {save('caption', 'caption look')}
             <Section title={p.caption ? 'Font of every caption' : 'Font'}>
               <CaptionFonts value={p.style.typeface ?? null}
                             onPick={(f) => p.onCaptionStyle({ typeface: f?.id ?? null }, f ? `The captions are in ${f.name}` : 'The captions are back to their own font')} />
@@ -189,10 +187,9 @@ export function Inspector(p: {
             </Section>
             <CaptionDress style={p.style} onPick={p.onCaptionStyle} />
             <Section title="Word art"><CaptionStyles style={p.style} thumb={p.captionThumb} onPick={p.onCaptionStyle} /></Section>
-            {save('caption', 'look', lookSet, 'Pick a font, colour, outline or word art first, then save it')}
             <Section title={p.caption ? 'Animation of every caption' : 'Animation'}>
+              {save('animation', 'animation')}
               <CaptionAnimations style={p.style} thumb={p.captionThumb} sample={p.captionSample} onPick={p.onCaptionStyle} />
-              {save('animation', 'animation', !!st.enter, 'Pick an animation first, then save it')}
             </Section>
             {!p.caption && <Hint>One style for every caption. Click a caption on the picture or the timeline to change its words.</Hint>}
           </> : <Hint>Turn captions on to put the time and place of each moment on the video.</Hint>}
@@ -201,25 +198,25 @@ export function Inspector(p: {
         {p.tab === 'effects' && <>
           {!p.joinPicked && (shot ? (
             <Section title={`Effect on shot ${shot.n}`}>
+              {save('effect', 'effect')}
               <EffectTiles n={shot.n} effect={shot.effect ?? null} amount={shot.effect_amount ?? 1} thumb={p.itemThumb}
                            onPick={(patch, label) => p.onEffect(patch, false, label)}
                            onAll={() => p.onEffect({ effect: shot.effect ?? null, effect_amount: shot.effect_amount ?? 1 }, true,
                              shot.effect ? `Every shot now has ${effectName(shot.effect)}` : 'You took the effects off every shot')} />
-              {save('effect', 'effect', !!shot.effect, 'Pick an effect first, then save it')}
             </Section>
           ) : (
             <Section title="Effect on every shot">
               <Hint>Or click a shot on the timeline to give just that shot an effect.</Hint>
+              {save('effect', 'effect')}
               <EffectTiles n={null} effect={p.allEffect.effect} amount={p.allEffect.amount} thumb={p.allEffect.thumb}
                            onPick={(patch, label) => p.onEffect(patch, true, label)} onAll={() => {}} />
-              {save('effect', 'effect', !!p.allEffect.effect, 'Pick an effect first, then save it')}
             </Section>
           ))}
           {p.join ? (
             <Section title={p.joinPicked ? `The cut from shot ${p.join.before} to shot ${p.join.after}` : 'Transition at every cut'}>
               {!p.joinPicked && <Hint>Or click the dot between two shots on the timeline to change just that cut.</Hint>}
+              {save('transition', 'transition')}
               <Transitions {...p.join} before={p.joinPicked ? p.join.before : null} after={p.joinPicked ? p.join.after : null} onPick={p.onJoin} />
-              {save('transition', 'transition', !!pickedJoin && pickedJoin !== 'cut', 'Pick a transition first, then save it')}
             </Section>
           ) : <Hint>Transitions go between two shots. Your edit has no cuts yet.</Hint>}
         </>}
@@ -241,7 +238,7 @@ export function Inspector(p: {
                 <div className="pt-1"><Chip onClick={p.onExtract}>Take the sound off</Chip></div>
               </>}
           </Section>
-        ) : <Section title="Music">{p.music}{p.songOn && save('song', 'song', true, '')}<Hint>Click a shot on the timeline to change its own sound.</Hint></Section>)}
+        ) : <Section title="Music">{p.music}{!p.saveWhy.song && save('song', 'song')}<Hint>Click a shot on the timeline to change its own sound.</Hint></Section>)}
 
         {p.tab === 'adjust' && p.looks && (
           <Section title="Look">
@@ -621,10 +618,6 @@ function TrimBar({ item, thumb, onTrim }: { item: SeqItem; thumb: string | null;
     </div>
   )
 }
-
-// a shot's own settings and their defaults (board.SHOT_FX / FX_PLAIN): anything off its default is worth saving
-const SHOT_SETTINGS: [keyof SeqItem, unknown][] = [['speed', 1], ['gain', 1], ['mute', false], ['rotate', 0], ['fill', false],
-  ['mirror', false], ['fade_in', 0], ['fade_out', 0], ['punch', 0], ['effect', null], ['reverse', false]]
 
 // "Save to My resources", where the thing was made (CapCut's "Save as preset").
 // Always there; with nothing to keep yet it's quieter, and a click says what to do first.

@@ -260,10 +260,12 @@ def through_api() -> None:
     check("a public server is signed out", c.get("/api/resources").json()["signed_in"] is False)
     os.environ.pop("VIBECUT_PUBLIC")
     check("who: another host is a visitor", not resources.who("10.0.0.4", {})["signed_in"])
+    r = c.get("/api/resources", headers={"x-vibecut-visitor": "1"}).json()
+    check("the owner can see the folder as a visitor does", r["signed_in"] is False and r["items"] == [])
 
     c.post("/api/ops", json={"ops": [{"op": "set_shot", "shot": A2, "effect": "disco", "effect_amount": 0.5}], "label": "fx"})
     r = c.post("/api/resources", json={"kind": "effect", "shot": A2}, headers=away)
-    check("signed out: Save leads to sign in", r.status_code == 401 and "Sign in" in r.json()["detail"], r.text)
+    check("signed out: Save leads to logging in", r.status_code == 401 and "log in" in r.json()["detail"], r.text)
     r = c.post("/api/resources", json={"kind": "effect", "shot": A2, "name": "Party"})
     check("signed in: saved off the video", r.status_code == 200 and r.json()["item"]["name"] == "Party"
           and r.json()["item"]["value"] == {"effect": "disco", "effect_amount": 0.5}, r.text)

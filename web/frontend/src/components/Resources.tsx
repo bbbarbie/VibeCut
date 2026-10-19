@@ -7,9 +7,10 @@ import { Icon, type IconName } from './icons'
 
 // My resources (sarah, 2026-10-19: "a resources folder so i can save my own
 // animations or templates forever", on the left rail, and in the profile).
-// What the creator saved with a "Save to My resources" button where it was
-// made, by kind; one click puts it on the video as one undoable turn. Signed
-// out, the folder is a card that leads to signing in, and so is every Save.
+// The folder's top saves what's on the video now (and so do the Save buttons
+// in each tab, where the thing is made); below, what was saved, by kind; one
+// click puts it on the video as one undoable turn. Logged out, the folder is
+// a card that asks to log in or make an account, and so is every Save.
 
 const ICON: Record<ResourceKind, IconName> = {
   caption: 'text', animation: 'spark', transition: 'split', effect: 'spark', shot: 'adjust', song: 'music',
@@ -23,15 +24,28 @@ const GOES: Record<ResourceKind, string> = {
   shot: 'On the clicked shot',
   song: 'Under the whole video',
 }
+const SAVE_LABEL: Record<ResourceKind, string> = {
+  caption: 'Caption look', animation: 'Animation', transition: 'Transition', effect: 'Effect', shot: 'Shot settings', song: 'Song',
+}
 
-/** The folder on the left rail. `onUse` absent (the profile page): rename and delete only. */
-export function Resources({ folder, error, onUse, onChange, onRetry }: {
+/** What can be saved off the video right now: null = ready, else what to do first. */
+export type SaveWhy = Record<ResourceKind, string | null>
+
+/** The folder on the left rail. `onUse` absent (the profile page): rename and delete only.
+ *  `saveWhy` + `onSave` (the edit screen): the "Save from your video" buttons at the top. */
+export function Resources({ folder, error, onUse, onChange, onRetry, saveWhy, onSave }: {
   folder: ResourceFolder | null
   error?: string | null
   onUse?: (r: Resource) => void
   onChange: (items: Resource[]) => void
   onRetry?: () => void
+  saveWhy?: SaveWhy
+  onSave?: (kind: ResourceKind, why: string | null) => void
 }) {
+  // a Save button with nothing to keep yet says what to do first, here where it was
+  // clicked, for as long as that's still so
+  const [asked, setAsked] = useState<ResourceKind | null>(null)
+  const said = asked && saveWhy ? saveWhy[asked] : null
   if (error) return (
     <div className="space-y-3 px-1 py-2">
       <p className="font-serif text-[16px] text-zinc-100">Your resources didn’t load: {error}</p>
@@ -39,50 +53,78 @@ export function Resources({ folder, error, onUse, onChange, onRetry }: {
     </div>
   )
   if (!folder) return <p className="px-1 py-2 font-serif text-[16px] text-zinc-300">Opening your folder…</p>
-  if (!folder.signed_in) return <SignIn url={folder.signin_url} />
-  if (!folder.items.length) return (
-    <div className="space-y-3 px-1 py-2">
-      <p className="font-serif text-[17px] text-zinc-100">Nothing saved yet.</p>
-      <p className="font-serif text-[15px] leading-snug text-zinc-300">
-        When you like a caption look, an animation, a transition, an effect, a shot’s settings or a song, press
-        <span className="whitespace-nowrap text-zinc-100"> <Icon name="resources" size={16} className="inline -mt-0.5" /> Save to My resources</span> where
-        you changed it. It stays here for every video.
-      </p>
-    </div>
-  )
+  if (!folder.signed_in) return <LogIn login={folder.signin_url} signup={folder.signup_url ?? folder.signin_url} />
   const kinds = folder.kinds.filter((k) => folder.items.some((x) => x.kind === k.id))
   return (
-    <div className="space-y-5">
-      {onUse && <p className="font-serif text-[15px] leading-snug text-zinc-300">Click one to put it on your video.</p>}
-      {kinds.map((k) => (
-        <section key={k.id} className="space-y-2">
-          <header>
-            <h3 className="font-serif text-[18px] font-medium text-zinc-100">{k.title}</h3>
-            {onUse && <p className="font-serif text-[15px] text-zinc-300">{GOES[k.id]}</p>}
-          </header>
-          <ul className="space-y-1.5">
-            {folder.items.filter((x) => x.kind === k.id).map((r) => (
-              <Row key={r.id} r={r} onUse={onUse} onChange={onChange} />
-            ))}
-          </ul>
+    <div className="space-y-6">
+      {saveWhy && onSave && (
+        <section className="space-y-2.5">
+          <h3 className="font-serif text-[18px] font-medium text-zinc-100">Save from your video</h3>
+          <div className="grid grid-cols-2 gap-2">
+            {folder.kinds.map((k) => {
+              const why = saveWhy[k.id]
+              return (
+                <button key={k.id} type="button" onClick={() => { setAsked(k.id); if (!why) onSave(k.id, null) }}
+                        title={why ?? `Save this ${SAVE_LABEL[k.id].toLowerCase()} to My resources`}
+                        className={cx('flex min-w-0 items-center gap-2 rounded-xl border px-2.5 py-2 text-left font-serif text-[15px]',
+                          why ? 'border-dashed border-line text-zinc-300 hover:bg-raised' : 'border-accent/60 bg-accent/6 text-accent hover:bg-accent/12')}>
+                  <Icon name={why ? ICON[k.id] : 'plus'} size={17} className="shrink-0" />
+                  <span className="min-w-0 truncate">{SAVE_LABEL[k.id]}</span>
+                </button>
+              )
+            })}
+          </div>
+          {said
+            ? <p role="status" className="rounded-lg bg-raised px-3 py-2 font-serif text-[15px] leading-snug text-zinc-100">{said}</p>
+            : <p className="font-serif text-[15px] leading-snug text-zinc-300">
+                Click a shot or a cut on the timeline first to save just its effect, transition or settings.
+              </p>}
         </section>
-      ))}
+      )}
+      {!folder.items.length ? (
+        <section className="space-y-2">
+          <h3 className="font-serif text-[18px] font-medium text-zinc-100">Saved</h3>
+          <p className="font-serif text-[15px] leading-snug text-zinc-300">
+            Nothing saved yet. What you save stays here for every video.
+          </p>
+        </section>
+      ) : <>
+        {onUse && <p className="font-serif text-[15px] leading-snug text-zinc-300">Click one to put it on your video.</p>}
+        {kinds.map((k) => (
+          <section key={k.id} className="space-y-2">
+            <header>
+              <h3 className="font-serif text-[18px] font-medium text-zinc-100">{k.title}</h3>
+              {onUse && <p className="font-serif text-[15px] text-zinc-300">{GOES[k.id]}</p>}
+            </header>
+            <ul className="space-y-1.5">
+              {folder.items.filter((x) => x.kind === k.id).map((r) => (
+                <Row key={r.id} r={r} onUse={onUse} onChange={onChange} />
+              ))}
+            </ul>
+          </section>
+        ))}
+      </>}
     </div>
   )
 }
 
-function SignIn({ url }: { url: string | null }) {
+// Logged out (sarah, 2026-10-19: "you need to login to save your resources,
+// no account? create one now"). Both buttons go where the Launch work points
+// them; until accounts exist they say so.
+function LogIn({ login, signup }: { login: string | null; signup: string | null }) {
   const [soon, setSoon] = useState(false)
+  const go = (url: string | null) => { if (url) window.location.href = url; else setSoon(true) }
   return (
     <div className="flex flex-col items-center gap-3 rounded-2xl border border-line bg-raised px-5 py-6 text-center">
       <span className="grid size-14 place-items-center rounded-2xl bg-accent/12 text-accent"><Icon name="resources" size={30} /></span>
-      <h3 className="font-serif text-[20px] leading-tight text-zinc-100">Sign in to keep your resources</h3>
+      <h3 className="font-serif text-[20px] leading-tight text-zinc-100">You need to log in to save your resources</h3>
       <p className="font-serif text-[15px] leading-snug text-zinc-300">
-        Save your caption looks, animations, transitions, effects and songs, and use them on every video. They stay yours, in your own folder.
+        Keep your caption looks, animations, transitions, effects and songs, and use them on every video.
       </p>
-      <Button variant="primary" size="lg" onClick={() => { if (url) window.location.href = url; else setSoon(true) }}>
-        <Icon name="user" size={18} /> Sign in
-      </Button>
+      <Button variant="primary" size="lg" onClick={() => go(login)}><Icon name="user" size={18} /> Log in</Button>
+      <p className="font-serif text-[16px] text-zinc-100">
+        No account? <button type="button" onClick={() => go(signup)} className="font-serif text-accent underline underline-offset-2 hover:brightness-110">Create one now</button>
+      </p>
       {soon && (
         <p className="font-serif text-[15px] leading-snug text-zinc-100" role="status">
           Accounts are coming soon. Until then, My resources works when VibeCut runs on your own computer.

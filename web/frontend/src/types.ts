@@ -189,7 +189,7 @@ export type MusicTrack = { id: string; title: string; duration: number; bpm: num
 // or song the creator saved off a video to use again (web/backend/resources.py)
 export type ResourceKind = 'caption' | 'animation' | 'transition' | 'effect' | 'shot' | 'song'
 export type Resource = { id: string; kind: ResourceKind; name: string; value: Record<string, unknown>; at: number }
-export type ResourceFolder = { signed_in: boolean; as?: string; signin_url: string | null
+export type ResourceFolder = { signed_in: boolean; as?: string; signin_url: string | null; signup_url?: string | null
   kinds: { id: ResourceKind; title: string }[]; items: Resource[] }
 export type Habit = { id: string; kind: 'avoid' | 'prefer' | 'music_off'; label: string | null; weight: number; n: number; evidence: string[]; text: string; used: number; off: boolean }
 

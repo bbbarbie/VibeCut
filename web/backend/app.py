@@ -230,7 +230,7 @@ def api_profile_put(req: ProfileReq) -> dict:
 # My resources: what the creator saved to keep, in the left rail and the profile
 # --------------------------------------------------------------------------
 
-SIGN_IN = "Sign in to keep your resources."
+SIGN_IN = "You need to log in to save your resources."
 
 
 def _who(request: Request) -> dict:
@@ -250,7 +250,7 @@ def _song_title(track_id: str) -> str | None:
 @app.get("/api/resources")
 def api_resources(request: Request) -> dict:
     me = _who(request)
-    return {**me, "signin_url": resources.signin_url(),
+    return {**me, "signin_url": resources.signin_url(), "signup_url": resources.signup_url(),
             "kinds": [{"id": k, "title": resources.TITLES[k]} for k in resources.KINDS],
             "items": resources.all_items() if me["signed_in"] else []}
 

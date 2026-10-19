@@ -14,7 +14,9 @@ videos and restarts, and mirrored as kind `resource` (cloud.py) like the
 defaults. Who it belongs to (`who`): until there are accounts, the browser on
 the computer VibeCut runs on counts as signed in -- a request that reached
 the server from elsewhere (a tunnel, the public link) is signed out and is
-shown the sign-in card instead. VIBECUT_PUBLIC=1 forces that for a server.
+shown the log-in card instead. VIBECUT_PUBLIC=1 forces that for a server, and
+the x-vibecut-visitor header (the app's "?visitor") for one browser, so the
+owner can see what a visitor sees.
 """
 
 from __future__ import annotations
@@ -43,6 +45,7 @@ LIMIT = 300            # a folder, not a dump: oldest of a kind go first past th
 CAPTION_KEYS = ("template", "text_color", "typeface", "outline", "shadow", "backdrop", "thick")
 LOOPBACK = {"127.0.0.1", "::1", "localhost", "testclient"}
 FORWARDED = ("x-forwarded-for", "forwarded", "cf-connecting-ip", "x-real-ip")
+VISITOR = "x-vibecut-visitor"   # only ever takes the folder away, so it needs no checking
 _lock = threading.Lock()
 
 
@@ -56,7 +59,7 @@ class ResourceError(Exception):
 def who(client_host: str | None, headers) -> dict:
     """Signed in or not. No accounts yet: this computer's own browser is the
     owner; anything relayed from elsewhere is a visitor, signed out."""
-    if os.environ.get("VIBECUT_PUBLIC") == "1":
+    if os.environ.get("VIBECUT_PUBLIC") == "1" or headers.get(VISITOR):
         return {"signed_in": False}
     relayed = any(headers.get(h) for h in FORWARDED)
     if client_host in LOOPBACK and not relayed:
@@ -65,8 +68,13 @@ def who(client_host: str | None, headers) -> dict:
 
 
 def signin_url() -> str | None:
-    """Where Sign in goes once accounts exist (the Launch work sets it)."""
+    """Where Log in goes once accounts exist (the Launch work sets it)."""
     return os.environ.get("VIBECUT_SIGNIN_URL") or None
+
+
+def signup_url() -> str | None:
+    """Where "Create one now" goes; the log-in page until there's a separate one."""
+    return os.environ.get("VIBECUT_SIGNUP_URL") or signin_url()
 
 
 # --------------------------------------------------------------------------

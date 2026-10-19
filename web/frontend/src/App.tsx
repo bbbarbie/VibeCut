@@ -21,7 +21,7 @@ import type { OverlayEdit } from './components/OverlayCanvas'
 import { Menu, SwapPicker, type MenuItem } from './components/Menus'
 import { Music } from './components/Music'
 import type { ClassifyReq } from './components/Remember'
-import { Resources } from './components/Resources'
+import { Resources, type SaveWhy } from './components/Resources'
 import { Shelf } from './components/Shelf'
 import { SmoothButton, Story, type PlayItem, type Selection } from './components/Story'
 import { Timeline, type Marks } from './components/Timeline'
@@ -63,6 +63,8 @@ const r3 = (x: number) => Math.round(x * 1000) / 1000
 const FX_PLAIN = { speed: 1, gain: 1, mute: false, rotate: 0, fill: false, mirror: false, fade_in: 0, fade_out: 0,
   punch: 0, effect: null, effect_amount: 1, reverse: false } as const
 const FX_KEYS = Object.keys(FX_PLAIN) as (keyof typeof FX_PLAIN)[]
+// anything off its default is worth saving to My resources (the effect's strength alone isn't)
+const SHOT_SETTINGS = FX_KEYS.filter((k) => k !== 'effect_amount').map((k) => [k, FX_PLAIN[k]] as const)
 const SEEN_FX = ['rotate', 'fill', 'mirror', 'effect', 'effect_amount']   // what a held frame can take
 const pick = (o: Record<string, unknown>, keys: string[]) => Object.fromEntries(Object.entries(o).filter(([k]) => keys.includes(k)))
 
@@ -1240,6 +1242,22 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     && (x.effect_amount ?? 1) === (shotItems[0].effect_amount ?? 1))
   const allEffect = { effect: same ? shotItems[0].effect ?? null : null, amount: same ? shotItems[0].effect_amount ?? 1 : 1,
                       thumb: shotThumb(shotItems[0]) }
+  // what can be saved to My resources right now (the tabs' Save buttons and the folder's): null = ready
+  const st = ovData.style
+  const shotSel = selItem?.kind === 'shot' ? selItem : null
+  const joinShown = pickedJoin ?? allJoins[0]
+  const saveWhy: SaveWhy = {
+    caption: st.template || st.text_color || st.typeface || st.outline || st.shadow || st.backdrop || st.thick != null ? null
+      : 'Pick a font, colour, outline or word art for your captions first (Captions tab), then save it',
+    animation: st.enter ? null : 'Pick an animation for your captions first (Captions tab), then save it',
+    transition: joinShown?.picked && joinShown.picked !== 'cut' ? null : 'Pick a transition first (Effects tab), then save it',
+    effect: (shotSel ? shotSel.effect : allEffect.effect) ? null
+      : shotSel ? `Shot ${shotSel.n} has no effect yet: pick one in the Effects tab, then save it` : 'Click a shot and pick an effect first (Effects tab), then save it',
+    shot: !shotSel ? 'Click a shot on the timeline first'
+      : SHOT_SETTINGS.some(([k, plain]) => shotSel[k] != null && shotSel[k] !== plain) ? null
+        : `Shot ${shotSel.n} is as filmed: change its speed, turn, crop, effect or sound first, then save it`,
+    song: session?.music ? null : 'There’s no music under this video',
+  }
   const inspector = (
     <Inspector tab={insTab} onTab={setInsTab}
                item={selItem} itemThumb={shotThumb(selItem ?? undefined)}
@@ -1297,7 +1315,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                onJoin={(op, label) => run([{ op: 'set_transition', ...(op.all || !pickedJoin ? {} : { shot: pickedJoin.after }), ...op }], label)}
                onLook={(id, name) => run([{ op: 'set_look', look: id }], `The video now has the ${name} look`)}
                allEffect={allEffect}
-               onSave={saveResource} songOn={!!session?.music}
+               onSave={saveResource} saveWhy={saveWhy}
                onEffect={(patch, all, label) => {
                  const keys = all ? tl.items.filter((x) => x.kind === 'shot').map((x) => x.key) : selItem ? [selItem.key] : []
                  if (keys.length) run(keys.map((k) => ({ op: 'set_shot', shot: k, ...patch })), label)
@@ -1350,7 +1368,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   </> : side === 'resources' ? <>
     {panelHead('My resources')}
     <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
-      <Resources folder={folder} error={folderError} onRetry={loadFolder} onUse={applyResource}
+      <Resources folder={folder} error={folderError} onRetry={loadFolder} onUse={applyResource} saveWhy={saveWhy} onSave={saveResource}
                  onChange={(items) => setFolder((f) => (f ? { ...f, items } : f))} />
     </div>
   </> : null

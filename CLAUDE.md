@@ -676,8 +676,11 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   caption looks (the hand-picked `overlay_style` fields, never the
   entrance), animations, transitions, effects, shot settings (`SHOT_FX`;
   a held frame takes only what it can show) and songs (track + in-point).
-  Saved by "Save … to My resources" where each is made (Captions, Effects,
-  Edit, Audio tabs): what's on the video now, never typed in. One click
+  Saved by "Save from your video" at the top of the folder (sarah, 2026-10-19:
+  she couldn't find the tabs' buttons) and by "Save … to My resources" at the
+  top of where each is made (Captions, Effects, Edit, Audio tabs): what's on
+  the video now, never typed in; one readiness list (`saveWhy` in App.tsx)
+  says what to do first when there's nothing to keep. One click
   puts it on as ops (`overlay_style`, `set_transition`, `set_shot`,
   `set_music` at the current levels, else the bed's) in one undoable turn,
   on the clicked shot / cut else everywhere. Kept in `$VIBECUT_CACHE/
@@ -685,8 +688,11 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   (migration 0002; a delete is `{deleted: true}`). No accounts yet: the
   browser on the computer VibeCut runs on is signed in; a request relayed
   from elsewhere (X-Forwarded-For etc.) or `VIBECUT_PUBLIC=1` is signed out,
-  sees the "Sign in to keep your resources" card, and every Save opens it;
-  `VIBECUT_SIGNIN_URL` is where Sign in will go. `tests/test_resources.py`.
+  sees "You need to log in to save your resources" with Log in and "No
+  account? Create one now" (her words), and every Save opens it;
+  `VIBECUT_SIGNIN_URL` / `VIBECUT_SIGNUP_URL` are where they will go. The
+  app's `?visitor` (header `x-vibecut-visitor`, can only take rights away)
+  shows the owner what a visitor sees. `tests/test_resources.py`.
 - **Every cut checked** (`cutgrammar/joins.py`, `web/backend/seams.py`;
   research 08 P2). Report only: per cut, brightness jump, colour change
   (best-frame proxy), same view again, energy step, loudness step, going
