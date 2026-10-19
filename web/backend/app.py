@@ -31,9 +31,10 @@ from cutgrammar import grade
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, bed, brief, cloud, defaults, habits, make, vibes, tempo, ink, moment, cut, export, looks, pitch, seams, selfcheck, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, oai, overlays, reference, remix, resources, reverse, speech, story, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, bed, brief, cloud, defaults, habits, make, vibes, tempo, ink, moment, cut, export, looks, pitch, seams, selfcheck, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, oai, overlays, reference, remix, speech, story, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import GATE, Workflow, WorkflowError
+from . import resources, reverse
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -354,8 +355,12 @@ def _capabilities() -> dict:
 # they succeed the project is written to disk. Uploads, the finished-video
 # tool and the reference library stand apart: they are not project state.
 _NO_PROJECT_OK = ("/api/projects", "/api/upload", "/api/locate", "/api/polish", "/api/music/folder",
-                  "/api/references", "/api/profile", "/api/vibes", "/api/resources")
+                  "/api/references", "/api/profile", "/api/vibes")
 _NOT_SAVED = ("/api/projects", "/api/upload", "/api/locate", "/api/polish", "/api/music/folder", "/api/profile", "/api/vibes")
+
+
+# My resources stand apart too: the profile page renames and deletes them with no video open.
+_NO_PROJECT_OK += ("/api/resources",)
 
 
 @app.middleware("http")
