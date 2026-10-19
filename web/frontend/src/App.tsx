@@ -37,7 +37,7 @@ import { go } from './router'
 import { deriveStage, reached, STAGES, type Stage } from './stage'
 import { phStore, snapStore, transport, transportStore, useStore } from './transport'
 import { Button, Confirm, cx, Wordmark } from './ui'
-import type { Capabilities, Clip, Msg, Option, Overlay, OverlayKind, Overlays as OverlayData, Segment, Session, StyleAnswers, StyleQuestion, TimelineData } from './types'
+import type { Capabilities, Clip, Msg, Option, Overlay, OverlayKind, Overlays as OverlayData, SceneWord, Segment, Session, StyleAnswers, StyleQuestion, TimelineData } from './types'
 
 const hello: Msg = {
   id: 'hello', role: 'app', at: 0,
@@ -1100,7 +1100,11 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                  if (keys.length) run(keys.map((k) => ({ op: 'set_shot', shot: k, ...patch })), label)
                }} />
   )
-  const RAIL: { id: NonNullable<typeof side>; icon: IconName; label: string }[] = [
+  // One word per scene after watching (vlog.py step 8): keep = noted; cut and longer change the video, undoable.
+const SCENE_WORDS: [SceneWord, string, string][] = [
+  ['keep', 'Keep', 'Just right'], ['cut', 'Cut', 'Take this scene out'], ['longer', 'Longer', 'Hold every shot in it longer']]
+
+const RAIL: { id: NonNullable<typeof side>; icon: IconName; label: string }[] = [
     { id: 'media', icon: 'media', label: 'Media' },
     { id: 'text', icon: 'text', label: 'Text' },
     { id: 'music', icon: 'music', label: 'Music' },
@@ -1310,6 +1314,24 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                           } catch (e) { note((e as Error).message) }
                         }}>Undo that</button>
               </p>
+            ) : null}
+            {session?.board?.beats?.some((b) => b.title !== 'Hook') ? (
+              <div className="mt-3 flex w-full max-w-[1100px] flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[12px] text-muted">
+                <span title="One word per scene: it changes the video now and teaches the next one">How was each scene?</span>
+                {session.board.beats.filter((b) => b.title !== 'Hook').map((b) => (
+                  <span key={b.id} className="inline-flex items-center gap-1">
+                    <span className="mr-0.5 text-zinc-300">{b.title}</span>
+                    {SCENE_WORDS.map(([w, label, tip]) => (
+                      <button key={w} type="button" aria-pressed={session.scenes?.[b.id] === w} title={tip}
+                              className={cx('rounded-full border px-2 py-0.5',
+                                session.scenes?.[b.id] === w ? 'border-accent text-accent' : 'border-line hover:bg-raised')}
+                              onClick={async () => {
+                                try { const r = await api.sceneVerdict(b.id, w); setSession(r); if (w !== 'keep') offerUndo(r) } catch (e) { note((e as Error).message) }
+                              }}>{label}</button>
+                    ))}
+                  </span>
+                ))}
+              </div>
             ) : null}
           </main>
         ) : framesView ? (

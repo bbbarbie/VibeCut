@@ -495,8 +495,26 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   in before the action (`select.window`). Shorts are unchanged. Judged on
   the one real shoot (42 clips: 27 shots of 0.6–3.9 s in 45-min sessions →
   20 shots of 2.6–6.8 s in 7 scenes, 73 s of the 90 asked: the footage is
-  short). Every number is a prior. Not done from the plan: cut on motion,
-  dissolves between scenes, a grade per vlog, captions thinned.
+  short). Every number is a prior. Then, the same day, the rest of the plan:
+  **continuity** (`vlog.flow`: inside one stop, among the orders that keep
+  wide → medium → close, the one the joins checker scores smoothest, with
+  look-alikes apart and the scene still ending on a detail or a face;
+  never across stops, so the day's order holds) and the smoother's nudge
+  onto movement runs after a vlog Make as its own "Smoother cuts" turn
+  (user decision 2026-10-19: Make is the machine's own edit, so this is
+  not cutfix; it still never touches a hand-cut edit); **phrases**
+  (`vlog.phrase`: the hook on a whole beat, every scene a whole number of
+  two- or four-bar phrases, shots inside a scene where the action ends,
+  not on the beat; the closing shot takes the slack); **natural sound**
+  (the vlog's own sound at 1.0, music at `vlog.MUSIC_GAIN` 0.5 settling to
+  `SETTLE` 0.6 of that inside each scene via the bed's duck list, so it
+  rises at a scene change; `set_join carry_out` inside a scene = L cuts);
+  **one word per scene** (`POST /api/scenes/{beat}/verdict {keep|cut|
+  longer}` from the Watch screen; cut and longer are one undoable turn
+  each, every word is a `scene_verdict` event on the project with the
+  scene's labels and holds — the calibration record — and `habits.derive`
+  reads cut / longer as removed / held; `launchlog.summary` counts them).
+  Tested in `tests/test_vlog.py` and the wide Make in `test_make.py`.
 
 - From montage-vlog-compiler (MIT; see NOTICE), four pieces:
   - **Evidence levels** (`cutgrammar/evidence.py`): every finding names
@@ -609,7 +627,10 @@ The promise to a user is therefore *not* "this will be beautiful." It is
 - **Smoother cuts** (`web/backend/smooth.py`, P3-1/P3-2). Only when asked,
   one undoable turn: beam search over join roughness + filming-order
   penalty inside a part (move_shot), and window nudges ≤2 s onto movement,
-  never onto a word (trim). Never runs by default — that would be cutfix.
+  never onto a word (trim). Never runs by default on a hand-cut edit — that
+  would be cutfix. The one exception (2026-10-19, vlog.py step 5): the
+  nudge alone runs after a vlog *Make*, as its own turn, because that edit
+  is the machine's to begin with.
 - **Looks** (`web/backend/looks.py`, `looks/*.json`, P3-3). The spec's 7
   vibes as dated records: type + motion, and since 2026-10-10 (plan step 1)
   the picture too — `grade` (relative to the footage: warmth, black floor /

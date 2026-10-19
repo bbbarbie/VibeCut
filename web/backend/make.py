@@ -156,6 +156,7 @@ def moments(clips: dict[str, dict], cut, fp: dict, judge=None, taste: str = "", 
             plan = remix.plan_shots(clips, fp, length=length, cut=cut, judge=judge, taste=taste, bias=bias,
                                     min_s=vlog.MIN_PICK_S)
             vlog.scenes(plan)
+            vlog.flow(plan, clips)
             vlog.breathe(plan, clips, fp)
             if plan.duration >= vlog.LENGTH_OK * fp["duration"] or plan.duration <= 0:
                 break
@@ -217,7 +218,7 @@ def pace_of(fp: dict) -> str:
 
 
 def music(clips: dict[str, dict], plan: sel.Plan, fp: dict, pace: str, own: list[mu.Track] | None,
-          progress=None, pool: list[mu.Track] | None = None) -> tuple[dict | None, str]:
+          progress=None, pool: list[mu.Track] | None = None, fmt: str = "short") -> tuple[dict | None, str]:
     """A track for this plan, and the plan re-cut to its beat. `pool` stands
     in for bed.candidates in tests. Returns (pick, where it came from)."""
     source = "given"
@@ -226,7 +227,10 @@ def music(clips: dict[str, dict], plan: sel.Plan, fp: dict, pace: str, own: list
     hook_s = sum(p.duration for p in plan.hook) or fp["hook_s"]
     mx = remix.pick_from(pool, fp, plan.duration + 4.0, hook_s)
     if mx:
-        remix.quantise(plan, clips, mx["period"])
+        if fmt == "short" or fp.get("refs_used"):
+            remix.quantise(plan, clips, mx["period"])       # a reel: every cut on the grid
+        else:
+            vlog.phrase(plan, clips, mx["period"])           # a vlog: scene changes on the phrases
         hold_ending(clips, plan, mx["period"], end_beats(fp, mx["period"]))
         hook_s = sum(p.duration for p in plan.hook) or hook_s
         mx["in"] = round(max(0.0, mx["drop"] - hook_s), 3)
@@ -288,7 +292,12 @@ def ops(plan: sel.Plan, fp: dict, mx: dict | None, fmt: str, look: str | None, a
              "level": True, "fade_out": min(3.0, max(1.5, 4 * mx["period"])), "duck": [], "sfx": []}
         if fmt != "short" and talking:
             m["duck"] = bed.ducks(board, talking)
+        if fmt != "short" and not fp.get("refs_used"):
+            m["gain"] = vlog.MUSIC_GAIN
+            m["duck"] = list(m["duck"]) + vlog.swells(plan)   # up at a scene change, settled inside
         out.append(m)
+    if fmt != "short" and not fp.get("refs_used"):
+        out.extend(vlog.carries(plan))                       # the place's sound runs on under the next shot
     if look:
         out.append({"op": "set_look", "look": look})
     out.extend(punches(plan, mx, fmt == "short"))
@@ -463,7 +472,7 @@ def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, ab
             if fmt == "short" or fp.get("refs_used"):
                 end_strong(plan)          # a vlog's scene already ends on its detail or its face
             job.stage = "music"
-            mx, source = (music(clips, plan, fp, pace, own, progress) if want_music
+            mx, source = (music(clips, plan, fp, pace, own, progress, fmt=fmt) if want_music
                           else (None, "off, as last time"))
             job.stage = "words"
             pool, _ = sb.usable(sb.shots_from_clips(list(clips.values()), cut))

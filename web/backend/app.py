@@ -31,7 +31,7 @@ from cutgrammar import grade
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, bed, brief, cloud, defaults, habits, make, vibes, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, bed, brief, cloud, defaults, habits, make, vibes, vlog, tempo, ink, moment, cut, export, looks, pitch, seams, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, overlays, reference, remix, speech, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import GATE, Workflow, WorkflowError
 
@@ -335,6 +335,7 @@ def _session() -> dict:
         "board": board,
         "structure_note": _structure_note(b),
         "last": {"turn": last.id, "diff": last.diff, "ghosts": ghosts, "review": review} if last else None,
+        "scenes": {e["beat"]: e["word"] for e in (PROJECT["p"].events if PROJECT["p"] else []) if e.get("kind") == "scene_verdict"},
         "seams": cuts,
         "turns": [{
             "id": t.id, "kind": t.kind, "text": t.text, "reply": t.reply, "question": t.question,
@@ -1127,6 +1128,16 @@ def api_make(req: BriefAutoReq | None = None) -> dict:
             SESSION.add({"kind": "direct", "text": MAKE_TEXT, "ops": ops_,
                          "reply": job.result["reply"] + (" " + said if said else "")},
                         CATALOG["cat"], _make_proposals)
+            if style.get("format", "tall") != "short" and not job.result["fp"].get("refs_used") and SESSION.board:
+                # a vlog's cuts sit on movement (vlog.py step 5): the smoother's nudge, as its
+                # own turn so one undo takes it back and an undo is heard (preferences.py)
+                try:
+                    n_ops, n_said = smooth.propose(SESSION.board, clips, CATALOG["cat"], order=False, nudge=True)
+                    if n_ops:
+                        SESSION.add({"kind": "direct", "text": "Smoother cuts", "ops": n_ops, "reply": n_said},
+                                    CATALOG["cat"], _make_proposals)
+                except Exception as e:  # noqa: BLE001 -- a nudge that fails leaves the cut as made
+                    job.result.setdefault("notes", []).append(f"no nudge: {e}")
             pr_ = PROJECT["p"]
             if pr_ is not None and pr_.brief:
                 # the chips read the brief: after Make it must describe the cut, not the guess
@@ -1932,6 +1943,31 @@ def api_export_verdict(n: int, req: VerdictReq) -> dict:
     with LOCK:
         pr.exports[n]["verdict"] = {"post": req.post, "note": req.note.strip()[:500], "at": time.time()}
         pr.events.append({"kind": "verdict", "at": time.time(), "export": n, "post": req.post})
+        return _session()
+
+
+class SceneReq(BaseModel):
+    word: str
+
+
+@app.post("/api/scenes/{beat}/verdict")
+def api_scene_verdict(beat: str, req: SceneReq) -> dict:
+    """One word per scene after watching -- keep, cut, longer (vlog.py step
+    8). Cut and longer are one undoable turn each, so habits.py hears them
+    as removed / held; every word is kept on the project's record."""
+    pr = PROJECT["p"]
+    with LOCK:
+        if SESSION.board is None:
+            raise HTTPException(409, "Make a video first.")
+        try:
+            ops, text, rec = vlog.verdict_ops(SESSION.board, CATALOG["cat"], beat, req.word.strip().lower())
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        if ops:
+            SESSION.add({"kind": "direct", "text": text, "ops": ops, "reply": text + "."}, CATALOG["cat"], _make_proposals)
+        if pr is not None:
+            pr.events = [e for e in pr.events if not (e.get("kind") == "scene_verdict" and e.get("beat") == beat)]
+            pr.events.append({**rec, "at": time.time()})
         return _session()
 
 

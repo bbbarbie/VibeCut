@@ -197,6 +197,8 @@ export type Session = {
   // Music by default (backend/bed.py): the pick runs in the background and lands as a turn.
   // what the creator's habits did to the last Make (habits.py), for the one line and its Undo
   habits?: { id: string; text: string }[]
+  // one word per scene after watching (vlog.py step 8), by part id
+  scenes?: Record<string, SceneWord>
   bed: { stage: 'looking' | 'done' | 'nothing' | 'error'; why: string; source: string; done: number; total: number; elapsed: number } | null
   // The edit's sound as one track (backend/audiomix.py) -- what preview plays and export writes.
   mix: { key: string; audio: string; joins: JoinInfo[]; transitions: Trans[]; bars: number } | null
@@ -235,6 +237,7 @@ export type PrefRule = {
   id: string; klass: 'long_term' | 'project'; rule: string; scope: string; counter: string; reason: string
   active: boolean; evidence: { said: string; changed: string[] }; history: { at: number; action: string; klass: string; actor: string }[]
 }
+export type SceneWord = 'keep' | 'cut' | 'longer'
 export type PrefSuggestion = { id: string; source: 'undo' | 'verdict'; said: string; rule: string; suggested: PrefClass }
 export type Preferences = { candidates: PrefCandidate[]; rules: PrefRule[]; suggestions?: PrefSuggestion[] }
 

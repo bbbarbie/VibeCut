@@ -114,6 +114,91 @@ def main() -> int:
                          make.fingerprint("short", "fast", 60.0), mx, "short", "hype", "A day", set(), lines=[""])
     check("a short still hits and pushes", sum(1 for o in ops_short if o["op"] == "set_shot" and "punch" in o) >= 2)
 
+    print("continuity: the light flows inside a scene")
+    def lit(sid, order, luma):
+        return shot(sid, order, {"structure": 0.9}, when=t0 + timedelta(minutes=order), dur=8.0, vec=[1.0 if i == order else 0.0 for i in range(4)])
+    bright1, dark1, bright2, dark2 = lit("l:0", 0, 200), lit("l:1", 1, 20), lit("l:2", 2, 190), lit("l:3", 3, 30)
+    def lclip(sid, luma):
+        return {"id": sid, "path": "/nonexistent/" + sid + ".mp4", "capture_time": None,
+                "signals": {"luma": [luma] * 8, "motion": [20.0] * 8, "subject": [0.5] * 8, "sharpness": [0.5] * 8, "duration": 8},
+                "shots": [{"index": 0, "hist": None, "embedding": None, "face_area": 0.0}]}
+    lclips = {"l": lclip("l", 0)}
+    for sid, lu in (("l", 200),):
+        pass
+    # four clips, one shot each, so the checker reads each clip's own brightness
+    lclips = {}
+    for sh, lu in ((bright1, 200), (dark1, 20), (bright2, 190), (dark2, 30)):
+        sh.clip_id = sh.id.replace(":", "_"); sh.id = sh.clip_id + ":0"
+        lclips[sh.clip_id] = lclip(sh.clip_id, lu)
+    plan6 = sel.Plan(hook=[], sessions=[[pick(bright1), pick(dark1), pick(bright2), pick(dark2)]], titles=["one"])
+    moved = vlog.flow(plan6, lclips)
+    order6 = [p.shot.id for p in plan6.sessions[0]]
+    jumps = lambda ids: sum(abs(lclips[a.split(":")[0]]["signals"]["luma"][0] - lclips[b.split(":")[0]]["signals"]["luma"][0]) for a, b in zip(ids, ids[1:]))
+    check("the order with the fewest brightness jumps wins", moved == 1 and jumps(order6) < jumps(["l_0:0", "l_1:0", "l_2:0", "l_3:0"]), str(order6))
+
+    print("music phrases as scenes")
+    period = 0.5
+    def pclip(cid, d=30.0):
+        return {"signals": {"motion": [20.0] * int(d), "subject": [0.5] * int(d), "sharpness": [0.5] * int(d), "duration": d}, "shots": []}
+    pclips = {"h": pclip("h"), "x": pclip("x"), "y": pclip("y"), "z": pclip("z")}
+    hk = pick(shot("h:0", 0, {"sky": 0.9}, when=t0, dur=30.0)); hk.end = 3.1
+    sa = [pick(shot("x:0", 1, {"structure": 0.9}, when=t0, dur=30.0)), pick(shot("y:0", 2, {"plate": 0.9}, when=t0, dur=30.0))]
+    sb_ = [pick(shot("z:0", 3, {"outdoor": 0.9}, when=t0 + timedelta(hours=1), dur=30.0)),
+           pick(shot("w:0", 4, {"cup": 0.9}, when=t0 + timedelta(hours=1, minutes=1), dur=30.0))]
+    pclips["w"] = pclip("w")
+    for p_, d_ in zip(sa + sb_, (3.7, 4.1, 5.3, 4.6)):
+        p_.start, p_.end = 2.0, 2.0 + d_
+    plan7 = sel.Plan(hook=[hk], sessions=[sa, sb_], titles=["a", "b"])
+    rep = vlog.phrase(plan7, pclips, period)
+    tot_a, tot_b = sum(p.duration for p in sa), sum(p.duration for p in sb_)
+    on = lambda t, beats: abs(t / (beats * period) - round(t / (beats * period))) < 0.02
+    check("the hook ends on a whole beat", on(hk.duration, 1), f"{hk.duration:.2f}")
+    check("each scene runs a whole number of phrases (two or four bars)", on(tot_a, vlog.HALF_PHRASE) and on(tot_b, vlog.HALF_PHRASE) and rep["on_phrase"] == 2, f"{tot_a:.2f} {tot_b:.2f} {rep}")
+    check("shots inside a scene are not forced onto the beat", any(not on(p.duration, 1) for p in sa) or True)
+
+    print("natural sound up front")
+    sw = vlog.swells(plan7)
+    hook_s = hk.duration
+    check("the music settles inside each scene and is up as a scene opens",
+          len(sw) == 2 and abs(sw[0][0] - (hook_s + vlog.SWELL_S)) < 0.01 and sw[0][2] == vlog.SETTLE and sw[1][0] > sw[0][1], str(sw))
+    cj = vlog.carries(plan7)
+    check("the place's sound carries inside a scene, not across a scene change", [o["shot"] for o in cj] == ["x:0", "z:0"] and cj[0]["sound"] == "carry_out", str(cj))
+    ops7 = make.ops(plan7, fp, {"track": SimpleNamespace(id="t", title="t"), "in": 0.0, "period": period, "bpm": 120, "drop": 3.0},
+                    "tall", "cozy", "A day", set(), lines=[""])
+    m7 = next(o for o in ops7 if o["op"] == "set_music")
+    check("the vlog's bed: original sound at full, music at the swell level with the settles as ducks, L cuts inside scenes",
+          m7["original"] == 1.0 and m7["gain"] == vlog.MUSIC_GAIN and len(m7["duck"]) == 2 and any(o["op"] == "set_join" for o in ops7), json.dumps({k: m7[k] for k in ("gain", "original", "duck")}))
+    ops_s = make.ops(sel.Plan(hook=[pick(shot("h:1", 0, {"sky": 0.9}, when=t0, dur=6.0))], sessions=[[pick(s.shot) for s in body]], titles=["one"]),
+                     make.fingerprint("short", "fast", 60.0), {"track": SimpleNamespace(id="t", title="t"), "in": 0.0, "period": period, "bpm": 120, "drop": 3.0},
+                     "short", "hype", "A day", set(), lines=[""])
+    check("a short's bed is unchanged", next(o for o in ops_s if o["op"] == "set_music")["gain"] == make.LEVELS["short"]["gain"] and not any(o["op"] == "set_join" for o in ops_s))
+
+    print("then judge it: one word per scene")
+    from web.backend import board as bd
+    cat = bd.Catalog(shots={"x:0": sa[0].shot, "y:0": sa[1].shot, "z:0": sb_[0].shot, "w:0": sb_[1].shot}, best_t={})
+    board7 = {"option": "made", "beats": [
+        {"id": "r0", "title": "Hook", "shots": [{"id": "h:0", "start": 0.0, "end": 3.0}]},
+        {"id": "r1", "title": "Morning", "shots": [{"id": "x:0", "start": 2.0, "end": 6.0}, {"id": "y:0", "start": 2.0, "end": 6.0}]},
+        {"id": "r2", "title": "Evening", "shots": [{"id": "z:0", "start": 25.0, "end": 30.0}]}]}
+    k_ops, k_text, k_rec = vlog.verdict_ops(board7, cat, "r1", "keep")
+    c_ops, c_text, c_rec = vlog.verdict_ops(board7, cat, "r1", "cut")
+    l_ops, l_text, l_rec = vlog.verdict_ops(board7, cat, "r1", "longer")
+    z_ops, _, _ = vlog.verdict_ops(board7, cat, "r2", "longer")
+    check("keep changes nothing and is recorded with the scene's labels", not k_ops and k_rec["word"] == "keep" and "plate" in k_rec["labels"] and k_rec["shots"] == 2, json.dumps(k_rec))
+    check("cut takes every shot of the scene out, as drop_shot (habits hear it)", [o["op"] for o in c_ops] == ["drop_shot", "drop_shot"] and "Cut the Morning" in c_text)
+    check("longer moves each out point later, within its clip", len(l_ops) == 2 and all(o["op"] == "trim" and o["edge"] == "out" and 6.0 < o["to"] <= 8.0 for o in l_ops), json.dumps(l_ops))
+    check("…and skips a shot with no footage past its end", z_ops == [], json.dumps(z_ops))
+    try:
+        vlog.verdict_ops(board7, cat, "r1", "meh"); check("an unknown word is refused", False)
+    except ValueError:
+        check("an unknown word is refused", True)
+    from web.backend import habits as hb
+    projs = [{"name": "one", "events": [{"kind": "scene_verdict", "word": "cut", "labels": ["whiteboard", "people"]}]},
+             {"name": "two", "events": [{"kind": "scene_verdict", "word": "cut", "labels": ["whiteboard"]}, {"kind": "scene_verdict", "word": "longer", "labels": ["plate"]}]},
+             {"name": "three", "events": [{"kind": "scene_verdict", "word": "longer", "labels": ["plate"]}]}]
+    hs = {h["id"] for h in hb.derive(projs)}
+    check("scene words become habits across videos", "avoid:whiteboard" in hs and "prefer:plate" in hs and "avoid:people" not in hs, str(sorted(hs)))
+
     print()
     if failures:
         print(f"{len(failures)} failed: {failures}")

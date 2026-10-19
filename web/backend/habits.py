@@ -127,6 +127,11 @@ def derive(projects: list) -> list[dict]:
         name = getattr(p, "name", None) or (p.get("name") if isinstance(p, dict) else "") or "?"
         events = getattr(p, "events", None) or (p.get("events") if isinstance(p, dict) else []) or []
         for e in events:
+            if e.get("kind") == "scene_verdict" and e.get("word") in ("cut", "longer"):
+                # one word per scene after watching (vlog.py step 8): cut = removed, longer = held
+                for l in e.get("labels", [])[:TOP_LABELS]:
+                    (seen_removed if e["word"] == "cut" else seen_kept).setdefault(l, set()).add(name)
+                continue
             if e.get("kind") != "signals":
                 continue
             for s in e.get("items", []):
