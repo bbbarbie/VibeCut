@@ -107,7 +107,7 @@ def words_of(board: dict, total: float) -> dict:
             "cards": len(ovs), "upper": bool(letters) and sum(ch.isupper() for ch in letters) / len(letters) > 0.8,
             "size": None, "words_per_card": round(float(np.median([len(t.split()) for t in texts])), 1),
             "samples": samples[:SAMPLES],
-            "words": [f"words {round(share * 100)}% of the time, at the {band}", f"each held about {hold:.1f} s"]}
+            "words": [f"words {round(share * 100)}% of the time, {_where(band)}", f"each held about {hold:.1f} s"]}
 
 
 def music_of(board: dict, track: mu.Track | None, total: float) -> dict | None:
@@ -157,6 +157,18 @@ def measure(board: dict | None, track: mu.Track | None, fmt: str | None) -> dict
     return {"style": style, "dress": dress}
 
 
+def _length(s: float) -> str:
+    """The video's length as the timeline reads it: 0:45, 1:05, or 8.5 s."""
+    if round(s, 1) < 10:
+        return f"{s:.1f} s"
+    m, r = divmod(int(round(s)), 60)
+    return f"{r} s" if not m else f"{m}:{r:02d}"
+
+
+def _where(band: str | None) -> str:
+    return "in the middle" if band == "middle" else f"at the {band or 'bottom'}"
+
+
 def words(rec: dict) -> list[str]:
     """What a recipe will do, in the creator's words, for the save dialog
     and the Cut it like line."""
@@ -164,7 +176,7 @@ def words(rec: dict) -> list[str]:
     p = s.get("pace") or {}
     out = [brief.FORMATS.get(d.get("format"), "Vlog · vertical").split(" ·")[0] + " frame"]
     if p:
-        out.append(f"{s['duration']:.0f} s, about {p['median_s']:.1f} s a shot")
+        out.append(f"{_length(s['duration'])}, about {p['median_s']:.1f} s a shot")
     lk = looks.get(d.get("look")) if d.get("look") else None
     if lk:
         out.append(f"{lk['name']} look")
@@ -175,7 +187,7 @@ def words(rec: dict) -> list[str]:
     else:
         name = overlays.TEMPLATES.get(cap.get("template"), "Soft")
         face = overlays.TYPEFACES.get(cap.get("typeface"))
-        out.append(f"{name} captions" + (f" in {face}" if face else "") + f" at the {w.get('band') or 'bottom'}")
+        out.append(f"{name} captions" + (f" in {face}" if face else "") + f" {_where(w.get('band'))}")
     tr = d.get("transition")
     if tr and tr.get("kind") in transitions.KINDS and tr["kind"] != "cut":
         out.append(f"{transitions.KINDS[tr['kind']]['name'].lower()} between every shot")
