@@ -387,16 +387,24 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   description or list of the picture (`story.VOICE`, also in the chat's
   overlay rule and `llm.DAY_SYSTEM`); lines they typed before
   (`habits.phrases`) and their taste ride along. Checked in code
-  (`story.line_of`: lists dropped, no model clock, one emoji, ≤ 6 words);
+  (`story.line_of`: a list, a clock left mid-line, > 6 words or > 42
+  characters drops the line, never cut to a fragment; a model's clock only
+  comes off either end; one emoji, flags and CJK counted right);
   `clock` puts the real filming time in front ("7:40 am · walk to class").
   Captions (kind `caption`, so the Soft look) hang on their shot once the
-  title has gone, ≤ 2 a chapter, held 1.4-3 s to read, never past the
-  chapter. Chapter titles are overlay kind `heading` with their own `look`,
+  title has gone (a moment under the title starts its caption just after
+  it), ≤ 2 a chapter, held 1.4-3 s to read, never past the chapter; after
+  the self-check moves shots, `story.fit_captions` rides on the check turn
+  and keeps each title inside its chapter and each caption after it, ≥ 1 s
+  or dropped. Chapter titles are overlay kind `heading` with their own `look`,
   independent of the captions' one style: every AI title, and any added by
   hand, is `spaced` = thin white widely spaced capitals (Montserrat Light,
   bundled) over an italic line in the same family, with its own calm
   entrance (no card tilt or slam); a title always fits the frame on one
-  line by getting smaller (`fitTitle`, ≥ 40%), in the typing box too.
+  line by getting smaller (`fitTitle`, ≥ 40% of its plain size, so one
+  sized up by hand comes back down), in the typing box too (measured on the
+  words being typed); where ink.py asks for a halo it wins over the title's
+  soft shadow.
   script / bold / serif stay pickable by hand. `tests/test_story.py`,
   `headingLook.test.ts`.
   Runs only with `OPENAI_API_KEY` in web/.env **and** the AI switch on (the

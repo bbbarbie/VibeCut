@@ -935,7 +935,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       date: { text: shortDate(clip?.capture_time) ?? shortDate(new Date().toISOString())! },
       end: { text: 'Thanks for watching', sub: handle },
       chapters: {},
-      heading: { text: it?.beat_title ?? 'Chapter', sub: 'what happens here', look: 'script' },
+      heading: { text: it?.beat_title ?? 'Chapter', sub: 'what happens here', look: 'spaced' },
     }
     return { ...where, ...words[kind] }
   }

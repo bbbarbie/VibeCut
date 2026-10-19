@@ -14,7 +14,7 @@ const heading = (text: string, sub = '', extra: Partial<Overlay> = {}): Overlay 
 
 // a canvas that measures letters as 0.6 of their size plus the tracking, and
 // records where each line lands and in what font
-type Drawn = { text: string; font: string; fill: string; x0: number; x1: number }
+type Drawn = { text: string; font: string; fill: string; x0: number; x1: number; shadow: string }
 function recorder() {
   let m = [1, 0, 0, 1, 0, 0]
   const stack: number[][] = []
@@ -35,7 +35,8 @@ function recorder() {
       const ls = parseFloat(ctx.letterSpacing)
       const w = ctx.measureText(t).width
       const a = ctx.textAlign === 'center' ? x - w / 2 : ctx.textAlign === 'right' ? x - w : x
-      drawn.push({ text: t, font: ctx.font, fill: String(ctx.fillStyle), x0: m[0] * a + m[4], x1: m[0] * (a + w - ls) + m[4] })
+      drawn.push({ text: t, font: ctx.font, fill: String(ctx.fillStyle), x0: m[0] * a + m[4], x1: m[0] * (a + w - ls) + m[4],
+        shadow: String(ctx.shadowColor) })
     },
   }
   return { ctx, drawn }
@@ -119,4 +120,22 @@ test('a chapter title fades up and settles straight, whatever the look (no Cozy 
     const p = phase(o, 1.2, m)
     assert.equal(pose(o, p.pin, p.pout, 1, 1000, 'center', m).alpha, 1, 'fully in by 1.2 s, its line too')
   }
+})
+
+test('a title sized up by hand still fits the frame on one line, every letter kept', () => {
+  const W = 1080, H = 1920
+  const m = safe(W, H)
+  const o = heading('My Way To School', '', { place: { x: 0.5, y: 0.5, scale: 3 } })
+  const title = draw(o, W, H).filter((x) => /[A-Z]/.test(x.text))
+  assert.deepEqual(title.map((x) => x.text), ['MY WAY TO SCHOOL'], 'one line, nothing cut')
+  // placed by hand it may go to the frame's edge, never past it
+  assert.ok(title[0].x0 >= 0 && title[0].x1 <= W && title[0].x1 - title[0].x0 <= W - m.l - m.r + 0.5,
+    `title from ${title[0].x0.toFixed(0)} to ${title[0].x1.toFixed(0)}`)
+})
+
+test("where ink found nothing that reads, a title's halo wins over its soft shadow", () => {
+  const plain = draw(heading('Coffee Run'))
+  assert.equal(plain[0].shadow, 'rgba(0,0,0,0.5)', 'the soft shadow by default')
+  const lit = draw(heading('Coffee Run', '', { halo: 'rgba(0,0,0,0.85)' }))
+  assert.equal(lit[0].shadow, 'rgba(0,0,0,0.85)')
 })

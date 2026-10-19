@@ -587,6 +587,17 @@ def apply(board: dict | None, op: dict, cat: Catalog, proposals: dict | None,
     return b, op
 
 
+def applied(board: dict | None, ops: list[dict], cat: Catalog | None, proposals: dict | None) -> dict | None:
+    """The board those ops would make, worked out on a copy; nothing is
+    logged and an op that fails is passed over, as replay would."""
+    for k, op in enumerate(ops):
+        try:
+            board, _ = apply(board, op, cat, proposals, new_id=lambda k=k: f"t{k}")
+        except (OpError, ov.OverlayError):
+            continue
+    return board
+
+
 def _better_than(board: dict, cat: Catalog, sid: str) -> str:
     """The shelf shot that could stand in for `sid`: looks like it, but better made."""
     cur = cat.get(sid)

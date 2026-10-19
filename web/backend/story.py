@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import re
 
-from . import oai, select as sel, storyboard as sb
+from . import oai, overlays as ov, select as sel, storyboard as sb
 
 MAX_CANDIDATES = 60          # frames sent; ~85 tokens each at low detail
 # Seconds a shot holds for its job in a chapter, by frame [prior; the
@@ -56,13 +56,15 @@ MAX_WORDS = 6
 MAX_CHARS = 42
 CAPTIONS_PER_CHAPTER = 2
 CAPTION_AT = 0.15            # a beat after the cut, so the eye lands on the picture first
+GAP_S = 0.15                 # a breath between the title going and a caption coming
+MIN_READ_S = 1.0             # a caption up for less can't be read
 READ_S = (1.4, 3.0)          # a caption holds long enough to read, never past its chapter
 
 # How a creator writes the words on their own vlog: shared by the chapter
 # lines and the captions, so every line the story editor writes sounds the same.
 VOICE = """How the words sound. Every line you write is the creator talking, as if they typed it on their phone over their own clip, one of two kinds:
 1. a thought, in first person, about what is in the frame: "this matcha is so good", "why is it so cold", "obsessed with this view", "ok one more coffee", "not me buying another tote"
-2. what they are doing at that moment, plainly: "walk to class", "grocery run", "getting ready", "studying till late", "back home"
+2. what they are doing at that moment, plainly: "walk to class", "quick grocery run", "getting ready for class", "studying till late tonight", "finally back home"
 3 to 5 words, lowercase, no full stop, no hashtags, at most one emoji (most lines have none). Never describe the picture or list what is in it: "green spaces, a green drink, and sunny streets", "a cozy café with warm lighting" and "beautiful city views" are what a machine writes, not a person. Never write a clock time (the app adds the real one), and only name a place, shop, food or person when the frame or the labels make it plain; never guess a brand."""
 
 SYSTEM = """You are the editor of a vlog. The creator filmed a day (or a trip) on their phone and wants it cut like the vlogs they love: told in short named chapters, each one a little story.
@@ -70,7 +72,7 @@ SYSTEM = """You are the editor of a vlog. The creator filmed a day (or a trip) o
 You get the moments that survived a rough cut, in filming order. Each has a number, what the phone measured (time, which stop of the day, image labels, faces, talking, laughter, a 0-1 worth score) and one frame. Decide the video:
 
 - Chapters: group moments by what is happening, not just by place or hour ("Morning Routine", "Coffee Run", "OOTD", "Hit the Stores", "Night In"). 3 to 8 chapters, in the order they happened. A title is 1 to 3 short words a creator would actually put on screen; it is shown in spaced capitals, so keep it short.
-- The line under each title (subtitle): one line in the creator's voice (below) that opens the chapter, a thought or what they're doing ("finally coffee", "walk to class"). Set clock to true when the time of day is part of the story (a day-in-my-life: waking up, heading to class, a late night); the app then puts the real time in front ("7:40 am · walk to class").
+- The line under each title (subtitle): one line in the creator's voice (below) that opens the chapter, a thought or what they're doing ("finally getting my coffee", "walk to class"). Set clock to true when the time of day is part of the story (a day-in-my-life: waking up, heading to class, a late night); the app then puts the real time in front ("7:40 am · walk to class").
 - Inside a chapter, cut it like a sequence: one or two quick setup shots (arriving, the outside, a wide view), a few short steps (the actions: pouring, picking, walking in), and one payoff held longer (the reveal, the reaction, the finished thing, the view). A chapter can be only a payoff if there is nothing to build up.
 - Choose what to leave out. Prefer moments where something happens, the day rather than the creator's face over and over, variety, and frames that look intended. Never keep two moments that look the same.
 - Give each kept moment its job and its length in seconds, within the ranges you are given, and never longer than it was filmed. Make the total land near the target length.
@@ -180,22 +182,27 @@ def estimate(n: int, model: str | None = None) -> float:
 # the words, checked
 # --------------------------------------------------------------------------
 
-_CLOCK = re.compile(r"\b\d{1,2}(:\d{2})?\s*(am|pm|a\.m\.|p\.m\.)(?=\W|$)", re.I)
+_TIME = r"\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.)|\d{1,2}:\d{2}"
+_EDGE = "\\s·\\-–—,:"
+_LEAD = re.compile(rf"^(?:{_TIME})(?=[^\w:]|$)[{_EDGE}]*", re.I)                   # "7:40 am · walk to class"
+_TAIL = re.compile(rf"[{_EDGE}]*(?:\b(?:at|around|by|from|until|about)\s+)?(?:{_TIME})(?=[!?.]*$)", re.I)   # "… at 7:40 am"
+_ANY = re.compile(rf"(?<![\w:])(?:{_TIME})(?![\w:])", re.I)
 _MODS = "\ufe0f\u20e3"                  # emoji presentation, keycap: part of the emoji before them
 _ZWJ = "\u200d"                         # joins two emoji into one (a family, a profession)
 
 
 def _emoji(ch: str) -> bool:
     o = ord(ch)
-    return o >= 0x1F000 or 0x2600 <= o <= 0x27BF or 0x2B00 <= o <= 0x2BFF
+    return 0x1F000 <= o <= 0x1FAFF or 0x2600 <= o <= 0x27BF or 0x2B00 <= o <= 0x2BFF
 
 
 def _one_emoji(t: str) -> str:
-    """Keep the first emoji (with its joins, skin tone, flag pair), drop the rest."""
+    """Keep the first emoji (with its joins, skin tone, flag pair or tag
+    sequence), drop the rest."""
     out, kept, inside, glued, flag = [], 0, False, False, 0
     for ch in t:
         o = ord(ch)
-        part = inside and (ch in _MODS or 0x1F3FB <= o <= 0x1F3FF or ch == _ZWJ or glued
+        part = inside and (ch in _MODS or 0x1F3FB <= o <= 0x1F3FF or ch == _ZWJ or glued or 0xE0020 <= o <= 0xE007F
                            or (flag == 1 and 0x1F1E6 <= o <= 0x1F1FF))
         if part:
             glued = ch == _ZWJ
@@ -212,20 +219,23 @@ def _one_emoji(t: str) -> str:
 
 def line_of(text) -> str:
     """A line as the creator would type it, or "" when what came back isn't
-    one: whitespace and quotes tidied, no clock (the app adds the real one),
-    no full stop, at most one emoji, at most MAX_WORDS words. A list of
-    things in the picture ("green spaces, a green drink, and sunny streets")
-    is dropped: that is the line sarah called AI."""
+    one: whitespace and quotes tidied, no full stop, at most one emoji. A
+    clock at either end goes (the app puts the real time in front), with
+    the "at" that led into it; one in the middle can't come out cleanly, so
+    that line goes. So does a list of things in the picture ("green spaces,
+    a green drink and sunny streets": the line sarah called AI) and a line
+    over MAX_WORDS or MAX_CHARS -- cut short it would be a fragment."""
     t = " ".join(str(text or "").split()).strip().strip("\"'“”‘’")
-    t = re.sub(r"\s+(at|around|by|from|until)$", "", _CLOCK.sub("", t).strip(" ·-–—,:"), flags=re.I)
-    if t.count(",") >= 2 or ", and " in t.lower():
+    timed = bool(_ANY.search(t))
+    t = _TAIL.sub("", _LEAD.sub("", t)).strip(" ·-–—,:")
+    if _ANY.search(t):
+        return ""
+    low = t.lower()
+    if t.count(",") >= 2 or ("," in t and (" and " in low or " & " in t)):
         return ""
     t = " ".join(_one_emoji(t).split())
-    words = t.split()
-    if len(words) > MAX_WORDS:
-        t = " ".join(words[:MAX_WORDS])
-    while len(t) > MAX_CHARS and " " in t:
-        t = t.rsplit(" ", 1)[0]
+    if len(t.split()) > MAX_WORDS or len(t) > MAX_CHARS or (timed and len(t.split()) < 2):
+        return ""
     return t.rstrip(" .!,;:·-–—") if not t.endswith(("!", "?")) else t
 
 
@@ -319,21 +329,58 @@ def heading_ops(plan: sel.Plan, chapters: list[dict]) -> list[dict]:
         for p in picks:
             starts.setdefault(p.shot.id, (t, p.duration))
             t += p.duration
-        free, n = head, 0
+        free, n = head + GAP_S, 0
         for c in ch.get("captions") or []:
             if n >= CAPTIONS_PER_CHAPTER or c["shot"] not in starts or c["text"].lower() in seen:
                 continue
             at0, length = starts[c["shot"]]
-            if at0 + CAPTION_AT < free:
-                continue            # the title (or the last caption) is still up over this moment
+            at = max(CAPTION_AT, free - at0)     # once the title (or the last caption) has gone
+            if at > length - MIN_READ_S / 2:
+                continue            # this moment is nearly over by then
             read = min(READ_S[1], max(READ_S[0], 0.9 + 0.32 * len(c["text"].split())))
-            dur = min(read, span - (at0 + CAPTION_AT) - 0.05)
-            if dur < 1.0:
+            dur = min(read, span - (at0 + at) - 0.05)
+            if dur < MIN_READ_S:
                 continue            # too close to the chapter's end to read
             out.append({"op": "add_overlay", "kind": "caption", "text": c["text"],
-                        "anchor": {"to": "shot", "id": c["shot"]}, "at": CAPTION_AT, "dur": round(dur, 2)})
-            free, n = at0 + CAPTION_AT + dur, n + 1
+                        "anchor": {"to": "shot", "id": c["shot"]}, "at": round(at, 2), "dur": round(dur, 2)})
+            free, n = at0 + at + dur + GAP_S, n + 1
             seen.add(c["text"].lower())
+    return out
+
+
+def fit_captions(board: dict | None) -> list[dict]:
+    """The same promises after shots have moved under the words (the
+    self-check drops, shortens and moves shots; captions hang off a shot
+    with a fixed length): a chapter title ends with its chapter, and each
+    caption in a titled chapter starts once the title and the caption
+    before it have gone and ends before the chapter does -- moved later
+    and shortened to fit, or dropped when it can't be read. Returns the
+    edit_overlay / drop_overlay ops."""
+    if not board:
+        return []
+    beats, shots, _ = ov._spans(board)
+    beat_of = {k: bid for bid, k, _a, _z in ov._entries(board)}
+    out: list[dict] = []
+    free: dict[str, float] = {}
+    for o in ov.resolve(board):
+        anchor = o.get("anchor") or {}
+        if o["kind"] == "heading" and anchor.get("to") == "beat" and anchor.get("id") in beats:
+            ca, cz = beats[anchor["id"]]
+            end = min(o["end"], cz - 0.05)
+            if end < o["end"] - 0.01:
+                out.append({"op": "edit_overlay", "overlay": o["id"], "dur": round(max(ov.FRAME, end - o["start"]), 2)})
+            free[anchor["id"]] = end + GAP_S
+        elif o["kind"] == "caption" and anchor.get("to") == "shot" and beat_of.get(anchor.get("id")) in free:
+            bid, (a, z) = beat_of[anchor["id"]], shots[anchor["id"]]
+            start = max(o["start"], free[bid])
+            end = min(start + (o["end"] - o["start"]), beats[bid][1] - 0.05)
+            if start > z - MIN_READ_S / 2 or end - start < MIN_READ_S:
+                out.append({"op": "drop_overlay", "overlay": o["id"]})
+                continue
+            if abs(start - o["start"]) > 0.01 or abs(end - o["end"]) > 0.01:
+                out.append({"op": "edit_overlay", "overlay": o["id"], "anchor": dict(anchor),
+                            "at": round(start - a, 2), "dur": round(end - start, 2)})
+            free[bid] = end + GAP_S
     return out
 
 

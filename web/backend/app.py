@@ -1475,7 +1475,11 @@ def _check_landed(res: dict, pr, where: str) -> bd.Turn:
             said += f" That try cost {_cents(cost)}."
         return SESSION.add({"kind": "check", "text": CHECK_TEXT, "ops": [], "reply": said, "cost": cost},
                            CATALOG["cat"], _make_proposals)
-    return SESSION.add({"kind": "check", "text": CHECK_TEXT, "ops": res["ops"], "reply": res["reply"],
+    ops = list(res["ops"])
+    if ops:
+        # the fixes move shots under the chapter titles and captions: keep each where it can be read
+        ops += story.fit_captions(bd.applied(SESSION.board, ops, CATALOG["cat"], SESSION.proposals))
+    return SESSION.add({"kind": "check", "text": CHECK_TEXT, "ops": ops, "reply": res["reply"],
                         "cost": cost, "sheets": res.get("sheets") or []}, CATALOG["cat"], _make_proposals)
 
 

@@ -308,14 +308,18 @@ function headingLines(o: Overlay, u: number): Line[] {
 }
 
 // How much smaller a chapter title must be to sit on one line in `maxW`
-// (1 = as it is), never below TITLE_MIN; tracking scales with the letters.
+// (1 = as it is), never below `min`; tracking scales with the letters.
 const TITLE_MIN = 0.4
-export function fitTitle(measure: (text: string, px: number) => number, text: string, px: number, maxW: number): number {
-  for (let k = 1; k > TITLE_MIN; k *= 0.94) {
+export function fitTitle(measure: (text: string, px: number) => number, text: string, px: number, maxW: number,
+  min = TITLE_MIN): number {
+  for (let k = 1; k > min; k *= 0.94) {
     if (measure(text, px * k) <= maxW) return k
   }
-  return TITLE_MIN
+  return min
 }
+// The floor is 40% of the title's plain size: one sized up by hand can come
+// all the way back down to fit, rather than wrap or run off the frame.
+const titleFloor = (o: Overlay) => Math.min(TITLE_MIN, TITLE_MIN / ((o.place?.scale ?? 1) * SIZE[o.size]))
 
 const tplFor = (style: OverlayStyle): Tpl | null => style.template ? dress(TEMPLATES[style.template], style) : null
 
@@ -508,19 +512,18 @@ function anchorFor(pos: Overlay['pos'], W: number, H: number): Anchor {
 // A chapter title typed on the picture is as small as the canvas draws it,
 // so the box shows what the frame will (the frame's size in CSS pixels).
 let measurer: CanvasRenderingContext2D | null = null
-function fitTyped(lines: Line[], style: OverlayStyle, frame: { W: number; H: number } | undefined): Line[] {
+function fitTyped(lines: Line[], o: Overlay, style: OverlayStyle, frame: { W: number; H: number } | undefined): Line[] {
   const t = lines[0]
   if (!t?.title || !frame || typeof document === 'undefined') return lines
   measurer ??= document.createElement('canvas').getContext('2d')
   const ctx = measurer
   if (!ctx) return lines
   const { W, H } = frame
-  const m = safe(W, H)
   const k = fitTitle((s, px) => {
     ctx.font = lineFont(style, t, px)
     setTracking(ctx, t.track ? t.track * px : 0)
     return ctx.measureText(t.upper ? s.toUpperCase() : s).width
-  }, t.text, t.px, W - m.l - m.r - extra(t))
+  }, t.text, t.px, roomFor(o, W, H) - extra(t), titleFloor(o))
   return k === 1 ? lines : [{ ...t, px: t.px * k }, ...lines.slice(1)]
 }
 //
@@ -535,7 +538,7 @@ export type TypeLook = { lead: TypeLine | null; main: TypeLine; trail: TypeLine 
 export function typeLook(o: Overlay, style: OverlayStyle, u: number, frame?: { W: number; H: number }): TypeLook {
   const su = u * (o.place?.scale ?? 1)
   const probe = { ...o, sub: o.sub || ' ', text: o.text || ' ' }
-  const lines = fitTyped(linesFor(probe, style, su, Infinity), style, frame)
+  const lines = fitTyped(linesFor(probe, style, su, Infinity), o, style, frame)
   const tpl = lines[0]?.tpl
   const shadow = tpl && !tpl.shadow ? 'none'
     : tpl && !o.halo ? `0 ${0.003 * u}px ${0.02 * u}px rgba(0,0,0,0.7)`
@@ -550,7 +553,7 @@ export function typeLook(o: Overlay, style: OverlayStyle, u: number, frame?: { W
           const o = (px * t.extrude!.depth * (i + 1)) / (t.extrude!.solid ? 1 : 6)
           return `${o}px ${o}px 0 ${t.extrude!.color}`
         }).join(', ')
-      : t && typeof t.shadow === 'object' ? `${t.shadow.dist * px * 0.7071}px ${t.shadow.dist * px * 0.7071}px ${t.shadow.blur * px}px ${t.shadow.color}`
+      : t && typeof t.shadow === 'object' && !haloWins(o) ? `${t.shadow.dist * px * 0.7071}px ${t.shadow.dist * px * 0.7071}px ${t.shadow.blur * px}px ${t.shadow.color}`
       : null
     const sw = (t?.stroke?.w ?? 0) + (t?.thick ?? 0)
     return {
@@ -602,13 +605,21 @@ export function drawOverlays(ctx: CanvasRenderingContext2D | OffscreenCanvasRend
   }
 }
 
+// How wide a block may be: the safe width when centred, less from a side.
+const fullRoom = (W: number, H: number) => { const m = safe(W, H); return W - m.l - m.r }
+const roomFor = (o: Overlay, W: number, H: number) =>
+  o.place || anchorFor(o.pos, W, H).align === 'center' ? fullRoom(W, H) : fullRoom(W, H) * 0.72
+// A chapter title's soft shadow is only its default: where ink.py found no
+// colour that reads over the frame, the halo it asked for comes first.
+const haloWins = (o: Overlay) => o.kind === 'heading' && !!o.halo
+
 // room a line needs beyond its letters: a backing's padding, 3D sides
 const extra = (ln: Line) => (ln.tpl?.box || ln.tpl?.marker ? ln.px * 0.9 : 0) + (ln.tpl?.extrude ? ln.px * ln.tpl.extrude.depth : 0)
 
 function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, W: number, H: number, u: number,
   lines: Line[], o: Overlay, style: OverlayStyle, a: Anchor, at: (group: number) => Pose, boxes?: OverlayBox[]) {
   const m = safe(W, H)
-  const maxW = (a.align === 'center' ? W - m.l - m.r : (W - m.l - m.r) * 0.72)
+  const maxW = a.align === 'center' ? fullRoom(W, H) : fullRoom(W, H) * 0.72
   // measure and wrap
   type Row = { text: string; line: Line; w: number; h: number }
   const rows: Row[] = []
@@ -625,7 +636,7 @@ function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingConte
         ctx.font = lineFont(style, ln0, px)
         setTracking(ctx, ln0.track ? ln0.track * px : 0)
         return ctx.measureText(t).width
-      }, text, ln0.px, room)
+      }, text, ln0.px, room, titleFloor(o))
       ln = k === 1 ? ln0 : { ...ln0, px: ln0.px * k }
       ctx.font = lineFont(style, ln)
       setTracking(ctx, ln.track ? ln.track * ln.px : 0)
@@ -714,7 +725,7 @@ function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingConte
   if (tpl && !tpl.shadow) {
     ctx.shadowColor = 'rgba(0,0,0,0)'
     ctx.shadowBlur = 0
-  } else if (tpl && typeof tpl.shadow === 'object') {
+  } else if (tpl && typeof tpl.shadow === 'object' && !haloWins(o)) {
     // set by hand: a drop down and to the right, sized from the main line
     const px = lines[lines.length - 1].px, d = tpl.shadow.dist * px * 0.7071
     ctx.shadowColor = tpl.shadow.color

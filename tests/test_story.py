@@ -135,8 +135,18 @@ def unit() -> None:
     check("at most one emoji", lo_("so good ☕☕ 😍") == "so good ☕", lo_("so good ☕☕ 😍"))
     check("a joined emoji counts once", lo_("girls night 👩‍👩‍👧 💅") == "girls night 👩‍👩‍👧", lo_("girls night 👩‍👩‍👧 💅"))
     check("no full stop, no quotes", lo_('"Finally coffee."') == "Finally coffee" and lo_("why is it so cold?") == "why is it so cold?")
-    long_ = lo_("we walked all the way across the whole city today")
-    check("a few words, never a paragraph", len(long_.split()) <= story.MAX_WORDS and len(long_) <= story.MAX_CHARS, long_)
+    check("a paragraph is dropped, never cut into a fragment", lo_("we walked all the way across the whole city today") == ""
+          and lo_("walk to the station and then grab a coffee") == "")
+    check("a list without the last comma is still a list", lo_("green spaces, a green drink and sunny streets") == "")
+    check("a clock comes off either end with the word that led to it, keeping the ! or ?",
+          lo_("heading out at 7:30am!") == "heading out!" and lo_("7:40 am · walk to class") == "walk to class"
+          and lo_("7:40 walk to class") == "walk to class", lo_("heading out at 7:30am!"))
+    check("a clock in the middle can't come out cleanly: the line goes", lo_("up at 6am and ready") == "" and lo_("up at 6am!") == "")
+    check("no clock, nothing cut: a line may end on at or from", lo_("back at it") == "back at it"
+          and lo_("look where we're from") == "look where we're from" and lo_("the 3 of us") == "the 3 of us")
+    flag = "🏴\U000E0067\U000E0062\U000E0065\U000E006E\U000E0067\U000E007F"
+    check("a tag flag is one emoji, rare CJK letters aren't emoji", lo_(f"home {flag} 😍") == f"home {flag}"
+          and lo_("𠀀𠀁 so good 😍") == "𠀀𠀁 so good 😍", repr(lo_(f"home {flag} 😍")))
 
     print("the line under a title, and the clock")
     check("clock asked for: the real time from the chapter's first moment goes in front",
@@ -182,6 +192,53 @@ def unit() -> None:
             {"n": 1, "role": "payoff", "seconds": 2.5, "caption": ""},
             {"n": 2, "role": "setup", "seconds": 0.8, "caption": "no time to read this"}]}]}, cands2, {}, "tall")[:2])
     check("no caption where there's no time left to read it", not [o for o in tight if o["kind"] == "caption"])
+    late = story.heading_ops(*story.plan_from({"video_title": "", "hook": None, "chapters": [
+        {"title": "Lunch", "subtitle": "", "clock": False, "shots": [
+            {"n": 1, "role": "setup", "seconds": 1.2, "caption": ""},
+            {"n": 2, "role": "payoff", "seconds": 4.0, "caption": "this ramen is unreal"}]}]}, cands2, {}, "tall")[:2])
+    lc = [o for o in late if o["kind"] == "caption"]
+    check("a payoff that starts under the title gets its caption once the title has gone",
+          len(lc) == 1 and abs(lc[0]["at"] - (story.HEADING_S + story.GAP_S - 1.2)) < 0.02 and lc[0]["dur"] >= story.MIN_READ_S,
+          json.dumps(lc))
+
+    print("words kept readable when shots move under them (the self-check's fixes)")
+    from web.backend import board as bd
+
+    def fixture(lens2: tuple[float, ...] = (1.2, 1.4, 3.0)):
+        b = {"beats": [{"id": "r1", "title": "Coffee", "shots": [{"id": f"c{i}:0", "start": 0.0, "end": d} for i, d in enumerate(lens2)]},
+                       {"id": "r2", "title": "Home", "shots": [{"id": "c9:0", "start": 0.0, "end": 3.0}]}], "overlays": []}
+        for k, op in enumerate([{"op": "add_overlay", "kind": "heading", "text": "Coffee", "look": "spaced", "beat": "r1", "at": 0.0, "dur": 2.4},
+                                {"op": "add_overlay", "kind": "caption", "text": "finally coffee", "anchor": {"to": "shot", "id": "c2:0"},
+                                 "at": 0.15, "dur": 2.5},
+                                {"op": "add_overlay", "kind": "heading", "text": "Home", "look": "spaced", "beat": "r2", "at": 0.0, "dur": 2.4}]):
+            b, _ = bd.apply(b, op, None, None, new_id=lambda k=k: f"o{k}")
+        return b
+
+    def timed(b):
+        return {o["id"]: (o["start"], o["end"]) for o in ov.resolve(b)}
+
+    b0 = fixture()
+    check("as made: the caption after the title, inside its chapter", timed(b0)["o1"] == (2.75, 5.25) and not story.fit_captions(b0),
+          json.dumps(timed(b0)))
+    dropped = fixture()
+    dropped["beats"][0]["shots"].pop(1)                    # the self-check drops the step as a repeat
+    fixed = bd.applied(dropped, story.fit_captions(dropped), None, None)
+    a, z = timed(fixed)["o1"]
+    check("a dropped shot pulls the caption under the title: it waits for the title, and ends with its chapter",
+          a >= 2.4 + story.GAP_S - 0.01 and z <= 4.2 - 0.05 + 0.01 and z - a >= story.MIN_READ_S, f"{a}–{z}")
+    short = fixture((1.2, 1.4, 1.5))                       # …shortens the payoff
+    a, z = timed(bd.applied(short, story.fit_captions(short), None, None))["o1"]
+    check("a shortened chapter: the caption ends before the next chapter's title", z <= 4.1 - 0.05 + 0.01 and a == 2.75, f"{a}–{z}")
+    tiny = fixture((1.2, 1.4, 0.6))
+    ops_ = story.fit_captions(tiny)
+    check("no room left to read it: the caption goes", {"op": "drop_overlay", "overlay": "o1"} in ops_, json.dumps(ops_))
+    small = fixture()
+    sh = small["beats"][0]["shots"]
+    sh.pop(1)
+    sh[0]["end"], sh[1]["end"] = 1.0, 0.9                  # the chapter is 1.9 s now
+    ops_ = story.fit_captions(small)
+    head = next((o for o in ops_ if o.get("overlay") == "o0"), None)
+    check("a chapter title ends with its chapter, not over the next one", head and abs(head["dur"] - 1.85) < 0.02, json.dumps(ops_))
 
     print("chapter titles have their own look")
     hs = story.heading_ops(plan, chapters)
