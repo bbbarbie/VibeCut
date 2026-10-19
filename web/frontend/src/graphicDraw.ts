@@ -26,7 +26,7 @@ export const PIECES: Record<GraphicPiece, { name: string; line: string; life: nu
   clock: { name: 'Clock', line: 'The hands spin to the time this was filmed', life: 3.5 },
   stickers: { name: 'Beat sticker', line: 'A sticker that bounces on the beat of your music', life: 3 },
   sparkles: { name: 'Sparkles', line: 'Little stars twinkling over a spot', life: 3 },
-  circle: { name: 'Circle it', line: 'A marker circle draws itself around something', life: 2.5 },
+  circle: { name: 'Circle it', line: 'A marker circle draws itself around something', life: 3 },
   progress: { name: 'Progress bar', line: 'A thin bar along the top fills as the video plays', life: 4 },
 }
 export const PIECE_ORDER: GraphicPiece[] = ['title', 'chapter', 'route', 'pin', 'camcorder', 'clock', 'stickers', 'sparkles', 'circle', 'progress']
@@ -944,7 +944,7 @@ const DETAIL: Partial<Record<StickerKind, (ctx: Ctx, tint: string) => void>> = {
 // two middling, four small -- each twinkling brighter and dimmer at its own
 // pace and turning slowly. A faint dark edge keeps them off a pale sky, then
 // a soft glow in the piece's colour.
-const SPARKLE_SIZES = [0.06, 0.04, 0.04, 0.022, 0.022, 0.022, 0.022]
+const SPARKLE_SIZES = [0.06, 0.04, 0.04, 0.026, 0.026, 0.026, 0.026]
 const sparkles: Draw = (ctx, W, H, g, t) => {
   const { el, raw, gone } = life(g, t, 0.6, 0.4)
   const u = Math.min(W, H) * scaleOf(g)
@@ -968,13 +968,13 @@ const sparkles: Draw = (ctx, W, H, g, t) => {
   })
   // a glint: long up and down, shorter across, pinched thin
   const star = (s: number) => {
-    const h = s * 0.72, k = s * 0.05
+    const h = s * 0.72, a = s * 0.12, b = s * 0.02
     ctx.beginPath()
     ctx.moveTo(0, -s)
-    ctx.quadraticCurveTo(k, -k, h, 0)
-    ctx.quadraticCurveTo(k, k, 0, s)
-    ctx.quadraticCurveTo(-k, k, -h, 0)
-    ctx.quadraticCurveTo(-k, -k, 0, -s)
+    ctx.bezierCurveTo(b, -a, a * 0.72, -b, h, 0)
+    ctx.bezierCurveTo(a * 0.72, b, b, a, 0, s)
+    ctx.bezierCurveTo(-b, a, -a * 0.72, b, -h, 0)
+    ctx.bezierCurveTo(-a * 0.72, -b, -b, -a, 0, -s)
     ctx.fill()
   }
   ctx.save()
@@ -1013,8 +1013,8 @@ const sparkles: Draw = (ctx, W, H, g, t) => {
 
 // Circle it: a marker loop draws itself round a spot, a little more than
 // once, fast at first the way a hand starts and thinning at its end as a
-// marker lifts; its words, if any, are written above it (below, if there's
-// no room above).
+// marker lifts; its words, if any, are written on above it (below, if
+// there's no room above).
 const circle: Draw = (ctx, W, H, g, t) => {
   const { el, gone } = life(g, t, 1.0, 0.35)
   const u = Math.min(W, H) * scaleOf(g)
@@ -1072,9 +1072,10 @@ const circle: Draw = (ctx, W, H, g, t) => {
   ctx.restore()
   let box = { id: g.id, x: c.x - rx * 1.1, y: c.y - ry * 1.1, w: rx * 2.2, h: ry * 2.2 }
   if (g.text) {
-    const lp = back(win(el, 0.65, 0.35))
+    // written on left to right, by the same hand as the loop
+    const wp = win(el, 0.6, 0.45), wrote = 1 - (1 - wp) ** 2
     ctx.save()
-    ctx.globalAlpha = clamp01(lp) * (1 - gone)
+    ctx.globalAlpha = clamp01(wp * 4) * (1 - gone)
     const m = safe(W, H)
     const lab = fit(ctx, g.text, (q) => `700 ${q}px ${HAND}`, 0.064 * u, (W - m.l - m.r) * 0.9, 1)
     const px = lab.px
@@ -1092,7 +1093,9 @@ const circle: Draw = (ctx, W, H, g, t) => {
     ctx.textBaseline = under ? 'top' : 'bottom'
     ctx.translate(tx + tw / 2, ty)
     ctx.rotate(-0.06)
-    ctx.scale(lp, lp)
+    ctx.beginPath()
+    ctx.rect(-tw / 2 - px * 0.4, under ? -px * 0.3 : -px * 1.4, (tw + px * 0.8) * wrote, px * 1.7)
+    ctx.clip()
     ctx.textAlign = 'center'
     soft(ctx, u, 0.75, 0.003, 0.001)
     ctx.fillText(lab.rows[0], 0, 0)
