@@ -431,15 +431,22 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   const silent = useMemo(() => new Set(tl.audio?.off ?? []), [tl.audio])
   // Measured from the bottom: Audio (strips, then the music), Captions, and
   // the picture takes what is left.
+  // A taller panel stretches every lane, not only the picture, as in CapCut
+  // (sarah, 2026-10-20): from the usual height up to the tallest, caption and
+  // sound rows grow to 1.8x with their words; the picture still takes the rest.
+  const stretch = 1 + 0.8 * Math.max(0, Math.min(1, (height - 290) / 270))
+  const rowH = Math.round(LANE_ROW * stretch)
+  const soundH = Math.round(SOUND_H * stretch)
+  const chipText = Math.round(12 + (stretch - 1) * 5)
   const audioRows = (strips.length ? 1 : 0) + 1
-  const audioH = audioRows * SOUND_H + (audioRows - 1) * 4 + 8
-  const capH = Math.max(1, lanes.n) * LANE_ROW + 8
+  const audioH = audioRows * soundH + (audioRows - 1) * 4 + 8
+  const capH = Math.max(1, lanes.n) * rowH + 8
   const audioBottom = 8
   const capBottom = audioBottom + audioH + LANE_GAP
   const shotsBottom = capBottom + capH + LANE_GAP
   const lanesH = VIDEO_TOP + MIN_VIDEO_H + shotsBottom
   const musicBottom = audioBottom + 4
-  const stripBottom = musicBottom + SOUND_H + 4
+  const stripBottom = musicBottom + soundH + 4
   const [moving, setMoving] = useState<{ id: string; x0: number; grab: number; at: number; moved: boolean } | null>(null)
   const overlayTime = (clientX: number, bypass: boolean) => {
     const el = track.current!
@@ -603,8 +610,8 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
             {music && (
               <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={onSelectMusic}
                       title={`${music.title}: click for the music's controls`}
-                      className="absolute flex items-center gap-2 overflow-hidden rounded-md px-2.5 text-[14px] text-[#1d5c46] hover:brightness-95"
-                      style={{ left: PAD, width: Math.max(40, still.end), bottom: musicBottom, height: SOUND_H,
+                      className="absolute flex items-center gap-2 overflow-hidden rounded-md px-2.5 text-[#1d5c46] hover:brightness-95"
+                      style={{ left: PAD, width: Math.max(40, still.end), bottom: musicBottom, height: soundH, fontSize: chipText + 2,
                         background: 'repeating-linear-gradient(90deg, #bfe3d3 0 2px, #cdeadd 2px 5px)' }}>
                 <Icon name="music" size={16} />
                 <span className="truncate">{music.title}</span>
@@ -647,10 +654,10 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                        onOverlayEdit?.(o.id, patch)
                      }}
                      onPointerCancel={() => setDrag(null)}
-                     className={`absolute flex touch-none items-center gap-1 overflow-hidden rounded-md px-2 text-[12px] leading-none text-stone-900 ${
+                     className={`absolute flex touch-none items-center gap-1 overflow-hidden rounded-md px-2 leading-none text-stone-900 ${
                        d?.moved && !d.pending ? 'cursor-grabbing shadow-lg ring-2 ring-white' : 'cursor-grab'} ${sel ? 'ring-2 ring-accent' : ''}`}
-                     style={{ left: x, width: w, bottom: capBottom + capH - 4 - ((lanes.row.get(o.id) ?? 0) + 1) * LANE_ROW + 3, height: LANE_ROW - 3,
-                       background: meta.color, zIndex: d ? 6 : undefined }}>
+                     style={{ left: x, width: w, bottom: capBottom + capH - 4 - ((lanes.row.get(o.id) ?? 0) + 1) * rowH + 3, height: rowH - 3,
+                       fontSize: chipText, background: meta.color, zIndex: d ? 6 : undefined }}>
                   <span className="shrink-0 font-semibold">{meta.icon}</span>
                   <span className="truncate">{o.text}</span>
                   {ends && <span className={`absolute inset-y-0 left-0 w-1.5 cursor-ew-resize ${sel || d ? 'bg-black/25' : 'hover:bg-black/20'}`} />}
@@ -744,7 +751,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                   {handle('in')}
                   {handle('out')}
                   {ed && <div className="pointer-events-none absolute left-1/2 top-1 -translate-x-1/2 rounded bg-black/80 px-1.5 text-[12px] tabular-nums text-zinc-100">{((it.src_end - it.src_start + grow) / sp).toFixed(1)}s</div>}
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 pb-1 pt-3 text-[10px] tabular-nums text-zinc-200">
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 pb-1 pt-3 tabular-nums text-zinc-200" style={{ fontSize: chipText - 2 }}>
                     {it.kind === 'gap' ? 'gap ' : it.n != null ? `${it.n} · ` : ''}{(it.seq_end - it.seq_start).toFixed(1)}s{it.freeze ? ' · held frame' : ''}{it.reverse ? ' · backwards' : ''}{sp !== 1 ? ` · ${sp}×` : ''}{it.mute ? ' · muted' : it.gain != null ? ` · ${Math.round(it.gain * 100)}%` : ''}{silent.has(it.key) ? ' · sound below' : ''}
                   </div>
                 </div>
@@ -798,10 +805,10 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                        if (!m.moved) { onSelectAudio?.(a.id, e.currentTarget.getBoundingClientRect()); return }
                        if (Math.abs(m.at - a.at) > 1 / 60) onAudioMove?.(a.id, Math.round(m.at * 1000) / 1000)
                      }}
-                     className={`absolute flex cursor-grab items-center gap-1.5 overflow-hidden rounded-md px-1.5 text-[12px] leading-none active:cursor-grabbing ${
+                     className={`absolute flex cursor-grab items-center gap-1.5 overflow-hidden rounded-md px-1.5 leading-none active:cursor-grabbing ${
                        a.mute ? 'bg-stone-300 text-stone-600' : 'bg-teal-600 text-white'} ${
                        selectedAudio === a.id ? 'ring-2 ring-accent' : ''} ${m?.moved ? 'opacity-80' : ''}`}
-                     style={{ left: x, width: w, bottom: stripBottom, height: SOUND_H,
+                     style={{ left: x, width: w, bottom: stripBottom, height: soundH, fontSize: chipText,
                        backgroundImage: a.mute ? undefined : 'repeating-linear-gradient(90deg, rgba(255,255,255,.18) 0 2px, transparent 2px 5px)' }}>
                   <span className="shrink-0">{a.mute ? '🔇' : '♪'}</span>
                   <span className="truncate">{label}{a.mute ? ' · muted' : a.gain !== 1 ? ` · ${Math.round(a.gain * 100)}%` : ''}</span>
