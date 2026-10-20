@@ -22,6 +22,8 @@ import sys
 import threading
 from pathlib import Path
 
+from .helpers import prebuilt
+
 SRC = Path(__file__).parent / "place" / "vibeplace.swift"
 ROUND = 3            # decimal places: ~100 m, one neighbourhood
 _lock = threading.Lock()
@@ -38,6 +40,8 @@ def ensure_built() -> Path | None:
     global _binary, _failed
     with _lock:
         if _binary or _failed:
+            return _binary
+        if (_binary := prebuilt("vibeplace")):
             return _binary
         if sys.platform != "darwin" or not shutil.which("swiftc"):
             _failed = "not on macOS with swiftc"

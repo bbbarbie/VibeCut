@@ -1,0 +1,30 @@
+# Builds VibeCut.app (mac/build.sh) on GitHub's Apple silicon Macs and keeps
+# VibeCut-mac.zip on the run's page under Artifacts.
+name: Mac app
+
+on:
+  push:
+    branches: [main, "claude/mac-app-*"]
+    paths: ["mac/**", "web/**", "cutgrammar/**", "polish/**", "requirements.txt", ".github/workflows/mac-app.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build VibeCut.app
+        run: VERSION="0.1.${{ github.run_number }}" PYTHON=python3 mac/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VibeCut-mac
+          path: mac/build/VibeCut-mac.zip
+          compression-level: 0
+          retention-days: 30

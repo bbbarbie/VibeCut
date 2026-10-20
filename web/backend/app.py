@@ -31,7 +31,7 @@ from cutgrammar import grade
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, bed, brief, cloud, defaults, habits, make, vibes, tempo, ink, moment, cut, export, looks, pitch, seams, selfcheck, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, oai, overlays, reference, remix, speech, story, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, bed, helpers, brief, cloud, defaults, habits, make, vibes, tempo, ink, moment, cut, export, looks, pitch, seams, selfcheck, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, oai, overlays, reference, remix, speech, story, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import GATE, Workflow, WorkflowError
 
@@ -242,7 +242,7 @@ def _capabilities() -> dict:
         "llm": llm.available(),
         # who answers the chat now: "openai" (the course key, AI switch on), "claude", or None
         "chat": llm.chat_provider(),
-        "speech": sys.platform == "darwin" and shutil.which("swiftc") is not None,
+        "speech": helpers.prebuilt("vibespeech") is not None or helpers.can_build(),
         "vision": vision.status(),
         "sound": sound.status(),
         "links": reference.ytdlp() is not None,

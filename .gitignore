@@ -25,3 +25,4 @@ design/mockups/assets/
 
 # calibration records are the numbers behind the thresholds
 !design/research/calibration/*.json
+mac/build/
