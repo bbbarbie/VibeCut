@@ -281,10 +281,26 @@ def main() -> int:
         t = chat("red outline, then neon", [op(op="caption_style", captions=captions(
             outline={"set": "on", "color": "#ff0000", "width": -1})), op(op="caption_style", captions=captions(word_art="neon")),
             op(op="drop_shot", shot="nothere00001:0")])
-        check("asked for earlier in the same answer, it survives the new word art", style().get("template") == "neon"
-              and style().get("outline") == {"color": "#ff0000", "width": 0.2}, json.dumps(style()))
+        check("asked for earlier in the same answer, it survives the new word art, read on it (neon's own width)",
+              style().get("template") == "neon" and style().get("outline") == {"color": "#ff0000", "width": 0.04},
+              json.dumps(style()))
         check("and the word art is remembered even if something else in the answer couldn't be done",
               t.skipped and defaults.get().get("caption_template") == "neon", json.dumps(defaults.get()) + str(t.skipped))
+        A.SESSION.add({"kind": "direct", "text": "bold again", "ops": [{"op": "overlay_style", "template": "bold"}]},
+                      cat, lambda d: PROPOSALS)
+        t = chat("a black outline, soft captions", [op(op="caption_style", captions=captions(
+            outline={"set": "on", "color": "#000000", "width": -1})), op(op="caption_style", captions=captions(word_art="soft"))])
+        check("an outline asked before the word art changes is read again on the new one (soft has none: the tab's on)",
+              style().get("template", "x") is None and style().get("outline") == {"color": "#000000", "width": 0.12},
+              json.dumps(style()))
+        A.SESSION.add({"kind": "direct", "text": "bold again", "ops": [{"op": "overlay_style", "template": "bold"}]},
+                      cat, lambda d: PROPOSALS)
+        t = chat("no shadow, handwritten", [op(op="caption_style", captions=captions(
+            shadow={"set": "none", "color": "keep", "strength": -1, "softness": -1, "distance": -1})),
+            op(op="caption_style", captions=captions(word_art="handwritten"))])
+        check("a shadow switched off before the word art changes stays off on it",
+              style().get("template") == "handwritten" and (style().get("shadow") or {}).get("opacity") == 0,
+              json.dumps(style()))
 
         t = chat("tighten the first part a lot", [op(op="set_pace", beat=beats[0], direction="tighter",
                                                      amount="a_lot", option="unused")])
@@ -369,6 +385,21 @@ def main() -> int:
         check("a part cut in the same answer takes its captions with it, no false Skipped",
               not t.skipped and all(o["size"] == "S" for o in kinds("caption")), str(t.skipped) + json.dumps(first_beat))
         A.SESSION.toggle(t.id, cat, lambda d: PROPOSALS)
+        gone = [o["id"] for o in kinds("part", "caption") if o["anchor"]["id"] == beats[0]
+                or o["anchor"]["id"] in {bd.key(x) for x in s.board["beats"][0]["shots"]}]
+        t = chat("cut the opening and its words", [op(op="drop_beat", beat=beats[0]),
+                                                  *[op(op="drop_overlay", overlay=i) for i in gone]])
+        check("words removed along with their part in the same answer aren't said as Skipped",
+              gone and not t.skipped and not any(o["id"] in gone for o in A.SESSION.board["overlays"]),
+              str(t.skipped) + str(gone))
+        A.SESSION.toggle(t.id, cat, lambda d: PROPOSALS)
+        import time
+        many = [op(op="edit_overlay", overlay=o["id"], placement=placement(size="l" if n % 2 else "s"))
+                for n in range(25) for o in kinds("caption")]
+        t0 = time.perf_counter()
+        got = llm.expand(many, A.SESSION.board, cat, PROPOSALS)
+        took = time.perf_counter() - t0
+        check("a long answer (100 edits) is read in order quickly", len(got) == 100 and took < 1.0, f"{took:.2f}s")
         A.SESSION.add({"kind": "direct", "text": "red edge", "ops": [
             {"op": "overlay_style", "template": None, "outline": {"color": "#ff0000", "width": 0.2}}]}, cat, lambda d: PROPOSALS)
         t = chat("the time story, red outline", [op(op="choose_option", option="time"), op(op="caption_style", captions=captions(

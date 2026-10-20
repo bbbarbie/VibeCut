@@ -475,7 +475,9 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   `ART_DRESS`: keep the two in step), numbers clamped to its sliders (12 read
   as 12%), an unplaced overlay's spot as `CaptionWords` reckons it, enums
   without case, each op reading the edit as the earlier ops in the same answer
-  left it; in the chat and on pause. What can't land still reaches the
+  left it (`board.applied` on only the ops added since, so a long answer stays
+  quick; an outline or shadow asked before a new word art is read again on it,
+  so the order in the answer doesn't matter); in the chat and on pause. What can't land still reaches the
   board, so the turn says "Skipped: …" instead of nothing. The state shows
   CAPTION STYLE (with the word art's own numbers) and each overlay's place
   (an unplaced one: where it's drawn and where a set starts, x 0.5 as the tab's

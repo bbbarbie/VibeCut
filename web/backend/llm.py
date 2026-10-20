@@ -596,6 +596,7 @@ def _dress(field: str, ask: object, now: dict) -> tuple[bool, dict | None]:
 
 
 DRESSED = ("outline", "shadow", "backdrop", "thick")
+SET_ASKS = ("on", "none", "own")     # a dress switch actually asked about (not keep)
 DRESS_FIELDS = (("outline", "outline"), ("shadow", "shadow"), ("backdrop", "background"))   # overlay_style's, caption_style's
 
 
@@ -703,20 +704,35 @@ def expand(ops: list[dict], board: dict | None, cat: bd.Catalog | None = None,
     first = set(overlays)
     st = ov.style_of(board)
     kept: set = set()
+    asks: dict = {}       # caption_style's dress asks so far in this answer, by its field name
     out: list[dict] = []
+    trial, done = board, 0
     for op in ops:
         op = dict(op)
-        if cat is not None and out:
-            trial = bd.applied(board, out, cat, proposals)
+        if cat is not None and len(out) > done:
+            # only the ops added since the last look, each applied once (under the app's lock)
+            trial, done = bd.applied(trial, out[done:], cat, proposals, first_id=done), len(out)
             # the board's own overlays as they are now; ones added in this answer have no id yet
             overlays = {o["id"]: dict(o) for o in (trial or {}).get("overlays") or [] if o["id"] in first}
             st = ov.style_of(trial)
         captions, placement = _lowered(op.pop("captions", None)), _lowered(op.pop("placement", None))
         if op.get("op") == "caption_style":
-            patch = _caption_style(captions, st, kept)
+            art = captions.get("word_art")
+            fresh = kept
+            if (art == "soft" or art in ov.TEMPLATES) and (None if art == "soft" else art) != st.get("template"):
+                # a new word art: what was asked earlier in this answer still holds (on the
+                # old one it may have been what it showed anyway, so nothing was pinned)
+                captions = {**asks, **{a: v for a, v in captions.items()
+                                       if not (a in asks and not (isinstance(v, dict) and v.get("set") in SET_ASKS))}}
+                # read on the new word art, as if asked after it: the order in the answer doesn't matter
+                fresh = kept - {f for f, a in (*DRESS_FIELDS, ("thick", "boldness"))
+                                if isinstance(captions.get(a), dict) and captions[a].get("set") in SET_ASKS}
+            patch = _caption_style(captions, st, fresh)
             st = {**st, **patch}
-            kept |= {f for f, a in (*DRESS_FIELDS, ("thick", "boldness"))
-                     if isinstance(captions.get(a), dict) and captions[a].get("set") in ("on", "none", "own")}
+            for f, a in (*DRESS_FIELDS, ("thick", "boldness")):
+                if isinstance(captions.get(a), dict) and captions[a].get("set") in SET_ASKS:
+                    kept.add(f)
+                    asks[a] = captions[a]
             out.append({"op": "overlay_style", **patch})   # empty: "nothing to change"
             continue
         if op.get("op") == "add_overlay":
@@ -724,6 +740,8 @@ def expand(ops: list[dict], board: dict | None, cat: bd.Catalog | None = None,
                                  if v is not None}})
             continue
         kind = ALL_OF.get(op.get("overlay"))
+        if kind is None and op.get("op") in ("drop_overlay", "edit_overlay") and op.get("overlay") in first - set(overlays):
+            continue    # gone with what it hung off, earlier in this answer: the diff says so
         if op.get("op") == "drop_overlay":
             gone = [o["id"] for o in overlays.values() if o["kind"] == kind] if kind else [op.get("overlay")]
             for oid in gone:
