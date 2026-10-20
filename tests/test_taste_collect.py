@@ -42,7 +42,7 @@ def _video(i: int, views: int, likes: int, dur: int = 900, title: str = "") -> d
             "view_count": views, "like_count": likes, "extractor_key": "Youtube"}
 
 
-def test_discover_picks_against_the_creator() -> None:
+def test_discover_learns_from_the_most_watched_vlogs() -> None:
     with tempfile.TemporaryDirectory() as t:
         _setup(Path(t))
         vids = {f"https://y/{i}": v for i, v in enumerate([
@@ -60,9 +60,10 @@ def test_discover_picks_against_the_creator() -> None:
         collect._json = fake_json
         collect.discover(lambda s: None)
         rows = list(csv.DictReader(collect.GROUPS["long"].open()))
-        got = {r["verdict"]: r["url_or_file"] for r in rows}
-        assert got == {"good": "https://y/1", "ordinary": "https://y/3"}, got
-        assert [r["id"] for r in rows] == ["L001", "L002"]
+        got = [r["url_or_file"] for r in rows]
+        assert got == ["https://y/4", "https://y/1", "https://y/0"], got   # most watched vlogs, haul and short left out
+        assert {r["verdict"] for r in rows} == {"good"}
+        assert [r["id"] for r in rows] == ["L001", "L002", "L003"]
         st = {r["creator"]: r["status"] for r in csv.DictReader(collect.CREATORS.open())}
         assert st == {"Some One": "discovered", "Gone": "struck"}, st
 
@@ -97,6 +98,6 @@ def test_vlog_filter() -> None:
 
 if __name__ == "__main__":
     test_vlog_filter()
-    test_discover_picks_against_the_creator()
+    test_discover_learns_from_the_most_watched_vlogs()
     test_measure_keeps_numbers_only()
     print("ok")

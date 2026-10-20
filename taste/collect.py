@@ -10,11 +10,9 @@ Two passes, both resumable (a row's status says how far it got):
 
 - discover: for every creator in data/candidate-creators.csv still marked
   `candidate`, list their recent videos of the group's kind (long uploads,
-  or Shorts / TikToks), read views and likes, and add two rows: the one
-  with the most likes per view among their better-watched videos (good) and
-  the one with the fewest among their less-watched (ordinary). Comparing a
-  creator with themselves is the point -- a big channel shouldn't count as
-  good for being big.
+  or Shorts / TikToks), keep the vlogs, read views and likes, and add their
+  PER_CREATOR most-watched as good examples. The list is vloggers only, and
+  a popular vlogger's vlogs are all worth learning from (sarah, 2026-10-20).
 - measure: every row with a link, a verdict and status `listed` is
   downloaded at 480p (long: the first LONG_S seconds), measured
   (taste.measure + words on screen through Vision), and deleted. Only the
@@ -29,7 +27,6 @@ import argparse
 import csv
 import json
 import shutil
-import statistics
 import subprocess
 import tempfile
 import time
@@ -44,7 +41,8 @@ GROUPS = {"long": DATA / "long-youtube.csv", "short": DATA / "short-reels.csv"}
 CREATORS = DATA / "candidate-creators.csv"
 PREFIX = {"long": "L", "short": "S"}
 
-RECENT = 12            # videos looked at per creator
+RECENT = 12            # vlogs looked at per creator
+PER_CREATOR = 3        # ...of which the most watched are learnt from
 LONG_S = 600.0         # a long vlog is measured on its first ten minutes
 LONG_RANGE = (300, 2700)   # what counts as a long vlog, seconds
 SHORT_MAX = 180            # ...and a short one
@@ -155,6 +153,8 @@ def sync(log) -> None:
                 log(f"new from the thread: {o['id']} {o['url_or_file']}")
             elif STAGE.get(o.get("status", ""), 0) > STAGE.get(mine.get("status", ""), 0):
                 mine.update({k: o.get(k, "") for k in head})
+            elif o.get("verdict") and o["verdict"] != mine.get("verdict"):
+                mine["verdict"] = o["verdict"]     # sarah's call, made in the thread
         _save(path, head, rows)
     head, creators = _rows(CREATORS)
     known = {(c["group"], c["creator"]): c for c in creators}
@@ -162,8 +162,10 @@ def sync(log) -> None:
         c = known.get((o["group"], o["creator"]))
         if c is None:
             creators.append({k: o.get(k, "") for k in head})
-        elif o["status"] != "candidate" and c["status"] == "candidate":
+        elif o["status"] in ("struck", "dropped") or o["status"].startswith("skip"):
             c["status"] = o["status"]          # struck or skipped in the thread
+        elif o["status"] != "candidate" and c["status"] == "candidate":
+            c["status"] = o["status"]
     # a creator whose picks all turned out not to be vlogs is looked at again
     kept = {r["creator"] for path in GROUPS.values() for r in _rows(path)[1]
             if r.get("source") == "web" and r.get("status") != "not a vlog"}
@@ -215,30 +217,28 @@ def discover(log) -> None:
                 vids.append(d)
             if len(vids) >= RECENT:
                 break
-        if len(vids) < 3:
-            c["status"] = "too few vlogs"
-            log(f"{name}: only {len(vids)} vlogs among the recent videos at {where}")
+        if not vids:
+            c["status"] = "no vlogs"
+            log(f"{name}: no vlogs among the recent videos at {where}")
             continue
-        mid = statistics.median(d["view_count"] for d in vids)
-        upper = [d for d in vids if d["view_count"] >= mid]
-        lower = [d for d in vids if d["view_count"] <= mid]
-        good = max(upper, key=_ratio)
-        plain = min((d for d in lower if d is not good), key=_ratio)
+        # sarah, 2026-10-20: a big vlogger's vlogs are all good examples, so
+        # learn from their most-watched recent ones rather than pick a weak one.
+        picks = sorted(vids, key=lambda d: d["view_count"], reverse=True)[:PER_CREATOR]
         hd, rows = _rows(GROUPS[group])
         have = {r["url_or_file"] for r in rows}
-        for d, verdict in ((good, "good"), (plain, "ordinary")):
+        for d in picks:
             url = d.get("webpage_url")
             if url in have:
                 continue
             row = {k: "" for k in hd}
             row.update(id=_next_id(group, rows), group=group, platform=d.get("extractor_key", "").lower(),
-                       url_or_file=url, source="web", verdict=verdict, status="listed",
-                       notes=f"{verdict} by likes/view vs {len(vids)} recent ({_ratio(d):.3f}); channel {d.get('channel_follower_count') or '?'}")
+                       url_or_file=url, source="web", verdict="good", status="listed",
+                       notes=f"top {PER_CREATOR} by views of {len(vids)} recent vlogs; channel {d.get('channel_follower_count') or '?'}")
             _counts(row, d)
             rows.append(row)
         _save(GROUPS[group], hd, rows)
         c["status"] = "discovered"
-        log(f"{name}: good {good.get('title', '')[:40]!r}, ordinary {plain.get('title', '')[:40]!r}")
+        log(f"{name}: " + "; ".join(repr((d.get('title') or '')[:40]) for d in picks))
         _save(CREATORS, head, creators)
     _save(CREATORS, head, creators)
 
@@ -298,9 +298,13 @@ def measure_one(row: dict, log) -> None:
 
 
 def measure_all(log) -> None:
+    off = {c["creator"].lower() for c in _rows(CREATORS)[1]
+           if c["status"] in ("struck", "dropped") or c["status"].startswith("skip")}
     for group, path in GROUPS.items():
         head, rows = _rows(path)
         for row in rows:
+            if row.get("source") == "web" and row.get("creator", "").lower() in off:
+                continue
             if row.get("status") == "listed" and row.get("verdict") in ("good", "ordinary") and row.get("url_or_file"):
                 measure_one(row, log)
                 _save(path, head, rows)    # after each, so a stop loses one video at most
