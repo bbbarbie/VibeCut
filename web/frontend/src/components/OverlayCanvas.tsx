@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { drawOverlays, ensureFonts, safe, typeLook, type OverlayBox, type Part, type TypeLine, type TypeLook } from '../overlayDraw'
 import { phStore } from '../transport'
 import { multiline, typable, wordsOf, wordsPatch } from '../captionWords'
-import type { LineLook, LineRole, Overlay, OverlayPlace, OverlayStyle } from '../types'
+import type { Overlay, OverlayPlace, OverlayStyle } from '../types'
 
 export type OverlayView = { items: Overlay[]; style: OverlayStyle; parts: Part[] }
 
@@ -25,6 +25,8 @@ export type OverlayEdit = {
 }
 
 const SNAP = 0.02   // pulls onto the centre lines within 2% of the frame
+type LineRole = import('../types').LineRole
+type LineLook = import('../types').LineLook
 type Drag = { id: string; mode: 'move' | 'scale' | 'line'; role?: LineRole; nudge0?: { dx: number; dy: number }; x0: number; y0: number; start: OverlayPlace; d0: number; moved: boolean; again: boolean }
 // the box being typed into: where the caption was drawn when typing began
 type Typing = { id: string; box: OverlayBox; value: string }
@@ -45,14 +47,16 @@ export function OverlayCanvas({ view, width, height, edit }: { view: OverlayView
   // read by the box's blur, which can come after Enter already saved it
   const typingRef = useRef<Typing | null>(null)
   typingRef.current = typing
-  const placed: OverlayView = live || liveLine
-    ? { ...view, items: view.items.map((o) => (o.id === live?.id ? { ...o, place: live.place }
-      : o.id === liveLine?.id ? { ...o, lines: { ...o.lines, [liveLine.role]: { ...o.lines?.[liveLine.role], dx: liveLine.dx, dy: liveLine.dy } } } : o)) }
+  const placed: OverlayView = live
+    ? { ...view, items: view.items.map((o) => (o.id === live.id ? { ...o, place: live.place } : o)) }
     : view
   // the words being typed stand in for the drawn ones until they're saved
   const shown: OverlayView = typing ? { ...placed, items: placed.items.filter((o) => o.id !== typing.id) } : placed
-  const viewRef = useRef(shown)
-  viewRef.current = shown
+  // a line of a group being dragged away from the rest
+  const drawn: OverlayView = liveLine ? { ...shown, items: shown.items.map((o) => o.id !== liveLine.id ? o
+    : { ...o, lines: { ...o.lines, [liveLine.role]: { ...o.lines?.[liveLine.role], dx: liveLine.dx, dy: liveLine.dy } } }) } : shown
+  const viewRef = useRef(drawn)
+  viewRef.current = drawn
   const selRef = useRef(edit?.selected ?? null)
   selRef.current = edit?.selected ?? null
 
@@ -84,7 +88,7 @@ export function OverlayCanvas({ view, width, height, edit }: { view: OverlayView
     ensureFonts(shown.style).then(() => { if (alive) draw() })
     const off = phStore.subscribe(draw)
     return () => { alive = false; off(); cancelAnimationFrame(raf) }
-  }, [width, height, shown, edit?.selected]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [width, height, drawn, edit?.selected]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // A fresh edit from the server (the music being picked polls the session
   // every 1.5 s) must not snap a caption back from under the pointer, nor
@@ -118,6 +122,7 @@ export function OverlayCanvas({ view, width, height, edit }: { view: OverlayView
 
   if (!edit) return <canvas ref={ref} className="pointer-events-none absolute inset-0 z-[5] size-full" aria-hidden="true" />
 
+  const pickedRow = edit.line && selBox ? selBox.rows?.find((r) => r.role === edit.line) ?? null : null
   const startTyping = (id: string) => {
     const o = view.items.find((x) => x.id === id)
     const b = boxes.current.find((x) => x.id === id)
@@ -225,7 +230,6 @@ export function OverlayCanvas({ view, width, height, edit }: { view: OverlayView
     if (drag && !drag.moved && drag.again) startTyping(drag.id)
   }
   const sel = edit.selected ? view.items.find((o) => o.id === edit.selected) : null
-  const pickedRow = edit.line && selBox ? selBox.rows?.find((r) => r.role === edit.line) ?? null : null
   return (
     <>
       <canvas ref={ref} className="pointer-events-none absolute inset-0 z-[5] size-full" aria-hidden="true" />

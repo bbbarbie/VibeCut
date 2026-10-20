@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { api, type AIEstimate, type AIState, type ChatProvider, type MakeJob, saving } from './api'
 import { AISwitch } from './components/AISwitch'
 import { Chat, type ChatItem, type SendExtra } from './components/Chat'
-import { KIND_META, lineName, partsOf } from './overlayDraw'
+import { KIND_META, partsOf } from './overlayDraw'
 import { loadProfile } from './profile'
 import { StyleQuestions } from './components/StyleQuestions'
 import { composeBrief, sayPicks, type Picks } from './brief'
@@ -28,6 +28,8 @@ import { Inspector, type InspectorTab, type JoinPick } from './components/Inspec
 import { PreviewBar, type FrameChoice } from './components/PreviewBar'
 import { Handle, useLayout } from './components/Split'
 import { Icon, type IconName } from './components/icons'
+import { lineName } from './overlayDraw'
+import type { LineRole } from './types'
 import { Footage, type Importing } from './components/Footage'
 import { fromDataTransfer, fromInput, takeHandoff, takeRefs, type Picked } from './drop'
 import { bytes, cents, uid } from './format'
@@ -38,7 +40,7 @@ import { go } from './router'
 import { deriveStage, reached, STAGES, type Stage } from './stage'
 import { phStore, snapStore, transport, transportStore, useStore } from './transport'
 import { Button, Confirm, cx, Wordmark } from './ui'
-import type { Capabilities, Clip, LineRole, Msg, Option, Overlay, OverlayKind, Overlays as OverlayData, Segment, Session, StyleAnswers, StyleQuestion, TimelineData } from './types'
+import type { Capabilities, Clip, Msg, Option, Overlay, OverlayKind, Overlays as OverlayData, Segment, Session, StyleAnswers, StyleQuestion, TimelineData } from './types'
 
 const hello: Msg = {
   id: 'hello', role: 'app', at: 0,

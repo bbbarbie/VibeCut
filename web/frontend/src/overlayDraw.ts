@@ -378,8 +378,7 @@ const SIZE = { S: 0.78, M: 1, L: 1.4 }
 // ---- layout ---------------------------------------------------------------
 
 type Line = { text: string; px: number; bold: boolean; color: string; track?: number; upper?: boolean
-  family?: string; weight?: number; tpl?: Tpl
-  role?: LineRole; own?: boolean; dx?: number; dy?: number }   // which line of the group; tuned on its own; nudged (px)
+  family?: string; weight?: number; tpl?: Tpl }
 
 export function safe(W: number, H: number) {
   const portrait = H > W
@@ -431,26 +430,28 @@ function labelTpl(o: Overlay, style: OverlayStyle): Tpl | null {
 // (sarah, 2026-10-20: "make them into a group of captions, and we can tune it
 // independently", like CapCut's grouped text). Which line is which: the place
 // name sits above a caption or a stop's line, the line under a title below.
+// which line of the group; tuned on its own; nudged (px)
+type Grouped = Line & { role?: LineRole; own?: boolean; dx?: number; dy?: number }
 export const subAbove = (o: Overlay) => o.kind === 'caption' || o.kind === 'part'
 /** What each line of a group is called in the panel: "Title" / "Line under", "Words" / "Place name". */
 export const lineLabel = (o: Pick<Overlay, 'kind'> | undefined, role: LineRole) =>
   o && subAbove(o as Overlay) ? (role === 'main' ? 'Words' : 'Place name') : role === 'main' ? 'Title' : 'Line under'
 export const lineName = (o: Pick<Overlay, 'kind'> | undefined, role: LineRole) =>
   o && subAbove(o as Overlay) ? (role === 'main' ? 'the words' : 'the place name') : role === 'main' ? 'the title' : 'the line under the title'
-function roles(o: Overlay, lines: Line[]): Line[] {
-  if (!o.sub) return lines.map((ln) => ({ ...ln, role: 'main' }))
+function roles(o: Overlay, lines: Line[]): Grouped[] {
+  if (!o.sub) return lines.map((ln): Grouped => ({ ...ln, role: 'main' }))
   const sub = subAbove(o) ? 0 : lines.length > 1 ? lines.length - 1 : -1
-  return lines.map((ln, i) => ({ ...ln, role: i === sub ? 'sub' : 'main' }))
+  return lines.map((ln, i): Grouped => ({ ...ln, role: i === sub ? 'sub' : 'main' }))
 }
 
 // One line's own look over the group's: the panel's font, colour, outline,
 // shadow, background and boldness, its size, and where it sits.
-function tuned(o: Overlay, style: OverlayStyle, lines: Line[], u: number): Line[] {
+function tuned(o: Overlay, style: OverlayStyle, lines: Grouped[], u: number): Grouped[] {
   if (!o.lines) return lines
   return lines.map((ln0) => {
     const L = o.lines?.[ln0.role ?? 'main']
     if (!L) return ln0
-    let ln: Line = { ...ln0, family: ln0.family ?? FAMILY[style.font], weight: ln0.weight ?? (ln0.bold ? WEIGHT[style.font].bold : WEIGHT[style.font].regular) }
+    let ln: Grouped = { ...ln0, family: ln0.family ?? FAMILY[style.font], weight: ln0.weight ?? (ln0.bold ? WEIGHT[style.font].bold : WEIGHT[style.font].regular) }
     const face = fontById(L.typeface)
     if (face) ln = { ...ln, family: face.family, weight: face.weight, px: ln.px * face.size }
     if (L.scale) ln = { ...ln, px: ln.px * L.scale }
@@ -754,22 +755,23 @@ function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingConte
     ctx.globalAlpha = group ? at(group).alpha : p0.alpha
     // letter-spacing adds trailing space; shift so tracked text stays aligned
     const shift = r.line.track && a.align !== 'left' ? (r.line.track * r.line.px) / (a.align === 'center' ? 2 : 1) : 0
-    const ddx = r.line.dx ?? 0, ddy = r.line.dy ?? 0
+    const gl = r.line as Grouped
+    const ddx = gl.dx ?? 0, ddy = gl.dy ?? 0
     const ty = y + ddy + (r.h - r.line.px) / 2
-    if (r.line.role) {
+    if (gl.role) {
       const left = (a.align === 'left' ? x : a.align === 'right' ? x - r.w : x - r.w / 2) + ddx
       const [bx, by] = toCanvas(left, y + ddy)
       const last = rowBoxes[rowBoxes.length - 1]
       // a line that wrapped is one line to pick
-      if (last && last.role === r.line.role && prev === r.line) {
+      if (last && last.role === gl.role && prev === r.line) {
         const x0 = Math.min(last.x, bx), x1 = Math.max(last.x + last.w, bx + r.w * pl0.sc)
         Object.assign(last, { x: x0, w: x1 - x0, h: by + r.h * pl0.sc - last.y })
-      } else rowBoxes.push({ role: r.line.role, x: bx, y: by, w: r.w * pl0.sc, h: r.h * pl0.sc })
+      } else rowBoxes.push({ role: gl.role, x: bx, y: by, w: r.w * pl0.sc, h: r.h * pl0.sc })
     }
     if (r.line.tpl) {
       ctx.globalAlpha = group ? at(group).alpha : p0.alpha
       const t = r.line.tpl
-      if (r.line.own) {
+      if (gl.own) {
         // a line tuned on its own carries its own shadow, not the group's
         ctx.save()
         const d = typeof t.shadow === 'object' ? t.shadow.dist * r.line.px * 0.7071 : 0.003 * u
@@ -779,7 +781,7 @@ function drawBlock(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingConte
         ctx.shadowOffsetY = t.shadow ? d : 0
       }
       drawTemplateRow(ctx, r.text, r.w, r.line, t, x + shift + ddx, y + ddy, r.h, a.align)
-      if (r.line.own) ctx.restore()
+      if (gl.own) ctx.restore()
       y += r.h
       prev = r.line
       continue
