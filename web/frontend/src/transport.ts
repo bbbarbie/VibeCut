@@ -67,6 +67,8 @@ export class Transport {
 
   /** The player's two pictures and its veil (Player.tsx). */
   attach(primary: HTMLVideoElement | null, back: HTMLVideoElement | null, veil: HTMLDivElement | null) {
+    // a new player (Watch to the editor): the old pictures are gone, stop on them first
+    if (primary && this.primary && primary !== this.primary && transportStore.get().playing) this.stop()
     if (!transportStore.get().playing) this.video = primary
     this.primary = primary
     this.back = back

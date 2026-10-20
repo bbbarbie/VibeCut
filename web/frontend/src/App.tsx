@@ -273,6 +273,17 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     else transport.stop()
     setMenu(null)
   }, [level, shown])
+  // Watch, the editor and Story each draw their own player, so the picture
+  // is a new element after Fine-tune: the transport follows it there, or the
+  // editor stayed black (sarah, 2026-10-20).
+  const attached = useRef<HTMLVideoElement | null>(null)
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v || v === attached.current) return
+    attached.current = v
+    transport.attach(v, backRef.current, veilRef.current)
+    if (level === 'frames' && !segment) transport.seek(phStore.get())
+  })
   useEffect(() => { transport.audio = session?.music ? musicRef.current : null }, [session?.music])
   const mixKey = session?.mix?.key
   const transList = session?.mix?.transitions
