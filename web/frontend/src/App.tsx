@@ -746,6 +746,15 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
     setSegment({ key: shotId + uid(), clipId, start, end, autoplay: true })
   }
   const timelineOwns = () => { stopQueue(); setSegment(null) }
+  // A click on the timeline while a clip from Media plays: back to the video
+  // at that frame, playing (sarah, 2026-10-20). Without a clip up it only seeks.
+  const backToVideo = () => {
+    if (!segment) return
+    videoRef.current?.pause()
+    timelineOwns()
+    snapStore.set(null)
+    transport.play(1)
+  }
 
   // ---- the edit at the playhead ------------------------------------------------
   const tlRef = useRef(tl)
@@ -1691,7 +1700,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                           if (key && anchor && it?.kind === 'gap') setMenu({ kind: 'gap', key, anchor })
                         }}
                         onReorder={reorder} onInsertShot={insertShot} onClear={clear} onHelp={() => setHelp(true)}
-                        onSplit={cut} onDelete={() => deleteSelection(false)}
+                        onSplit={cut} onDelete={() => deleteSelection(false)} onTap={backToVideo}
                         overlays={ovData.items} graphics={art} selectedOverlay={selOverlay}
                         onSelectOverlay={(id) => (isArt(id) ? selectArt(id) : selectOverlay(id))}
                         onOverlayEdit={(id, patch) => {

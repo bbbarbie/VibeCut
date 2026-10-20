@@ -53,7 +53,7 @@ function growOf(it: SeqItem, ed: { edge: 'in' | 'out'; to: number }): number {
 export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, onReorder,
   onInsertShot, onClear, onHelp, overlays = [], graphics = [], selectedOverlay = null, onSelectOverlay, onOverlayEdit, onExport, onTrimEdge,
   selectedAudio = null, onSelectAudio, onAudioMove, joins = [], selectedJoin = null, onSelectJoin,
-  music = null, onSelectMusic, onSplit, onDelete, height = 290 }: {
+  music = null, onSelectMusic, onSplit, onDelete, onTap, height = 290 }: {
   tl: TimelineData
   marks: Marks
   marksOf: Record<string, 'added' | 'moved' | 'trimmed' | undefined>
@@ -89,6 +89,8 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   onSelectMusic?: () => void
   /** the toolbar's Split (at the playhead) and Delete (the selection) */
   onSplit?: () => void
+  /** the ruler or a shot was clicked: the playhead is now there */
+  onTap?: () => void
   onDelete?: () => void
   height?: number
 }) {
@@ -569,7 +571,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                 scrubTo(e.clientX, e.altKey)
               }}
               onPointerMove={(e) => { if (scrubbing.current) scrubTo(e.clientX, e.altKey) }}
-              onPointerUp={() => { scrubbing.current = false }}
+              onPointerUp={() => { if (scrubbing.current) { scrubbing.current = false; onTap?.() } }}
             >
               <svg className="absolute inset-0 h-full" width={geo.end + 2 * PAD}>
                 {inX != null && outX != null && outX > inX && (
@@ -726,6 +728,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                     const rect = e.currentTarget.getBoundingClientRect()
                     scrubTo(e.clientX, e.altKey)   // a click also puts the playhead there
                     onSelect(it.key, new DOMRect(e.clientX - 1, rect.top, 2, rect.height))
+                    onTap?.()
                   }}
                   className={`group absolute cursor-pointer overflow-hidden rounded-md ${it.kind === 'gap'
                     ? 'bg-[repeating-linear-gradient(45deg,#efebe4,#efebe4_6px,#e2ddd4_6px,#e2ddd4_12px)]' : 'bg-black'} ${
