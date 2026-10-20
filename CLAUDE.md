@@ -464,7 +464,7 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   animation, position) and moves or sizes words with `placement` on
   edit_overlay / add_overlay (set x, y, scale / usual, size, a chapter
   title's look); overlay `all_captions` (kind caption) / `all_titles` (kind
-  heading) = one edit each, never their words or timing; part labels, name
+  heading) = one edit (or drop_overlay) each, never their words or timing; part labels, name
   tags, dates and the opening title go one at a time (they share moments on
   screen, so one point would stack them). Every field is `keep` unless asked
   and a number left alone is -1, so the strict schema can't reset the rest;
@@ -474,9 +474,12 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   overlayDraw's `dressOf` / `tinted`, word arts' own edges and boxes in
   `ART_DRESS`: keep the two in step), numbers clamped to its sliders (12 read
   as 12%), an unplaced overlay's spot as `CaptionWords` reckons it, enums
-  without case; in the chat and on pause. What can't land still reaches the
+  without case, each op reading the edit as the earlier ops in the same answer
+  left it; in the chat and on pause. What can't land still reaches the
   board, so the turn says "Skipped: …" instead of nothing. The state shows
-  CAPTION STYLE (with the word art's own numbers) and each overlay's place.
+  CAPTION STYLE (with the word art's own numbers) and each overlay's place
+  (an unplaced one: where it's drawn and where a set starts, x 0.5 as the tab's
+  Place / Size start; resizing in place is `size`).
   Many changed at once read as one line (`overlays._fold`). A template or
   entrance asked for in words is remembered like one picked in the tab, once
   it landed. What it can't do, it says where in the app it's done. The schema

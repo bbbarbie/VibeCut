@@ -174,7 +174,9 @@ def main() -> int:
         check("the state says how the captions look now, the word art's own numbers too (a white edge round red)",
               "word_art bold" in line and "colour #ff0000" in line and "font own" in line
               and "outline own (#ffffff width 0.2)" in line and "background own (none)" in line, line)
-        check("and where each caption sits", "usual spot, size M" in state and "title look spaced" in state)
+        check("and where each caption sits, and where a move would start from",
+              "usual spot, bottom (a set starts from x 0.50 y 0.80), size M" in state and "title look spaced" in state
+              and "usual spot, bottom left (a set starts from x 0.50 y 0.80), size M" in state)
 
         print("her message: lowercase, the style's own font, colours that stand out")
         A.SESSION.add({"kind": "direct", "text": "a font", "ops": [{"op": "overlay_style", "typeface": "anton"}]},
@@ -270,6 +272,19 @@ def main() -> int:
             shadow={"set": "on", "color": "keep", "strength": 1, "softness": -1, "distance": -1}))])
         check("-1 keeps a number as it is", style().get("shadow") == {"color": "#000000", "opacity": 1.0,
                                                                      "blur": 0.4, "dist": 0.06}, json.dumps(style().get("shadow")))
+        t = chat("bold, with its outline", [op(op="caption_style", captions=captions(word_art="bold")),
+                                            op(op="caption_style", captions=captions(
+                                                outline={"set": "on", "color": "keep", "width": -1}))])
+        check("an outline it already shows isn't pinned (the tab ignores a click on the state it shows)",
+              "outline" in style() and style()["outline"] is None and t.skipped == ["nothing to change"],
+              json.dumps(style()) + str(t.skipped))
+        t = chat("red outline, then neon", [op(op="caption_style", captions=captions(
+            outline={"set": "on", "color": "#ff0000", "width": -1})), op(op="caption_style", captions=captions(word_art="neon")),
+            op(op="drop_shot", shot="nothere00001:0")])
+        check("asked for earlier in the same answer, it survives the new word art", style().get("template") == "neon"
+              and style().get("outline") == {"color": "#ff0000", "width": 0.2}, json.dumps(style()))
+        check("and the word art is remembered even if something else in the answer couldn't be done",
+              t.skipped and defaults.get().get("caption_template") == "neon", json.dumps(defaults.get()) + str(t.skipped))
 
         t = chat("tighten the first part a lot", [op(op="set_pace", beat=beats[0], direction="tighter",
                                                      amount="a_lot", option="unused")])
@@ -290,7 +305,7 @@ def main() -> int:
               all(o.get("place") is None for o in kinds("part", "heading", "title")))
         said = [l["text"] for l in t.lines]
         check("one turn of four edits, read as one line", len(t.ops) == 4
-              and said == ["Changed the place of 4 captions"], json.dumps(said))
+              and said == ["Changed the place and size of 4 captions"], json.dumps(said))
         lines = [{"kind": "retitled", "text": f"Changed the place of the {k} “{w}”"}
                  for k, w in (("caption", "a"), ("caption", "b"), ("part label", "c"), ("caption", "d"))]
         check("a mix of kinds is counted as what it is", ov._fold(lines)[0]["text"]
@@ -333,6 +348,24 @@ def main() -> int:
         check("said as a change of style", any(l["text"].startswith("Changed the style of the chapter title")
                                                for l in t.lines), json.dumps([l["text"] for l in t.lines]))
 
+        caps = [o["id"] for o in kinds("caption")]
+        got = llm.expand([op(op="drop_overlay", overlay=caps[0]),
+                          op(op="add_overlay", kind="caption", text="new one", shot=bd.key(shots[2])),
+                          op(op="edit_overlay", overlay="all_captions", placement=placement(size="s"))], A.SESSION.board)
+        check("one answer reads as it goes: the dropped caption isn't edited, the added one is sized too",
+              [g["overlay"] for g in got if g["op"] == "edit_overlay"] == caps[1:]
+              and next(g for g in got if g["op"] == "add_overlay").get("size") == "S", json.dumps(got)[:400])
+        t = chat("no chapter titles", [op(op="drop_overlay", overlay="all_titles")])
+        check("every chapter title removed at once, one undoable turn", not kinds("heading") and not t.skipped
+              and kinds("title"), str(t.skipped))
+        A.SESSION.toggle(t.id, cat, lambda d: PROPOSALS)
+        check("Undo brings it back", len(kinds("heading")) == 1)
+        try:
+            ov.edit(A.SESSION.board, {"overlay": "all_captions"})
+            said_some = ""
+        except ov.OverlayError as e:
+            said_some = str(e)
+        check("with captions there, it never claims there are none", "no captions" not in said_some and said_some, said_some)
         check("every-title edit with none of them in the edit says so", llm.expand(
             [op(op="edit_overlay", overlay="all_titles", placement=placement(size="L"))], {"overlays": []})
             == [{"op": "edit_overlay", "overlay": "all_titles"}])
@@ -353,7 +386,8 @@ def main() -> int:
         check("one edit per caption and the overlay_style op, nothing applied yet",
               [o["op"] for o in out["ops"]] == ["edit_overlay"] * 4 + ["overlay_style"]
               and out["ops"][-1].get("typeface") == "caveat" and len(A.SESSION.turns) == n, json.dumps(out["ops"])[:300])
-        check("its preview is computed", out["preview"] and out["preview"]["lines"], json.dumps(out["preview"]))
+        check("its preview is computed, a resize said as one", out["preview"]
+              and "Changed the size of 4 captions" in out["preview"]["lines"], json.dumps(out["preview"]))
 
         print("with a look")
         A.SESSION.add({"kind": "direct", "text": "cozy", "ops": [{"op": "set_look", "look": "cozy"}]}, cat, lambda d: PROPOSALS)

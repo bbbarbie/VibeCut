@@ -374,8 +374,11 @@ def _find(b: dict, oid: str | None) -> dict:
     for o in b.get("overlays", []):
         if o["id"] == oid:
             return o
-    if oid in ("all_captions", "all_titles"):   # the chat's every-caption edit, with none to change
-        raise OverlayError(f"there are no {'captions' if oid == 'all_captions' else 'chapter titles'} in this edit")
+    if oid in ("all_captions", "all_titles"):   # the chat's every-caption edit
+        kind, what = ("caption", "captions") if oid == "all_captions" else ("heading", "chapter titles")
+        if any(o["kind"] == kind for o in b.get("overlays", [])):
+            raise OverlayError(f"every one of the {what} at once can only be moved, sized or removed")
+        raise OverlayError(f"there are no {what} in this edit")
     raise OverlayError(f"no overlay {oid}")
 
 
@@ -470,8 +473,10 @@ def describe(a: dict | None, b: dict | None) -> list[dict]:
             what.append("length")
         if old.get("look") != o.get("look"):
             what.append("style")
-        if (old["pos"], old["size"], old.get("place")) != (o["pos"], o["size"], o.get("place")):
+        if (old["pos"], old.get("place")) != (o["pos"], o.get("place")):
             what.append("place")
+        if old["size"] != o["size"]:
+            what.append("size")
         if old["anim"] != o["anim"]:
             what.append("animation")
         if what:
