@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { api, type AIEstimate, type AIState, type ChatProvider, type MakeJob, saving } from './api'
 import { AISwitch } from './components/AISwitch'
 import { Chat, type ChatItem, type SendExtra } from './components/Chat'
-import { KIND_META, partsOf } from './overlayDraw'
+import { KIND_META, lineName, partsOf } from './overlayDraw'
 import { loadProfile } from './profile'
 import { StyleQuestions } from './components/StyleQuestions'
 import { composeBrief, sayPicks, type Picks } from './brief'
@@ -38,7 +38,7 @@ import { go } from './router'
 import { deriveStage, reached, STAGES, type Stage } from './stage'
 import { phStore, snapStore, transport, transportStore, useStore } from './transport'
 import { Button, Confirm, cx, Wordmark } from './ui'
-import type { Capabilities, Clip, Msg, Option, Overlay, OverlayKind, Overlays as OverlayData, Segment, Session, StyleAnswers, StyleQuestion, TimelineData } from './types'
+import type { Capabilities, Clip, LineRole, Msg, Option, Overlay, OverlayKind, Overlays as OverlayData, Segment, Session, StyleAnswers, StyleQuestion, TimelineData } from './types'
 
 const hello: Msg = {
   id: 'hello', role: 'app', at: 0,
@@ -103,6 +103,9 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
   const [alt, setAlt] = useState(false)
   const [help, setHelp] = useState(false)
   const [selOverlay, setSelOverlay] = useState<string | null>(null)
+  // one line of the picked group (a title and the line under it), tuned on its own; null = the whole group
+  const [selLine, setSelLine] = useState<LineRole | null>(null)
+  useEffect(() => { setSelLine(null) }, [selOverlay])
   // Frames: the panel beside the rail on the left (closed by clicking its item again)
   const [side, setSide] = useState<'media' | 'text' | 'music' | 'chat' | null>(() => (window.innerWidth < 1100 ? null : 'media'))
   const [layout, setSize] = useLayout()
@@ -968,6 +971,9 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
       const o = ovData.items.find((x) => x.id === id)
       run([{ op: 'edit_overlay', overlay: id, ...patch }], `You changed the words of the ${o ? KIND_META[o.kind].label.toLowerCase() : 'caption'}`)
     },
+    line: selLine,
+    onLine: setSelLine,
+    onNudge: (id, role, look) => run([{ op: 'edit_overlay', overlay: id, lines: { [role]: look } }], `You moved ${lineName(ovData.items.find((x) => x.id === id), role)}`),
   } : undefined
   const overlaysPanel = session?.board ? (
     <Overlays data={ovData} items={tl.items} level={level} selected={selOverlay} busy={!!pending}
@@ -1160,6 +1166,8 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                onCaptionWatch={() => ovSel && watchOverlay(ovSel)}
                onCaptionDone={() => setSelOverlay(null)}
                onCaptionPlace={(place, label) => ovSel && run([{ op: 'edit_overlay', overlay: ovSel.id, place }], label)}
+               line={selLine} onLine={setSelLine}
+               onLineLook={(role, look, label) => ovSel && run([{ op: 'edit_overlay', overlay: ovSel.id, lines: { [role]: look } }], label)}
                looks={ovData.look ? { id: ovData.look.id, all: ovData.look.all } : null}
                music={musicNode}
                video={session?.board ? (
