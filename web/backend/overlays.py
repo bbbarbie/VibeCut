@@ -374,6 +374,8 @@ def _find(b: dict, oid: str | None) -> dict:
     for o in b.get("overlays", []):
         if o["id"] == oid:
             return o
+    if oid in ("all_captions", "all_titles"):   # the chat's every-caption edit, with none to change
+        raise OverlayError(f"there are no {'captions' if oid == 'all_captions' else 'chapter titles'} in this edit")
     raise OverlayError(f"no overlay {oid}")
 
 
@@ -509,10 +511,12 @@ def _fold(lines: list[dict]) -> list[dict]:
     drop, put = set(), {}
     for what, ix in groups.items():
         if len(ix) > 3:
-            labels = {label for _, label in ix}
-            # mixed kinds are all "captions", as the app calls words on screen
-            put[ix[0][0]] = {"kind": "retitled", "text": f"Changed the {what} of {len(ix)} "
-                                                         f"{labels.pop() if len(labels) == 1 else 'caption'}s"}
+            counts: dict[str, int] = {}
+            for _, label in ix:
+                counts[label] = counts.get(label, 0) + 1
+            many = [f"{n} {label}s" if n > 1 else ("an " if label[0] in "aeiou" else "a ") + label
+                    for label, n in counts.items()]
+            put[ix[0][0]] = {"kind": "retitled", "text": f"Changed the {what} of {what_list(many)}"}
             drop |= {i for i, _ in ix[1:]}
     return [put.get(i, l) for i, l in enumerate(lines) if i not in drop]
 

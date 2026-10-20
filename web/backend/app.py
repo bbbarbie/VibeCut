@@ -957,13 +957,15 @@ def api_chat(req: ChatReq) -> dict:
         ops = llm.expand(out.get("ops", []), SESSION.board)
         if req.t is not None:
             ops = [o for o in ops if o.get("op") != "choose_option"]   # about a moment of this edit, never a new one
-        for o in ops:   # a caption look asked for in words follows the creator too, as one picked in the tab
-            if o.get("op") == "overlay_style":
-                defaults.note(**{f"caption_{k}": o[k] for k in ("template", "enter") if k in o})
-        SESSION.add({"kind": "chat", "text": msg, "ops": ops,
-                     "reply": out.get("reply", ""), "question": out.get("question"),
-                     "choices": out.get("choices", []) if out.get("question") else [],
-                     "direction": direction, "cost": cost}, CATALOG["cat"], _make_proposals)
+        t = SESSION.add({"kind": "chat", "text": msg, "ops": ops,
+                         "reply": out.get("reply", ""), "question": out.get("question"),
+                         "choices": out.get("choices", []) if out.get("question") else [],
+                         "direction": direction, "cost": cost}, CATALOG["cat"], _make_proposals)
+        landed = (SESSION.board or {}).get("overlay_style") or {}
+        for o in ops:   # a caption look asked for in words follows the creator too, once it is on the edit
+            picks = {f"caption_{k}": o[k] for k in ("template", "enter") if k in o and landed.get(k, "-") == o[k]}
+            if o.get("op") == "overlay_style" and SESSION.board is not None and not t.skipped and picks:
+                defaults.note(**picks)
         return _session()
 
 

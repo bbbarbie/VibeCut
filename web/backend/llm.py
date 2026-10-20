@@ -124,26 +124,26 @@ Use only ids that appear in the state. Fields you don't need are null (option an
 - set_pace {beat, direction: tighter|looser, amount: a_little|a_lot}: trims (or relaxes) every shot in the beat around its best moment. "Punchier", "too slow", "drags" → tighter. "Let it breathe", "too rushed" → looser. "A lot", "way", "much" → a_lot.
 - open_with {shot} / end_with {shot}: make a specific shot the very first / very last. To open or end on a whole section, use move_beat instead.
 
-Words on screen (OVERLAYS in the state). They hang off a beat or a shot and move with it. Every caption shares one look (CAPTION STYLE in the state, set with caption_style below), so a font or colour can't differ between two captions.
-- add_overlay {kind, text, sub, beat | shot}: kind is title (big opening words), part (a part/place label, sub = small line above it), name (a person's name tag, sub = handle or role), caption (a spoken line or short remark), date, end (end card). Give beat or shot to say where it goes; both null = the start of the video (for end: the last seconds). Use the user's own words when they give them, or words already in the storyboard (beat titles). When they ask for a caption and leave the words to you, write it in their voice, as if they typed it over their own clip: a thought in first person about what is in the shot ("this matcha is so good", "why is it so cold") or what they are doing ("walk to class", "quick grocery run"); 3 to 5 words, lowercase, at most one emoji, no clock time. Never describe the picture or list what is in it ("green spaces, a green drink, and sunny streets" reads as a machine). Never invent names, places or quotes — ask instead.
-- edit_overlay {overlay, text, sub, placement, kind: null}: change an existing overlay (id from OVERLAYS): its words (text, sub), or give beat or shot to move it to another moment. For a placement change to many at once, overlay all_captions means every small caption (captions, part labels, name tags, dates) and all_titles every title (chapter titles, the opening title, the end card); their words and timing stay their own.
+Words on screen (OVERLAYS in the state). They hang off a beat or a shot and move with it. Every caption (kind caption) shares one look (CAPTION STYLE in the state, set with caption_style below), so a font or colour can't differ between two captions; part labels, name tags, dates and titles are lettered by the video's look (set_look).
+- add_overlay {kind, text, sub, beat | shot, placement}: kind is title (big opening words), part (a part/place label, sub = small line above it), name (a person's name tag, sub = handle or role), caption (a spoken line or short remark), date, end (end card). Give beat or shot to say where it goes; both null = the start of the video (for end: the last seconds). Use the user's own words when they give them, or words already in the storyboard (beat titles). When they ask for a caption and leave the words to you, write it in their voice, as if they typed it over their own clip: a thought in first person about what is in the shot ("this matcha is so good", "why is it so cold") or what they are doing ("walk to class", "quick grocery run"); 3 to 5 words, lowercase, at most one emoji, no clock time. Never describe the picture or list what is in it ("green spaces, a green drink, and sunny streets" reads as a machine). Never invent names, places or quotes — ask instead. placement (as for edit_overlay; null = its usual spot) puts it somewhere else on the picture.
+- edit_overlay {overlay, text, sub, placement, kind: null}: change an existing overlay (id from OVERLAYS): its words (text, sub), or give beat or shot to move it to another moment. For a placement change to many at once, overlay all_captions means every caption (kind caption) and all_titles every chapter title (kind heading); their words and timing stay their own. Part labels, name tags, dates, the opening title and the end card are changed one at a time by their id.
   placement moves or sizes it on the picture (null = leave it as it is):
-  - mode set: x, y are where its centre sits (0 to 1 across and down the frame; 0.5, 0.5 is the middle; captions usually sit around y 0.8, a title around 0.45) and scale is how big (0.4 to 3, 1 = its usual size). It may go right up to the frame's edge.
+  - mode set: x, y are where its centre sits (0 to 1 across and down the frame; 0.5, 0.5 is the middle; captions usually sit around y 0.8, a title around 0.45) and scale is how big (0.4 to 3, 1 = its usual size). Any of x, y and scale you aren't changing: -1 (as it is now). It may go right up to the frame's edge.
   - mode usual: back where it usually sits, at its usual size. mode keep: leave where it is (x, y and scale are then ignored).
   - size: S, M or L, its size without moving it; keep = as it is.
   - title_look, for a chapter title only: spaced (thin, white, widely spaced capitals, the default), script, bold or serif; keep = as it is.
 - drop_overlay {overlay}
 
 How every caption looks, as in the Captions tab (CAPTION STYLE in the state is what's set now):
-- caption_style {captions}: every field is keep (leave it as it is) unless the user asked about it:
+- caption_style {captions}: every field is keep (leave it as it is) unless the user asked about it. Picking a different word art starts it fresh, with its own outline, shadow, background and boldness, unless those are asked for in the same answer:
   - word_art: soft (the default: small lowercase words with a soft shadow, low on the left), outlined (serif letters with a black edge, the time on its own line), bold (big heavy capitals), label (dark words on a white box), highlight (dark words on a yellow marker), handwritten (handwriting, lowercase), tape (typewriter words on a strip), pop (chunky letters in a bright colour), quiet (tiny widely spaced capitals), neon (pink glowing script), glow (bold letters with a blue glow), gradient (yellow fading to pink), extrude (3D letters), retro (a hard drop shadow).
   - font: own (the word art's or the look's own font), or one of the fonts that come with VibeCut: tiktok-sans, montserrat, poppins, bebas-neue (tall capitals), anton (condensed and heavy), archivo-black, luckiest-guy (cartoon), bangers (comic), fredoka (rounded), permanent-marker, caveat (handwriting), pacifico (script), lobster (script), playfair-display (serif), courier-prime (typewriter). Only these: for any other font, say it isn't in VibeCut and offer the nearest.
   - colour: auto (VibeCut picks, for each caption, a colour that stands out from the picture behind it, adding a glow where nothing does: "readable", "contrasting" and "stands out from the background" all mean auto) or "#rrggbb".
-  - outline, shadow, background: set is keep, none (take it away), own (the word art's own) or on, with its colour ("#rrggbb") and numbers: outline width 0.05 (thin) to 0.25 (thick), at most 0.4; shadow strength 0 to 1 (usually 0.7), softness 0 to 1.5 (usually 0.4), distance 0 to 0.4 (usually 0.06); background opacity 0 to 1, round 0 (square) to 0.5 (pill).
+  - outline, shadow, background: set is keep, none (take it away), own (the word art's own) or on, with its colour ("#rrggbb", or keep) and numbers: outline width 0.05 (thin) to 0.25 (thick), at most 0.4; shadow strength 0 to 1 (usually 0.7), softness 0 to 1.5 (usually 0.4), distance 0 to 0.4 (usually 0.06); background opacity 0 to 1, round 0 (square) to 0.5 (pill). Any number you aren't changing: -1 (as it is now, which CAPTION STYLE shows).
   - boldness: set keep, own or on, with amount 0 (regular) to 0.15 (heaviest); 0.06 reads as bolder.
   - animation, how captions come in: own (the look's own), fade, pop, slide, stamp, type (typewriter) or word (word by word).
   - position: bottom or center, where captions sit when nobody has placed them by hand.
-  Case: soft and handwritten show captions in lowercase, bold and quiet in capitals, the others as typed (or as the look sets them). To change the words themselves (lowercase them, say), use edit_overlay with the new text.
+  Case: soft and handwritten show captions in lowercase; bold and quiet in capitals; retro and extrude, and the fonts bebas-neue, luckiest-guy and bangers, only have capitals whatever is typed; every other word art shows the words as typed (the look never changes a caption's case). To change the words themselves (lowercase them, say), use edit_overlay with the new text; under an all-capitals word art or font, say the letters will still show as capitals.
 
 The look (vibe) of the words on screen, for the whole video — font, colours and how words move:
 - set_look {look}: one of clean (crisp, simple), cozy (warm, handwritten, soft), quiet (still, spare), cinematic (slow, wide, small caps), film (old camera, typewriter), playful (bright, bouncy, on the beat), hype (fast, loud, slams on the beat). "Make it feel cozier" → set_look cozy. Anything the creator set by hand (a font, a colour) is kept.
@@ -195,10 +195,11 @@ PLACEMENT_SCHEMA = _obj({
     "size": {"type": "string", "enum": ["keep", *ov.SIZES]},
     "title_look": {"type": "string", "enum": ["keep", *ov.HEADING_LOOKS]},
 })
-# What "all captions" and "all titles" mean to the creator (expand): the small
-# words (lines, stop labels, name tags, dates) and the big ones (chapter
-# titles, the opening title, the end card).
-ALL_OF = {"all_captions": ("caption", "part", "name", "date"), "all_titles": ("heading", "title", "end")}
+# Every caption, or every chapter title, at once (expand): the kinds the
+# Captions tab's "Same place for all captions" and its style reach. Part
+# labels, name tags, dates and the opening title share moments on screen
+# with them, so placing them all on one point would stack them.
+ALL_OF = {"all_captions": "caption", "all_titles": "heading"}
 
 
 SCHEMA = {
@@ -276,6 +277,8 @@ def _shot_line(cat: bd.Catalog, sid: str, start: float | None = None, end: float
 
 def _placement(o: dict) -> str:
     """Where an overlay sits, in edit_overlay's placement terms."""
+    if o["kind"] == "chapters":
+        return "a fixed strip across the top, can't be moved or sized"
     p = o.get("place")
     where = (f"placed x {p['x']:.2f} y {p['y']:.2f} scale {p.get('scale', 1.0):.2f}" if p
              else "usual spot")
@@ -286,14 +289,13 @@ def _placement(o: dict) -> str:
 def _caption_style_line(b: dict) -> str:
     """The captions' one look, in caption_style's terms."""
     st = ov.style_of(b)
+    shows = _dress_of(st)
 
     def dress(field: str) -> str:
-        d = st.get(field)
-        if d is None:
-            return "own"
-        if not d.get(DRESS_OFF[field]):
-            return "none"
-        return d["color"] + "".join(f" {DRESS_ARGS[field][n]} {d[n]:g}" for n in ov.DRESS[field])
+        d = shows[field]
+        now = "none" if not d.get(DRESS_OFF[field]) else d["color"] + "".join(
+            f" {DRESS_ARGS[field][n]} {d[n]:g}" for n in ov.DRESS[field])
+        return now if st.get(field) is not None else f"own ({now})"
 
     parts = [f"word_art {st.get('template') or 'soft'}", f"font {st.get('typeface') or 'own'}",
              f"colour {st.get('text_color') or 'auto'}", f"outline {dress('outline')}",
@@ -491,15 +493,23 @@ def _overlay_op(op: dict) -> dict:
     return op
 
 
-# The Captions tab's own starting values when a switch is turned on, the
-# chat's names for its sliders, and the slider that turns each one off.
-DRESS_ON = {"outline": {"color": "#000000", "width": 0.12},
-            "shadow": {"color": "#000000", "opacity": 0.7, "blur": 0.4, "dist": 0.06},
-            "backdrop": {"color": "#000000", "opacity": 0.85, "round": 0.25}}
+# Each word art's own edge, box or band and shadow, as overlayDraw.ts's
+# TEMPLATES and softTpl (None = Soft) have them -- only what dressOf reads --
+# so a switch the chat turns on starts where the Captions tab's would.
+ART_DRESS: dict = {
+    None: {"shadow": (0.35, 0.04)}, "outlined": {"stroke": ("#000000", 0.13)}, "bold": {"stroke": ("#000000", 0.2)},
+    "label": {"box": ("#ffffff", 0.5)}, "highlight": {"marker": True}, "handwritten": {"shadow": True},
+    "tape": {"box": ("#f4efe3", 0.08)}, "pop": {"stroke": ("#1a1a1a", 0.18)}, "quiet": {"shadow": True},
+    "neon": {"stroke": ("#ff7ae6", 0.04)}, "glow": {}, "gradient": {"stroke": ("#1a1a1a", 0.14)},
+    "extrude": {"stroke": ("#1a1a1a", 0.08)}, "retro": {},
+}
+# The chat's names for the tab's sliders, the slider that turns each one off,
+# and where the tab puts it when its switch is turned on.
 DRESS_ARGS = {"outline": {"width": "width"},
               "shadow": {"opacity": "strength", "blur": "softness", "dist": "distance"},
               "backdrop": {"opacity": "opacity", "round": "round"}}
 DRESS_OFF = {"outline": "width", "shadow": "opacity", "backdrop": "opacity"}
+TURN_ON = {"outline": 0.12, "shadow": 0.7, "backdrop": 0.85}
 COLOURS = {"white": "#ffffff", "black": "#000000", "red": "#e53935", "yellow": "#ffd400", "pink": "#ff6fae",
            "blue": "#2f80ed", "green": "#2e9e5b", "orange": "#ff8a00", "purple": "#8e5cf7",
            "grey": "#9e9e9e", "gray": "#9e9e9e"}
@@ -516,36 +526,74 @@ def _colour(v: object) -> str | None:
     return ov._hex(s)
 
 
-def _num(v: object, lo: float, hi: float, fallback: float, zero_ok: bool = True, pct: bool = True) -> float:
-    """A number the model gave, inside the slider's range. Not a number, below
-    zero (or zero where that contradicts "on") -> `fallback`; a percentage
-    like 12 for 0.12, as the tab's sliders read, is taken as meant."""
+def _dark(hex_: str) -> bool:
+    """overlayDraw's test for a dark colour (relative luminance under 0.35)."""
+    n = int(hex_[1:], 16)
+    lin = [(x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4)
+           for x in (((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255)]
+    return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2] < 0.35
+
+
+def _dress_of(st: dict) -> dict:
+    """The outline, shadow and background the captions show now, set by hand
+    or the word art's own, as overlayDraw.ts's dressOf reads them (a picked
+    colour tints the word art's box or edge first, as `tinted` does)."""
+    art = dict(ART_DRESS.get(st.get("template"), {}))
+    c = _colour(st.get("text_color"))
+    if c and not st.get("backdrop"):
+        if "box" in art:
+            art["box"] = (c, art["box"][1])
+        elif "marker" in art:
+            pass
+        elif "stroke" in art:
+            art["stroke"] = ("#ffffff" if _dark(c) else "#000000", art["stroke"][1])
+        elif _dark(c):
+            art["stroke"], art["shadow"] = ("#ffffff", 0.1), False
+    stroke, box, shadow = art.get("stroke"), art.get("box"), art.get("shadow")
+    return {
+        "outline": st.get("outline") or ({"color": "#000000" if stroke[0] == "#1a1a1a" else stroke[0], "width": stroke[1]}
+                                         if stroke else {"color": "#000000", "width": 0.0}),
+        "shadow": st.get("shadow") or ({"color": "#000000", "opacity": 0.7, "blur": shadow[0], "dist": shadow[1]}
+                                       if isinstance(shadow, tuple) else
+                                       {"color": "#000000", "opacity": 0.7 if shadow else 0.0, "blur": 0.4, "dist": 0.06}),
+        "backdrop": st.get("backdrop") or ({"color": box[0], "opacity": 1.0, "round": box[1]} if box
+                                           else {"color": "#000000", "opacity": 0.0, "round": 0.25}),
+    }
+
+
+def _num(v: object, lo: float, hi: float, fallback: float, zero_ok: bool = True) -> float:
+    """A number the model gave, inside the slider's range. Not a number or
+    below zero (-1 = as it is), or zero where that contradicts "on" ->
+    `fallback`; a percentage like 12 for 0.12 or 150 for a 1.5 scale, as the
+    tab's sliders read, is taken as meant."""
     if not isinstance(v, (int, float)) or isinstance(v, bool) or v != v or v < 0 or (v == 0 and not zero_ok):
         return fallback
-    if pct and v >= 2 and lo <= v / 100 <= hi:
+    if v >= 2 and v > hi and lo <= v / 100 <= hi:
         v = v / 100
     return round(min(hi, max(lo, float(v))), 3)
 
 
-def _dress(field: str, ask: object, now: dict | None) -> tuple[bool, dict | None]:
+def _dress(field: str, ask: object, now: dict) -> tuple[bool, dict | None]:
     """(asked, value) for one of outline / shadow / backdrop: own = the word
-    art's own (None), none = switched off, on = these numbers, with what it
-    has now (else the tab's starting values) for any the model left out."""
+    art's own (None), none = switched off, on = these numbers, starting from
+    what the captions show now (`now`, from _dress_of) for any left as -1."""
     ask = ask if isinstance(ask, dict) else {}
     how = ask.get("set")
     if how == "own":
         return True, None
-    base = {**DRESS_ON[field], **(now or {})}
     off = DRESS_OFF[field]
     if how == "none":
-        return True, {**base, off: 0.0}
+        return True, {**now, off: 0.0}
     if how != "on":
         return False, None
-    d = {"color": _colour(ask.get("color")) or base["color"]}
+    d = {"color": _colour(ask.get("color")) or now["color"]}
     for n, (lo, hi) in ov.DRESS[field].items():
-        fb = DRESS_ON[field][n] if n == off and base[n] <= 0 else base[n]
+        fb = TURN_ON[field] if n == off and now[n] <= 0 else now[n]
         d[n] = _num(ask.get(DRESS_ARGS[field][n]), lo, hi, fb, zero_ok=n != off)
     return True, d
+
+
+DRESSED = ("outline", "shadow", "backdrop", "thick")
 
 
 def _caption_style(c: dict, now: dict) -> dict:
@@ -554,10 +602,11 @@ def _caption_style(c: dict, now: dict) -> dict:
     never resets the rest; own / soft / auto are the tab's None."""
     out: dict = {}
     art = c.get("word_art")
-    if art == "soft":
-        out["template"] = None
-    elif art in ov.TEMPLATES:
-        out["template"] = art
+    if art == "soft" or art in ov.TEMPLATES:
+        out["template"] = None if art == "soft" else art
+        if out["template"] != now.get("template"):
+            # a new word art starts fresh, as the tab's tile does (StyleBars PLAIN)
+            out.update(dict.fromkeys(DRESSED))
     font = c.get("font")
     if font == "own":
         out["typeface"] = None
@@ -568,15 +617,16 @@ def _caption_style(c: dict, now: dict) -> dict:
         out["text_color"] = None
     elif _colour(colour):
         out["text_color"] = _colour(colour)
+    shows = _dress_of({**now, **out})
     for field, arg in (("outline", "outline"), ("shadow", "shadow"), ("backdrop", "background")):
-        asked, v = _dress(field, c.get(arg), now.get(field))
+        asked, v = _dress(field, c.get(arg), shows[field])
         if asked:
             out[field] = v
     bold = c.get("boldness") if isinstance(c.get("boldness"), dict) else {}
     if bold.get("set") == "own":
         out["thick"] = None
     elif bold.get("set") == "on":
-        out["thick"] = _num(bold.get("amount"), 0.0, ov.THICK_MAX, 0.06)
+        out["thick"] = _num(bold.get("amount"), 0.0, ov.THICK_MAX, now.get("thick") or 0.06)
     if c.get("animation") == "own":
         out["enter"] = None
     elif c.get("animation") in ov.ENTERS:
@@ -594,21 +644,31 @@ def _lowered(d: object) -> dict:
             for k, v in d.items()}
 
 
-def _placed(p: dict, o: dict | None) -> dict:
-    """edit_overlay's placement -> the overlay's place / size / title look, as
-    dragging it on the picture or the Captions tab would set them."""
+def _usual(o: dict, st: dict) -> dict:
+    """Where an overlay nobody has placed sits, as the Captions tab reckons it
+    (CaptionWords): a caption on the captions' line, others by their spot."""
+    pos = ("center" if st.get("captions") == "center" else "bottom") if o.get("kind") == "caption" \
+        else str(o.get("pos") or ov.KINDS.get(o.get("kind"), {}).get("pos") or "bottom")
+    return {"x": 0.5, "y": 0.2 if pos.startswith("top") else 0.5 if pos == "center" else 0.8, "scale": 1.0}
+
+
+def _placed(p: dict, o: dict | None, st: dict) -> dict:
+    """A placement -> the overlay's place / size / title look, as dragging it
+    on the picture or the Captions tab would set them. -1 = as it is."""
+    o = o or {}
+    if o.get("kind") == "chapters":
+        return {}          # the bar is drawn in its own strip; the tab offers it no place or size
     out: dict = {}
-    now = (o or {}).get("place") or {}
+    now = o.get("place") or _usual(o, st)
     if p.get("mode") == "usual":
         out["place"] = None
     elif p.get("mode") == "set":
-        out["place"] = {"x": _num(p.get("x"), 0.0, 1.0, now.get("x", 0.5)),
-                        "y": _num(p.get("y"), 0.0, 1.0, now.get("y", 0.5)),
+        out["place"] = {"x": _num(p.get("x"), 0.0, 1.0, now["x"]), "y": _num(p.get("y"), 0.0, 1.0, now["y"]),
                         "scale": _num(p.get("scale"), ov.SCALE_MIN, ov.SCALE_MAX, now.get("scale", 1.0),
-                                      zero_ok=False, pct=False)}
+                                      zero_ok=False)}
     if str(p.get("size")).upper() in ov.SIZES:
         out["size"] = str(p["size"]).upper()
-    if p.get("title_look") in ov.HEADING_LOOKS and (o is None or o.get("kind") == "heading"):
+    if p.get("title_look") in ov.HEADING_LOOKS and o.get("kind") in (None, "heading"):
         out["look"] = p["title_look"]
     return out
 
@@ -617,29 +677,35 @@ def expand(ops: list[dict], board: dict | None) -> list[dict]:
     """The model's ops as board ops, read against the edit as it is now:
     caption_style becomes the overlay_style op the Captions tab sends, a
     placement becomes the overlay's place / size / title look, and an edit of
-    all_captions / all_titles one edit per overlay of those kinds (their words
-    and timing stay each one's own)."""
+    all_captions / all_titles one edit per overlay of that kind (their words
+    and timing stay each one's own). What can't be done still reaches the
+    board, so the turn reports it skipped rather than saying nothing."""
     overlays = {o["id"]: o for o in (board or {}).get("overlays") or []}
+    st = ov.style_of(board)
     out = []
     for op in ops:
         op = dict(op)
         captions, placement = _lowered(op.pop("captions", None)), _lowered(op.pop("placement", None))
         if op.get("op") == "caption_style":
-            patch = _caption_style(captions, ov.style_of(board))
-            if patch:
-                out.append({"op": "overlay_style", **patch})
+            patch = _caption_style(captions, st)
+            st = {**st, **patch}      # a second one in the same answer builds on the first
+            out.append({"op": "overlay_style", **patch})   # empty: "nothing to change"
+            continue
+        if op.get("op") == "add_overlay":
+            out.append({**op, **{k: v for k, v in _placed(placement, {"kind": op.get("kind")}, st).items()
+                                 if v is not None}})
             continue
         if op.get("op") != "edit_overlay":
             out.append(op)
             continue
-        kinds = ALL_OF.get(op.get("overlay"))
-        if kinds is None:
-            out.append({**op, **_placed(placement, overlays.get(op.get("overlay")))})
+        kind = ALL_OF.get(op.get("overlay"))
+        if kind is None:
+            out.append({**op, **_placed(placement, overlays.get(op.get("overlay")), st)})
             continue
-        for o in overlays.values():
-            one = _placed(placement, o)
-            if o["kind"] in kinds and one:
-                out.append({"op": "edit_overlay", "overlay": o["id"], **one})
+        targets = [o for o in overlays.values() if o["kind"] == kind]
+        many = [{"op": "edit_overlay", "overlay": o["id"], **one} for o in targets if (one := _placed(placement, o, st))]
+        # none of that kind: the board says so; nothing to change: it says that
+        out += many or [{"op": "edit_overlay", "overlay": targets[0]["id"] if targets else op["overlay"]}]
     return out
 
 
