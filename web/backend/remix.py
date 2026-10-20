@@ -54,6 +54,7 @@ from cutgrammar.media import AUDIO_SR, load_audio
 
 from . import board as bd
 from . import export
+from .helpers import prebuilt
 from . import indexer
 from . import reference as ref
 from . import select as sel
@@ -449,6 +450,8 @@ try! rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWith
 
 
 def text_tool() -> Path:
+    if (exe := prebuilt("vibetext")):
+        return exe
     d = indexer.CACHE / "bin"
     d.mkdir(parents=True, exist_ok=True)
     h = hashlib.sha1(SWIFT.encode()).hexdigest()[:10]

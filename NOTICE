@@ -100,3 +100,15 @@ Bangers, Fredoka, Pacifico, Lobster, Caveat, Playfair Display and Courier
 Prime are licensed under the SIL Open Font License 1.1; Luckiest Guy and
 Permanent Marker under the Apache License 2.0. Files from Fontsource
 (https://fontsource.org), unmodified; each folder carries its licence.
+
+VibeCut.app (the Mac download, built by mac/build.sh) also carries, unchanged:
+
+FFmpeg — https://ffmpeg.org
+Static macOS arm64 build by Martin Riedl, https://ffmpeg.martin-riedl.de
+Licensed under the GNU General Public License v3 (this build includes GPL
+components such as x264). Source: https://ffmpeg.org/download.html, and
+the build scripts at https://gitlab.com/martinr92/ffmpeg. The exact version
+is in the app at Contents/Resources/bin/FFMPEG-VERSION.txt.
+
+yt-dlp — https://github.com/yt-dlp/yt-dlp
+Released into the public domain (The Unlicense).

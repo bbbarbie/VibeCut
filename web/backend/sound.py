@@ -29,6 +29,8 @@ from pathlib import Path
 
 from cutgrammar.signals import ClipSignals, with_voice
 
+from .helpers import prebuilt
+
 SRC = Path(__file__).parent / "sound" / "vibesound.swift"
 WORKERS = 4
 _lock = threading.Lock()
@@ -46,6 +48,8 @@ def ensure_built() -> Path | None:
     global _binary, _failed
     with _lock:
         if _binary or _failed:
+            return _binary
+        if shutil.which("ffmpeg") and (_binary := prebuilt("vibesound")):
             return _binary
         if sys.platform != "darwin" or not shutil.which("swiftc") or not shutil.which("ffmpeg"):
             _failed = "not on macOS with swiftc and ffmpeg"

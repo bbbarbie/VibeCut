@@ -18,6 +18,8 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from .helpers import prebuilt
+
 SRC = Path(__file__).parent / "vision" / "vibevision.swift"
 _lock = threading.Lock()
 _binary: Path | None = None
@@ -37,6 +39,8 @@ def ensure_built() -> Path | None:
     global _binary, _failed
     with _lock:
         if _binary or _failed:
+            return _binary
+        if (_binary := prebuilt("vibevision")):
             return _binary
         if sys.platform != "darwin" or not shutil.which("swiftc"):
             _failed = "not on macOS with swiftc"

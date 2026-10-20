@@ -22,6 +22,7 @@ from pathlib import Path
 import numpy as np
 
 from . import indexer
+from .helpers import prebuilt
 
 SRC = Path(__file__).parent / "speech" / "vibespeech.swift"
 LOCALES = {"zh-CN": "Chinese", "en-US": "English"}
@@ -42,6 +43,8 @@ def ensure_built() -> Path:
             return _binary
         if _failed:
             raise SpeechError(_failed)
+        if (_binary := prebuilt("vibespeech")):
+            return _binary
         if sys.platform != "darwin" or not shutil.which("swiftc"):
             _failed = "Transcribing needs macOS 26 or later with the Xcode command-line tools."
             raise SpeechError(_failed)
