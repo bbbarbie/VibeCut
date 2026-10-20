@@ -355,6 +355,32 @@ def main() -> int:
         check("one answer reads as it goes: the dropped caption isn't edited, the added one is sized too",
               [g["overlay"] for g in got if g["op"] == "edit_overlay"] == caps[1:]
               and next(g for g in got if g["op"] == "add_overlay").get("size") == "S", json.dumps(got)[:400])
+        got = llm.expand([op(op="add_overlay", kind="caption", text="x", shot=bd.key(shots[2]),
+                             placement=placement(mode="set", x=-1, y=0.15, scale=-1)),
+                          op(op="edit_overlay", overlay="all_captions", placement=placement(mode="usual"))],
+                         A.SESSION.board)
+        check("all back to their usual spot, the one added in the same answer too", "place" not in got[0], json.dumps(got[0]))
+        t = chat("lowercase every caption", [op(op="edit_overlay", overlay="all_captions", text="paris")])
+        check("words for every caption at once: says why it couldn't", t.skipped
+              == ["every one of the captions at once can only be moved, sized or removed"], str(t.skipped))
+        first_beat = next(o["anchor"] for o in kinds("caption") if o["anchor"]["to"] == "shot")
+        t = chat("cut the opening, smaller captions", [op(op="drop_beat", beat=beats[0]),
+                                                      op(op="edit_overlay", overlay="all_captions", placement=placement(size="s"))])
+        check("a part cut in the same answer takes its captions with it, no false Skipped",
+              not t.skipped and all(o["size"] == "S" for o in kinds("caption")), str(t.skipped) + json.dumps(first_beat))
+        A.SESSION.toggle(t.id, cat, lambda d: PROPOSALS)
+        A.SESSION.add({"kind": "direct", "text": "red edge", "ops": [
+            {"op": "overlay_style", "template": None, "outline": {"color": "#ff0000", "width": 0.2}}]}, cat, lambda d: PROPOSALS)
+        t = chat("the time story, red outline", [op(op="choose_option", option="time"), op(op="caption_style", captions=captions(
+            outline={"set": "on", "color": "#ff0000", "width": 0.2}))])
+        check("a story chosen in the same answer starts clean, and the outline lands on it",
+              not t.skipped and style().get("outline") == {"color": "#ff0000", "width": 0.2}, str(t.skipped))
+        t = chat("the time story, no captions", [op(op="choose_option", option="time"),
+                                                op(op="drop_overlay", overlay="all_captions")])
+        check("and has no captions to remove", t.skipped == ["there are no captions in this edit"], str(t.skipped))
+        A.SESSION.toggle(t.id, cat, lambda d: PROPOSALS)
+        A.SESSION.toggle(A.SESSION.turns[-2].id, cat, lambda d: PROPOSALS)
+        check("undone, the words are back", len(kinds("caption")) == 4, str(len(kinds("caption"))))
         t = chat("no chapter titles", [op(op="drop_overlay", overlay="all_titles")])
         check("every chapter title removed at once, one undoable turn", not kinds("heading") and not t.skipped
               and kinds("title"), str(t.skipped))

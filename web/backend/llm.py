@@ -136,9 +136,9 @@ Words on screen (OVERLAYS in the state). They hang off a beat or a shot and move
 
 How every caption looks, as in the Captions tab (CAPTION STYLE in the state is what's set now):
 - caption_style {captions}: every field is keep (leave it as it is) unless the user asked about it. Picking a different word art starts it fresh, with its own outline, shadow, background and boldness, unless those are asked for in the same answer:
-  - word_art: soft (the default: small lowercase words with a soft shadow, low on the left), outlined (serif letters with a black edge, the time on its own line), bold (big heavy capitals), label (dark words on a white box), highlight (dark words on a yellow marker), handwritten (handwriting, lowercase), tape (typewriter words on a strip), pop (chunky letters in a bright colour), quiet (tiny widely spaced capitals), neon (pink glowing script), glow (bold letters with a blue glow), gradient (yellow fading to pink), extrude (3D letters with dark sides), retro (white capitals with a solid pink drop behind them). Extrude's sides and retro's drop are part of the word art, not its shadow: shadow none won't remove them; to lose them, pick another word art.
+  - word_art: soft (the default: small lowercase words with a soft shadow, low on the left), outlined (serif letters with a black edge, the time on its own line), bold (big heavy capitals), label (dark words on a white box), highlight (dark words on a yellow marker), handwritten (handwriting, lowercase), tape (typewriter words on a strip), pop (white chunky letters, the longest word or two in yellow or blue), quiet (tiny widely spaced capitals), neon (pink glowing script), glow (bold letters with a blue glow), gradient (yellow fading to pink), extrude (3D letters with dark sides), retro (white capitals with a solid pink drop behind them). Extrude's sides and retro's drop are part of the word art, not its shadow: shadow none won't remove them; to lose them, pick another word art.
   - font: own (the word art's or the look's own font), or one of the fonts that come with VibeCut: tiktok-sans, montserrat, poppins, bebas-neue (tall capitals), anton (condensed and heavy), archivo-black, luckiest-guy (cartoon), bangers (comic), fredoka (rounded), permanent-marker, caveat (handwriting), pacifico (script), lobster (script), playfair-display (serif), courier-prime (typewriter). Only these: for any other font, say it isn't in VibeCut and offer the nearest.
-  - colour: auto or "#rrggbb". Under soft, auto means VibeCut picks, for each caption, a colour that stands out from the picture behind it, adding a glow where nothing does ("readable", "contrasting", "stands out from the background" then all mean auto). Under any other word art, auto is that word art's own colours, which read by its own edge, box or glow and never change with the picture; there, making captions stand out is better done with outline, shadow or background (or a #rrggbb). Under label, tape and highlight a colour fills the box or marker and the words turn black or white, whichever reads; to colour those words instead, also set background on with the box's own colour (label #ffffff, tape #f4efe3; a background replaces highlight's marker).
+  - colour: auto or "#rrggbb". Under soft, auto means VibeCut picks, for each caption, a colour that stands out from the picture behind it (under the playful look it is the look's own colour); "readable" or "contrasting" means auto when a #rrggbb is set now, and when colour is already auto, captions are made easier to read with outline, shadow or background. Under any other word art, auto is that word art's own colours, which read by its own edge, box or glow and never change with the picture; there, making captions stand out is better done with outline, shadow or background (or a #rrggbb). Under label, tape and highlight a colour fills the box or marker and the words turn black or white, whichever reads; to colour those words instead, also set background on with the box's own colour (label #ffffff, tape #f4efe3; a background replaces highlight's marker). Under gradient the letters keep their yellow-to-pink fill whatever colour is picked (only the edge changes); under pop the longest word or two keep pop's yellow and blue.
   - outline, shadow, background: set is keep, none (take it away), own (the word art's own) or on, with its colour ("#rrggbb", or keep) and numbers: outline width 0.05 (thin) to 0.25 (thick), at most 0.4; shadow strength 0 to 1 (usually 0.7), softness 0 to 1.5 (usually 0.4), distance 0 to 0.4 (usually 0.06); background opacity 0 to 1, round 0 (square) to 0.5 (pill). Any number you aren't changing: -1 (as it is now, which CAPTION STYLE shows).
   - boldness: set keep, own or on, with amount 0 (regular) to 0.15 (heaviest); 0.06 reads as bolder.
   - animation, how captions come in: own (the look's own), fade, pop, slide, stamp, type (typewriter) or word (word by word).
@@ -146,7 +146,7 @@ How every caption looks, as in the Captions tab (CAPTION STYLE in the state is w
   Case: soft and handwritten show captions in lowercase; bold and quiet in capitals; retro and extrude in their own font, and the fonts bebas-neue, luckiest-guy and bangers, only have capitals whatever is typed; every other word art (and retro or extrude with another font) shows the words as typed. The look never changes a caption's case. Under every word art except soft, a caption's place name (its sub, the small line above) shows in capitals. To change the words themselves (lowercase them, say), use edit_overlay with the new text; where letters will still show as capitals, say so.
 
 The look (vibe) of the words on screen, for the whole video — font, colours and how words move:
-- set_look {look}: one of clean (crisp, simple), cozy (warm, handwritten, soft), quiet (still, spare), cinematic (slow, wide, small caps), film (old camera, typewriter), playful (bright, bouncy, on the beat), hype (fast, loud, slams on the beat). "Make it feel cozier" → set_look cozy. Anything the creator set by hand (a font, a colour) is kept.
+- set_look {look}: one of clean (crisp, simple), cozy (warm, soft, a lowercase serif), quiet (still, spare), cinematic (slow, wide, small caps), film (old camera, typewriter), playful (bright, bouncy, on the beat), hype (fast, loud, slams on the beat). "Make it feel cozier" → set_look cozy. Anything the creator set by hand (a font, a colour) is kept.
 
 How the sound crosses a cut. Between parts the place's sound already carries a beat past the cut; inside a part the sound cuts with the picture.
 - set_join {shot, sound}: the cut *after* that shot. sound is carry_out (the sound runs on under the next shot — "let the sound flow into the next part", "don't let it cut off"), carry_in (the next shot's sound starts early — "hear the next place before we see it"), cut (hard — "a clean break"), or default (back to the automatic choice).
@@ -687,21 +687,30 @@ def _placed(p: dict, o: dict | None, st: dict) -> dict:
     return out
 
 
-def expand(ops: list[dict], board: dict | None) -> list[dict]:
+def expand(ops: list[dict], board: dict | None, cat: bd.Catalog | None = None,
+           proposals: dict | None = None) -> list[dict]:
     """The model's ops as board ops, read against the edit as it is now:
     caption_style becomes the overlay_style op the Captions tab sends, a
     placement becomes the overlay's place / size / title look, and an edit of
     all_captions / all_titles one edit per overlay of that kind (their words
     and timing stay each one's own). What can't be done still reaches the
-    board, so the turn reports it skipped rather than saying nothing."""
+    board, so the turn reports it skipped rather than saying nothing. With
+    `cat`, each op reads the edit as the ops before it in the answer leave it
+    (a part cut takes its captions with it, a story chosen has none)."""
     # the overlays and style as each op will find them: earlier ops in the
     # same answer (a caption dropped or moved, a style set) count
     overlays = {o["id"]: dict(o) for o in (board or {}).get("overlays") or []}
+    first = set(overlays)
     st = ov.style_of(board)
     kept: set = set()
     out: list[dict] = []
     for op in ops:
         op = dict(op)
+        if cat is not None and out:
+            trial = bd.applied(board, out, cat, proposals)
+            # the board's own overlays as they are now; ones added in this answer have no id yet
+            overlays = {o["id"]: dict(o) for o in (trial or {}).get("overlays") or [] if o["id"] in first}
+            st = ov.style_of(trial)
         captions, placement = _lowered(op.pop("captions", None)), _lowered(op.pop("placement", None))
         if op.get("op") == "caption_style":
             patch = _caption_style(captions, st, kept)
@@ -738,11 +747,13 @@ def expand(ops: list[dict], board: dict | None) -> list[dict]:
                 many.append({"op": "edit_overlay", "overlay": o["id"], **one})
         added = [a for a in out if a.get("op") == "add_overlay" and a.get("kind") == kind]
         for a in added:      # added earlier in this answer: no id yet, so placed where it's added
-            a.update({k: v for k, v in _placed(placement, {"kind": kind, "place": a.get("place")}, st).items()
-                      if v is not None})
-        # none of that kind: the board says so; nothing to change: it says that
-        out += many or ([] if added else
-                        [{"op": "edit_overlay", "overlay": targets[0]["id"] if targets else op["overlay"]}])
+            for k, v in _placed(placement, {"kind": kind, "place": a.get("place")}, st).items():
+                if v is None:
+                    a.pop(k, None)      # back to its usual spot: an add with no place
+                else:
+                    a[k] = v
+        # nothing it could do: the board says why (none of them, or only moved / sized / removed at once)
+        out += many or ([] if added else [{"op": "edit_overlay", "overlay": op["overlay"]}])
     return out
 
 
