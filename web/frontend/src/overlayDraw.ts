@@ -407,8 +407,26 @@ export function wrap(measure: (s: string) => number, text: string, maxW: number,
   return lines
 }
 
+// The words the video writes for itself (a stop's line, the title, the
+// sign-off, a name) take the Captions panel's look too, the way CapCut's text
+// panel edits whatever text is picked (sarah, 2026-10-20: the colour, shadow
+// and font did nothing on a made video's "Columbia University, morning",
+// which is a part label). Until something is set they keep the look's own.
+const LABELS: Partial<Record<Overlay['kind'], number>> = { part: 0.058, title: 0.09, end: 0.07, name: 0.05 }
+
+function labelTpl(o: Overlay, style: OverlayStyle): Tpl | null {
+  const size = LABELS[o.kind]
+  if (!size || !(style.template || isDressed(style))) return null
+  // a template is sized for a caption: a label keeps its own size beside it
+  if (style.template) {
+    const t = tplFor(style)!
+    return { ...t, size: t.size * (size / LABELS.part!), side: undefined }
+  }
+  return dress({ family: FAMILY[style.font], weight: WEIGHT[style.font].bold, size, color: style.text_color || o.ink || style.color, shadow: true }, style)
+}
+
 function linesFor(o: Overlay, style: OverlayStyle, u: number, chars: number): Line[] {
-  const face = o.kind === 'caption' ? fontById(style.typeface) : null
+  const face = o.kind === 'caption' || LABELS[o.kind] ? fontById(style.typeface) : null
   // a picked font letters every caption line; the template keeps its edge,
   // backing and case, the look its colour and motion
   const lettered = (lines: Line[]) => !face ? lines
@@ -420,6 +438,8 @@ function linesFor(o: Overlay, style: OverlayStyle, u: number, chars: number): Li
   if (o.kind === 'caption') {
     return lettered(templateLines(o, dress(softTpl(o, style), style), u, chars))
   }
+  const label = labelTpl(o, style)
+  if (label) return lettered(templateLines(o, label, u, chars))
   const lines = baseLines(o, style, u, chars)
   const m = style.motion
   if (!m || o.kind === 'date') return lettered(lines)
@@ -435,7 +455,7 @@ function linesFor(o: Overlay, style: OverlayStyle, u: number, chars: number): Li
 function baseLines(o: Overlay, style: OverlayStyle, u: number, chars: number): Line[] {
   const s = SIZE[o.size]
   const text = chars < o.text.length ? o.text.slice(0, chars) : o.text
-  const ink = (o.kind === 'caption' && style.text_color) || o.ink || style.color
+  const ink = ((o.kind === 'caption' || LABELS[o.kind]) && style.text_color) || o.ink || style.color
   style = o.ink2 ? { ...style, accent: o.ink2 } : style
   switch (o.kind) {
     case 'title':
