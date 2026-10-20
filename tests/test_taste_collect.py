@@ -37,8 +37,8 @@ def _setup(tmp: Path) -> None:
     measure.OUT = tmp / "measurements"
 
 
-def _video(i: int, views: int, likes: int, dur: int = 900) -> dict:
-    return {"webpage_url": f"https://y/{i}", "title": f"v{i}", "channel": "Some One", "duration": dur,
+def _video(i: int, views: int, likes: int, dur: int = 900, title: str = "") -> dict:
+    return {"webpage_url": f"https://y/{i}", "title": title or f"paris vlog {i}", "channel": "Some One", "duration": dur,
             "view_count": views, "like_count": likes, "extractor_key": "Youtube"}
 
 
@@ -48,7 +48,8 @@ def test_discover_picks_against_the_creator() -> None:
         vids = {f"https://y/{i}": v for i, v in enumerate([
             _video(0, 1000, 10), _video(1, 2000, 100),   # 1: well watched, 5% -> good
             _video(2, 500, 5), _video(3, 400, 2),        # 3: less watched, 0.5% -> ordinary
-            _video(4, 3000, 60), _video(5, 100, 50, dur=30)])}   # 5: too short for long, ignored
+            _video(4, 3000, 60), _video(5, 100, 50, dur=30),     # 5: too short for long, ignored
+            _video(6, 5000, 500, title="fall haul + GRWM")])}    # 6: best ratio, but not a vlog
         def fake_json(args, timeout=120):
             q = args[-1]
             if q.startswith("ytsearch1:"):
@@ -86,7 +87,16 @@ def test_measure_keeps_numbers_only() -> None:
         assert clip.exists()   # a local file is the creator's own; only downloads are deleted
 
 
+def test_vlog_filter() -> None:
+    assert collect.is_vlog({"title": "a week in tokyo"})
+    assert collect.is_vlog({"title": "day in my life as a columbia student"})
+    assert not collect.is_vlog({"title": "GRWM for my first day of class"})
+    assert not collect.is_vlog({"title": "college haul vlog"})
+    assert not collect.is_vlog({"title": "my favourite lip products"})
+
+
 if __name__ == "__main__":
+    test_vlog_filter()
     test_discover_picks_against_the_creator()
     test_measure_keeps_numbers_only()
     print("ok")

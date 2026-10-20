@@ -49,6 +49,23 @@ LONG_S = 600.0         # a long vlog is measured on its first ten minutes
 LONG_RANGE = (300, 2700)   # what counts as a long vlog, seconds
 SHORT_MAX = 180            # ...and a short one
 FORMAT = "bv*[height<=480]+ba/b[height<=480]/b"
+BRANCH = "origin/claude/vlog-taste-model-i4z3mi"
+
+# sarah, 2026-10-20: "filter mainly for vlogs". A creator's channel also
+# carries hauls, get-ready-with-me, Q&As and podcasts; those are cut by
+# other rules (talking to a mirror, a product on a table) and would teach
+# the wrong rhythm. A title has to say it is a vlog, and must not say it
+# is one of those.
+VLOG = ("vlog", "day in my life", "day in the life", "diml", "a day ", "spend the day", "week in",
+        "weekend in", "days in", "trip", "travel", "a week", "24 hours", "morning routine",
+        "come with me", "life in", "living in", "college", "uni ", "semester", "study with me")
+NOT_VLOG = ("grwm", "get ready with me", "haul", "q&a", "q & a", "podcast", "reaction", "review",
+            "unboxing", "makeup tutorial", "storytime", "try on", "try-on", "ranking", "challenge")
+
+
+def is_vlog(d: dict) -> bool:
+    text = " ".join([d.get("title") or "", " ".join(d.get("tags") or [])]).lower() + " "
+    return any(w in text for w in VLOG) and not any(w in text for w in NOT_VLOG)
 
 
 def ytdlp() -> str:
@@ -107,6 +124,58 @@ def _ratio(d: dict) -> float | None:
     return l / v if v and l is not None else None
 
 
+# --- what Claude added on the branch -----------------------------------------
+
+def _origin_rows(path: Path) -> list[dict]:
+    """The branch's copy of a list: links sarah sent in the thread, strikes."""
+    try:
+        rel = path.relative_to(HERE.parent).as_posix()
+    except ValueError:
+        return []
+    p = subprocess.run(["git", "show", f"{BRANCH}:{rel}"], capture_output=True, text=True, cwd=HERE.parent)
+    return list(csv.DictReader(p.stdout.splitlines())) if p.returncode == 0 else []
+
+
+STAGE = {"": 0, "listed": 1, "failed": 1, "not a vlog": 2, "measured": 3}
+
+
+def sync(log) -> None:
+    """Bring in what the branch has without losing what this Mac measured."""
+    for path in [*GROUPS.values()]:
+        head, rows = _rows(path)
+        by_url = {r["url_or_file"]: r for r in rows}
+        for o in _origin_rows(path):
+            mine = by_url.get(o["url_or_file"])
+            if mine is None:
+                o = {k: o.get(k, "") for k in head}
+                if any(r["id"] == o["id"] for r in rows):
+                    o["id"] = _next_id(o["group"], rows)
+                rows.append(o)
+                log(f"new from the thread: {o['id']} {o['url_or_file']}")
+            elif STAGE.get(o.get("status", ""), 0) > STAGE.get(mine.get("status", ""), 0):
+                mine.update({k: o.get(k, "") for k in head})
+        # rows found before the vlog filter existed
+        for r in rows:
+            if r.get("source") == "web" and r.get("status") == "listed" and not is_vlog({"title": r.get("title")}):
+                r["status"] = "not a vlog"
+        _save(path, head, rows)
+    head, creators = _rows(CREATORS)
+    known = {(c["group"], c["creator"]): c for c in creators}
+    for o in _origin_rows(CREATORS):
+        c = known.get((o["group"], o["creator"]))
+        if c is None:
+            creators.append({k: o.get(k, "") for k in head})
+        elif o["status"] != "candidate" and c["status"] == "candidate":
+            c["status"] = o["status"]          # struck or skipped in the thread
+    # a creator whose picks all turned out not to be vlogs is looked at again
+    kept = {r["creator"] for path in GROUPS.values() for r in _rows(path)[1]
+            if r.get("source") == "web" and r.get("status") != "not a vlog"}
+    for c in creators:
+        if c["status"] == "discovered" and c["creator"] not in kept:
+            c["status"] = "candidate"
+    _save(CREATORS, head, creators)
+
+
 # --- discover ---------------------------------------------------------------
 
 def _channel(name: str, platform: str, group: str) -> str | None:
@@ -138,20 +207,20 @@ def discover(log) -> None:
             c["status"] = "not found"
             log(f"{name}: channel not found")
             continue
-        flat = _json(["--flat-playlist", "--playlist-items", f"1:{RECENT * 2}", where], timeout=300)
+        flat = _json(["--flat-playlist", "--playlist-items", f"1:{RECENT * 4}", where], timeout=300)
         vids = []
         for e in flat:
             u = e.get("url") or e.get("webpage_url")
             if not u:
                 continue
             d = info(u)
-            if d and _fits(group, d) and _ratio(d) is not None:
+            if d and _fits(group, d) and is_vlog(d) and _ratio(d) is not None:
                 vids.append(d)
             if len(vids) >= RECENT:
                 break
         if len(vids) < 3:
-            c["status"] = "too few videos"
-            log(f"{name}: {len(vids)} usable videos at {where}")
+            c["status"] = "too few vlogs"
+            log(f"{name}: only {len(vids)} vlogs among the recent videos at {where}")
             continue
         mid = statistics.median(d["view_count"] for d in vids)
         upper = [d for d in vids if d["view_count"] >= mid]
@@ -195,6 +264,10 @@ def measure_one(row: dict, log) -> None:
         d = info(url)
         if d:
             _counts(row, d)
+    if row.get("source") == "web" and not is_vlog({"title": row.get("title")}):
+        row["status"] = "not a vlog"
+        log(f"{row['id']}: not a vlog ({row['title'][:40]!r}), skipped")
+        return
     tmp = Path(tempfile.mkdtemp(prefix="taste-"))
     try:
         if url.startswith("http"):
@@ -239,6 +312,7 @@ def main() -> None:
     ap.add_argument("--only", choices=["discover", "measure"])
     a = ap.parse_args()
     log = lambda s: print(s, flush=True)
+    sync(log)
     if a.only != "measure":
         discover(log)
     if a.only != "discover":
