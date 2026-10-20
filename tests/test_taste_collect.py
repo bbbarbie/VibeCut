@@ -97,7 +97,7 @@ def test_vlog_filter() -> None:
 
 
 def test_fingerprint_is_the_good_videos_middle() -> None:
-    recs = [{"id": f"L{i}", "pace": {"median_s": m}, "lufs": -14.0 - i, "measured_s": 600,
+    recs = [{"id": f"L{i}", "pace": {"median_s": m}, "lufs": -14.0 - i, "measured_s": 300,
              "ending": {"last_s": 9.0}, "words": {"pending": ["vision"]}} for i, m in enumerate([1.0, 2.0, 3.0, 4.0, 5.0])]
     fp = fingerprint.fingerprint(recs, "long")
     t = fp["traits"]

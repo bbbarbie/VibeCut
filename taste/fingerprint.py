@@ -4,7 +4,7 @@ Each trait becomes a range: the middle half of the good videos (25th–75th
 percentile) and their median, so "how VibeCut should cut a long vlog" reads
 as "shots of 1.9–2.6 s, median 2.2 s", not one video's habit. A trait that
 was pending on a video (no Vision, no beat) is left out of that trait only.
-The ending is skipped for long vlogs measured on their first ten minutes:
+The ending is skipped for long vlogs measured on their first minutes:
 where the download stopped isn't where the creator ended.
 
     python -m taste.fingerprint            # writes fingerprints/<group>.json
@@ -83,7 +83,7 @@ def fingerprint(recs: list[dict], group: str) -> dict:
         for r in recs:
             if _pending(r, path):
                 continue
-            if path[0] == "ending" and (r.get("ending_is_cutoff") or (group == "long" and r.get("measured_s", 0) >= 599)):
+            if path[0] == "ending" and (r.get("ending_is_cutoff") or (group == "long" and r.get("measured_s", 0) >= collect.LONG_S - 1)):
                 continue
             v = _get(r, path)
             if v is not None:

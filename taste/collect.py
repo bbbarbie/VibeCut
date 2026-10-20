@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -43,7 +44,8 @@ PREFIX = {"long": "L", "short": "S"}
 
 RECENT = 12            # vlogs looked at per creator
 PER_CREATOR = 3        # ...of which the most watched are learnt from
-LONG_S = 600.0         # a long vlog is measured on its first ten minutes
+LONG_S = 300.0         # a long vlog is measured on its first five minutes (100+ shots;
+                       # sarah, 2026-10-20: ten took ~7 min a video on her connection)
 LONG_RANGE = (300, 2700)   # what counts as a long vlog, seconds
 SHORT_MAX = 180            # ...and a short one
 FORMAT = "bv*[height<=480]+ba/b[height<=480]/b"
@@ -298,12 +300,13 @@ def measure_one(row: dict, log) -> None:
 
 
 def measure_all(log) -> None:
-    off = {c["creator"].lower() for c in _rows(CREATORS)[1]
+    key = lambda n: re.sub(r"[^a-z0-9]", "", n.lower().split("(")[0])   # "Casey Neistat" = "CaseyNeistat"
+    off = {key(c["creator"]) for c in _rows(CREATORS)[1]
            if c["status"].startswith(("struck", "dropped", "skip"))}
     for group, path in GROUPS.items():
         head, rows = _rows(path)
         for row in rows:
-            if row.get("source") == "web" and row.get("creator", "").lower() in off:
+            if row.get("source") == "web" and key(row.get("creator", "")) in off:
                 continue
             if row.get("status") == "listed" and row.get("verdict") in ("good", "ordinary") and row.get("url_or_file"):
                 measure_one(row, log)
