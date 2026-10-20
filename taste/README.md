@@ -1,0 +1,39 @@
+# taste/ — what a good vlog looks like, measured
+
+VibeCut cuts every video to a house style. This folder is where that style
+comes from: a set of real vlogs, each marked good or ordinary, reduced to
+numbers, and the per-group fingerprint derived from them.
+
+## Two groups
+
+- **long** — YouTube vlogs, roughly 5–30 min (`data/long-youtube.csv`)
+- **short** — TikTok / Instagram Reels / Shorts vlogs, under 3 min (`data/short-reels.csv`)
+
+A video gets in two ways: sarah sends it (her verdict counts as *good*), or a
+web search finds a young day-in-my-life creator and their videos are ranked
+by likes per view against the creator's own typical video, so a big channel
+doesn't win for being big. Each creator gives one good and one ordinary
+example. `data/candidate-creators.csv` is that list before she strikes any.
+
+## How a video is measured
+
+`python -m taste.measure <file> --id S001` → `measurements/S001.json`:
+the traits "Cut it like" already learns (`cutgrammar/style.learn`: pace and
+shot lengths, transitions, beat alignment, music feel, look, frame, opening,
+ending, words on screen where the Mac can read them) plus integrated
+loudness. No AI calls. Links are downloaded on sarah's Mac (yt-dlp), measured
+and deleted; this repo keeps numbers only — never a video, a recording or a
+still of someone else's work.
+
+Known: a screen recording carries the app's buttons over the picture, and
+shot detection under that chrome under-counts cuts (her Oct 17 reference
+read as 4 shots in 55 s). Recordings need the chrome cropped before they
+count.
+
+## How the fingerprint is used
+
+`fingerprints/<group>.json` (once measured): the good side's ranges per
+trait and how they differ from the ordinary side. It becomes the default
+recipe every video is cut to (`remix.fingerprint` / vibes) and the standard
+the AI self-check judges against. Uploads land in the project's shared
+folder `taste/`; the CSVs here are synced from there.
