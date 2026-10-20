@@ -69,7 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
             addr.sin_addr.s_addr = inet_addr("127.0.0.1")
             let ok = withUnsafePointer(to: &addr) {
                 $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                    bind(s, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) == 0
+                    Darwin.bind(s, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) == 0
                 }
             }
             if ok { return p }
@@ -228,7 +228,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         func add(_ title: String, _ items: [NSMenuItem]) {
             let item = NSMenuItem()
             let menu = NSMenu(title: title)
-            items.forEach(menu.addItem)
+            for i in items { menu.addItem(i) }
             item.submenu = menu
             main.addItem(item)
         }
