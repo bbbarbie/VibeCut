@@ -954,9 +954,12 @@ def api_chat(req: ChatReq) -> dict:
             style = brief.clean_style(req.style) or (_direction() or {}).get("style")
             if style:
                 direction["style"] = style
-        ops = out.get("ops", [])
+        ops = llm.expand(out.get("ops", []), SESSION.board)
         if req.t is not None:
             ops = [o for o in ops if o.get("op") != "choose_option"]   # about a moment of this edit, never a new one
+        for o in ops:   # a caption look asked for in words follows the creator too, as one picked in the tab
+            if o.get("op") == "overlay_style":
+                defaults.note(**{f"caption_{k}": o[k] for k in ("template", "enter") if k in o})
         SESSION.add({"kind": "chat", "text": msg, "ops": ops,
                      "reply": out.get("reply", ""), "question": out.get("question"),
                      "choices": out.get("choices", []) if out.get("question") else [],
@@ -1095,7 +1098,7 @@ def api_moment_chat(req: MomentReq) -> dict:
                 _save()     # a failed request isn't saved by the middleware; what it cost must be
             raise HTTPException(502, str(e) + (f" That try cost {_cents(paid)}." if paid else "")) from e
         cost = _chat_spent(out, "moment")
-        ops = [o for o in out.get("ops") or [] if o.get("op") != "choose_option"]
+        ops = [o for o in llm.expand(out.get("ops") or [], SESSION.board) if o.get("op") != "choose_option"]
         preview = None
         if ops:
             # what Apply would change, computed on a copy -- never reported by the model

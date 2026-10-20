@@ -31,6 +31,7 @@ carries the number it is based on and a verdict, like cutgrammar's rules.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 FRAME = 1 / 30
@@ -465,6 +466,8 @@ def describe(a: dict | None, b: dict | None) -> list[dict]:
             what.append("timing")
         if old["dur"] != o["dur"]:
             what.append("length")
+        if old.get("look") != o.get("look"):
+            what.append("style")
         if (old["pos"], old["size"], old.get("place")) != (o["pos"], o["size"], o.get("place")):
             what.append("place")
         if old["anim"] != o["anim"]:
@@ -492,7 +495,26 @@ def describe(a: dict | None, b: dict | None) -> list[dict]:
         if changed:
             lines.append({"kind": "retitled", "text": "Text style: " + ", ".join(
                 f"{k} {style_of(b)[k]}" for k in changed)})
-    return lines
+    return _fold(lines)
+
+
+def _fold(lines: list[dict]) -> list[dict]:
+    """The same change to many overlays (every caption moved at once) reads as
+    one line, not one per caption."""
+    groups: dict[str, list[tuple[int, str]]] = {}
+    for i, l in enumerate(lines):
+        m = re.match(r"Changed the (.+) of the (.+?) “", l["text"]) if l["kind"] == "retitled" else None
+        if m:
+            groups.setdefault(m.group(1), []).append((i, m.group(2)))
+    drop, put = set(), {}
+    for what, ix in groups.items():
+        if len(ix) > 3:
+            labels = {label for _, label in ix}
+            # mixed kinds are all "captions", as the app calls words on screen
+            put[ix[0][0]] = {"kind": "retitled", "text": f"Changed the {what} of {len(ix)} "
+                                                         f"{labels.pop() if len(labels) == 1 else 'caption'}s"}
+            drop |= {i for i, _ in ix[1:]}
+    return [put.get(i, l) for i, l in enumerate(lines) if i not in drop]
 
 
 def what_list(xs: list[str]) -> str:

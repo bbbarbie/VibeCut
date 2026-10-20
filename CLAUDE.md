@@ -457,6 +457,22 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   answer landing on another video changes nothing; a failed one offers Try
   again. The app's own first story (no board, no `ai_ok`) is the free rules'.
   `tests/test_chat_ai.py` (stand-in replies). Not yet run live.
+  **Caption looks by chat** (sarah, 2026-10-20: the chat said it "can't set
+  custom fonts or background-matched contrasting colours"; "Build it"): the
+  chat has the Captions tab's controls as `caption_style {captions}` (word
+  art / soft, font / own, colour / auto, outline, shadow, background, boldness,
+  animation, position) and moves or sizes words with edit_overlay's
+  `placement` (set x, y, scale / usual, size, a chapter title's look);
+  overlay `all_captions` (caption, part, name, date) / `all_titles` (heading,
+  title, end) = one edit each, never their words or timing. Every field is
+  `keep` unless asked, so the strict schema can't reset the rest; `llm.expand`
+  turns the answer into board ops against the edit as it is (`overlay_style`
+  as the tab sends it, numbers clamped to its sliders, a 12 read as 12%,
+  enums without case), in the chat and on pause; the state shows CAPTION
+  STYLE and each overlay's place. Many changed at once read as one line
+  (`overlays._fold`). What it can't do, it says where in the app it's done.
+  The schema is at Claude's limit of 16 nullable fields: `option` / `amount`
+  say "unused" instead. `tests/test_chat_captions.py`. Not yet run live.
 - **The AI checks its own edit** (`web/backend/selfcheck.py`, `/api/check`,
   `/api/check/estimate`, `/api/check/sheet/{name}`; sarah, 2026-10-18: "lets
   do AI checks own edit"). The story editor sees one frame per moment and
