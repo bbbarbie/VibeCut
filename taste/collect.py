@@ -162,7 +162,7 @@ def sync(log) -> None:
         c = known.get((o["group"], o["creator"]))
         if c is None:
             creators.append({k: o.get(k, "") for k in head})
-        elif o["status"] in ("struck", "dropped") or o["status"].startswith("skip"):
+        elif o["status"].startswith(("struck", "dropped", "skip")):
             c["status"] = o["status"]          # struck or skipped in the thread
         elif o["status"] != "candidate" and c["status"] == "candidate":
             c["status"] = o["status"]
@@ -299,7 +299,7 @@ def measure_one(row: dict, log) -> None:
 
 def measure_all(log) -> None:
     off = {c["creator"].lower() for c in _rows(CREATORS)[1]
-           if c["status"] in ("struck", "dropped") or c["status"].startswith("skip")}
+           if c["status"].startswith(("struck", "dropped", "skip"))}
     for group, path in GROUPS.items():
         head, rows = _rows(path)
         for row in rows:
