@@ -15,6 +15,17 @@ by likes per view against the creator's own typical video, so a big channel
 doesn't win for being big. Each creator gives one good and one ordinary
 example. `data/candidate-creators.csv` is that list before she strikes any.
 
+## Filling it in one run (on sarah's Mac)
+
+    cd ~/Desktop/VibeCut/repo && git fetch -q origin claude/vlog-taste-model-i4z3mi && git checkout origin/claude/vlog-taste-model-i4z3mi -- taste && .venv/bin/python -m taste.collect
+
+`taste/collect.py` finds each candidate creator's recent videos, reads views
+and likes, adds their best (most likes per view among their better-watched)
+and an ordinary one, then downloads, measures and deletes every listed row
+that has a verdict. Resumable: a row's `status` says how far it got. The
+Mac's safety check only lets a command typed by her download videos, which
+is why this is one line she pastes rather than something Claude runs.
+
 ## How a video is measured
 
 `python -m taste.measure <file> --id S001` → `measurements/S001.json`:
