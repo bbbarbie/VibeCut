@@ -2,10 +2,8 @@
 # VibeCut-mac.zip on the run's page under Artifacts.
 name: Mac app
 
+# Runs only when started by hand (Actions > Mac app > Run workflow).
 on:
-  push:
-    branches: [main, "claude/mac-app-*"]
-    paths: ["mac/**", "web/**", "cutgrammar/**", "polish/**", "requirements.txt", ".github/workflows/mac-app.yml"]
   workflow_dispatch:
 
 jobs:
