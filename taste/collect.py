@@ -64,7 +64,8 @@ NOT_VLOG = ("grwm", "get ready with me", "haul", "q&a", "q & a", "podcast", "rea
 
 
 def is_vlog(d: dict) -> bool:
-    text = " ".join([d.get("title") or "", " ".join(d.get("tags") or [])]).lower() + " "
+    text = " ".join([d.get("title") or "", " ".join(d.get("tags") or []),
+                     (d.get("description") or "")[:400]]).lower() + " "
     return any(w in text for w in VLOG) and not any(w in text for w in NOT_VLOG)
 
 
@@ -154,10 +155,6 @@ def sync(log) -> None:
                 log(f"new from the thread: {o['id']} {o['url_or_file']}")
             elif STAGE.get(o.get("status", ""), 0) > STAGE.get(mine.get("status", ""), 0):
                 mine.update({k: o.get(k, "") for k in head})
-        # rows found before the vlog filter existed
-        for r in rows:
-            if r.get("source") == "web" and r.get("status") == "listed" and not is_vlog({"title": r.get("title")}):
-                r["status"] = "not a vlog"
         _save(path, head, rows)
     head, creators = _rows(CREATORS)
     known = {(c["group"], c["creator"]): c for c in creators}
@@ -260,14 +257,16 @@ def _words(path: str, tmp: Path, limit_s: float):
 def measure_one(row: dict, log) -> None:
     url = row["url_or_file"]
     group = row["group"]
-    if not row.get("views") and url.startswith("http"):
+    if url.startswith("http") and (not row.get("views") or row.get("source") == "web"):
         d = info(url)
         if d:
-            _counts(row, d)
-    if row.get("source") == "web" and not is_vlog({"title": row.get("title")}):
-        row["status"] = "not a vlog"
-        log(f"{row['id']}: not a vlog ({row['title'][:40]!r}), skipped")
-        return
+            if not row.get("views"):
+                _counts(row, d)
+            # picked before the vlog filter, or by a loose title: checked with its tags and description
+            if row.get("source") == "web" and not is_vlog(d):
+                row["status"] = "not a vlog"
+                log(f"{row['id']}: not a vlog ({row['title'][:40]!r}), skipped")
+                return
     tmp = Path(tempfile.mkdtemp(prefix="taste-"))
     try:
         if url.startswith("http"):
