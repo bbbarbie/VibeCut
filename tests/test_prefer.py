@@ -174,6 +174,14 @@ def main() -> int:
     nxt = dk.next_card()
     if nxt is not None:
         check("the next card starts from the version she picked", nxt["sides"][nxt["video"]].ops == better.ops)
+        made_ops = dk._side(dk.turns[dk.make_turn]).ops
+        dk.follow(dk.make_turn)        # she undid that pick
+        again = dk.next_card()
+        check("…and after an Undo it's built again from the made version, so a pick can't bring the undone one back",
+              again is not nxt and again["kind"] == nxt["kind"] and again["sides"][again["video"]].ops == made_ops
+              and all(s.ops != better.ops for s in again["sides"]))
+        dk.follow(7)
+        nxt = dk.next_card()
         n0 = len(json.loads(tm._personal_path().read_text())["pairs"])
         dk.answer(nxt["id"], None)
         check("can't tell: nothing kept", len(json.loads(tm._personal_path().read_text())["pairs"]) == n0)
@@ -285,8 +293,12 @@ def api(clips_dir: Path, model: tm.Model) -> None:
         check("…and her pick is kept for the taste model", len(stored["pairs"]) == 1)
         check("the project's record has it", any(e.get("kind") == "prefer" and e.get("landed")
                                                  for e in backend.PROJECT["p"].events))
+        on_pick = (r.get("prefer") or {}).get("on")
         s = c.post(f"/api/turns/{r['turns'][-1]['id']}/toggle").json()
         check("Undo puts the made version back", s["timeline"]["items"] == before)
+        check("…and the cards are told the video moved, so the next one is fetched again",
+              on_pick == r["turns"][-1]["id"] and (s.get("prefer") or {}).get("on") == dk.make_turn,
+              f"{on_pick} -> {(s.get('prefer') or {}).get('on')}")
         if s.get("prefer"):
             r = c.get("/api/prefer").json()
             dk = backend.PREFER["deck"]

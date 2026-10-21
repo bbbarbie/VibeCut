@@ -1461,13 +1461,18 @@ PREFER_LOCK = threading.Lock()     # builds a card outside LOCK; never taken whi
 REDRESS: dict[str, Callable[[prefer.Deck], None]] = {}
 
 
-def _follow(d: prefer.Deck) -> bool:
-    """Under LOCK: whether the video is as Make or the last pick left it
-    (Deck.follow), looking past what REDRESS put on by itself since."""
+def _basis(d: prefer.Deck) -> int | None:
+    """Under LOCK: the turn the video's version is read from, the last live
+    one, looking past what REDRESS put on by itself since."""
     live = [t for t in SESSION.turns if not t.undone and t.ops]
     while live and live[-1].text in REDRESS and live[-1].id not in d.turns:
         live.pop()
-    return d.follow(live[-1].id if live else None)
+    return live[-1].id if live else None
+
+
+def _follow(d: prefer.Deck) -> bool:
+    """Under LOCK: whether the video is as Make or the last pick left it (Deck.follow)."""
+    return d.follow(_basis(d))
 
 
 def _prefer_deck() -> prefer.Deck | None:
@@ -1484,7 +1489,9 @@ def _prefer_deck() -> prefer.Deck | None:
 
 def _prefer_public() -> dict | None:
     d = _prefer_deck()
-    return None if d is None or d.done() else {"at": min(d.i + 1, len(d.kinds)), "of": len(d.kinds), "deck": d.make_turn}
+    # `on`: the turn the video's version is read from; when it moves (an Undo) the card is fetched again
+    return None if d is None or d.done() else {"at": min(d.i + 1, len(d.kinds)), "of": len(d.kinds),
+                                               "deck": d.make_turn, "on": _basis(d)}
 
 
 def _card_public(card: dict) -> dict:
@@ -1563,6 +1570,8 @@ def api_prefer_pick(cid: int, req: PreferReq) -> dict:
                 d.landed(t.id, side)
                 landed = True
                 said = f"Your video now has {words}."
+            elif last is not None and last.kind == "check":
+                said = "Noted for your next videos. This one keeps the fixes from the check."
             else:
                 said = "Noted for your next videos. This one keeps the changes you made."
             if PROJECT["p"] is not None:

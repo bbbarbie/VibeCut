@@ -1415,7 +1415,7 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
               </p>
             ) : null}
             {/* this version or that one? her picks teach her taste and tailor this video (PreferCards.tsx) */}
-            <PreferCards prefer={session?.prefer ?? null} onSession={setSession} />
+            <PreferCards prefer={session?.prefer ?? null} turns={session?.turns ?? []} onSession={setSession} />
           </main>
         ) : framesView ? (
           <main className="relative flex min-h-0 min-w-0 flex-col px-3 pb-3">

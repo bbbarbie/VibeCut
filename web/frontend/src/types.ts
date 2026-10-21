@@ -204,7 +204,7 @@ export type Session = {
   // what the creator's habits did to the last Make (habits.py), for the one line and its Undo
   habits?: { id: string; text: string }[]
   // "Which do you like better?" after Make (backend prefer.py): which card of how many, while any are left
-  prefer?: { at: number; of: number; deck: number } | null
+  prefer?: { at: number; of: number; deck: number; on: number | null } | null
   bed: { stage: 'looking' | 'done' | 'nothing' | 'error'; why: string; source: string; done: number; total: number; elapsed: number } | null
   // The edit's sound as one track (backend/audiomix.py) -- what preview plays and export writes.
   mix: { key: string; audio: string; joins: JoinInfo[]; transitions: Trans[]; bars: number } | null

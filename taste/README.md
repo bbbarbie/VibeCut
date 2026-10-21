@@ -136,9 +136,12 @@ faces, labels or words — the log says so.
   small offset held near zero (`$VIBECUT_CACHE/taste/personal.json`,
   stamped to the model it was learnt against). A pick is weighted by how
   subtle its change was (`PICK_STEP`), so one pick settles a close call
-  and a strong conviction of the model takes several. `record_edit` (what
-  she exported vs what Make made) and `record_verdict` ("would you post
-  this?") exist but nothing in the app calls them yet.
+  and a strong conviction of the model takes several; a tiny change counts
+  as `PICK_FLOOR`, so one pick on it can't swing bigger comparisons that
+  share its features. `record_edit` (what she exported vs what Make made)
+  and `record_verdict` ("would you post this?") exist but nothing in the
+  app calls them yet; their weight of 1 is small beside a pick's, to be
+  weighed when they are wired.
 - **In Make** (`web/backend/tastepick.py`, rules path only, not the AI
   story editor's chapters): today's edit and up to 8 one-change versions
   (held opening, runner-up hook, rhythm by role, ending held 1 or 3 beats,
@@ -158,8 +161,11 @@ faces, labels or words — the log says so.
   sound export would write). Her pick is kept as a pair and refits her
   layer at once; while the video is as Make left it, the picked version
   lands as one undoable turn ("You picked a version"), and after a hand
-  edit it only teaches. "Can't tell" keeps nothing. Cards live in memory:
-  a restart, another project or Make again clears them.
+  edit it only teaches. What the app puts on by itself after Make (a
+  profile's captions or transition, `app.REDRESS`) isn't an edit: the
+  picked version gets it too. An Undo of a pick cuts the next card again
+  from the version on screen. "Can't tell" keeps nothing. Cards live in
+  memory: a restart, another project or Make again clears them.
 - **Fixed on the way.** `media.load` decodes on the nominal frame-rate grid
   (variable-frame-rate files were stretched about 2×, S007);
   `shots.jump_cuts` finds jump cuts inside a "shot"; Vision `--text2` reads

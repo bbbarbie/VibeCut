@@ -235,7 +235,10 @@ class Deck:
         while nothing but Make and the picks has changed it (then a pick may
         land), False after any other edit."""
         if last_turn in self.turns:
-            self.now = dict(self.turns[last_turn])
+            now = self.turns[last_turn]
+            if now != self.now:
+                # a card built on another version (a pick undone since) would put it back: build it again
+                self.now, self.card = dict(now), None
             return True
         return False
 

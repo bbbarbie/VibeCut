@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { locate, toSource, type SeqItem } from '../sequence'
 import { dress, transport } from '../transport'
-import type { PreferCard, PreferSide, Session } from '../types'
+import type { PreferCard, PreferSide, Session, Turn } from '../types'
 import { Button } from '../ui'
 
 const DRIFT = 0.25      // seconds the picture may wander from the sound before it is put back
@@ -16,13 +16,15 @@ const H = 210           // a version's height on the card: big enough to judge, 
 
 type Said = { deck: number; text: string; turn: number | null }
 
-export function PreferCards({ prefer, onSession }: {
-  prefer: { at: number; of: number; deck: number } | null
+export function PreferCards({ prefer, turns, onSession }: {
+  prefer: { at: number; of: number; deck: number; on: number | null } | null
+  turns: Turn[]
   onSession: (s: Session) => void
 }) {
   const [card, setCard] = useState<(PreferCard & { deck: number }) | null>(null)
   const [frame, setFrame] = useState<{ w: number; h: number } | null>(null)
-  const [playing, setPlaying] = useState<number | null>(null)
+  const [playing, setPlaying] = useState<{ card: string; i: number } | null>(null)   // per card: a new one never starts playing
+  const [again, setAgain] = useState(0)        // a card that had gone: fetch the one there is now
   const [said, setSaid] = useState<Said | null>(null)
   const [finished, setFinished] = useState<Said | null>(null)    // the last answer, shown a moment after the last card
   const [busy, setBusy] = useState(false)
@@ -31,6 +33,7 @@ export function PreferCards({ prefer, onSession }: {
 
   const deck = prefer?.deck ?? null
   const at = prefer?.at ?? 0
+  const on = prefer?.on ?? null       // the turn the video's version is read from: an Undo moves it, and the card is cut again
   useEffect(() => {
     if (deck === null || hidden === deck) return
     let live = true
@@ -38,7 +41,7 @@ export function PreferCards({ prefer, onSession }: {
       .then((r) => { if (live) { setCard(r.card && { ...r.card, deck }); setFrame(r.frame); setError('') } })
       .catch((e) => { if (live) setError((e as Error).message) })
     return () => { live = false }
-  }, [deck, at, hidden])
+  }, [deck, at, on, hidden, again])
 
   const shown = card && deck !== null && card.deck === deck ? card : null
   if (deck !== null && hidden === deck) return null
@@ -51,9 +54,11 @@ export function PreferCards({ prefer, onSession }: {
       setFinished(null)
     } catch (e) { setError((e as Error).message) }
   }
+  // Undo only while that turn is in the video (the top bar's Undo may have taken it already: this would redo it)
   const saidLine = (x: Said) => (
     <p className="font-serif text-[16px] text-zinc-200">
-      {x.text}{x.turn !== null && <> · <button type="button" className="underline" onClick={() => undo(x.turn!)}>Undo</button></>}
+      {x.text}{x.turn !== null && turns.some((t) => t.id === x.turn && !t.undone) &&
+        <> · <button type="button" className="underline" onClick={() => undo(x.turn!)}>Undo</button></>}
     </p>
   )
   if (!shown) {
@@ -76,6 +81,7 @@ export function PreferCards({ prefer, onSession }: {
       onSession(r)
     } catch (e) {
       setError((e as Error).message)
+      setAgain((n) => n + 1)
     } finally {
       setBusy(false)
     }
@@ -84,6 +90,7 @@ export function PreferCards({ prefer, onSession }: {
   // a strip under the video, so the video stays the biggest thing: the question
   // and its answers on the left, the two versions side by side on the right
   const ratio = frame ? frame.w / frame.h : 9 / 16
+  const key = `${shown.deck}-${shown.id}`
   return (
     <section aria-label="Which version do you like better?"
              className="mt-3 flex w-full max-w-[1100px] flex-col gap-3 rounded-2xl border border-line bg-panel px-4 py-3 sm:flex-row sm:items-center">
@@ -99,9 +106,10 @@ export function PreferCards({ prefer, onSession }: {
       </div>
       <div className="flex justify-center gap-4">
         {shown.sides.map((s, i) => (
-          <div key={`${shown.deck}-${shown.id}-${i}`} className="flex flex-col items-center gap-2">
-            <Version side={s} ratio={ratio} label={i ? 'B' : 'A'} playing={playing === i}
-                     onPlay={() => { transport.stop(); setPlaying(i) }} onStop={() => setPlaying((p) => (p === i ? null : p))} />
+          <div key={`${key}-${i}`} className="flex flex-col items-center gap-2">
+            <Version side={s} ratio={ratio} label={i ? 'B' : 'A'} playing={playing?.card === key && playing.i === i}
+                     onPlay={() => { transport.stop(); setPlaying({ card: key, i }) }}
+                     onStop={() => setPlaying((p) => (p?.card === key && p.i === i ? null : p))} />
             <Button variant="primary" size="md" disabled={busy} onClick={() => pick(i)}>This one</Button>
           </div>
         ))}

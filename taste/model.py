@@ -159,9 +159,14 @@ PERSONAL_L2 = 150.0
 # on the test shoot, 2026-10-21): her picks counted for nothing. Now a close
 # call goes her way after one pick, and the test model's strongest
 # conviction (the held opening, 2.7 points ahead) was down to 0.9 after six
-# videos of her turning it down. [prior]
+# videos of her turning it down. A tiny difference counts as PICK_FLOOR:
+# the offset a pick learns grows as its pair shrinks, and a bigger
+# comparison sharing those features moves with it. The cards' pairs on the
+# test shoot measure 0.75 to 24 (median 8.5); with a floor of 0.25, one pick
+# on a near-identical pair could move a 24 one about ten times the 0.6 step,
+# at 4 about twice. [prior]
 PICK_STEP = 90.0
-PICK_FLOOR = 0.25
+PICK_FLOOR = 4.0
 WEAK = 0.3           # an export she wouldn't post vs the exports she would: says something is
                      # wrong, not what [prior]
 MAX_PAIRS = 400      # her newest pairs kept

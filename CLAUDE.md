@@ -46,7 +46,11 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   `PreferCards.tsx`, `/api/prefer`): under the made video up to 3 cards
   play two versions one change apart; a pick refits her layer
   (`taste/model.py` `PICK_STEP`) and, while the video is untouched since
-  Make, lands as one undoable turn. `tests/test_prefer.py`. Every threshold
+  Make, lands as one undoable turn. A turn the app adds by itself after Make
+  (a profile's captions or transition) isn't a change: register its text in
+  `app.REDRESS` and the picked version gets it too, inside the pick's turn
+  (#47's "From your profile" needs that one line when the two meet).
+  `tests/test_prefer.py`. Every threshold
   a prior. See `taste/README.md`.
 - `web/` — the app (FastAPI + Vite/React). Built at the user's explicit
   request despite the "no web UI" non-goal below; scope is deliberately one
