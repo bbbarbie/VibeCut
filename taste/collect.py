@@ -224,15 +224,18 @@ def sync(log) -> None:
 
 def _channel(name: str, platform: str, group: str) -> str | None:
     """Where a creator's recent videos of this kind are listed."""
+    tab = "/videos" if group == "long" else "/shorts"
     if platform.lower() == "tiktok" and " " not in name.strip():
         return f"https://www.tiktok.com/@{name.strip().lstrip('@')}"
+    if platform.lower() == "youtube" and name.strip().startswith("@") and " " not in name.strip():
+        return f"https://www.youtube.com/{name.strip()}{tab}"   # a checked handle beats a search by name
     hit = _json(["--flat-playlist", "--playlist-items", "1", f"ytsearch1:{name} vlog"])
     url = hit[0].get("channel_url") if hit else None
     if not url and hit and hit[0].get("url"):
         url = (info(hit[0]["url"]) or {}).get("channel_url")
     if not url:
         return None
-    return url.rstrip("/") + ("/videos" if group == "long" else "/shorts")
+    return url.rstrip("/") + tab
 
 
 def _fits(group: str, d: dict) -> bool:

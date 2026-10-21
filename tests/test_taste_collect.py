@@ -462,6 +462,18 @@ def test_a_creator_learnt_from_is_not_looked_up_again() -> None:
         assert collect._off(row, {"Her 86m2 (Thuy Dao)"}) and not collect._off(row, {"Some One"})
 
 
+def test_a_handle_is_opened_without_a_search() -> None:
+    def no_search(args, timeout=120):
+        raise AssertionError(f"searched: {args}")
+    real, collect._json = collect._json, no_search
+    try:
+        assert collect._channel("@KatieFeeney", "YouTube", "short") == "https://www.youtube.com/@KatieFeeney/shorts"
+        assert collect._channel("hubs.life", "TikTok", "short") == "https://www.tiktok.com/@hubs.life"
+    finally:
+        collect._json = real
+    assert collect._same("@KatieFeeney", "Katie Feeney")   # her rows carry the channel's name
+
+
 def test_accurate_ocr_says_which_frames_went_unread() -> None:
     """--text2 runs in its own chunks; a chunk that hangs comes back as
     unread frames (words unknown), not as frames with no words, and what it
@@ -514,6 +526,7 @@ if __name__ == "__main__":
     test_a_failed_call_is_counted_and_not_asked_twice()
     test_a_hangup_stops_the_download_too()
     test_a_creator_learnt_from_is_not_looked_up_again()
+    test_a_handle_is_opened_without_a_search()
     test_accurate_ocr_says_which_frames_went_unread()
     test_ai_needs_a_cap_and_a_key()
     print("ok")
