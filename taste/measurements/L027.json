@@ -232,20 +232,6 @@
   "upper": 0.6,
   "size": 0.152,
   "words_per_card": 1.0,
-  "samples": [
-   "Iiillj I",
-   "eir\u00e9",
-   "Iiillji",
-   "TO'DAY&SpVLOQ",
-   "TODAY&SpVLOQ",
-   "I,nill'il.",
-   "illll",
-   "\", DAY'SpVLOQ",
-   "I,riillll",
-   "'S VLOQ",
-   "I,nillll",
-   "IN"
-  ],
   "bands": {
    "bottom": 0.24,
    "middle": 0.74,

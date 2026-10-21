@@ -233,20 +233,6 @@
   "upper": 0.04,
   "size": 0.039,
   "words_per_card": 3.0,
-  "samples": [
-   "\u00a5:.*r%xYi r -",
-   ") Ill",
-   "intro",
-   "rt diarie",
-   "In9 Yrom howrt s back",
-   "in9 1rom howrt J back t",
-   ")IiJ",
-   "in9 from horne s back t.",
-   "ro",
-   "diaries :",
-   "kln9 Trom horne & back ,ts scho",
-   "ift"
-  ],
   "bands": {
    "bottom": 0.7,
    "middle": 0.27,

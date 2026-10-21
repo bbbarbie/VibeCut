@@ -232,20 +232,6 @@
   "upper": 0.04,
   "size": 0.043,
   "words_per_card": 8.0,
-  "samples": [
-   "Hi everyone, it's me, T. Thuy's faitorite hubby.",
-   "Hi everyone, it's me, T. Thu!'s faitorite hubby.",
-   "Hi everyone, it's me, T. Thu!'s f(Ivorite hubby.",
-   "ii",
-   "Oops, I mean. everyoiie s favorile husband, lol.",
-   "Oops, I mean, everyone's favorite. husband, lol.",
-   "\u2022\u2022",
-   "I'll be. your gui(le for loday.",
-   "I'll be your guide for l()day.",
-   "I'll be your gYuide for today.",
-   "i)",
-   "I'll Iie youi- guide lor today."
-  ],
   "bands": {
    "bottom": 0.87,
    "middle": 0.09,

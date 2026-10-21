@@ -231,20 +231,6 @@
   "upper": 0.18,
   "size": 0.036,
   "words_per_card": 1.0,
-  "samples": [
-   "4 eJ//_",
-   "rrl/li Iii",
-   "NFbKIl/ I Ir-",
-   "qs",
-   "12:45 pm",
-   "Opm",
-   "1:25 pm",
-   "otes",
-   "takeover",
-   "es",
-   "akeover",
-   "1:30 pm"
-  ],
   "bands": {
    "bottom": 0.09,
    "middle": 0.64,

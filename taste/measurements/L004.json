@@ -231,20 +231,6 @@
   "upper": 0.31,
   "size": 0.057,
   "words_per_card": 1.0,
-  "samples": [
-   "aris",
-   "a solo trip to paris",
-   "Ii",
-   "JL-J J",
-   "L.",
-   "al",
-   "9:30p",
-   "yjuly 12",
-   "ayjuly12",
-   "day july 12",
-   "9:30pm",
-   "ayjuly 12"
-  ],
   "bands": {
    "bottom": 0.28,
    "middle": 0.44,

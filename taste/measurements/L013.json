@@ -235,20 +235,6 @@
   "upper": 0.47,
   "size": 0.041,
   "words_per_card": 2.0,
-  "samples": [
-   "Question.",
-   "ol*ll IFT",
-   "X El oFoll \u00a2\u00a5F\u00b0d7JF?",
-   "X El oFoll *NF\u00b0d7JF?",
-   "X El oFoll \u00a2NFo17JF?",
-   "X Y oFoll e\u00a5F\u00b0d7JF?",
-   "X El oFoll e\u00a5F\u00b0d7JF?",
-   "O>Ol AlaPXIAI d= drylA4.",
-   "0101 AlakXIXI Od= dllA4.",
-   "O>Ol Al2kXIXI Od= JIIA4,",
-   "01I4?J*F?I",
-   "oFLI.$1"
-  ],
   "bands": {
    "bottom": 0.77,
    "middle": 0.21,

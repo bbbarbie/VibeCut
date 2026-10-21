@@ -236,20 +236,6 @@
   "upper": 0.53,
   "size": 0.048,
   "words_per_card": 2.0,
-  "samples": [
-   "13IJJLdpz",
-   "I?IJJLdpz",
-   "IJIJJLdpz",
-   "IJIJJL",
-   "13iJJi",
-   "13iJJy _",
-   "10131ryJI OIZIUI",
-   "JIXIOI EILIXI[I",
-   "R, 311",
-   "Ja4L4TFOI:2.",
-   "G718aO",
-   "Ja4L4TPOI:2."
-  ],
   "bands": {
    "bottom": 0.85,
    "middle": 0.15,

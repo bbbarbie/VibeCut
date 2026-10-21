@@ -233,20 +233,6 @@
   "upper": 0.04,
   "size": 0.043,
   "words_per_card": 9.0,
-  "samples": [
-   "li",
-   "FROM GA",
-   "D\u00a3N TO t",
-   "'*FROM GA",
-   "TO",
-   "'IKFROM GAR",
-   "TO T",
-   "ftD",
-   "Straivl)e.i'i'ies, c.he.i'i-ies in May-June..",
-   "Straivl)e.i'i'ies, c.he.i'i-ies in May-June.",
-   "Straivl)e.i'i'ies, e.he.i'i-ies in May-June.",
-   "*t,"
-  ],
   "bands": {
    "bottom": 0.89,
    "middle": 0.08,

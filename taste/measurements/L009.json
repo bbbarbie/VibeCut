@@ -234,20 +234,6 @@
   "upper": 0.04,
   "size": 0.043,
   "words_per_card": 8.0,
-  "samples": [
-   "There is something so beautilul",
-   "There is something so beautiful",
-   "moving through a house and a garden,",
-   "n)OlTing through a house and a garden,",
-   "..IPiI",
-   "A leaf becomes an umbrella.",
-   "Ii",
-   "A tiny floweE\" becomes something enormous.",
-   "A tiny flowei' becomes something enormous.",
-   "A tiny flower becomes something enormous.",
-   "vl",
-   "So I thought,"
-  ],
   "bands": {
    "bottom": 0.87,
    "middle": 0.08,

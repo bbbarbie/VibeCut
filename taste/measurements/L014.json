@@ -235,20 +235,6 @@
   "upper": 0.44,
   "size": 0.087,
   "words_per_card": 1.0,
-  "samples": [
-   ".1111",
-   "1111",
-   "Jiilil",
-   "Miiii",
-   "11111",
-   "'Ii Miilil",
-   ",NOVEMBER",
-   "2024",
-   "OVEMBER",
-   "NOVEMBER",
-   "vp",
-   "VEMBER,'"
-  ],
   "bands": {
    "bottom": 0.44,
    "middle": 0.39,

@@ -234,20 +234,6 @@
   "upper": 0.19,
   "size": 0.041,
   "words_per_card": 1.0,
-  "samples": [
-   "hi friends",
-   "- a few years ago",
-   "l rnad\u00e8 a quiet pact with mysdf",
-   "I made a quiet pact with mysoif",
-   "I made a quiet pqct with myseif",
-   "uld go oyt inio nalur",
-   "ould go out inio nalur",
-   "reg",
-   "ho'",
-   "44",
-   "K44",
-   "afo"
-  ],
   "bands": {
    "bottom": 0.33,
    "middle": 0.51,

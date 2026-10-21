@@ -233,20 +233,6 @@
   "upper": 0.17,
   "size": 0.042,
   "words_per_card": 1.0,
-  "samples": [
-   "SCH",
-   "111 \u2022 for the fiill dayp",
-   "A'iso",
-   "ngol",
-   "I'ND",
-   "Kl",
-   "So.t",
-   "svthyl",
-   "Ing",
-   "yii",
-   "rAnyw",
-   "poeL>\u2022org"
-  ],
   "bands": {
    "bottom": 0.1,
    "middle": 0.82,

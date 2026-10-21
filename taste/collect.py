@@ -286,6 +286,8 @@ def measure_one(row: dict, log) -> None:
         m = media.load(path, limit_s=limit)
         s = style.learn(m, text=_words(path, tmp, min(m.duration, limit or m.duration)))
         s["transitions"].pop("list", None)
+        if isinstance(s.get("words"), dict):
+            s["words"].pop("samples", None)   # the creator's own lines: numbers only leave this run
         rec = {"id": row["id"], "source_name": Path(path).name, "group": group, **s,
                "lufs": media.loudness_lufs(path), "measured_s": round(m.duration, 2),
                "ending_is_cutoff": bool(limit and m.duration >= limit - 1)}

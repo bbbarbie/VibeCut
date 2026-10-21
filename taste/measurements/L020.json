@@ -231,20 +231,6 @@
   "upper": 0.35,
   "size": 0.093,
   "words_per_card": 1.0,
-  "samples": [
-   "I,",
-   "111",
-   "Jf",
-   "4Jb",
-   "fii",
-   "\u20221",
-   "Ir",
-   "Iii",
-   "41Y",
-   "Iri.",
-   "klll",
-   "iTr,,j"
-  ],
   "bands": {
    "bottom": 0.29,
    "middle": 0.57,

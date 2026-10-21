@@ -234,20 +234,6 @@
   "upper": 0.08,
   "size": 0.444,
   "words_per_card": 1.0,
-  "samples": [
-   "IP",
-   "ljl",
-   "P4",
-   "i\u2022 P",
-   "P*",
-   "i strugg",
-   "i struggle so much with",
-   "i struggle so much with procrastinat",
-   "i struggle so much with procrastination",
-   "and",
-   "and later",
-   "and later i end u"
-  ],
   "bands": {
    "bottom": 0.05,
    "middle": 0.91,

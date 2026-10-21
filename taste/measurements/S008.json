@@ -232,15 +232,6 @@
   "upper": 0.55,
   "size": 0.459,
   "words_per_card": 1.0,
-  "samples": [
-   "tr",
-   "'i.y",
-   "J\u2022",
-   "i\u2022",
-   "111",
-   "5911",
-   "O/ Ikl"
-  ],
   "bands": {
    "bottom": 0.14,
    "middle": 0.71,

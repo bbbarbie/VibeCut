@@ -235,20 +235,6 @@
   "upper": 0.24,
   "size": 0.256,
   "words_per_card": 1.0,
-  "samples": [
-   ">pock9ls",
-   "l ito \"sonie",
-   "welcome",
-   "to som",
-   "poc",
-   "ets",
-   ",of",
-   ". peace",
-   "'pockets",
-   "peace",
-   "peace .",
-   "welcome ,"
-  ],
   "bands": {
    "bottom": 0.14,
    "middle": 0.73,

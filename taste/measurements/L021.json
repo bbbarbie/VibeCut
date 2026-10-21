@@ -230,20 +230,6 @@
   "upper": 0.03,
   "size": 0.043,
   "words_per_card": 10.0,
-  "samples": [
-   "A day ol slow living in a countryside cottage.",
-   "A day ol slow living kn a countryside cottage.",
-   "11",
-   "Ii,'I'i ;,",
-   "i.I",
-   "They are surprisingly loud,",
-   "*i41*",
-   "'o\u00a5h9,POCKET4",
-   ",QiM(VOCK5T4",
-   "OSVO POCKET4 . \u2022'.",
-   ". OSMO POCKET&.. *.'. :",
-   "I'm sui\"e the heat will come back soon,"
-  ],
   "bands": {
    "bottom": 0.92,
    "middle": 0.04,

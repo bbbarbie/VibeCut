@@ -233,9 +233,6 @@
   "upper": 0.33,
   "size": 0.415,
   "words_per_card": 1.0,
-  "samples": [
-   ") ii"
-  ],
   "bands": {
    "bottom": 0.0,
    "middle": 1.0,
