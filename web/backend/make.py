@@ -494,19 +494,22 @@ def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, ab
             # only a writer's lines are "written": place and time of day are the plain fallback
             wrote = bool(lines) and lines != plain_lines(plan, found)
             made = ops(plan, fp, mx, fmt, look, about, talking, lines=lines, chapters=chapters)
-            picked = None
+            picked = deck = None
             if raw is not None:
                 job.line = "Weighing a few cuts…"
+                base = (plan, mx, made)
                 try:
-                    plan, mx, made, picked = tastepick.choose(clips, raw, fp, mx, fmt, look, about, talking, lines,
-                                                              (plan, mx, made))
+                    plan, mx, made, picked = tastepick.choose(clips, raw, fp, mx, fmt, look, about, talking, lines, base)
+                    # what the "which do you like better?" cards cut their versions from (prefer.py)
+                    deck = {"raw": raw, "base": base, "clips": clips, "fp": fp, "mx": base[1], "fmt": fmt,
+                            "look": look, "about": about, "talking": talking, "lines": lines}
                 except Exception as e:  # noqa: BLE001 -- today's edit stands; the video is always made
                     print(f"tastepick: {e!r}; today's edit stands", file=sys.stderr)
                     picked = {"error": str(e)[:160]}
                 job.line = ""
             chose = tastepick.sentence(picked) if raw is not None else ""
             job.result = {"ops": made, "music": mx, "fp": fp, "plan": plan, "taste": taste, "written": wrote,
-                          "ai": ai, "taste_pick": picked,
+                          "ai": ai, "taste_pick": picked, "deck": deck,
                           "reply": say(plan, fp, mx, source, judged, ai) + (" Claude wrote the lines, in your voice." if wrote else "")
                           + (" " + chose if chose else "")}
             if check:

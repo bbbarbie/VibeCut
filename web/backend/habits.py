@@ -43,7 +43,7 @@ TOP_LABELS = 3            # labels per shot that count as "what it was"
 MAX_PHRASES = 20
 SUGGEST_AFTER = 3         # uses without an undo before a habit is offered as a rule
 MACHINE_TEXTS = ("Made your video", "Music and the beat", "Captions, as you asked", "Took out shots that repeat another",
-                 "Smoother cuts", "Remix")      # "No music" is the creator's own switch, so it counts
+                 "Smoother cuts", "Remix", "You picked a version")   # "No music" is the creator's own switch, so it counts
 _lock = threading.Lock()
 
 

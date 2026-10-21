@@ -34,7 +34,8 @@ it from the good vlogs themselves, in three parts.
 Her own layer sits on top: pairs from her projects (the board she exported
 against the one Make made, a pick between two versions, an export she
 wouldn't post against one she would) move the weights by an offset held close to zero, so a
-handful of picks move it a little and many picks more
+handful of picks move it a little and many picks more, except that a pick on
+a close call between two versions decides it (PICK_STEP)
 ($VIBECUT_CACHE/taste/personal.json).
 
 numpy only, deterministic for a seed, and nothing here calls a model.
@@ -145,9 +146,22 @@ ROLE_MARGIN = 0.1    # ...and it must name jobs this much more often than always
 ROLE_L2 = 1.0
 # Her layer: the offset is pulled to zero this hard, so a few picks move the
 # score a little and many move it clearly (on the test's fake creators,
-# three picks for flashes closed a tenth of the gap, thirty-three most of
+# three picks for flashes closed a sixth of the gap, thirty-three all of
 # it). [prior]
 PERSONAL_L2 = 150.0
+# A pick between two versions one change apart (the cards after Make,
+# web/backend/prefer.py) is weighted by how subtle that change is: PICK_STEP
+# over the squared size of the pair's difference (at least PICK_FLOOR), so
+# each pick moves the score on its own comparison by about the same step
+# (up to PICK_STEP / PERSONAL_L2 = 0.6 of a point on the model's scale)
+# however small the change. Unweighted, a card's pair differs in one part of
+# the video only and twelve identical picks moved its gap by 0.02 (measured
+# on the test shoot, 2026-10-21): her picks counted for nothing. Now a close
+# call goes her way after one pick, and the test model's strongest
+# conviction (the held opening, 2.7 points ahead) was down to 0.9 after six
+# videos of her turning it down. [prior]
+PICK_STEP = 90.0
+PICK_FLOOR = 0.25
 WEAK = 0.3           # an export she wouldn't post vs the exports she would: says something is
                      # wrong, not what [prior]
 MAX_PAIRS = 400      # her newest pairs kept
@@ -1886,7 +1900,11 @@ def personal_fit(models: dict | None = None) -> dict:
             else:
                 hi = m._z(m._vector(p["better"]))
             rows.append(hi - m._z(m._vector(p["worse"])))
-            a.append(float(p.get("weight") or 1.0))
+            wt = float(p.get("weight") or 1.0)
+            if p.get("kind") == "pick":
+                d2 = float(np.nansum(rows[-1] ** 2))
+                wt *= PICK_STEP / max(d2, PICK_FLOOR)
+            a.append(wt)
         u = _fit_pairs(np.array(rows), np.array(a), PERSONAL_L2, base=m.w) if rows else np.zeros(len(m.names))
         data["fit"][group] = {"features": m.names, "u": [round(float(x), 6) for x in u], "pairs": len(rows),
                               "model": model_stamp(m), "at": round(time.time(), 1)}

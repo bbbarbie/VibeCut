@@ -10,7 +10,10 @@ few of those and keeps the one that plays best. Here the taste model
 variant is one small change an editor might try, built as the same ops Make
 lands, read without rendering (taste.describe.from_board) and scored.
 Today's edit is always variant 0, so the model can keep it, and it only
-gives way to a variant that beats it by MIN_GAIN.
+gives way to a variant that beats it by MIN_GAIN. A winner then has each
+other part of the video (PARTS) tried on top of it, one change per part, so
+her own taste (the cards after Make, prefer.py, teach the model) can show
+in a part whose change didn't win alone.
 
 Nothing here is paid or decoded: the moments, the judge, the track and the
 words were chosen once by Make; a variant only re-windows picks it already
@@ -49,6 +52,13 @@ END_TRY = (1, 2, 3)     # ending holds tried, in beats [prior; make.END_BEATS is
 WIDE_FACE = 0.05        # a shot whose largest face fills less than this is a wide look at the place [prior]
 MIN_LOCO = 0.75         # a model picks only if, on creators it never saw, it tells the real edit from a
                         # damaged copy this often (the report's "leave one creator out") [prior]
+
+# the part of the video each change is in: Make keeps at most one change per
+# part, and the cards after Make (prefer.py) ask about one part at a time
+PART = {"held_open": "opening", "runner_up_hook": "opening", "rhythm_by_role": "rhythm",
+        "strongest_last": "order", "filming_order": "order", "wide_first": "order",
+        "end_1": "ending", "end_2": "ending", "end_3": "ending"}
+PARTS = ("opening", "rhythm", "order", "ending")      # in the order the video plays them
 
 # what the reply says when a variant wins: "The taste model chose <says>."
 SAYS = {
@@ -242,26 +252,41 @@ def _refit(clips: dict[str, dict], plan: sel.Plan, fp: dict, mx: dict | None, en
     return vmx
 
 
-def build(spec: dict, raw: sel.Plan, clips: dict[str, dict], fp: dict, mx: dict | None, fmt: str,
-          look: str | None, about: str, talking: set[str], lines: list[str] | None) -> tuple | None:
-    """One variant from the plan as it was before music: (plan, mx, ops), or
-    None when it can't be made."""
-    plan = copy_plan(raw)
-    name = spec["name"]
+# when several changes make one cut (the cards, prefer.py): the shots' lengths
+# first, then which moment opens and how long, then each stop's order; the
+# ending is the music's refit
+CHANGE_ORDER = ("rhythm_by_role", "runner_up_hook", "held_open", "strongest_last", "filming_order", "wide_first")
+
+
+def _change(plan: sel.Plan, name: str, clips: dict[str, dict], fp: dict) -> bool:
+    """One variant's change on `plan`; False when it can't be made."""
     if name == "rhythm_by_role":
         _role_rhythm(plan, clips, fp)
     elif name == "held_open":
         _hold_open(plan, clips)
     elif name == "runner_up_hook":
-        if not _swap_hook(plan, clips):
-            return None
+        return _swap_hook(plan, clips)
     elif name == "strongest_last":
         _strongest_last(plan)
     elif name == "filming_order":
         _filming_order(plan)
     elif name == "wide_first":
         _wide_first(plan)
-    vmx = _refit(clips, plan, fp, mx, spec.get("end"))
+    return True
+
+
+def build(spec: dict | list[dict], raw: sel.Plan, clips: dict[str, dict], fp: dict, mx: dict | None, fmt: str,
+          look: str | None, about: str, talking: set[str], lines: list[str] | None) -> tuple | None:
+    """One variant from the plan as it was before music: (plan, mx, ops), or
+    None when it can't be made. A list of specs makes one cut with each of
+    their changes (at most one per part of the video: prefer.KIND)."""
+    specs = spec if isinstance(spec, list) else [spec]
+    plan = copy_plan(raw)
+    rank = {n: i for i, n in enumerate(CHANGE_ORDER)}
+    for s in sorted(specs, key=lambda s: rank.get(s["name"], len(rank))):
+        if not _change(plan, s["name"], clips, fp):
+            return None
+    vmx = _refit(clips, plan, fp, mx, next((s["end"] for s in specs if s.get("end")), None))
     if vmx is False:
         return None
     ops = make.ops(plan, fp, vmx, fmt, look, about, talking, lines=lines)
@@ -283,9 +308,12 @@ def choose(clips: dict[str, dict], raw: sel.Plan, fp: dict, mx: dict | None, fmt
            about: str, talking: set[str], lines: list[str] | None, base: tuple, cat: bd.Catalog | None = None,
            model: tm.Model | None = None) -> tuple[sel.Plan, dict | None, list[dict], dict]:
     """Score today's edit (`base` = its (plan, mx, ops), as Make built it)
-    against the variants of `raw` (the plan before music re-cut it) and
-    return the winner's (plan, mx, ops) and a report: {"picked", "name",
-    "of", "score", "base_score", "why", "says", "variants", "elapsed"}."""
+    against the variants of `raw` (the plan before music re-cut it); when
+    one wins, try each other part's changes on top of it, keeping one that
+    gains MIN_GAIN. Returns the winner's (plan, mx, ops) and a report:
+    {"picked" (the winning single change's index), "name", "chosen" (every
+    change kept), "of" (cuts read), "score", "base_score", "why", "says",
+    "variants" and "specs" (the singles), "elapsed"}."""
     t0 = time.time()
     model = model or model_for(fmt)
     if model is None:
@@ -308,11 +336,38 @@ def choose(clips: dict[str, dict], raw: sel.Plan, fp: dict, mx: dict | None, fmt
         raise ValueError("today's edit couldn't be read")
     base_score = tried[0][3]
     best = max(range(len(tried)), key=lambda i: (tried[i][3] - (0.0 if i == 0 else MIN_GAIN), -i))
+    chosen = [tried[best][0]]
     spec, made, desc, score = tried[best]
+    if best:
+        # then each other part on top of the winner, in the order the video plays: an editor
+        # who settled the opening still tries the ending both ways. This is how a taste she
+        # showed in one part (her picks, prefer.py) can reach a video whose best change is elsewhere.
+        for part in PARTS:
+            if part in {PART.get(c["name"]) for c in chosen}:
+                continue
+            trials = []
+            for s_, *_ in tried[1:]:
+                if PART.get(s_["name"]) != part:
+                    continue
+                m_ = build(chosen + [s_], raw, clips, fp, mx, fmt, look, about, talking, lines)
+                if m_ is None or m_[2] in seen:
+                    continue
+                seen.append(m_[2])
+                b_ = board_of(m_[2], cat)
+                if not b_:
+                    continue
+                d_ = ds.from_board(b_, clips, cat, fmt, track=track)
+                trials.append((s_, m_, d_, model.score(d_)))
+            top = max(trials, key=lambda t: t[3], default=None)
+            if top is not None and top[3] >= score + MIN_GAIN:
+                chosen.append(top[0])
+                _, made, desc, score = top
     why = model.explain(desc, top=3, against=tried[0][2] if best else None)
-    report = {"picked": best, "name": spec["name"], "of": len(tried), "score": round(score, 3),
-              "base_score": round(base_score, 3), "says": spec["says"], "why": [w["says"] for w in why],
+    report = {"picked": best, "name": spec["name"], "of": len(seen), "score": round(score, 3),
+              "base_score": round(base_score, 3), "says": " and ".join(c["says"] for c in chosen),
+              "why": [w["says"] for w in why],
               "variants": [{"name": s["name"], "score": round(sc, 3)} for s, _, _, sc in tried],
+              "specs": [dict(s) for s, _, _, _ in tried], "chosen": [dict(c) for c in chosen],
               "model": {"group": model.group, "date": model.date}, "elapsed": round(time.time() - t0, 2)}
     plan, vmx, ops = made
     return plan, vmx, ops, report

@@ -132,25 +132,41 @@ faces, labels or words — the log says so.
 - **Roles.** The AI editor's shot jobs are distilled into a small role
   model, used only when it has at least 3 creators and beats the majority
   guess on an unseen creator by 0.1; otherwise roles stay unread.
-- **Her own layer.** What she exports vs what Make made, her picks and her
-  "would you post this?" answers move a small offset held near zero
-  (`$VIBECUT_CACHE/taste/personal.json`, stamped to the model it was
-  learnt against).
+- **Her own layer.** Her picks on the cards after Make (below) move a
+  small offset held near zero (`$VIBECUT_CACHE/taste/personal.json`,
+  stamped to the model it was learnt against). A pick is weighted by how
+  subtle its change was (`PICK_STEP`), so one pick settles a close call
+  and a strong conviction of the model takes several. `record_edit` (what
+  she exported vs what Make made) and `record_verdict` ("would you post
+  this?") exist but nothing in the app calls them yet.
 - **In Make** (`web/backend/tastepick.py`, rules path only, not the AI
   story editor's chapters): today's edit and up to 8 one-change versions
   (held opening, runner-up hook, rhythm by role, ending held 1 or 3 beats,
   strongest last, wide first, filming order) are described with
   `describe.from_board` (no rendering) and scored; another version wins
-  only if it beats today's by `MIN_GAIN`. The choice is in
+  only if it beats today's by `MIN_GAIN`. Then each other part of the
+  video (opening, rhythm, order, ending) is tried on top of the winner and
+  kept if it gains `MIN_GAIN` too, so a taste she showed in one part can
+  reach a video whose best change is elsewhere. The choice is in
   `job.result["taste_pick"]` and one sentence of the reply. Off until
   `model/<group>.json` exists; `VIBECUT_TASTE=0` turns it off.
+- **Which do you like better?** (`web/backend/prefer.py`,
+  `PreferCards.tsx`; sarah, 2026-10-21.) Under the made video, up to 3
+  cards, one per part the model was least sure of, in the order the video
+  plays. Each plays the same few seconds of two versions that differ in
+  that part only (from the shot before the change, at most 8 s, with the
+  sound export would write). Her pick is kept as a pair and refits her
+  layer at once; while the video is as Make left it, the picked version
+  lands as one undoable turn ("You picked a version"), and after a hand
+  edit it only teaches. "Can't tell" keeps nothing. Cards live in memory:
+  a restart, another project or Make again clears them.
 - **Fixed on the way.** `media.load` decodes on the nominal frame-rate grid
   (variable-frame-rate files were stretched about 2×, S007);
   `shots.jump_cuts` finds jump cuts inside a "shot"; Vision `--text2` reads
   captions accurately, CJK included.
 - Every token threshold and every L2 strength is a prior. Tests:
   `test_taste_describe`, `test_taste_model`, `test_taste_editor`,
-  `test_tastepick`, `test_media_vfr`, `test_jump_cuts`, `test_taste_collect`.
+  `test_tastepick`, `test_prefer`, `test_media_vfr`, `test_jump_cuts`, `test_taste_collect`.
 
 ## First training (2026-10-21, on sarah's Mac)
 

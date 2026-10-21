@@ -221,8 +221,9 @@ def main() -> int:
     if rep and "picked" in rep:
         board, skipped = applies(job.result["ops"], clips)
         check("its ops apply with nothing skipped", board and board.get("beats") and not skipped, str(skipped))
-        check("every variant was scored", rep["of"] == len(rep["variants"]) >= 2
-              and all(np.isfinite(v["score"]) for v in rep["variants"]), str(rep["variants"]))
+        check("every variant was scored (and any cut with a second part changed counted too)",
+              rep["of"] >= len(rep["variants"]) >= 2 and all(np.isfinite(v["score"]) for v in rep["variants"]),
+              str(rep["variants"]))
         check("the winner is today's or beats it by the margin", rep["picked"] == 0
               or rep["score"] >= rep["base_score"] + tastepick.MIN_GAIN, f"{rep['name']}: {rep['score']} vs {rep['base_score']}")
         check("the picked plan is the one the ops were made from", job.result["plan"].hook[0].shot.id
