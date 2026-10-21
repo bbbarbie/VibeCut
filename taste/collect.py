@@ -6,7 +6,8 @@ the repo root:
     .venv/bin/python -m taste.collect            # discover, then measure
     .venv/bin/python -m taste.collect --only measure
 
-Two passes, both resumable (a row's status says how far it got):
+Two passes, both resumable (a row's status says how far it got), and
+three options:
 
 - discover: for every creator in data/candidate-creators.csv still marked
   `candidate`, list their recent videos of the group's kind (long uploads,
@@ -18,7 +19,20 @@ Two passes, both resumable (a row's status says how far it got):
   (taste.measure + words on screen through Vision), and deleted. Only the
   numbers stay, in measurements/<id>.json.
 
-Nothing of anyone's video is kept, and nothing here calls a paid model.
+- describe (`--describe`): every measured row is also written down shot
+  by shot (taste.describe: lengths, joins, faces, voice, labels, where the
+  words sit) in descriptions/<id>.json, from the same download when it is
+  measured now, else downloaded once more. Accurate OCR reads Korean,
+  Japanese and Chinese captions too; the words are counted and dropped.
+- `--ai --cap 2.50`: while a video's frames exist, the AI editor
+  (taste.editor) names each shot's job and the chapters. Its estimate is
+  printed before every call, the running total after, and nothing is sent
+  once the next call would pass the cap. What's said (English only, the
+  Mac's own recogniser) goes into that one call and nowhere else.
+- `--train`: retrain the taste model (taste.model) at the end.
+
+Nothing of anyone's video is kept, and nothing here calls a paid model
+unless --ai is given with a cap.
 """
 
 from __future__ import annotations
@@ -29,6 +43,7 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -38,6 +53,7 @@ from . import measure as measure_mod
 
 HERE = Path(__file__).parent
 DATA = HERE / "data"
+DESCRIPTIONS = HERE / "descriptions"
 GROUPS = {"long": DATA / "long-youtube.csv", "short": DATA / "short-reels.csv"}
 CREATORS = DATA / "candidate-creators.csv"
 PREFIX = {"long": "L", "short": "S"}
@@ -51,6 +67,8 @@ SHORT_MAX = 180            # ...and a short one
 DOWNLOAD_S = 600       # give up on one video's download after this long
 FORMAT = "bv*[height<=480]+ba/b[height<=480]/b"
 BRANCH = "origin/claude/vlog-taste-model-i4z3mi"
+TRANSCRIBE_S = 900     # give up on hearing one video's words after this long (it's only a hint)
+AI_FAILS = 2           # this many paid calls failing in a row (a rejected key, no budget) stop the AI
 
 # sarah, 2026-10-20: "filter mainly for vlogs". A creator's channel also
 # carries hauls, get-ready-with-me, Q&As and podcasts; those are cut by
@@ -257,9 +275,39 @@ def _words(path: str, tmp: Path, limit_s: float):
         return None
 
 
-def measure_one(row: dict, log) -> None:
+def _download(row: dict, tmp: Path) -> str:
+    """The row's video on disk: a link fetched into `tmp` (deleted by the
+    caller), or the creator's own file where it is."""
+    url = row["url_or_file"]
+    if not url.startswith("http"):
+        return url
+    cmd = [ytdlp(), "-q", "--no-warnings", "--no-playlist", "--socket-timeout", "30", "--retries", "3",
+           "-f", FORMAT, "-o", str(tmp / "v.%(ext)s")]
+    if row["group"] == "long":
+        cmd += ["--download-sections", f"*0-{int(LONG_S)}"]
+    # a stalled download (one stuck for hours on her Mac, 2026-10-20) is given up on, not waited for
+    subprocess.run(cmd + [url], check=True, timeout=DOWNLOAD_S)
+    return str(next(p for p in tmp.iterdir() if p.name.startswith("v.")))
+
+
+def _key(name: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", name.lower().split("(")[0])   # "Casey Neistat" = "CaseyNeistat"
+
+
+def _struck() -> set[str]:
+    return {_key(c["creator"]) for c in _rows(CREATORS)[1]
+            if c["status"].startswith(("struck", "dropped", "skip"))}
+
+
+def _off(row: dict, off: set[str]) -> bool:
+    """A web pick of a creator she struck: neither measured nor described."""
+    return row.get("source") == "web" and _key(row.get("creator", "")) in off
+
+
+def measure_one(row: dict, log, describe: bool = False, ai: "AIRun | None" = None) -> None:
     url = row["url_or_file"]
     group = row["group"]
+    d = None
     if url.startswith("http") and (not row.get("views") or row.get("source") == "web"):
         d = info(url)
         if d:
@@ -272,16 +320,7 @@ def measure_one(row: dict, log) -> None:
                 return
     tmp = Path(tempfile.mkdtemp(prefix="taste-"))
     try:
-        if url.startswith("http"):
-            cmd = [ytdlp(), "-q", "--no-warnings", "--no-playlist", "--socket-timeout", "30", "--retries", "3",
-                   "-f", FORMAT, "-o", str(tmp / "v.%(ext)s")]
-            if group == "long":
-                cmd += ["--download-sections", f"*0-{int(LONG_S)}"]
-            # a stalled download (one stuck for hours on her Mac, 2026-10-20) is given up on, not waited for
-            subprocess.run(cmd + [url], check=True, timeout=DOWNLOAD_S)
-            path = str(next(p for p in tmp.iterdir() if p.name.startswith("v.")))
-        else:
-            path = url
+        path = _download(row, tmp)
         limit = LONG_S if group == "long" else None
         m = media.load(path, limit_s=limit)
         s = style.learn(m, text=_words(path, tmp, min(m.duration, limit or m.duration)))
@@ -296,6 +335,9 @@ def measure_one(row: dict, log) -> None:
         row["status"] = "measured"
         log(f"{row['id']}: {s['pace']['shots'] if s.get('pace') else '?'} shots, "
             f"{(s.get('pace') or {}).get('median_s', '?')} s median, {rec['lufs']} LUFS")
+        if describe:
+            # from the same download: one fetch a video, however much is read from it
+            describe_one(row, path, log, ai=ai, lang=_lang(row, d, ai), loaded=m)
     except Exception as e:   # one bad link (private, login-only) must not stop the batch
         row["status"] = "failed"
         row["notes"] = (row.get("notes", "") + f"; failed {time.strftime('%Y-%m-%d')}: {type(e).__name__}").strip("; ")
@@ -304,30 +346,263 @@ def measure_one(row: dict, log) -> None:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def measure_all(log) -> None:
-    key = lambda n: re.sub(r"[^a-z0-9]", "", n.lower().split("(")[0])   # "Casey Neistat" = "CaseyNeistat"
-    off = {key(c["creator"]) for c in _rows(CREATORS)[1]
-           if c["status"].startswith(("struck", "dropped", "skip"))}
+def measure_all(log, describe: bool = False, ai: "AIRun | None" = None) -> None:
+    off = _struck()
     for group, path in GROUPS.items():
         head, rows = _rows(path)
         for row in rows:
-            if row.get("source") == "web" and key(row.get("creator", "")) in off:
+            if _off(row, off):
                 continue
             if row.get("status") == "listed" and row.get("verdict") in ("good", "ordinary") and row.get("url_or_file"):
-                measure_one(row, log)
+                measure_one(row, log, describe=describe, ai=ai)
                 _save(path, head, rows)    # after each, so a stop loses one video at most
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
+# --- describe ---------------------------------------------------------------
+
+def _no_words(x) -> None:
+    """Belt and braces: whatever a reader hands back, no line anyone wrote
+    on screen or said is kept in a description -- only counts and places."""
+    if isinstance(x, dict):
+        for k in ("text", "transcript", "samples"):
+            x.pop(k, None)
+        for v in x.values():
+            _no_words(v)
+    elif isinstance(x, list):
+        for v in x:
+            _no_words(v)
+
+
+def _english(lang) -> bool:
+    # the Mac's recogniser is asked for en-US; any English reads well enough
+    # through it, any other language would come back as nonsense
+    return bool(lang) and str(lang).lower().replace("_", "-").split("-")[0] == "en"
+
+
+def _lang(row: dict, d: dict | None, ai: "AIRun | None") -> str | None:
+    """The video's spoken language as the platform reports it -- asked only
+    when the AI editor is about to run, since that's all it is for. A
+    creator's own file says nothing, so it gets no transcript."""
+    if ai is None or ai.stopped or not row["url_or_file"].startswith("http"):
+        return None
+    try:
+        d = d or info(row["url_or_file"])
+    except Exception:          # a slow lookup costs the hint, never the video
+        return None
+    return (d or {}).get("language")
+
+
+def _transcript(path: str, work: Path, limit_s: float | None, log) -> str | None:
+    """What's said, read by the Mac's own recogniser (speech helper), for
+    the AI editor's one call. Held in memory only: the sound goes to the
+    run's work folder and is deleted, and nothing is cached (the app's
+    speech.transcribe would keep it next to a clip)."""
+    try:
+        from web.backend import speech
+        binary = speech.ensure_built()
+    except Exception:          # not macOS 26, no toolchain: the editor works from the pictures
+        return None
+    wav = work / "said.wav"
+    head = ["-t", f"{limit_s:.3f}"] if limit_s else []
+    try:
+        p = subprocess.run(["ffmpeg", "-v", "error", "-y", *head, "-i", path, "-vn", "-ac", "1",
+                            "-ar", str(speech.SR), "-c:a", "pcm_s16le", str(wav)], capture_output=True)
+        if p.returncode:
+            return None
+        p = subprocess.run([str(binary), str(wav), "en-US"], capture_output=True, text=True, timeout=TRANSCRIBE_S)
+    except subprocess.TimeoutExpired:
+        log("  what's said wasn't read in time: the editor works from the pictures")
+        return None
+    finally:
+        wav.unlink(missing_ok=True)
+    said = []
+    for line in p.stdout.splitlines():
+        try:
+            said.append(str(json.loads(line).get("text") or "").strip())
+        except (json.JSONDecodeError, AttributeError):
+            pass
+    return " ".join(x for x in said if x) or None
+
+
+class AIRun:
+    """The AI editor over one collect run (--ai --cap): the estimate is
+    printed before each call, the real cost counted after, and no call is
+    made once the next estimate would pass the cap. `post` stands in for
+    the network in tests."""
+
+    def __init__(self, cap: float, post=None, log=print) -> None:
+        from . import editor
+        self.budget = editor.Budget(cap)
+        self.post = post
+        self.log = log
+        self.stopped = False
+        self.fails = 0
+
+    def affords(self, n_shots: int) -> bool:
+        from . import editor
+        return self.budget.can(editor.estimate(n_shots))
+
+    def stop(self, why: str) -> None:
+        self.stopped = True
+        self.log(f"AI editor stopped: {why} (${self.budget.spent:.3f} of ${self.budget.cap:.2f} spent, "
+                 f"{self.budget.calls} call{'s' * (self.budget.calls != 1)})")
+
+    def edit(self, desc: dict, stills: list, path: str, work: Path, limit_s: float | None,
+             lang: str | None) -> dict:
+        """desc with the editor's roles and chapters, or as it was when the
+        cap is reached or the call fails (the description is kept either way)."""
+        from web.backend import oai
+        from . import editor
+        if self.stopped:
+            return desc
+        vid, n = desc.get("id") or "?", len(desc.get("shots") or [])
+        est = editor.estimate(n)
+        if not self.budget.can(est):
+            self.stop(f"{vid} would cost about ${est:.3f}, past the cap")
+            return desc
+        said = _transcript(path, work, limit_s, self.log) if _english(lang) else None
+        if said and self.budget.can(editor.estimate(n, len(said))):
+            est = editor.estimate(n, len(said))
+        else:
+            said = None        # what's said is a hint: dropped before the cap is
+        self.log(f"{vid}: AI editor on {n} shots{' and what is said' if said else ''}, about ${est:.3f} "
+                 f"(${self.budget.spent:.3f} of ${self.budget.cap:.2f} spent so far)")
+        try:
+            answer, usage = editor.breakdown(desc, stills, transcript=said, post=self.post)
+        except editor.EditorError as e:      # nothing was sent
+            self.log(f"{vid}: AI editor not asked ({e})")
+            return desc
+        except oai.OAIError as e:
+            cost = self.budget.spend(e.usage)
+            self.fails += 1
+            self.log(f"{vid}: AI editor failed ({e}), cost ${cost:.3f}")
+            if self.fails >= AI_FAILS:
+                self.stop(f"{self.fails} calls failed in a row")
+            return desc
+        self.fails = 0
+        cost = self.budget.spend(usage)
+        out = editor.apply(desc, answer, usage)
+        self.log(f"{vid}: {out['editor'].get('roles_given', 0)} shots given a job, "
+                 f"{len(out['editor'].get('chapters') or [])} chapter(s); cost ${cost:.3f}, "
+                 f"${self.budget.spent:.3f} of ${self.budget.cap:.2f} spent")
+        return out
+
+
+def describe_one(row: dict, path: str, log, ai: AIRun | None = None, lang: str | None = None,
+                 loaded=None) -> bool:
+    """descriptions/<id>.json from a video on disk. Its frames (2 fps, for
+    Vision and the AI editor) live in a work folder deleted here; only the
+    description's numbers and labels are written. -> written or not; a
+    failure is logged and never stops the batch. `loaded`: the video as
+    measure_one already read it (same limit), so it isn't decoded twice."""
+    from web.backend import vision
+    from . import describe
+    if sys.platform == "darwin" and vision.ensure_built() is None:
+        # a Vision helper that didn't build would leave descriptions with no
+        # faces, labels or words, and a written description is never redone
+        log(f"{row['id']}: not described: the Vision helper didn't build on this Mac ({vision.status()})")
+        return False
+    work = Path(tempfile.mkdtemp(prefix="taste-describe-"))
+    try:
+        limit = LONG_S if row["group"] == "long" else None
+        # frames only where something reads them: Vision on the Mac, the editor's stills
+        frames = work / "frames" if (vision.ensure_built() is not None or ai is not None) else None
+        desc, extras = describe.from_video(path, id=row["id"], group=row["group"], limit_s=limit,
+                                           workdir=frames, mac=True, log=log, loaded=loaded)
+        if ai is not None:
+            desc = ai.edit(desc, extras.get("stills") or [], path, work, limit, lang)
+        _no_words(desc)
+        DESCRIPTIONS.mkdir(parents=True, exist_ok=True)
+        describe.save(desc, DESCRIPTIONS / f"{row['id']}.json")
+        log(f"{row['id']}: described, {len(desc['shots'])} shots ({', '.join(desc['have']) or 'nothing read'})")
+        return True
+    except Exception as e:   # the measurement stands; the next --describe run tries again
+        log(f"{row['id']}: not described ({type(e).__name__}: {str(e)[:120]})")
+        return False
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def _needs(row: dict, ai: AIRun | None) -> bool:
+    """A measured row still to describe: no description yet, or (with the
+    AI editor) one the editor hasn't read and the cap can still pay for."""
+    from . import describe
+    out = DESCRIPTIONS / f"{row['id']}.json"
+    if not out.exists():
+        return True
+    if ai is None or ai.stopped:
+        return False
+    try:
+        old = describe.load(out)
+    except (OSError, ValueError):
+        return True
+    from . import editor
+    n = len(old.get("shots") or [])
+    if "roles" in (old.get("have") or []) or n < editor.MIN_SHOTS:
+        return False           # read already, or nothing the editor could break down
+    if not ai.affords(n):
+        ai.stop(f"{row['id']} would cost about ${editor.estimate(n):.3f}, past the cap")
+        return False
+    return True
+
+
+def describe_all(log, ai: AIRun | None = None) -> None:
+    """Every measured row without a description (or without the editor's
+    roles, under --ai) is fetched again, described and deleted. Resumable:
+    the description file is the record that it's done."""
+    off = _struck()
+    for group, path in GROUPS.items():
+        _, rows = _rows(path)
+        for row in rows:
+            if row.get("status") != "measured" or not row.get("url_or_file") or _off(row, off):
+                continue
+            if not _needs(row, ai):
+                continue
+            tmp = Path(tempfile.mkdtemp(prefix="taste-"))
+            try:
+                lang = _lang(row, None, ai)
+                describe_one(row, _download(row, tmp), log, ai=ai, lang=lang)
+            except Exception as e:   # a link gone private since it was measured: the next run tries again
+                log(f"{row['id']}: not described ({type(e).__name__}: {str(e)[:120]})")
+            finally:
+                shutil.rmtree(tmp, ignore_errors=True)
+
+
+def main(argv: list[str] | None = None) -> None:
+    ap = argparse.ArgumentParser(prog="python -m taste.collect")
     ap.add_argument("--only", choices=["discover", "measure"])
-    a = ap.parse_args()
+    ap.add_argument("--describe", action="store_true",
+                    help="also write each measured video down shot by shot (descriptions/<id>.json)")
+    ap.add_argument("--ai", action="store_true",
+                    help="the paid AI editor names each shot's job while the frames exist (needs --cap)")
+    ap.add_argument("--cap", type=float, help="the most --ai may spend in this run, in dollars")
+    ap.add_argument("--train", action="store_true", help="retrain the taste model at the end")
+    a = ap.parse_args(argv)
     log = lambda s: print(s, flush=True)
+    ai = None
+    if a.ai:
+        # no paid call without a yes: the flag is the yes, the cap its limit
+        if a.cap is None or a.cap <= 0:
+            ap.error("--ai needs --cap <dollars>, the most this run may spend")
+        from web.backend import oai
+        if not oai.has_key():
+            ap.error("--ai needs OPENAI_API_KEY in web/.env")
+        ai = AIRun(a.cap, log=log)
+        log(f"AI editor on {oai.model()}, up to ${a.cap:.2f} this run")
+    describe = a.describe or a.ai
     sync(log)
     if a.only != "measure":
         discover(log)
     if a.only != "discover":
-        measure_all(log)
+        measure_all(log, describe=describe, ai=ai)
+        if describe:
+            describe_all(log, ai=ai)
+    if ai is not None:
+        log(f"AI editor: {ai.budget.calls} call{'s' * (ai.budget.calls != 1)}, "
+            f"${ai.budget.spent:.3f} of ${ai.budget.cap:.2f}")
+    if a.train:
+        from . import model
+        model.main(["train"])
     log("done")
 
 

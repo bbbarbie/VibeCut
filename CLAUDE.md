@@ -310,6 +310,33 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   the one mirrored from the profile page (`/api/profile`). Not tried
   against the live model (no key on this Mac). `tests/test_taste.py`.
   Layer 3 (undo and verdicts as candidate rules) is not built.
+- **The taste model** (`taste/`: `describe.py`, `model.py`, `editor.py`,
+  `collect.py`; `web/backend/tastepick.py`; sarah, 2026-10-21: numbers to
+  match are "way too shallow", she wants "a learnable model that iterates
+  and improves", read the way a pro editor reads a cut). Every reference vlog
+  (long YouTube / short Reels, `taste/data/*.csv`) is described shot by shot
+  (length, join kind incl. jump cuts, motion, face and facing, voice /
+  music / laughter, top labels, word events; numbers and labels only, schema
+  in describe.py); a VibeCut board gets the same description without
+  rendering (`from_board`). The model learns from those: a trigram grammar
+  of shot tokens + a logistic scorer trained on each real edit against
+  copies the computer damaged one way (shuffled, evened, flashes, words on
+  top...; mirrored where the creator has the habit, so the data sets the
+  sign), checked by leaving a creator out and a damage out; a role model
+  distilled from the AI editor (`editor.py`, course OpenAI key, run only
+  from the collector with `--ai --cap`, estimate printed per call) names
+  each shot's job; her own layer (exported vs made, picks, verdicts) is an
+  offset held near zero. Make (rules path only) weighs up to 8 one-change
+  versions of today's edit (held open, runner-up hook, rhythm by role,
+  ending 1/3 beats, strongest last...) and keeps the best only if it beats
+  today's by MIN_GAIN; job.result["taste_pick"]. Off until
+  `taste/model/<group>.json` exists (`VIBECUT_TASTE=0` off). Also that day:
+  `media.load` decodes on the nominal frame-rate grid (VFR files were
+  stretched ~2x, S007), `shots.jump_cuts`, Vision `--text2` (accurate,
+  CJK; needs a Mac compile check). Not yet trained on real descriptions
+  (the Mac run makes them); every token threshold and L2 is a prior.
+  Tests: `test_taste_describe`, `test_taste_model`, `test_taste_editor`,
+  `test_tastepick`, `test_media_vfr`, `test_jump_cuts`.
 - **The viral library** (`web/backend/vibes.py`, `/api/vibes`, "Cut it
   like" in `Setup.tsx`; the user's vision, 2026-10-18: learn from viral
   vlogs). A vibe = `remix.fingerprint` over a *set* of reels learnt through

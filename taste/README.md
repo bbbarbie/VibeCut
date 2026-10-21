@@ -57,3 +57,55 @@ folder `taste/`; the CSVs here are synced from there.
 `python -m taste.scorecard measurements/V001.json --group short` scores one of
 VibeCut's own exports (V001 = "Your video 2026-10-19", V002 = "As it happened
 2026-10-14 18.54", both on sarah's Mac): 4 and 6 of 17 traits inside.
+
+## Shot by shot, for the taste model (2026-10-21)
+
+The measurements above are one number per trait. The taste model
+(`taste/model.py`) learns from how an edit unfolds, so every measured
+video is also written down shot by shot (`taste/describe.py`): each
+shot's length and how it joins the next (cut, jump cut, dissolve, dip,
+flash), how much moves, whether a face looks into the lens, whether
+someone talks or laughs or music plays, Vision's top three labels, and
+where words sit on screen, how big and for how long. One file per video,
+`descriptions/<id>.json`.
+
+On sarah's Mac, from the repo root, on a try-out branch that has this
+branch merged in (one line):
+
+    cd ~/Desktop/VibeCut/repo && caffeinate -i .venv/bin/python -m taste.collect --only measure --describe --ai --cap 2.50 --train
+
+- `--describe` downloads each measured video once more at 480p (the
+  first five minutes of a long one), describes it and deletes it. Rows
+  measured in the same run are described from that one download. S007
+  was measured with the old decoder's timing (a variable-frame-rate
+  file); its description is read with the fixed one.
+- `--ai --cap 2.50` asks the AI editor (`taste/editor.py`, the course's
+  OpenAI key in `web/.env`) to name each shot's job (hook, setup, step,
+  payoff, talk…) and the chapters, from numbered contact sheets of one
+  still per shot, while the frames still exist. Its estimate is printed
+  before every call and the running total after; it stops before the call
+  that would pass the cap. About 3¢ a short, 3–10¢ a long vlog, so the 33
+  videos measured now come to about $2 [priors; the real cost is read from
+  each reply]. Leave `--ai` off and nothing paid is called.
+- `--train` retrains the model at the end (`python -m taste.model train`).
+- How long: words are read with Vision's accurate recogniser (it reads
+  Korean, Japanese and Chinese captions, which the fast one used for the
+  measurements can't), several times slower: roughly a minute or two a
+  short and several minutes a long vlog, so a few hours for the whole set
+  [a guess, not yet timed]. `caffeinate -i` keeps the Mac awake;
+  everything is resumable, and one bad link is skipped, not fatal.
+
+What is kept: numbers and labels only. The words on screen are counted,
+placed and dropped; what's said (English videos only, read by the Mac's
+own recogniser) goes into the one AI call and is never written. The
+editor's own short notes are kept, scrubbed of anything quoted. Video,
+frames and sound are deleted after each video.
+
+The descriptions and the trained model are JSON the repo keeps
+(`.gitignore` lets `taste/*/*.json` through). The model file,
+`taste/model/<group>.json`, is what turns the taste pick on in Make.
+
+The first run on the Mac rebuilds the Vision helper (its source gained the
+accurate `--text2` reader). If it doesn't build, the app falls back to
+colours, and the collector writes no descriptions rather than ones with no
+faces, labels or words — the log says so.

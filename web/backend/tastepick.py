@@ -1,0 +1,312 @@
+"""Make picks with the taste model: a few cuts of the same moments, the one
+that reads most like the good vlogs kept.
+
+Why this exists (2026-10-21, sarah: the taste model should be "the essence
+of our algo"): the rules make one edit and every choice in it is a prior --
+the fixed shot-length spread, the stop's order, which moment opens it, how
+long the opening and the ending hold. An editor tries a
+few of those and keeps the one that plays best. Here the taste model
+(taste/model.py, learnt from real vlogs) is the one who watches: each
+variant is one small change an editor might try, built as the same ops Make
+lands, read without rendering (taste.describe.from_board) and scored.
+Today's edit is always variant 0, so the model can keep it, and it only
+gives way to a variant that beats it by MIN_GAIN.
+
+Nothing here is paid or decoded: the moments, the judge, the track and the
+words were chosen once by Make; a variant only re-windows picks it already
+has, re-fits them to the same track and drop, and reorders. Only on the
+rules path: an AI-planned edit's chapters name their own picks.
+
+The joins are not a variant (yet): "straight cuts" as a set_transition over
+every join is stored as the creator's own pick (`picture_all`), which a
+later set_look keeps -- a machine choice would outlive the look it was made
+against. That needs a source on the pick in board / transitions first.
+
+Off with VIBECUT_TASTE=0, and off until a model is trained
+(taste/model/<group>.json).
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import os
+import time
+from pathlib import Path
+
+from taste import describe as ds
+from taste import model as tm
+
+from . import board as bd, make, remix, select as sel
+
+MAX_VARIANTS = 8        # today's edit plus up to 7 changes; each costs ~0.05 s to build and read [prior]
+MIN_GAIN = 0.05         # a variant must beat today's edit by this much to replace it: scores are
+                        # differences on the model's own scale, and a hair's breadth is noise [prior]
+OPEN_HOLD = 1.6         # "hold the opening": the hook this many times as long [prior]
+END_TRY = (1, 2, 3)     # ending holds tried, in beats [prior; make.END_BEATS is today's]
+WIDE_FACE = 0.05        # a shot whose largest face fills less than this is a wide look at the place [prior]
+
+# what the reply says when a variant wins: "The taste model chose <says>."
+SAYS = {
+    "today": "today's cut",
+    "rhythm_by_role": "a rhythm that holds the strong moments and moves quickly through the rest",
+    "held_open": "a longer-held opening",
+    "runner_up_hook": "a different moment to open on",
+    "strongest_last": "every stop ending on its strongest moment",
+    "filming_order": "each stop in the order it was filmed",
+    "wide_first": "each stop opening on a wide look at the place",
+}
+
+_MODELS: dict[str, tuple[tuple, tm.Model | None]] = {}
+
+
+def _stamp(group: str) -> tuple:
+    """When the model file and her picks last changed: a new training or a
+    new pick is read on the next Make, with no restart."""
+    out = []
+    for p in (tm.MODEL_DIR / f"{group}.json", tm._personal_path()):
+        try:
+            out.append(Path(p).stat().st_mtime_ns)
+        except OSError:
+            out.append(None)
+    return tuple(out)
+
+
+def model_for(fmt: str) -> tm.Model | None:
+    """The group's model for this frame, loaded once per process (and again
+    when its file or her picks change); None when nothing is trained."""
+    group = ds.GROUP_OF_FORMAT.get(fmt, "long")
+    stamp = _stamp(group)
+    hit = _MODELS.get(group)
+    if hit is None or hit[0] != stamp:
+        hit = (stamp, tm.load(group))
+        _MODELS[group] = hit
+    return hit[1]
+
+
+def enabled(fmt: str) -> bool:
+    return os.environ.get("VIBECUT_TASTE", "1") != "0" and model_for(fmt) is not None
+
+
+def copy_plan(plan: sel.Plan) -> sel.Plan:
+    """A plan the variants may re-cut: new Picks, the same Shots (their
+    embeddings are never copied). See map/make.md, mutation hazards."""
+    return dataclasses.replace(plan, hook=[dataclasses.replace(p) for p in plan.hook],
+                               sessions=[[dataclasses.replace(p) for p in s] for s in plan.sessions],
+                               titles=list(plan.titles), notes=list(plan.notes))
+
+
+# --------------------------------------------------------------------------
+# the variants: one change each, the way an editor tries a cut both ways
+# --------------------------------------------------------------------------
+
+def _ids(plan: sel.Plan) -> list[list[str]]:
+    return [[p.shot.id for p in s] for s in plan.sessions]
+
+
+def _strongest_last(plan: sel.Plan) -> None:
+    for s in plan.sessions:
+        if len(s) > 1:
+            best = max(s, key=lambda p: p.score)
+            s.remove(best)
+            s.append(best)
+
+
+def _filming_order(plan: sel.Plan) -> None:
+    for s in plan.sessions:
+        s.sort(key=lambda p: p.shot.order)
+
+
+def _wide(p: sel.Pick) -> bool:
+    return not getattr(p.shot, "faces", 0) and float(getattr(p.shot, "face_area", 0.0) or 0.0) < WIDE_FACE
+
+
+def _wide_first(plan: sel.Plan) -> None:
+    # the establishing shot: a stop reads as a place before it reads as people
+    for s in plan.sessions:
+        w = next((p for p in s if _wide(p)), None)
+        if w is not None and s[0] is not w:
+            s.remove(w)
+            s.insert(0, w)
+
+
+def _runner_up(plan: sel.Plan) -> sel.Pick | None:
+    hook = {p.shot.id for p in plan.hook}
+    heroes = [p for s in plan.sessions for p in s if p.role == "hero" and p.shot.id not in hook]
+    return max(heroes, key=lambda p: p.score) if heroes else None
+
+
+def _swap_hook(plan: sel.Plan, clips: dict[str, dict]) -> bool:
+    """Open on the strongest hero instead of the punchiest moment. The old
+    hook goes back into its stop where it was filmed (make.moments lifted it
+    out), the new one is lifted out of its stop: still never a shot twice."""
+    new = _runner_up(plan)
+    if new is None or len(plan.hook) != 1:
+        return False
+    old = plan.hook[0]
+    home = next((i for i, s in enumerate(plan.sessions) if new in s), None)
+    plan.sessions[home].remove(new)
+    # the old hook's stop: the one whose filming span holds it, else the nearest
+    spans = [(i, min(p.shot.order for p in s), max(p.shot.order for p in s)) for i, s in enumerate(plan.sessions) if s]
+    o = old.shot.order
+    i = (min(spans, key=lambda x: 0 if x[1] <= o <= x[2] else min(abs(o - x[1]), abs(o - x[2])))[0]
+         if spans else home)
+    want = new.duration
+    hook = dataclasses.replace(new, role="hook", session=0)
+    hook.start, hook.end, hook.short = sel.window(clips, hook.shot, old.duration)
+    back = dataclasses.replace(old, role="hero", session=i)
+    back.start, back.end, back.short = sel.window(clips, back.shot, want)
+    plan.hook = [hook]
+    # at its filming place among the others, which keep their order (the
+    # last stop's strongest-last ending, make.end_strong, stays as it was)
+    stop = plan.sessions[i]
+    at = next((k for k, p in enumerate(stop) if p.shot.order > o), len(stop))
+    if stop and i == len(plan.sessions) - 1 and at == len(stop):
+        at -= 1          # never after the moment the video ends on
+    stop.insert(at, back)
+    return True
+
+
+def _role_rhythm(plan: sel.Plan, clips: dict[str, dict], fp: dict) -> None:
+    """Hero shots held at the top of the spread, filler at the bottom, in
+    place of the fixed pattern (remix._spread): the length follows what the
+    moment is worth, a quick run landing on something held."""
+    lo, hi = fp.get("spread", make.SPREAD)
+    body = [p for s in plan.sessions for p in s]
+    for k, p in enumerate(body):
+        want = fp["median_s"] * remix._curve_at(fp["curve"], (k + 0.5) / max(len(body), 1)) * (hi if p.role == "hero" else lo)
+        p.start, p.end, p.short = sel.window(clips, p.shot, want)
+
+
+def _hold_open(plan: sel.Plan, clips: dict[str, dict]) -> None:
+    for p in plan.hook:
+        p.start, p.end, p.short = sel.window(clips, p.shot, p.duration * OPEN_HOLD)
+
+
+def variants(plan: sel.Plan, fp: dict, fmt: str, look: str | None = None, mx: dict | None = None) -> list[dict]:
+    """Up to MAX_VARIANTS specs, today's edit first; the same plan gives the
+    same list (no randomness). A spec is {"name", "says", ...its knob}; only
+    changes that would change something are offered."""
+    out = [{"name": "today"}]
+    body = [p for s in plan.sessions for p in s]
+    if len({p.role for p in body}) > 1:
+        out.append({"name": "rhythm_by_role"})
+    if plan.hook and any(p.shot.end - p.shot.start > p.duration + 0.2 for p in plan.hook):
+        out.append({"name": "held_open"})
+    if len(plan.hook) == 1 and _runner_up(plan) is not None:
+        out.append({"name": "runner_up_hook"})
+    if mx and plan.sessions and plan.sessions[-1]:
+        today = make.end_beats(fp, mx["period"])
+        out.extend({"name": f"end_{k}", "end": k} for k in END_TRY if k != today)
+    for name, how in (("strongest_last", _strongest_last), ("filming_order", _filming_order),
+                      ("wide_first", _wide_first)):
+        trial = copy_plan(plan)
+        how(trial)
+        if _ids(trial) != _ids(plan):
+            out.append({"name": name})
+    for v in out:
+        v["says"] = SAYS.get(v["name"]) or f"an ending held {v.get('end')} beat{'s' * (v.get('end') != 1)}"
+    return out[:MAX_VARIANTS]
+
+
+def _refit(clips: dict[str, dict], plan: sel.Plan, fp: dict, mx: dict | None, end: int | None = None) -> dict | None:
+    """make.music without the search: the same track and drop, this plan's
+    shots on its beat, the in-point moved so the drop still lands at the end
+    of the hook. False when the track no longer covers the edit."""
+    if not mx:
+        return None
+    vmx = dict(mx)
+    period = vmx["period"]
+    remix.quantise(plan, clips, period)
+    make.hold_ending(clips, plan, period, make.end_beats(fp, period))
+    if end and plan.sessions and plan.sessions[-1]:
+        p = plan.sessions[-1][-1]
+        if p.shot.end - p.shot.start >= end * period - 1e-3:
+            p.start, p.end, p.short = sel.window(clips, p.shot, end * period)
+    hook_s = sum(p.duration for p in plan.hook) or fp["hook_s"]
+    vmx["in"] = round(max(0.0, vmx["drop"] - hook_s), 3)
+    if vmx["in"] + plan.duration > vmx["track"].duration:
+        return False
+    return vmx
+
+
+def build(spec: dict, raw: sel.Plan, clips: dict[str, dict], fp: dict, mx: dict | None, fmt: str,
+          look: str | None, about: str, talking: set[str], lines: list[str] | None) -> tuple | None:
+    """One variant from the plan as it was before music: (plan, mx, ops), or
+    None when it can't be made."""
+    plan = copy_plan(raw)
+    name = spec["name"]
+    if name == "rhythm_by_role":
+        _role_rhythm(plan, clips, fp)
+    elif name == "held_open":
+        _hold_open(plan, clips)
+    elif name == "runner_up_hook":
+        if not _swap_hook(plan, clips):
+            return None
+    elif name == "strongest_last":
+        _strongest_last(plan)
+    elif name == "filming_order":
+        _filming_order(plan)
+    elif name == "wide_first":
+        _wide_first(plan)
+    vmx = _refit(clips, plan, fp, mx, spec.get("end"))
+    if vmx is False:
+        return None
+    ops = make.ops(plan, fp, vmx, fmt, look, about, talking, lines=lines)
+    return plan, vmx, ops
+
+
+def board_of(ops: list[dict], cat: bd.Catalog) -> dict | None:
+    """The board the ops make, as Session.replay would: an op that fails is skipped."""
+    b = None
+    for k, op in enumerate(ops):
+        try:
+            b, _ = bd.apply(b, op, cat, None, new_id=lambda k=k: f"t{k}")
+        except bd.OpError:
+            continue
+    return b
+
+
+def choose(clips: dict[str, dict], raw: sel.Plan, fp: dict, mx: dict | None, fmt: str, look: str | None,
+           about: str, talking: set[str], lines: list[str] | None, base: tuple, cat: bd.Catalog | None = None,
+           model: tm.Model | None = None) -> tuple[sel.Plan, dict | None, list[dict], dict]:
+    """Score today's edit (`base` = its (plan, mx, ops), as Make built it)
+    against the variants of `raw` (the plan before music re-cut it) and
+    return the winner's (plan, mx, ops) and a report: {"picked", "name",
+    "of", "score", "base_score", "why", "says", "variants", "elapsed"}."""
+    t0 = time.time()
+    model = model or model_for(fmt)
+    if model is None:
+        raise ValueError("no taste model for this frame")
+    cat = cat or bd.Catalog.from_clips(list(clips.values()))
+    track = mx["track"] if mx else None
+    tried: list[tuple[dict, tuple, dict, float]] = []
+    seen: list[list[dict]] = []
+    for spec in variants(raw, fp, fmt, look, mx):
+        made = base if spec["name"] == "today" else build(spec, raw, clips, fp, mx, fmt, look, about, talking, lines)
+        if made is None or made[2] in seen:
+            continue                      # couldn't be made, or came out as a cut already tried
+        seen.append(made[2])
+        board = board_of(made[2], cat)
+        if not board:
+            continue
+        desc = ds.from_board(board, clips, cat, fmt, track=track)
+        tried.append((spec, made, desc, model.score(desc)))
+    if not tried or tried[0][0]["name"] != "today":
+        raise ValueError("today's edit couldn't be read")
+    base_score = tried[0][3]
+    best = max(range(len(tried)), key=lambda i: (tried[i][3] - (0.0 if i == 0 else MIN_GAIN), -i))
+    spec, made, desc, score = tried[best]
+    why = model.explain(desc, top=3, against=tried[0][2] if best else None)
+    report = {"picked": best, "name": spec["name"], "of": len(tried), "score": round(score, 3),
+              "base_score": round(base_score, 3), "says": spec["says"], "why": [w["says"] for w in why],
+              "variants": [{"name": s["name"], "score": round(sc, 3)} for s, _, _, sc in tried],
+              "model": {"group": model.group, "date": model.date}, "elapsed": round(time.time() - t0, 2)}
+    plan, vmx, ops = made
+    return plan, vmx, ops, report
+
+
+def sentence(report: dict | None) -> str:
+    """The reply's line when the model kept another cut than today's."""
+    if not report or not report.get("picked"):
+        return ""
+    return f"The taste model chose {report['says']}."
