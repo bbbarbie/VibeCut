@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import difflib
 import json
 import os
 import re
@@ -211,10 +212,10 @@ def sync(log) -> None:
         elif o["status"] != "candidate" and c["status"] == "candidate":
             c["status"] = o["status"]
     # a creator whose picks all turned out not to be vlogs is looked at again
-    kept = {r["creator"] for path in GROUPS.values() for r in _rows(path)[1]
-            if r.get("source") == "web" and r.get("status") != "not a vlog"}
+    kept = [r["creator"] for path in GROUPS.values() for r in _rows(path)[1]
+            if r.get("source") == "web" and r.get("status") != "not a vlog"]
     for c in creators:
-        if c["status"] == "discovered" and c["creator"] not in kept:
+        if c["status"] == "discovered" and not any(_same(c["creator"], k) for k in kept):
             c["status"] = "candidate"
     _save(CREATORS, head, creators)
 
@@ -327,6 +328,20 @@ def _key(name: str) -> str:
     return re.sub(r"[^a-z0-9]", "", name.lower().split("(")[0])   # "Casey Neistat" = "CaseyNeistat"
 
 
+def _same(listed: str, channel: str) -> bool:
+    """A creator as listed and the channel name their videos carry: "Her
+    86m2 (Thuy Dao)" / "Her 86m2", "sueddu (슛뚜)" / "슛뚜sueddu", "Alisha
+    Marie" / "AlishaMarieVlogs", "Catherine Manning" / "Cathrin Manning".
+    Read as different, a creator already learnt from was looked up again on
+    every run (2026-10-21)."""
+    a, b = _key(listed), _key(channel)
+    if not a or not b:
+        return False
+    if min(len(a), len(b)) >= 5 and (a in b or b in a):
+        return True
+    return difflib.SequenceMatcher(None, a, b).ratio() >= 0.85
+
+
 def _struck() -> set[str]:
     return {_key(c["creator"]) for c in _rows(CREATORS)[1]
             if c["status"].startswith(("struck", "dropped", "skip"))}
@@ -334,7 +349,7 @@ def _struck() -> set[str]:
 
 def _off(row: dict, off: set[str]) -> bool:
     """A web pick of a creator she struck: neither measured nor described."""
-    return row.get("source") == "web" and _key(row.get("creator", "")) in off
+    return row.get("source") == "web" and any(_same(s, row.get("creator", "")) for s in off)
 
 
 def measure_one(row: dict, log, describe: bool = False, ai: "AIRun | None" = None) -> None:

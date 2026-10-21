@@ -437,6 +437,31 @@ def test_a_hangup_stops_the_download_too() -> None:
         assert not [x for x in tmp.iterdir() if x.name.startswith("taste-")], list(tmp.iterdir())
 
 
+def test_a_creator_learnt_from_is_not_looked_up_again() -> None:
+    # channel names differ from the names listed (seen on her Mac, 2026-10-21)
+    for listed, channel in [("Her 86m2 (Thuy Dao)", "Her 86m2"), ("sueddu (슛뚜)", "슛뚜sueddu"),
+                            ("Alisha Marie", "AlishaMarieVlogs"), ("Catherine Manning", "Cathrin Manning")]:
+        assert collect._same(listed, channel), (listed, channel)
+    assert not collect._same("Emma Chamberlain", "Emma Watson") and not collect._same("Ann", "Anna Bey")
+    with tempfile.TemporaryDirectory() as t:
+        _setup(Path(t))
+        collect.CREATORS.write_text(
+            "group,creator,platform,size_as_reported,why_listed,where_found,status\n"
+            "long,Her 86m2 (Thuy Dao),YouTube,,,,discovered\nlong,Some One,YouTube,,,,discovered\n")
+        row = dict.fromkeys(HEAD, "")
+        row.update(id="L001", group="long", url_or_file="https://y/1", creator="Her 86m2", source="web", status="measured")
+        with collect.GROUPS["long"].open("a") as f:
+            csv.DictWriter(f, HEAD).writerow(row)
+        origin, collect._origin_rows = collect._origin_rows, lambda path: []
+        try:
+            collect.sync(lambda s: None)
+        finally:
+            collect._origin_rows = origin
+        st = {r["creator"]: r["status"] for r in csv.DictReader(collect.CREATORS.open())}
+        assert st == {"Her 86m2 (Thuy Dao)": "discovered", "Some One": "candidate"}, st
+        assert collect._off(row, {"Her 86m2 (Thuy Dao)"}) and not collect._off(row, {"Some One"})
+
+
 def test_accurate_ocr_says_which_frames_went_unread() -> None:
     """--text2 runs in its own chunks; a chunk that hangs comes back as
     unread frames (words unknown), not as frames with no words, and what it
@@ -488,6 +513,7 @@ if __name__ == "__main__":
     test_the_cap_counts_earlier_runs()
     test_a_failed_call_is_counted_and_not_asked_twice()
     test_a_hangup_stops_the_download_too()
+    test_a_creator_learnt_from_is_not_looked_up_again()
     test_accurate_ocr_says_which_frames_went_unread()
     test_ai_needs_a_cap_and_a_key()
     print("ok")
