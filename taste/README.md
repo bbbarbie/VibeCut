@@ -109,3 +109,35 @@ The first run on the Mac rebuilds the Vision helper (its source gained the
 accurate `--text2` reader). If it doesn't build, the app falls back to
 colours, and the collector writes no descriptions rather than ones with no
 faces, labels or words — the log says so.
+
+## How the model is built and used
+
+- **What it learns from.** A trigram grammar over shot tokens (kind,
+  length, join) and a logistic scorer trained on each real edit against
+  copies the computer damaged one way (shuffled, evened rhythm, flashes,
+  words on top…). Where a creator really has the habit (say, flashes), the
+  damage is mirrored so the data, not the breaker, sets the weight's sign.
+  The report (`model/<group>-report.md`) gives accuracy with a whole
+  creator left out and with a whole kind of damage left out.
+- **Roles.** The AI editor's shot jobs are distilled into a small role
+  model, used only when it has at least 3 creators and beats the majority
+  guess on an unseen creator by 0.1; otherwise roles stay unread.
+- **Her own layer.** What she exports vs what Make made, her picks and her
+  "would you post this?" answers move a small offset held near zero
+  (`$VIBECUT_CACHE/taste/personal.json`, stamped to the model it was
+  learnt against).
+- **In Make** (`web/backend/tastepick.py`, rules path only, not the AI
+  story editor's chapters): today's edit and up to 8 one-change versions
+  (held opening, runner-up hook, rhythm by role, ending held 1 or 3 beats,
+  strongest last, wide first, filming order) are described with
+  `describe.from_board` (no rendering) and scored; another version wins
+  only if it beats today's by `MIN_GAIN`. The choice is in
+  `job.result["taste_pick"]` and one sentence of the reply. Off until
+  `model/<group>.json` exists; `VIBECUT_TASTE=0` turns it off.
+- **Fixed on the way.** `media.load` decodes on the nominal frame-rate grid
+  (variable-frame-rate files were stretched about 2×, S007);
+  `shots.jump_cuts` finds jump cuts inside a "shot"; Vision `--text2` reads
+  captions accurately, CJK included.
+- Every token threshold and every L2 strength is a prior. Tests:
+  `test_taste_describe`, `test_taste_model`, `test_taste_editor`,
+  `test_tastepick`, `test_media_vfr`, `test_jump_cuts`, `test_taste_collect`.
