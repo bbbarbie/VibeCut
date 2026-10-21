@@ -172,3 +172,19 @@ wait for the next run. Reports: `model/long-report.md`, `model/short-report.md`.
   words rarely at the top, neighbouring shots' lengths changing gradually,
   a varied rhythm, talk broken up by cutaways, few capitals, no repeats.
 
+## Second training (2026-10-21, more shorts)
+
+sarah: "lets train a few more short vlogs?". 13 more short-vlog creators
+were listed (`data/candidate-creators.csv`); the run on her Mac found vlogs
+for 9 of them (4 had none among their recent videos), read 26 shorts plus
+the two long vlogs left over, and spent $0.89 (the set's total is $2.28 of
+the $2.50 cap). Looking at what was read, 7 weren't vlogs (a sports
+highlight, interviews, a skit, two one-shot clips, a sit-down Q&A): marked
+`not a vlog` and left out, and Katie Feeney dropped as a creator. Retrained
+without them (training here reproduces the Mac's to 1e-8):
+
+- **Shorts**: 85% on an unseen creator, from 28 shorts by 12 creators (was
+  66% from 8 by 4). Past `MIN_LOCO`, so Make now lets it choose for shorts
+  too. Still no story-job model for shorts (55% against 50% guessing).
+- **Long vlogs**: 90% on an unseen creator (24 by 8).
+

@@ -447,18 +447,22 @@ def test_a_creator_learnt_from_is_not_looked_up_again() -> None:
         _setup(Path(t))
         collect.CREATORS.write_text(
             "group,creator,platform,size_as_reported,why_listed,where_found,status\n"
-            "long,Her 86m2 (Thuy Dao),YouTube,,,,discovered\nlong,Some One,YouTube,,,,discovered\n")
+            "long,Her 86m2 (Thuy Dao),YouTube,,,,discovered\nlong,Some One,YouTube,,,,discovered\n"
+            "short,kelwak,TikTok,,,,discovered\n")
         row = dict.fromkeys(HEAD, "")
         row.update(id="L001", group="long", url_or_file="https://y/1", creator="Her 86m2", source="web", status="measured")
+        short = dict(row, id="S001", group="short", url_or_file="https://www.tiktok.com/@kelwak/video/1", creator="KELLY WAKASA")
         with collect.GROUPS["long"].open("a") as f:
             csv.DictWriter(f, HEAD).writerow(row)
+        with collect.GROUPS["short"].open("a") as f:
+            csv.DictWriter(f, HEAD).writerow(short)
         origin, collect._origin_rows = collect._origin_rows, lambda path: []
         try:
             collect.sync(lambda s: None)
         finally:
             collect._origin_rows = origin
         st = {r["creator"]: r["status"] for r in csv.DictReader(collect.CREATORS.open())}
-        assert st == {"Her 86m2 (Thuy Dao)": "discovered", "Some One": "candidate"}, st
+        assert st == {"Her 86m2 (Thuy Dao)": "discovered", "Some One": "candidate", "kelwak": "discovered"}, st
         assert collect._off(row, {"Her 86m2 (Thuy Dao)"}) and not collect._off(row, {"Some One"})
 
 
@@ -472,6 +476,25 @@ def test_a_handle_is_opened_without_a_search() -> None:
     finally:
         collect._json = real
     assert collect._same("@KatieFeeney", "Katie Feeney")   # her rows carry the channel's name
+
+
+def test_a_not_a_vlog_call_from_the_thread_wins() -> None:
+    with tempfile.TemporaryDirectory() as t:
+        _setup(Path(t))
+        row = dict.fromkeys(HEAD, "")
+        row.update(id="S001", group="short", url_or_file="https://y/9", creator="Some One", source="web",
+                   verdict="good", status="measured")
+        with collect.GROUPS["short"].open("a") as f:
+            csv.DictWriter(f, HEAD).writerow(row)
+        judged = dict(row, status="not a vlog", notes="a sports clip")
+        origin, collect._origin_rows = collect._origin_rows, (
+            lambda path: [judged] if path == collect.GROUPS["short"] else [])
+        try:
+            collect.sync(lambda s: None)
+        finally:
+            collect._origin_rows = origin
+        got = list(csv.DictReader(collect.GROUPS["short"].open()))[0]
+        assert (got["status"], got["notes"]) == ("not a vlog", "a sports clip"), got
 
 
 def test_accurate_ocr_says_which_frames_went_unread() -> None:
@@ -527,6 +550,7 @@ if __name__ == "__main__":
     test_a_hangup_stops_the_download_too()
     test_a_creator_learnt_from_is_not_looked_up_again()
     test_a_handle_is_opened_without_a_search()
+    test_a_not_a_vlog_call_from_the_thread_wins()
     test_accurate_ocr_says_which_frames_went_unread()
     test_ai_needs_a_cap_and_a_key()
     print("ok")

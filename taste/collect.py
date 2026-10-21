@@ -196,6 +196,9 @@ def sync(log) -> None:
                     o["id"] = _next_id(o["group"], rows)
                 rows.append(o)
                 log(f"new from the thread: {o['id']} {o['url_or_file']}")
+            elif o.get("status") == "not a vlog" and mine.get("status") != "not a vlog":
+                # judged in the thread once its reading was seen (a sports clip, an interview)
+                mine.update(status="not a vlog", notes=o.get("notes") or mine.get("notes", ""))
             elif STAGE.get(o.get("status", ""), 0) > STAGE.get(mine.get("status", ""), 0):
                 mine.update({k: o.get(k, "") for k in head})
             elif o.get("verdict") and o["verdict"] != mine.get("verdict"):
@@ -212,10 +215,11 @@ def sync(log) -> None:
         elif o["status"] != "candidate" and c["status"] == "candidate":
             c["status"] = o["status"]
     # a creator whose picks all turned out not to be vlogs is looked at again
-    kept = [r["creator"] for path in GROUPS.values() for r in _rows(path)[1]
+    kept = [(r["creator"], r.get("url_or_file", "").lower()) for path in GROUPS.values() for r in _rows(path)[1]
             if r.get("source") == "web" and r.get("status") != "not a vlog"]
     for c in creators:
-        if c["status"] == "discovered" and not any(_same(c["creator"], k) for k in kept):
+        handle = "/@" + c["creator"].strip().lstrip("@").lower() + "/"   # a TikTok link names its handle
+        if c["status"] == "discovered" and not any(_same(c["creator"], k) or handle in u for k, u in kept):
             c["status"] = "candidate"
     _save(CREATORS, head, creators)
 

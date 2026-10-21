@@ -38,9 +38,9 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   iterates and improves", read the way a pro editor reads a cut): reference
   vlogs described shot by shot, a scorer trained on real edits against
   damaged copies, Make weighs a few one-change versions with it
-  (`web/backend/tastepick.py`). First trained 2026-10-21 on her Mac (23 long
-  vlogs / 8 creators: 91% real-vs-damaged on unseen creators; 8 shorts / 4
-  creators: 66%, so below `MIN_LOCO` and not used by Make). Every threshold
+  (`web/backend/tastepick.py`). Trained 2026-10-21 on her Mac (24 long vlogs /
+  8 creators: 90% real-vs-damaged on unseen creators; 28 shorts / 12
+  creators: 85%; both past `MIN_LOCO`, so Make uses them). Every threshold
   a prior. See `taste/README.md`.
 - `web/` — the app (FastAPI + Vite/React). Built at the user's explicit
   request despite the "no web UI" non-goal below; scope is deliberately one
