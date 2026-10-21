@@ -181,6 +181,21 @@ def estimate(n_shots: int, transcript_chars: int = 0, model: str | None = None) 
     return (tokens_in * p_in + tokens_out * p_out) / 1e6
 
 
+def answer_allowance(n_shots: int) -> int:
+    """The most a breakdown may answer, thinking included (its max tokens)."""
+    return max(8000, 3 * (OUT_BASE + OUT_PER_SHOT * max(1, int(n_shots)) + OUT_THINK))
+
+
+def worst(n_shots: int, transcript_chars: int = 0, model: str | None = None) -> float:
+    """What one breakdown can cost at most: estimate() with the answer at
+    its full allowance. The cap is checked against this, so the last call
+    of a run can't carry the total past it."""
+    p_in, _, p_out = oai.PRICES.get(model or oai.model(), oai.DEAREST)
+    n = max(1, int(n_shots))
+    extra = answer_allowance(n) - (OUT_BASE + OUT_PER_SHOT * n + OUT_THINK)
+    return estimate(n, transcript_chars, model) + extra * p_out / 1e6
+
+
 class Budget:
     """A spend cap over a run of breakdowns: each call's real cost is
     counted, and the next one is only made when its estimate still fits."""
@@ -389,9 +404,8 @@ def breakdown(desc: dict, stills: list[str | None], transcript: str | None = Non
         raise EditorError("most of the shots have no picture to look at")
     text = listing(desc, transcript, missing)
     content = [{"type": "text", "text": text}] + [oai.image(p, detail="high") for p in pics]
-    out_tokens = OUT_BASE + OUT_PER_SHOT * len(shots) + OUT_THINK
     answer, usage = oai.ask_json(SYSTEM, content, SCHEMA, "vlog_breakdown",
-                                 max_tokens=max(8000, 3 * out_tokens), post=post)
+                                 max_tokens=answer_allowance(len(shots)), post=post)
     if not isinstance(answer, dict):
         raise oai.OAIError("the model's answer wasn't a breakdown", usage)
     scrub(answer, transcript)

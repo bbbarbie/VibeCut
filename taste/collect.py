@@ -27,7 +27,10 @@ three options:
 - `--ai --cap 2.50`: while a video's frames exist, the AI editor
   (taste.editor) names each shot's job and the chapters. Its estimate is
   printed before every call, the running total after, and nothing is sent
-  once the next call would pass the cap. What's said (English only, the
+  unless the most it could cost still fits under the cap. The cap is for
+  the whole set: every paid call goes into descriptions/spend.jsonl, and
+  what earlier runs spent counts, so running the same line again never
+  spends past it. What's said (English only, the
   Mac's own recogniser) goes into that one call and nowhere else.
 - `--train`: retrain the taste model (taste.model) at the end.
 
@@ -40,8 +43,10 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -95,9 +100,27 @@ def ytdlp() -> str:
     return exe
 
 
+def _run(cmd: list[str], timeout: float, capture: bool = False) -> subprocess.CompletedProcess:
+    """yt-dlp in a process group of its own, so giving up on it stops all of
+    it: the Mac's yt-dlp is a bundled app whose real work, and the ffmpeg it
+    starts, run in child processes that killing yt-dlp alone leaves behind
+    (one such download ran on for 18 hours on her Mac, 2026-10-21)."""
+    pipe = subprocess.PIPE if capture else None
+    p = subprocess.Popen(cmd, stdout=pipe, stderr=pipe, text=True, start_new_session=True)
+    try:
+        out, err = p.communicate(timeout=timeout)
+    except BaseException:      # given up on, or her Ctrl-C: none of it keeps running
+        try:
+            os.killpg(p.pid, signal.SIGKILL)
+        except OSError:
+            pass
+        p.wait()
+        raise
+    return subprocess.CompletedProcess(cmd, p.returncode, out, err)
+
+
 def _json(args: list[str], timeout: int = 120) -> list[dict]:
-    p = subprocess.run([ytdlp(), "-j", "--skip-download", "--no-warnings", *args],
-                       capture_output=True, text=True, timeout=timeout)
+    p = _run([ytdlp(), "-j", "--skip-download", "--no-warnings", *args], timeout, capture=True)
     out = []
     for line in p.stdout.splitlines():
         try:
@@ -216,51 +239,59 @@ def _fits(group: str, d: dict) -> bool:
     return LONG_RANGE[0] <= s <= LONG_RANGE[1] if group == "long" else 0 < s <= SHORT_MAX
 
 
+def _discover_one(c: dict, head: list[str], creators: list[dict], log) -> None:
+    """One candidate creator's most-watched recent vlogs, listed as rows."""
+    group, name = c["group"], c["creator"]
+    where = _channel(name, c.get("platform", ""), group)
+    if not where:
+        c["status"] = "not found"
+        log(f"{name}: channel not found")
+        return
+    flat = _json(["--flat-playlist", "--playlist-items", f"1:{RECENT * 4}", where], timeout=300)
+    vids = []
+    for e in flat:
+        u = e.get("url") or e.get("webpage_url")
+        if not u:
+            continue
+        d = info(u)
+        if d and _fits(group, d) and is_vlog(d) and _ratio(d) is not None:
+            vids.append(d)
+        if len(vids) >= RECENT:
+            break
+    if not vids:
+        c["status"] = "no vlogs"
+        log(f"{name}: no vlogs among the recent videos at {where}")
+        return
+    # sarah, 2026-10-20: a big vlogger's vlogs are all good examples, so
+    # learn from their most-watched recent ones rather than pick a weak one.
+    picks = sorted(vids, key=lambda d: d["view_count"], reverse=True)[:PER_CREATOR]
+    hd, rows = _rows(GROUPS[group])
+    have = {r["url_or_file"] for r in rows}
+    for d in picks:
+        url = d.get("webpage_url")
+        if url in have:
+            continue
+        row = {k: "" for k in hd}
+        row.update(id=_next_id(group, rows), group=group, platform=d.get("extractor_key", "").lower(),
+                   url_or_file=url, source="web", verdict="good", status="listed",
+                   notes=f"top {PER_CREATOR} by views of {len(vids)} recent vlogs; channel {d.get('channel_follower_count') or '?'}")
+        _counts(row, d)
+        rows.append(row)
+    _save(GROUPS[group], hd, rows)
+    c["status"] = "discovered"
+    log(f"{name}: " + "; ".join(repr((d.get('title') or '')[:40]) for d in picks))
+    _save(CREATORS, head, creators)
+
+
 def discover(log) -> None:
     head, creators = _rows(CREATORS)
     for c in creators:
         if c.get("status") != "candidate":
             continue
-        group, name = c["group"], c["creator"]
-        where = _channel(name, c.get("platform", ""), group)
-        if not where:
-            c["status"] = "not found"
-            log(f"{name}: channel not found")
-            continue
-        flat = _json(["--flat-playlist", "--playlist-items", f"1:{RECENT * 4}", where], timeout=300)
-        vids = []
-        for e in flat:
-            u = e.get("url") or e.get("webpage_url")
-            if not u:
-                continue
-            d = info(u)
-            if d and _fits(group, d) and is_vlog(d) and _ratio(d) is not None:
-                vids.append(d)
-            if len(vids) >= RECENT:
-                break
-        if not vids:
-            c["status"] = "no vlogs"
-            log(f"{name}: no vlogs among the recent videos at {where}")
-            continue
-        # sarah, 2026-10-20: a big vlogger's vlogs are all good examples, so
-        # learn from their most-watched recent ones rather than pick a weak one.
-        picks = sorted(vids, key=lambda d: d["view_count"], reverse=True)[:PER_CREATOR]
-        hd, rows = _rows(GROUPS[group])
-        have = {r["url_or_file"] for r in rows}
-        for d in picks:
-            url = d.get("webpage_url")
-            if url in have:
-                continue
-            row = {k: "" for k in hd}
-            row.update(id=_next_id(group, rows), group=group, platform=d.get("extractor_key", "").lower(),
-                       url_or_file=url, source="web", verdict="good", status="listed",
-                       notes=f"top {PER_CREATOR} by views of {len(vids)} recent vlogs; channel {d.get('channel_follower_count') or '?'}")
-            _counts(row, d)
-            rows.append(row)
-        _save(GROUPS[group], hd, rows)
-        c["status"] = "discovered"
-        log(f"{name}: " + "; ".join(repr((d.get('title') or '')[:40]) for d in picks))
-        _save(CREATORS, head, creators)
+        try:
+            _discover_one(c, head, creators, log)
+        except Exception as e:   # a lookup that timed out: this creator is tried again next run
+            log(f"{c['creator']}: skipped this run ({_why(e)})")
     _save(CREATORS, head, creators)
 
 
@@ -286,7 +317,9 @@ def _download(row: dict, tmp: Path) -> str:
     if row["group"] == "long":
         cmd += ["--download-sections", f"*0-{int(LONG_S)}"]
     # a stalled download (one stuck for hours on her Mac, 2026-10-20) is given up on, not waited for
-    subprocess.run(cmd + [url], check=True, timeout=DOWNLOAD_S)
+    r = _run(cmd + [url], DOWNLOAD_S)
+    if r.returncode:
+        raise subprocess.CalledProcessError(r.returncode, cmd + [url])
     return str(next(p for p in tmp.iterdir() if p.name.startswith("v.")))
 
 
@@ -308,18 +341,18 @@ def measure_one(row: dict, log, describe: bool = False, ai: "AIRun | None" = Non
     url = row["url_or_file"]
     group = row["group"]
     d = None
-    if url.startswith("http") and (not row.get("views") or row.get("source") == "web"):
-        d = info(url)
-        if d:
-            if not row.get("views"):
-                _counts(row, d)
-            # picked before the vlog filter, or by a loose title: checked with its tags and description
-            if row.get("source") == "web" and not is_vlog(d):
-                row["status"] = "not a vlog"
-                log(f"{row['id']}: not a vlog ({row['title'][:40]!r}), skipped")
-                return
     tmp = Path(tempfile.mkdtemp(prefix="taste-"))
     try:
+        if url.startswith("http") and (not row.get("views") or row.get("source") == "web"):
+            d = info(url)
+            if d:
+                if not row.get("views"):
+                    _counts(row, d)
+                # picked before the vlog filter, or by a loose title: checked with its tags and description
+                if row.get("source") == "web" and not is_vlog(d):
+                    row["status"] = "not a vlog"
+                    log(f"{row['id']}: not a vlog ({row['title'][:40]!r}), skipped")
+                    return
         path = _download(row, tmp)
         limit = LONG_S if group == "long" else None
         m = media.load(path, limit_s=limit)
@@ -341,7 +374,7 @@ def measure_one(row: dict, log, describe: bool = False, ai: "AIRun | None" = Non
     except Exception as e:   # one bad link (private, login-only) must not stop the batch
         row["status"] = "failed"
         row["notes"] = (row.get("notes", "") + f"; failed {time.strftime('%Y-%m-%d')}: {type(e).__name__}").strip("; ")
-        log(f"{row['id']}: failed ({type(e).__name__}: {str(e)[:120]})")
+        log(f"{row['id']}: failed ({_why(e)})")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -424,23 +457,74 @@ def _transcript(path: str, work: Path, limit_s: float | None, log) -> str | None
     return " ".join(x for x in said if x) or None
 
 
+def _ledger() -> Path:
+    """Every paid call on the set, one line each, kept beside the
+    descriptions: what it could cost at most is written before it is sent,
+    what it did cost once that's known. A call that dies with the run (a
+    closed window, a dropped connection) still counts, at its most."""
+    return DESCRIPTIONS / "spend.jsonl"
+
+
+def _note(rec: dict) -> None:
+    DESCRIPTIONS.mkdir(parents=True, exist_ok=True)
+    with _ledger().open("a") as f:
+        f.write(json.dumps(rec) + "\n")
+
+
+def spent_so_far() -> float:
+    """What the AI editor has cost this set over every earlier run: each
+    call at its real cost, or at its most when that never came back. Calls
+    from before the ledger (the first run, 2026-10-21) are read from the
+    cost their descriptions record."""
+    calls: dict[str, float] = {}
+    ids = set()
+    try:
+        lines = _ledger().read_text().splitlines()
+    except OSError:
+        lines = []
+    for line in lines:
+        try:
+            r = json.loads(line)
+            ids.add(r["id"])
+            if "cost" in r:
+                calls[r["call"]] = float(r["cost"])
+            else:
+                calls.setdefault(r["call"], float(r["upto"]))
+        except (ValueError, KeyError, TypeError):
+            continue
+    total = sum(calls.values())
+    for f in sorted(DESCRIPTIONS.glob("*.json")) if DESCRIPTIONS.is_dir() else []:
+        if f.stem in ids:
+            continue
+        try:
+            c = (json.loads(f.read_text()).get("editor") or {}).get("cost")
+        except (OSError, ValueError, AttributeError):
+            continue
+        if isinstance(c, (int, float)) and c > 0:
+            total += float(c)
+    return round(total, 4)
+
+
 class AIRun:
     """The AI editor over one collect run (--ai --cap): the estimate is
     printed before each call, the real cost counted after, and no call is
-    made once the next estimate would pass the cap. `post` stands in for
-    the network in tests."""
+    made unless the most it could cost still fits under the cap, which is
+    for the whole set (earlier runs' calls count). One video is asked at
+    most once a run. `post` stands in for the network in tests."""
 
-    def __init__(self, cap: float, post=None, log=print) -> None:
+    def __init__(self, cap: float, post=None, log=print, spent: float = 0.0) -> None:
         from . import editor
         self.budget = editor.Budget(cap)
+        self.budget.spent = float(spent)     # earlier runs' calls on this set count against the cap
         self.post = post
         self.log = log
         self.stopped = False
         self.fails = 0
+        self.asked: set[str] = set()
 
     def affords(self, n_shots: int) -> bool:
         from . import editor
-        return self.budget.can(editor.estimate(n_shots))
+        return self.budget.can(editor.worst(n_shots))
 
     def stop(self, why: str) -> None:
         self.stopped = True
@@ -453,34 +537,51 @@ class AIRun:
         cap is reached or the call fails (the description is kept either way)."""
         from web.backend import oai
         from . import editor
-        if self.stopped:
-            return desc
         vid, n = desc.get("id") or "?", len(desc.get("shots") or [])
-        est = editor.estimate(n)
-        if not self.budget.can(est):
-            self.stop(f"{vid} would cost about ${est:.3f}, past the cap")
+        if self.stopped or vid in self.asked:
+            return desc
+        if not self.budget.can(editor.worst(n)):
+            self.stop(f"{vid} could cost up to ${editor.worst(n):.3f}, past the cap")
             return desc
         said = _transcript(path, work, limit_s, self.log) if _english(lang) else None
-        if said and self.budget.can(editor.estimate(n, len(said))):
-            est = editor.estimate(n, len(said))
-        else:
+        if not (said and self.budget.can(editor.worst(n, len(said)))):
             said = None        # what's said is a hint: dropped before the cap is
+        chars = len(said) if said else 0
+        est, most = editor.estimate(n, chars), editor.worst(n, chars)
         self.log(f"{vid}: AI editor on {n} shots{' and what is said' if said else ''}, about ${est:.3f} "
                  f"(${self.budget.spent:.3f} of ${self.budget.cap:.2f} spent so far)")
+        self.asked.add(vid)
+        call = f"{vid} {time.strftime('%Y-%m-%dT%H:%M:%S')} {len(self.asked)}"
         try:
+            _note({"call": call, "id": vid, "upto": round(most, 4)})
             answer, usage = editor.breakdown(desc, stills, transcript=said, post=self.post)
         except editor.EditorError as e:      # nothing was sent
+            _note({"call": call, "id": vid, "cost": 0.0})
             self.log(f"{vid}: AI editor not asked ({e})")
             return desc
         except oai.OAIError as e:
-            cost = self.budget.spend(e.usage)
+            # an answer that came back says what it cost; a lost one counts at its most
+            known = isinstance(e.usage, dict) and e.usage.get("cost") is not None
+            cost = self.budget.spend(e.usage if known else most)
+            if known:
+                _note({"call": call, "id": vid, "cost": round(cost, 6)})
             self.fails += 1
             self.log(f"{vid}: AI editor failed ({e}), cost ${cost:.3f}")
             if self.fails >= AI_FAILS:
                 self.stop(f"{self.fails} calls failed in a row")
             return desc
+        except Exception as e:               # sent, maybe paid for, never answered: counted at its most
+            self.budget.spend(most)
+            self.fails += 1
+            self.log(f"{vid}: AI editor failed ({type(e).__name__}: {str(e)[:120]}), counted at ${most:.3f}")
+            if self.fails >= AI_FAILS:
+                self.stop(f"{self.fails} calls failed in a row")
+            return desc
         self.fails = 0
-        cost = self.budget.spend(usage)
+        known = isinstance(usage, dict) and usage.get("cost") is not None
+        cost = self.budget.spend(usage if known else most)
+        if known:
+            _note({"call": call, "id": vid, "cost": round(cost, 6)})
         out = editor.apply(desc, answer, usage)
         self.log(f"{vid}: {out['editor'].get('roles_given', 0)} shots given a job, "
                  f"{len(out['editor'].get('chapters') or [])} chapter(s); cost ${cost:.3f}, "
@@ -530,18 +631,18 @@ def _needs(row: dict, ai: AIRun | None) -> bool:
     out = DESCRIPTIONS / f"{row['id']}.json"
     if not out.exists():
         return True
-    if ai is None or ai.stopped:
-        return False
+    if ai is None or ai.stopped or row["id"] in ai.asked:
+        return False           # one paid look a video a run
     try:
         old = describe.load(out)
     except (OSError, ValueError):
         return True
     from . import editor
     n = len(old.get("shots") or [])
-    if "roles" in (old.get("have") or []) or n < editor.MIN_SHOTS:
-        return False           # read already, or nothing the editor could break down
+    if "roles" in (old.get("have") or []) or old.get("editor") or n < editor.MIN_SHOTS:
+        return False           # read already (if it named no jobs, asking again won't help), or too few shots
     if not ai.affords(n):
-        ai.stop(f"{row['id']} would cost about ${editor.estimate(n):.3f}, past the cap")
+        ai.stop(f"{row['id']} could cost up to ${editor.worst(n):.3f}, past the cap")
         return False
     return True
 
@@ -590,6 +691,13 @@ def describe_all(log, ai: AIRun | None = None) -> None:
             _fetch_and_describe(row, log, ai)
 
 
+def _quit(signum, frame) -> None:
+    # a closed Terminal window or a kill stops the run the way Ctrl-C does:
+    # yt-dlp runs in its own group (_run), so it is stopped from here, and
+    # every temp folder is removed on the way out
+    raise SystemExit(128 + signum)
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(prog="python -m taste.collect")
     ap.add_argument("--only", choices=["discover", "measure"])
@@ -597,20 +705,26 @@ def main(argv: list[str] | None = None) -> None:
                     help="also write each measured video down shot by shot (descriptions/<id>.json)")
     ap.add_argument("--ai", action="store_true",
                     help="the paid AI editor names each shot's job while the frames exist (needs --cap)")
-    ap.add_argument("--cap", type=float, help="the most --ai may spend in this run, in dollars")
+    ap.add_argument("--cap", type=float,
+                    help="the most the AI editor may have spent on the set, in dollars, earlier runs included")
     ap.add_argument("--train", action="store_true", help="retrain the taste model at the end")
     a = ap.parse_args(argv)
+    if argv is None:           # the command line, not a test calling in
+        for sig in (signal.SIGHUP, signal.SIGTERM):
+            signal.signal(sig, _quit)
     log = lambda s: print(s, flush=True)
     ai = None
     if a.ai:
         # no paid call without a yes: the flag is the yes, the cap its limit
         if a.cap is None or a.cap <= 0:
-            ap.error("--ai needs --cap <dollars>, the most this run may spend")
+            ap.error("--ai needs --cap <dollars>, the most the AI editor may spend on the set")
         from web.backend import oai
         if not oai.has_key():
             ap.error("--ai needs OPENAI_API_KEY in web/.env")
-        ai = AIRun(a.cap, log=log)
-        log(f"AI editor on {oai.model()}, up to ${a.cap:.2f} this run")
+        before = spent_so_far()
+        ai = AIRun(a.cap, log=log, spent=before)
+        log(f"AI editor on {oai.model()}, up to ${a.cap:.2f} in all"
+            + (f"; ${before:.3f} of it spent by earlier runs" if before else ""))
     describe = a.describe or a.ai
     sync(log)
     if a.only != "measure":
@@ -620,8 +734,8 @@ def main(argv: list[str] | None = None) -> None:
         if describe:
             describe_all(log, ai=ai)
     if ai is not None:
-        log(f"AI editor: {ai.budget.calls} call{'s' * (ai.budget.calls != 1)}, "
-            f"${ai.budget.spent:.3f} of ${ai.budget.cap:.2f}")
+        log(f"AI editor: {ai.budget.calls} call{'s' * (ai.budget.calls != 1)} this run, "
+            f"${ai.budget.spent:.3f} of ${ai.budget.cap:.2f} spent on the set")
     if a.train:
         from . import model
         model.main(["train"])

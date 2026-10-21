@@ -16,6 +16,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -233,7 +234,7 @@ def test_ai_editor_stops_at_the_cap() -> None:
         scratch.mkdir()
         # her own files (no download): two measured rows, off the Mac (no Vision, no transcript)
         _rows_csv([_row(1, str(clip), "measured"), _row(2, str(clip), "measured")])
-        cap = 1.5 * editor.estimate(2)      # room for one call, not two
+        cap = editor.worst(2) + 0.005      # room for one call at its most, not a second
         os.environ["OPENAI_API_KEY"] = "sk-test"
         try:
             tempfile.tempdir = str(scratch)
@@ -296,6 +297,146 @@ def test_a_failed_download_is_tried_once_more() -> None:
         assert _left(scratch) == [], _left(scratch)
 
 
+def _alive(pid: int) -> bool:
+    st = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
+    return bool(st) and not st.startswith("Z")       # a zombie has stopped; only its exit is unread
+
+
+def test_a_stalled_download_leaves_nothing_running() -> None:
+    """The Mac's yt-dlp is a bundled app: the process the collector starts
+    hands the download (and ffmpeg) to a child. Giving up on a stalled one
+    killed only the first, and the rest ran on for 18 hours (her Mac,
+    2026-10-21). Now the whole group stops."""
+    real = (collect.ytdlp, collect.DOWNLOAD_S)
+    with tempfile.TemporaryDirectory() as t:
+        tmp = Path(t)
+        exe, pidf = tmp / "yt-dlp", tmp / "child.pid"
+        exe.write_text(f"#!{sys.executable}\nimport subprocess, sys, time\n"
+                       f"c = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
+                       f"open({str(pidf)!r}, 'w').write(str(c.pid))\n"
+                       "time.sleep(60)\n")
+        exe.chmod(0o755)
+        (tmp / "dl").mkdir()
+        try:
+            collect.ytdlp = lambda: str(exe)
+            collect.DOWNLOAD_S = 2
+            try:
+                collect._download(_row(1, "https://y/1", "measured"), tmp / "dl")
+            except subprocess.TimeoutExpired:
+                pass
+            else:
+                raise AssertionError("a stalled download wasn't given up on")
+        finally:
+            collect.ytdlp, collect.DOWNLOAD_S = real
+        child = int(pidf.read_text())
+        for _ in range(20):
+            if not _alive(child):
+                break
+            time.sleep(0.1)
+        assert not _alive(child), "the download's child process is still running"
+
+
+def test_the_cap_counts_earlier_runs() -> None:
+    """Running the same line again after a stop never spends past --cap:
+    every paid call is in the ledger (at its most until its real cost is
+    known), and calls from before the ledger count from their descriptions."""
+    with tempfile.TemporaryDirectory() as t:
+        tmp = Path(t)
+        _setup(tmp)
+        assert collect.spent_so_far() == 0.0             # nothing yet
+        collect.DESCRIPTIONS.mkdir()
+        # the first run (no ledger yet): its costs are on the descriptions
+        (collect.DESCRIPTIONS / "L001.json").write_text(json.dumps({"editor": {"cost": 0.2}}))
+        (collect.DESCRIPTIONS / "L004.json").write_text(json.dumps({"editor": {"cost": 0.05}}))
+        (collect.DESCRIPTIONS / "S001.json").write_text(json.dumps({"have": ["motion"]}))   # never read by the AI
+        (collect.DESCRIPTIONS / "bad.json").write_text("{")
+        assert collect.spent_so_far() == 0.25, collect.spent_so_far()
+        with (collect.DESCRIPTIONS / "spend.jsonl").open("w") as f:
+            f.write(json.dumps({"call": "a", "id": "L008", "upto": 0.15}) + "\n")
+            f.write(json.dumps({"call": "a", "id": "L008", "cost": 0.08}) + "\n")   # answered: its real cost
+            f.write(json.dumps({"call": "b", "id": "L009", "upto": 0.12}) + "\n")   # lost with the run: at its most
+            f.write("half a line\n")
+        assert collect.spent_so_far() == 0.45, collect.spent_so_far()
+        ai = collect.AIRun(0.45 + editor.worst(2) * 0.5, post=lambda *a: None, spent=collect.spent_so_far())
+        assert not ai.affords(2) and ai.budget.calls == 0
+        assert collect.AIRun(0.45 + editor.worst(2) * 1.5, post=lambda *a: None, spent=0.45).affords(2)
+
+
+def test_a_failed_call_is_counted_and_not_asked_twice() -> None:
+    """A paid answer that came back broken (cut off, not a breakdown) still
+    costs: it's in the ledger, the next run starts from it, and one run asks
+    about a video once, however many times it is described."""
+    sent = []
+
+    def post(url, body, headers):
+        sent.append(body)
+        return {"model": "gpt-6.1-sol", "usage": {"prompt_tokens": 3000, "completion_tokens": 900},
+                "choices": [{"message": {"content": "{\"premise\": "}, "finish_reason": "length"}]}
+    real_dir = tempfile.tempdir
+    with tempfile.TemporaryDirectory() as t:
+        tmp = Path(t)
+        _setup(tmp)
+        clip = _clip(tmp / "clip.mp4")
+        scratch = tmp / "scratch"
+        scratch.mkdir()
+        _rows_csv([_row(1, str(clip), "listed")])
+        os.environ["OPENAI_API_KEY"] = "sk-test"
+        try:
+            tempfile.tempdir = str(scratch)
+            log = []
+            ai = collect.AIRun(1.0, post=post, log=log.append)
+            collect.measure_all(log.append, describe=True, ai=ai)   # measured, described, asked once
+            collect.describe_all(log.append, ai=ai)                  # same run: not asked again
+            first = len(sent)
+            spent = collect.spent_so_far()
+            again = collect.AIRun(spent + editor.worst(2) * 0.5, post=post, log=log.append, spent=spent)
+            collect.describe_all(log.append, ai=again)               # next run: no room left for it
+        finally:
+            os.environ["OPENAI_API_KEY"] = ""
+            tempfile.tempdir = real_dir
+        assert first == 1, (first, log)
+        assert spent == 0.015 and ai.budget.spent == 0.015, (spent, ai.budget.spent)
+        assert len(sent) == 1 and again.stopped, (len(sent), log)
+        assert _left(scratch) == [], _left(scratch)
+
+
+def test_a_hangup_stops_the_download_too() -> None:
+    """yt-dlp now runs in its own group, so a closed Terminal window no
+    longer reaches it directly: the collector turns the hangup into an exit
+    that stops yt-dlp's group and removes its temp folder."""
+    with tempfile.TemporaryDirectory() as t:
+        tmp = Path(t)
+        exe, pidf, code = tmp / "yt-dlp", tmp / "child.pid", tmp / "run.py"
+        exe.write_text(f"#!{sys.executable}\nimport subprocess, sys, time\n"
+                       f"c = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
+                       f"open({str(pidf)!r}, 'w').write(str(c.pid))\n"
+                       "time.sleep(60)\n")
+        exe.chmod(0o755)
+        root = Path(__file__).resolve().parents[1]
+        code.write_text(
+            f"import signal, sys, tempfile\nsys.path.insert(0, {str(root)!r})\n"
+            f"tempfile.tempdir = {str(tmp)!r}\n"
+            "from taste import collect\n"
+            f"collect.ytdlp = lambda: {str(exe)!r}\n"
+            "for s in (signal.SIGHUP, signal.SIGTERM):\n    signal.signal(s, collect._quit)\n"
+            "row = {'id': 'L001', 'group': 'short', 'url_or_file': 'https://y/1'}\n"
+            "collect._fetch_and_describe(row, print, None)\n")
+        p = subprocess.Popen([sys.executable, str(code)])
+        for _ in range(100):
+            if pidf.exists() and pidf.read_text():
+                break
+            time.sleep(0.1)
+        child = int(pidf.read_text())
+        p.send_signal(__import__("signal").SIGHUP)
+        assert p.wait(timeout=10) == 128 + 1, p.returncode
+        for _ in range(20):
+            if not _alive(child):
+                break
+            time.sleep(0.1)
+        assert not _alive(child), "the download kept running after the hangup"
+        assert not [x for x in tmp.iterdir() if x.name.startswith("taste-")], list(tmp.iterdir())
+
+
 def test_accurate_ocr_says_which_frames_went_unread() -> None:
     """--text2 runs in its own chunks; a chunk that hangs comes back as
     unread frames (words unknown), not as frames with no words, and what it
@@ -343,6 +484,10 @@ if __name__ == "__main__":
     test_describe_keeps_numbers_and_labels_only()
     test_ai_editor_stops_at_the_cap()
     test_a_failed_download_is_tried_once_more()
+    test_a_stalled_download_leaves_nothing_running()
+    test_the_cap_counts_earlier_runs()
+    test_a_failed_call_is_counted_and_not_asked_twice()
+    test_a_hangup_stops_the_download_too()
     test_accurate_ocr_says_which_frames_went_unread()
     test_ai_needs_a_cap_and_a_key()
     print("ok")

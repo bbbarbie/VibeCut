@@ -96,9 +96,14 @@ branch merged in (one line):
   vlog]. `caffeinate -i` keeps the Mac awake, but not with the lid shut;
   everything is resumable (a described video is never fetched or paid for
   again), one bad link is skipped, not fatal, and a download that fails is
-  tried once more at the end of the run.
-- `--cap` is per run: after a stopped run, give the next one what is left
-  (the last line it printed says how much was spent).
+  tried once more at the end of the run. A download given up on is stopped
+  with everything it started (yt-dlp's own helpers and ffmpeg).
+- `--cap` is for the whole set, not one run: every paid call is written
+  to `descriptions/spend.jsonl` before it is sent (at the most it could
+  cost) and again once its real cost is known, and a new run counts that
+  first. A call is only made if its most still fits, and a video is asked
+  at most once a run, so after a stop the same line can be run again and
+  the total still stays under the cap.
 
 What is kept: numbers and labels only. The words on screen are counted,
 placed and dropped; what's said (English videos only, read by the Mac's
