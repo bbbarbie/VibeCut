@@ -259,6 +259,43 @@ def test_ai_editor_stops_at_the_cap() -> None:
         assert clip.exists()
 
 
+def test_a_failed_download_is_tried_once_more() -> None:
+    """Her Mac, 2026-10-21: yt-dlp died mid-download ("ffmpeg exited with
+    code 183") on one vlog. The run goes on, and that vlog is fetched once
+    more after the rest; one that fails twice is left for the next run."""
+    real = (collect.ytdlp, tempfile.tempdir)
+    with tempfile.TemporaryDirectory() as t:
+        tmp = Path(t)
+        _setup(tmp)
+        clip = _clip(tmp / "clip.mp4")
+        exe, calls = tmp / "yt-dlp", tmp / "calls.txt"
+        # y/1 fails its first fetch, y/3 every fetch, y/2 never
+        exe.write_text(f"#!{sys.executable}\nimport shutil, sys\na = sys.argv\n"
+                       f"open({str(calls)!r}, 'a').write(a[-1] + '\\n')\n"
+                       f"n = open({str(calls)!r}).read().split().count(a[-1])\n"
+                       "if a[-1].endswith('/3') or (a[-1].endswith('/1') and n == 1):\n"
+                       "    sys.stderr.write('ERROR: ffmpeg exited with code 183\\n'); sys.exit(1)\n"
+                       f"shutil.copy({str(clip)!r}, a[a.index('-o') + 1].replace('%(ext)s', 'mp4'))\n")
+        exe.chmod(0o755)
+        scratch = tmp / "scratch"
+        scratch.mkdir()
+        _rows_csv([_row(i, f"https://y/{i}", "measured") for i in (1, 2, 3)])
+        log = []
+        try:
+            tempfile.tempdir = str(scratch)
+            collect.ytdlp = lambda: str(exe)
+            collect.describe_all(log.append)
+        finally:
+            collect.ytdlp, tempfile.tempdir = real
+        assert calls.read_text().split() == ["https://y/1", "https://y/2", "https://y/3",
+                                             "https://y/1", "https://y/3"], calls.read_text()
+        assert sorted(p.name for p in collect.DESCRIPTIONS.iterdir()) == ["S001.json", "S002.json"], log
+        assert sum("trying the download once more" in x for x in log) == 2, log
+        assert any(x.startswith("S003: not described (the download failed, yt-dlp exit 1)") for x in log), log
+        assert not any("Command '[" in x for x in log), log      # her screen shows yt-dlp's own error above
+        assert _left(scratch) == [], _left(scratch)
+
+
 def test_accurate_ocr_says_which_frames_went_unread() -> None:
     """--text2 runs in its own chunks; a chunk that hangs comes back as
     unread frames (words unknown), not as frames with no words, and what it
@@ -305,6 +342,7 @@ if __name__ == "__main__":
     test_measure_keeps_numbers_only()
     test_describe_keeps_numbers_and_labels_only()
     test_ai_editor_stops_at_the_cap()
+    test_a_failed_download_is_tried_once_more()
     test_accurate_ocr_says_which_frames_went_unread()
     test_ai_needs_a_cap_and_a_key()
     print("ok")

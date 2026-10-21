@@ -92,8 +92,13 @@ branch merged in (one line):
   Korean, Japanese and Chinese captions, which the fast one used for the
   measurements can't), several times slower: roughly a minute or two a
   short and several minutes a long vlog, so a few hours for the whole set
-  [a guess, not yet timed]. `caffeinate -i` keeps the Mac awake;
-  everything is resumable, and one bad link is skipped, not fatal.
+  [a guess, not yet timed; the first run took about 5 minutes a long
+  vlog]. `caffeinate -i` keeps the Mac awake, but not with the lid shut;
+  everything is resumable (a described video is never fetched or paid for
+  again), one bad link is skipped, not fatal, and a download that fails is
+  tried once more at the end of the run.
+- `--cap` is per run: after a stopped run, give the next one what is left
+  (the last line it printed says how much was spent).
 
 What is kept: numbers and labels only. The words on screen are counted,
 placed and dropped; what's said (English videos only, read by the Mac's

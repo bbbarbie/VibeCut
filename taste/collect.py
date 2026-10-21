@@ -546,26 +546,48 @@ def _needs(row: dict, ai: AIRun | None) -> bool:
     return True
 
 
+def _why(e: Exception) -> str:
+    """A failed fetch in words: yt-dlp's own error is already on screen above."""
+    if isinstance(e, subprocess.TimeoutExpired):
+        return f"the download stalled, given up after {int(e.timeout or 0)} s"
+    if isinstance(e, subprocess.CalledProcessError):
+        return f"the download failed, yt-dlp exit {e.returncode}"
+    return f"{type(e).__name__}: {str(e)[:120]}"
+
+
+def _fetch_and_describe(row: dict, log, ai: AIRun | None) -> bool:
+    """One measured row fetched again, described and deleted. -> False
+    when the fetch itself failed, which is worth another try."""
+    tmp = Path(tempfile.mkdtemp(prefix="taste-"))
+    try:
+        lang = _lang(row, None, ai)
+        try:
+            path = _download(row, tmp)
+        except Exception as e:   # a link gone private, a dropped connection: tried again
+            log(f"{row['id']}: not described ({_why(e)})")
+            return False
+        describe_one(row, path, log, ai=ai, lang=lang)
+        return True
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def describe_all(log, ai: AIRun | None = None) -> None:
     """Every measured row without a description (or without the editor's
     roles, under --ai) is fetched again, described and deleted. Resumable:
-    the description file is the record that it's done."""
+    the description file is the record that it's done. A fetch that fails
+    is tried once more at the end of the run: a connection that dropped
+    mid-download (her Mac, 2026-10-21) is usually back by then."""
     off = _struck()
+    todo = []
     for group, path in GROUPS.items():
         _, rows = _rows(path)
-        for row in rows:
-            if row.get("status") != "measured" or not row.get("url_or_file") or _off(row, off):
-                continue
-            if not _needs(row, ai):
-                continue
-            tmp = Path(tempfile.mkdtemp(prefix="taste-"))
-            try:
-                lang = _lang(row, None, ai)
-                describe_one(row, _download(row, tmp), log, ai=ai, lang=lang)
-            except Exception as e:   # a link gone private since it was measured: the next run tries again
-                log(f"{row['id']}: not described ({type(e).__name__}: {str(e)[:120]})")
-            finally:
-                shutil.rmtree(tmp, ignore_errors=True)
+        todo += [r for r in rows if r.get("status") == "measured" and r.get("url_or_file") and not _off(r, off)]
+    again = [r for r in todo if _needs(r, ai) and not _fetch_and_describe(r, log, ai)]
+    for row in again:
+        if _needs(row, ai):
+            log(f"{row['id']}: trying the download once more")
+            _fetch_and_describe(row, log, ai)
 
 
 def main(argv: list[str] | None = None) -> None:
