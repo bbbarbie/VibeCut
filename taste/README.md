@@ -151,3 +151,24 @@ faces, labels or words — the log says so.
 - Every token threshold and every L2 strength is a prior. Tests:
   `test_taste_describe`, `test_taste_model`, `test_taste_editor`,
   `test_tastepick`, `test_media_vfr`, `test_jump_cuts`, `test_taste_collect`.
+
+## First training (2026-10-21, on sarah's Mac)
+
+31 videos described (23 long by 8 creators, 8 shorts by 4); the AI editor
+read all 31 for $1.39 of the course key. L005 and L009 didn't download and
+wait for the next run. Reports: `model/long-report.md`, `model/short-report.md`.
+
+- **Long vlogs**: on a creator it never saw, it tells the real edit from a
+  damaged copy 91% of the time. On a kind of damage it was never shown,
+  only 29%: it knows the mistakes it was taught, not editing in general.
+  Every change Make tries is one of those taught mistakes undone (rhythm,
+  opening, ending, order), so the 91% is the number that matters there.
+  The story-job model names a new creator's shots right 52% of the time,
+  against 29% for always guessing the commonest job.
+- **Shorts**: 66% on an unseen creator, from 4 creators, and no story-job
+  model. Below `tastepick.MIN_LOCO` (75%), so Make doesn't let it choose:
+  shorts stay as the rules cut them until more shorts are learnt.
+- Strongest signals (long): music under as much of it as the good edits,
+  words rarely at the top, neighbouring shots' lengths changing gradually,
+  a varied rhythm, talk broken up by cutaways, few capitals, no repeats.
+

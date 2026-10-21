@@ -159,7 +159,14 @@ def main() -> int:
     model = train()
     tm.save(model, tm.MODEL_DIR / "short.json")
     print(f"  (trained the tiny model in {time.time() - t0:.1f} s)")
-    check("a trained short model turns it on for shorts", tastepick.enabled("short"))
+    check("a trained short model turns it on for shorts", tastepick.enabled("short"),
+          f"leave-one-creator-out {model.report.get('loco')}")
+    weak = tm.Model.from_json(model.to_json())
+    weak.report = {**weak.report, "loco": tastepick.MIN_LOCO - 0.1}
+    tm.save(weak, tm.MODEL_DIR / "short.json")
+    check("…not one that can't yet tell real from damaged on unseen creators", not tastepick.enabled("short"))
+    tm.save(model, tm.MODEL_DIR / "short.json")
+    check("…and on again with the better one", tastepick.enabled("short"))
     check("…not for a vlog, whose group has none", not tastepick.enabled("tall"))
     os.environ["VIBECUT_TASTE"] = "0"
     check("VIBECUT_TASTE=0 turns it off", not tastepick.enabled("short"))

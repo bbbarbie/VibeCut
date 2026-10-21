@@ -22,8 +22,11 @@ every join is stored as the creator's own pick (`picture_all`), which a
 later set_look keeps -- a machine choice would outlive the look it was made
 against. That needs a source on the pick in board / transitions first.
 
-Off with VIBECUT_TASTE=0, and off until a model is trained
-(taste/model/<group>.json).
+Off with VIBECUT_TASTE=0, off until a model is trained
+(taste/model/<group>.json), and off for a group whose model can't yet tell
+a real edit from a damaged one on creators it never saw (MIN_LOCO): the
+first shorts model, 4 creators, managed 66% (2026-10-21), so shorts stay
+as the rules cut them until more shorts are learnt.
 """
 
 from __future__ import annotations
@@ -44,6 +47,8 @@ MIN_GAIN = 0.05         # a variant must beat today's edit by this much to repla
 OPEN_HOLD = 1.6         # "hold the opening": the hook this many times as long [prior]
 END_TRY = (1, 2, 3)     # ending holds tried, in beats [prior; make.END_BEATS is today's]
 WIDE_FACE = 0.05        # a shot whose largest face fills less than this is a wide look at the place [prior]
+MIN_LOCO = 0.75         # a model picks only if, on creators it never saw, it tells the real edit from a
+                        # damaged copy this often (the report's "leave one creator out") [prior]
 
 # what the reply says when a variant wins: "The taste model chose <says>."
 SAYS = {
@@ -78,9 +83,17 @@ def model_for(fmt: str) -> tm.Model | None:
     stamp = _stamp(group)
     hit = _MODELS.get(group)
     if hit is None or hit[0] != stamp:
-        hit = (stamp, tm.load(group))
+        m = tm.load(group)
+        hit = (stamp, m if m is not None and trusted(m) else None)
         _MODELS[group] = hit
     return hit[1]
+
+
+def trusted(m: tm.Model) -> bool:
+    """Good enough to choose between cuts: its own report says it told real
+    from damaged on unseen creators at least MIN_LOCO of the time."""
+    loco = (m.report or {}).get("loco")
+    return isinstance(loco, (int, float)) and loco >= MIN_LOCO
 
 
 def enabled(fmt: str) -> bool:
