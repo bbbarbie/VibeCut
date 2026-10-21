@@ -48,3 +48,12 @@ trait and how they differ from the ordinary side. It becomes the default
 recipe every video is cut to (`remix.fingerprint` / vibes) and the standard
 the AI self-check judges against. Uploads land in the project's shared
 folder `taste/`; the CSVs here are synced from there.
+
+## First house style (2026-10-21)
+
+`python -m taste.fingerprint` → `fingerprints/long.json` (18 vlogs) and
+`fingerprints/short.json` (7, thin). Videos whose typical shot is held over
+6 s (someone sitting and talking) are listed as `held_out`, not averaged in.
+`python -m taste.scorecard measurements/V001.json --group short` scores one of
+VibeCut's own exports (V001 = "Your video 2026-10-19", V002 = "As it happened
+2026-10-14 18.54", both on sarah's Mac): 4 and 6 of 17 traits inside.

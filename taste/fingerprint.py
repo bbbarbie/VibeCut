@@ -23,6 +23,13 @@ from . import collect
 HERE = Path(__file__).parent
 OUT = HERE / "fingerprints"
 
+# A video whose typical shot is held this long is someone sitting and talking
+# (Emma's "ugg season" 12 s, a channel update 29 s), not a vlog cut through a
+# day. Those keep their time for words, which VibeCut leaves to talk.py; the
+# house style is taken from the ones cut like vlogs, and the held ones are
+# listed so a person can see what was left out. Set on the first 33 (2026-10-21).
+TALK_SHOT_S = 6.0
+
 # (name, path into the record, what it means)
 TRAITS = [
     ("shot_s", ("pace", "median_s"), "typical shot length, seconds"),
@@ -77,6 +84,8 @@ def good_records(group: str) -> list[dict]:
 
 
 def fingerprint(recs: list[dict], group: str) -> dict:
+    held = [r.get("id") for r in recs if (_get(r, ("pace", "median_s")) or 0) > TALK_SHOT_S]
+    recs = [r for r in recs if r.get("id") not in held]
     traits = {}
     for name, path, means in TRAITS:
         vals = []
@@ -99,7 +108,7 @@ def fingerprint(recs: list[dict], group: str) -> dict:
     if bands:
         traits["words_band"] = {"most": max(set(bands), key=bands.count), "n": len(bands),
                                 "means": "where captions sit: bottom / middle / top"}
-    return {"group": group, "videos": [r.get("id") for r in recs], "n": len(recs),
+    return {"group": group, "videos": [r.get("id") for r in recs], "n": len(recs), "held_out": held,
             "thin": len(recs) < 8, "traits": traits}
 
 
