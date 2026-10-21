@@ -48,6 +48,7 @@ LONG_S = 300.0         # a long vlog is measured on its first five minutes (100+
                        # sarah, 2026-10-20: ten took ~7 min a video on her connection)
 LONG_RANGE = (300, 2700)   # what counts as a long vlog, seconds
 SHORT_MAX = 180            # ...and a short one
+DOWNLOAD_S = 600       # give up on one video's download after this long
 FORMAT = "bv*[height<=480]+ba/b[height<=480]/b"
 BRANCH = "origin/claude/vlog-taste-model-i4z3mi"
 
@@ -272,10 +273,12 @@ def measure_one(row: dict, log) -> None:
     tmp = Path(tempfile.mkdtemp(prefix="taste-"))
     try:
         if url.startswith("http"):
-            cmd = [ytdlp(), "-q", "--no-warnings", "--no-playlist", "-f", FORMAT, "-o", str(tmp / "v.%(ext)s")]
+            cmd = [ytdlp(), "-q", "--no-warnings", "--no-playlist", "--socket-timeout", "30", "--retries", "3",
+                   "-f", FORMAT, "-o", str(tmp / "v.%(ext)s")]
             if group == "long":
                 cmd += ["--download-sections", f"*0-{int(LONG_S)}"]
-            subprocess.run(cmd + [url], check=True, timeout=1800)
+            # a stalled download (one stuck for hours on her Mac, 2026-10-20) is given up on, not waited for
+            subprocess.run(cmd + [url], check=True, timeout=DOWNLOAD_S)
             path = str(next(p for p in tmp.iterdir() if p.name.startswith("v.")))
         else:
             path = url
