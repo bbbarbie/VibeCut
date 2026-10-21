@@ -305,6 +305,36 @@ def api(clips_dir: Path, model: tm.Model) -> None:
         s = c.get("/api/session").json()
         check("Make again: the old cards are gone", backend.PREFER["deck"] is not old
               and (s.get("prefer") is None or s["prefer"]["deck"] != old.make_turn), str(s.get("prefer")))
+        # what the app puts on a made video by itself (a profile's "no captions" and a dissolve at
+        # every cut, as #47 does after Make) doesn't stop a pick landing, and the picked
+        # version gets it too, in the same turn
+        def dressing(_d=None) -> None:
+            b = backend.SESSION.board
+            backend.SESSION.add({"kind": "direct", "text": "From your profile",
+                                 "ops": [{"op": "drop_overlay", "overlay": o["id"]} for o in b.get("overlays") or []]
+                                 + [{"op": "set_transition", "all": True, "kind": "dissolve"}]},
+                                backend.CATALOG["cat"], backend._make_proposals)
+        backend.REDRESS["From your profile"] = dressing
+        try:
+            if s.get("prefer"):
+                with backend.LOCK:
+                    dressing()
+                s = c.get("/api/session").json()
+                made_items = s["timeline"]["items"]
+                r = c.get("/api/prefer").json()
+                dk = backend.PREFER["deck"]
+                n = len(s["turns"])
+                r = c.post(f"/api/prefer/{r['card']['id']}", json={"pick": 1 - dk.card["video"]}).json()
+                b = backend.SESSION.board
+                check("a profile's own turn after Make: the pick still lands, as one turn", r["prefer_landed"]
+                      and len(r["turns"]) == n + 1 and r["turns"][-1]["text"] == prefer.TURN_TEXT, r["prefer_said"])
+                check("…and the picked version is dressed the same (no captions, a dissolve at every cut)",
+                      not b.get("overlays") and (b.get("picture_all") or {}).get("kind") == "dissolve", str(b.get("picture_all")))
+                s = c.post(f"/api/turns/{r['turns'][-1]['id']}/toggle").json()
+                check("…and one Undo brings the made version back, still dressed", s["timeline"]["items"] == made_items
+                      and not backend.SESSION.board.get("overlays"))
+        finally:
+            backend.REDRESS.pop("From your profile", None)
         backend._close_project()
         check("another project: no cards", c.get("/api/prefer").json()["card"] is None)
 

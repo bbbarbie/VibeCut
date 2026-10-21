@@ -16,6 +16,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
+from typing import Callable
 from urllib.parse import unquote
 
 from contextlib import asynccontextmanager
@@ -31,7 +32,7 @@ from cutgrammar import grade
 
 from . import board as bd
 from . import projects as pj
-from . import audiomix, bed, brief, cloud, defaults, habits, make, prefer, vibes, tempo, ink, moment, cut, export, looks, pitch, seams, selfcheck, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, oai, overlays, reference, remix, speech, story, storyboard, talk, timeline, vision, voiceover
+from . import audiomix, bed, brief, cloud, defaults, habits, make, vibes, tempo, ink, moment, cut, export, looks, pitch, seams, selfcheck, smooth, sound, subtitles, places, indexer, llm, locate, musiclib, oai, overlays, reference, remix, speech, story, storyboard, talk, timeline, vision, voiceover
 from .preferences import PreferenceError, Preferences
 from .workflow import GATE, Workflow, WorkflowError
 
@@ -1449,8 +1450,24 @@ def api_make_status(jid: str) -> dict:
 # which do you like better? a few cards after Make (prefer.py; sarah, 2026-10-21)
 # --------------------------------------------------------------------------
 
+from . import prefer  # noqa: E402
+
 PREFER: dict = {"deck": None}
 PREFER_LOCK = threading.Lock()     # builds a card outside LOCK; never taken while holding LOCK
+# what the app puts on a made video by itself, from what the creator told it, as a turn of its own
+# after Make (a profile's captions or transition at every cut), by that turn's text -> what puts it
+# on again. Under such a turn the video is still as made, so a pick may land; the picked version
+# then gets it too, inside the pick's own turn, so one Undo brings the other version back whole.
+REDRESS: dict[str, Callable[[prefer.Deck], None]] = {}
+
+
+def _follow(d: prefer.Deck) -> bool:
+    """Under LOCK: whether the video is as Make or the last pick left it
+    (Deck.follow), looking past what REDRESS put on by itself since."""
+    live = [t for t in SESSION.turns if not t.undone and t.ops]
+    while live and live[-1].text in REDRESS and live[-1].id not in d.turns:
+        live.pop()
+    return d.follow(live[-1].id if live else None)
 
 
 def _prefer_deck() -> prefer.Deck | None:
@@ -1493,8 +1510,7 @@ def api_prefer() -> dict:
         with LOCK:
             d = _prefer_deck()
             if d is not None:
-                last = SESSION.last_active()
-                d.follow(last.id if last else None)
+                _follow(d)
             frame = export.frame_size(timeline.layout(SESSION.board), CLIPS, _want()) if d is not None else None
         card = d.next_card() if d is not None else None
         with LOCK:
@@ -1518,7 +1534,9 @@ def api_prefer_pick(cid: int, req: PreferReq) -> dict:
             if d is None:
                 raise HTTPException(409, "These versions are for a video that has changed since.")
             last = SESSION.last_active()
-            as_made = d.follow(last.id if last else None)
+            as_made = _follow(d)
+            redress = list(dict.fromkeys(t.text for t in SESSION.turns
+                                         if not t.undone and t.ops and t.id > d.make_turn and t.text in REDRESS))
         try:
             got = d.answer(cid, req.pick)
         except KeyError as e:
@@ -1534,6 +1552,14 @@ def api_prefer_pick(cid: int, req: PreferReq) -> dict:
                 t = SESSION.add({"kind": "direct", "text": prefer.TURN_TEXT,
                                  "ops": copy.deepcopy(side.ops) + copy.deepcopy(d.extra),
                                  "reply": f"Your video now has {words}."}, CATALOG["cat"], _make_proposals)
+                for text in redress:
+                    n = len(SESSION.turns)
+                    REDRESS[text](d)
+                    for x in SESSION.turns[n:]:        # into the pick's turn: one Undo takes it all back
+                        t.ops += x.ops
+                    del SESSION.turns[n:]
+                if redress:
+                    SESSION.replay(CATALOG["cat"], _make_proposals)
                 d.landed(t.id, side)
                 landed = True
                 said = f"Your video now has {words}."
