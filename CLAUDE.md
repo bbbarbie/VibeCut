@@ -34,6 +34,24 @@ The promise to a user is therefore *not* "this will be beautiful." It is
 - `storyline/` — proposes several edits from one shoot. Not built as a
   module; v1 axis enumeration (time / place / subject, no LLM) lives in
   `web/backend/storyboard.py`.
+- `taste/` — the taste model (sarah, 2026-10-21: "a learnable model that
+  iterates and improves", read the way a pro editor reads a cut): reference
+  vlogs described shot by shot, a scorer trained on real edits against
+  damaged copies, Make weighs a few one-change versions with it and keeps
+  at most one change per part (opening / rhythm / order / ending;
+  `web/backend/tastepick.py`). Trained 2026-10-21 on her Mac (24 long vlogs /
+  8 creators: 90% real-vs-damaged on unseen creators; 28 shorts / 12
+  creators: 85%; both past `MIN_LOCO`, so Make uses them). **Which do you
+  like better?** (sarah, 2026-10-21; `web/backend/prefer.py`,
+  `PreferCards.tsx`, `/api/prefer`): under the made video up to 3 cards
+  play two versions one change apart; a pick refits her layer
+  (`taste/model.py` `PICK_STEP`) and, while the video is untouched since
+  Make, lands as one undoable turn. A turn the app adds by itself after Make
+  (a profile's captions or transition) isn't a change: register its text in
+  `app.REDRESS` and the picked version gets it too, inside the pick's turn
+  (#47's "From your profile" needs that one line when the two meet).
+  `tests/test_prefer.py`. Every threshold
+  a prior. See `taste/README.md`.
 - `web/` — the app (FastAPI + Vite/React). Built at the user's explicit
   request despite the "no web UI" non-goal below; scope is deliberately one
   path: **Projects → Footage → (style questions) → Story → Export**, the rough trim automatic

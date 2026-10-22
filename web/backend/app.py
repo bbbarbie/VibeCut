@@ -16,6 +16,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
+from typing import Callable
 from urllib.parse import unquote
 
 from contextlib import asynccontextmanager
@@ -357,6 +358,7 @@ def _session() -> dict:
         "mix": _mix_public(b, tl),
         "preferences": _prefs_public(),
         "habits": MAKE.get("last_habits") or [],
+        "prefer": _prefer_public(),
         "voiceover": _voiceover_public(),
         "project": _meta(),
         "brief": PROJECT["p"].brief if PROJECT["p"] else None,
@@ -438,14 +440,27 @@ def _music_public() -> dict | None:
 MIXES: dict[str, dict] = {}
 
 
-def _mix_spec(b: dict | None, items: list[dict]) -> dict | None:
+_SESSION_TRACK = object()
+
+
+def _mix_spec(b: dict | None, items: list[dict], track=_SESSION_TRACK) -> dict | None:
+    """`track`: the music under `b`, when it isn't the session's board (a card's version)."""
     if not b or not items:
         return None
-    t = _track()
+    t = _track() if track is _SESSION_TRACK else track
     sp = export.spans(items)
     plan, _ = export.plan_transitions(sp, CLIPS, _style(b))
     music = export.music_spec(t.path if t else None, b.get("music"))
     return audiomix.spec(sp, CLIPS, b.get("joins"), plan, music, audiomix.strips_of(b))
+
+
+def _keep_mix(sp: dict) -> str:
+    """Remember a mix spec so /api/mix can render it; its key."""
+    k = audiomix.key_of(sp)
+    MIXES[k] = sp
+    while len(MIXES) > 64:   # only recent edits can still be asked for
+        MIXES.pop(next(iter(MIXES)))
+    return k
 
 
 def _mix_public(b: dict | None, tl: dict) -> dict | None:
@@ -453,10 +468,7 @@ def _mix_public(b: dict | None, tl: dict) -> dict | None:
     sp = _mix_spec(b, tl["items"])
     if sp is None:
         return None
-    k = audiomix.key_of(sp)
-    MIXES[k] = sp
-    while len(MIXES) > 64:   # only recent edits can still be asked for
-        MIXES.pop(next(iter(MIXES)))
+    k = _keep_mix(sp)
     joins = audiomix.joins_for(sp["items"], sp["joins"])
     # The picture side of the same plan export renders (plan_transitions):
     # per shot, frames of handle for a dissolve and any dip or flash, so the
@@ -1270,9 +1282,14 @@ def api_make(req: BriefAutoReq | None = None) -> dict:
                 due = habits.used([h["id"] for h in acted])
                 for h in due:
                     habits.mark_offered(h["id"])
-            SESSION.add({"kind": "direct", "text": MAKE_TEXT, "ops": ops_,
-                         "reply": job.result["reply"] + (" " + said if said else "")},
-                        CATALOG["cat"], _make_proposals)
+            made_turn = SESSION.add({"kind": "direct", "text": MAKE_TEXT, "ops": ops_,
+                                     "reply": job.result["reply"] + (" " + said if said else "")},
+                                    CATALOG["cat"], _make_proposals)
+            # "which do you like better?" (prefer.py): the versions the taste model weighed
+            pick_ = job.result.get("taste_pick") or {}
+            PREFER["deck"] = (prefer.Deck(job.result["deck"], pick_, made_turn.id, getattr(PROJECT["p"], "id", None),
+                                          extra=ops_[len(job.result["ops"]):])
+                              if job.result.get("deck") and len(pick_.get("specs") or []) > 1 else None)
             if job.result.get("check"):
                 _check_landed(job.result["check"], PROJECT["p"], "make")     # its fixes undo on their own
             pr_ = PROJECT["p"]
@@ -1427,6 +1444,143 @@ def api_make_status(jid: str) -> dict:
     if not job:
         raise HTTPException(404, "no such job")
     return job.public()
+
+
+# --------------------------------------------------------------------------
+# which do you like better? a few cards after Make (prefer.py; sarah, 2026-10-21)
+# --------------------------------------------------------------------------
+
+from . import prefer  # noqa: E402
+
+PREFER: dict = {"deck": None}
+PREFER_LOCK = threading.Lock()     # builds a card outside LOCK; never taken while holding LOCK
+# what the app puts on a made video by itself, from what the creator told it, as a turn of its own
+# after Make (a profile's captions or transition at every cut), by that turn's text -> what puts it
+# on again. Under such a turn the video is still as made, so a pick may land; the picked version
+# then gets it too, inside the pick's own turn, so one Undo brings the other version back whole.
+REDRESS: dict[str, Callable[[prefer.Deck], None]] = {}
+
+
+def _basis(d: prefer.Deck) -> int | None:
+    """Under LOCK: the turn the video's version is read from, the last live
+    one, looking past what REDRESS put on by itself since."""
+    live = [t for t in SESSION.turns if not t.undone and t.ops]
+    while live and live[-1].text in REDRESS and live[-1].id not in d.turns:
+        live.pop()
+    return live[-1].id if live else None
+
+
+def _follow(d: prefer.Deck) -> bool:
+    """Under LOCK: whether the video is as Make or the last pick left it (Deck.follow)."""
+    return d.follow(_basis(d))
+
+
+def _prefer_deck() -> prefer.Deck | None:
+    """The cards for the video on screen: gone when another project is open,
+    or the Make they came from was undone or made again. Under LOCK."""
+    d, pr = PREFER["deck"], PROJECT["p"]
+    if d is None or pr is None or d.project != pr.id:
+        return None
+    mk = next((t for t in SESSION.turns if t.id == d.make_turn), None)
+    if mk is None or mk.undone or any(t.text == MAKE_TEXT and t.id > d.make_turn and not t.undone for t in SESSION.turns):
+        return None
+    return d
+
+
+def _prefer_public() -> dict | None:
+    d = _prefer_deck()
+    # `on`: the turn the video's version is read from; when it moves (an Undo) the card is fetched again
+    return None if d is None or d.done() else {"at": min(d.i + 1, len(d.kinds)), "of": len(d.kinds),
+                                               "deck": d.make_turn, "on": _basis(d)}
+
+
+def _card_public(card: dict) -> dict:
+    sides = []
+    for side, win in zip(card["sides"], card["windows"]):
+        m = side.board.get("music") or {}
+        t = musiclib.find(m["track"]) if m.get("track") else None
+        out = prefer.side_public(side, win)
+        sp = _mix_spec(side.board, timeline.layout(side.board), track=t)
+        out["audio"] = f"/api/mix/{_keep_mix(sp)}.wav" if sp else None
+        # its first shot's still, shown until it plays (as the player holds a frame while loading)
+        first = next((CATALOG["cat"].shots.get(it["shot_id"]) for it in out["items"] if it["kind"] == "shot"), None)
+        out["poster"] = first.thumb if first else None
+        sides.append(out)
+    return {"id": card["id"], "ask": card["ask"], "at": card["at"], "of": card["of"], "sides": sides}
+
+
+@app.get("/api/prefer")
+def api_prefer() -> dict:
+    """The card on show: two versions of the video that differ in one part,
+    each as the shots that play and the sound they play with."""
+    with PREFER_LOCK:
+        with LOCK:
+            d = _prefer_deck()
+            if d is not None:
+                _follow(d)
+            frame = export.frame_size(timeline.layout(SESSION.board), CLIPS, _want()) if d is not None else None
+        card = d.next_card() if d is not None else None
+        with LOCK:
+            return {"card": _card_public(card) if card else None, "frame": frame}
+
+
+class PreferReq(BaseModel):
+    pick: int | None = None      # 0 / 1 = the left / right version; None = can't tell
+
+
+@app.post("/api/prefer/{cid}")
+def api_prefer_pick(cid: int, req: PreferReq) -> dict:
+    """Her pick: kept as a pair for her layer of the taste model, and the
+    picked version put on the video while it is as Make (or the last pick)
+    left it, as one undoable turn."""
+    if req.pick not in (None, 0, 1):
+        raise HTTPException(400, "pick is 0, 1 or nothing")
+    with PREFER_LOCK:
+        with LOCK:
+            d = _prefer_deck()
+            if d is None:
+                raise HTTPException(409, "These versions are for a video that has changed since.")
+            last = SESSION.last_active()
+            as_made = _follow(d)
+            redress = list(dict.fromkeys(t.text for t in SESSION.turns
+                                         if not t.undone and t.ops and t.id > d.make_turn and t.text in REDRESS))
+        try:
+            got = d.answer(cid, req.pick)
+        except KeyError as e:
+            raise HTTPException(409, "That card has gone; here is the next one.") from e
+        with LOCK:
+            side, words = got["side"], got["words"]
+            landed = False
+            if side is None:
+                said = "Skipped."
+            elif not got["change"]:
+                said = "Noted. Your video already has that one."
+            elif as_made and _prefer_deck() is d and SESSION.last_active() is last:
+                t = SESSION.add({"kind": "direct", "text": prefer.TURN_TEXT,
+                                 "ops": copy.deepcopy(side.ops) + copy.deepcopy(d.extra),
+                                 "reply": f"Your video now has {words}."}, CATALOG["cat"], _make_proposals)
+                for text in redress:
+                    n = len(SESSION.turns)
+                    REDRESS[text](d)
+                    for x in SESSION.turns[n:]:        # into the pick's turn: one Undo takes it all back
+                        t.ops += x.ops
+                    del SESSION.turns[n:]
+                if redress:
+                    SESSION.replay(CATALOG["cat"], _make_proposals)
+                d.landed(t.id, side)
+                landed = True
+                said = f"Your video now has {words}."
+            elif last is not None and last.kind == "check":
+                said = "Noted for your next videos. This one keeps the fixes from the check."
+            else:
+                said = "Noted for your next videos. This one keeps the changes you made."
+            if PROJECT["p"] is not None:
+                PROJECT["p"].events.append({"kind": "prefer", "at": time.time(), "ask": d.answers[-1]["kind"],
+                                            "pick": req.pick, "versions": d.answers[-1]["names"],
+                                            "video": d.answers[-1]["video"], "landed": landed})
+            out = {**_session(), "prefer_said": said, "prefer_landed": landed}
+    _save()
+    return out
 
 
 # --------------------------------------------------------------------------

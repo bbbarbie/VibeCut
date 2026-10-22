@@ -149,6 +149,10 @@ export const api = {
   exportPhotos: (id: string) => j<{ ok: boolean }>(post(`/api/export/${id}/photos`, {})),
   habits: () => j<{ habits: Habit[]; phrases: string[]; last: { id: string; text: string }[] }>(fetch('/api/habits')),
   habitSwitch: (id: string, off: boolean, remake = false) => j<MakeJob & { habit?: Habit }>(post(`/api/habits/${encodeURIComponent(id)}`, { off, remake })),
+  // "Which do you like better?" after Make (backend prefer.py)
+  prefer: () => j<{ card: import('./types').PreferCard | null; frame: { w: number; h: number } | null }>(fetch('/api/prefer')),
+  preferPick: (card: number, pick: number | null) =>
+    j<Session & { prefer_said: string; prefer_landed: boolean }>(post(`/api/prefer/${card}`, { pick })),
   exportVerdict: (n: number, wouldPost: boolean, note: string) => j<Session>(post(`/api/exports/${n}/verdict`, { post: wouldPost, note })),
   // Remix: reference reels + the shelf -> one finished short, then the board
   remixStart: (req: { refs: string[]; title?: string; sub?: string; length?: number }) =>

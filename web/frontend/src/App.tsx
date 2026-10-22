@@ -17,6 +17,7 @@ import { PauseChat } from './components/PauseChat'
 import { PaceButton } from './components/PaceButton'
 import { Setup, type SetupData } from './components/Setup'
 import { LengthButton } from './components/LengthButton'
+import { PreferCards } from './components/PreferCards'
 import type { OverlayEdit } from './components/OverlayCanvas'
 import { Menu, SwapPicker, type MenuItem } from './components/Menus'
 import { Music } from './components/Music'
@@ -1413,6 +1414,8 @@ export default function App({ id, view }: { id: string; view: 'story' | 'frames'
                         }}>Undo that</button>
               </p>
             ) : null}
+            {/* this version or that one? her picks teach her taste and tailor this video (PreferCards.tsx) */}
+            <PreferCards prefer={session?.prefer ?? null} turns={session?.turns ?? []} onSession={setSession} />
           </main>
         ) : framesView ? (
           <main className="relative flex min-h-0 min-w-0 flex-col px-3 pb-3">
