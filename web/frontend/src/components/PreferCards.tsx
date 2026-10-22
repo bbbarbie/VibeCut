@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { locate, toSource, type SeqItem } from '../sequence'
-import { dress, transport } from '../transport'
+import { dress, transport, transportStore } from '../transport'
 import type { PreferCard, PreferSide, Session, Turn } from '../types'
 import { Button } from '../ui'
 
@@ -100,7 +100,7 @@ export function PreferCards({ prefer, turns, onSession }: {
         {said && said.deck === shown.deck && saidLine(said)}
         <div className="mt-1 flex flex-wrap gap-2">
           <Button variant="secondary" size="md" disabled={busy} onClick={() => pick(null)}>Can't tell</Button>
-          <Button variant="ghost" size="md" onClick={() => { setPlaying(null); setHidden(shown.deck) }}>Not now</Button>
+          <Button variant="ghost" size="md" disabled={busy} onClick={() => { setPlaying(null); setHidden(shown.deck) }}>Not now</Button>
         </div>
         {error && <p className="text-[15px] text-rose-300">{error}</p>}
       </div>
@@ -197,7 +197,9 @@ function Version({ side, ratio, label, playing, onPlay, onStop }: {
       au.currentTime = side.start
       au.play().then(begin).catch(() => { sound = false; begin() })
     } else begin()
-    return () => { live = false; cancelAnimationFrame(s.raf); au?.pause() }
+    // the video itself started playing: this version gives way, so two never sound at once
+    const off = transportStore.subscribe(() => { if (transportStore.get().playing) onStop() })
+    return () => { live = false; off(); cancelAnimationFrame(s.raf); au?.pause() }
   }, [playing, side]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (

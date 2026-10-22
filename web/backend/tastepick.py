@@ -27,9 +27,9 @@ against. That needs a source on the pick in board / transitions first.
 
 Off with VIBECUT_TASTE=0, off until a model is trained
 (taste/model/<group>.json), and off for a group whose model can't yet tell
-a real edit from a damaged one on creators it never saw (MIN_LOCO): the
-first shorts model, 4 creators, managed 66% (2026-10-21), so shorts stay
-as the rules cut them until more shorts are learnt.
+a real edit from a damaged one on creators it never saw (MIN_LOCO). The
+first shorts model (4 creators) managed 66% and stayed off; retrained on
+12 creators it managed 85% (2026-10-21), so shorts are picked too.
 """
 
 from __future__ import annotations
