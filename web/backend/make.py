@@ -36,7 +36,19 @@ import uuid
 
 from cutgrammar import music as mu
 
-from . import audiomix, bed, habits, places, remix, select as sel, storyboard as sb, tempo, timeline, vlog
+from . import (
+    apply_intelligent_editing,
+    audiomix,
+    bed,
+    habits,
+    places,
+    remix,
+    select as sel,
+    storyboard as sb,
+    tempo,
+    timeline,
+    vlog,
+)
 
 # Shot length and hook by frame and pace [prior]. A short is cut like the
 # reels the creator brought on 2026-09-25 (0.7 s a shot, hook 1.4 s); a
@@ -278,14 +290,34 @@ def words(plan: sel.Plan, about: str, taste: str = "", ask=None, fp: dict | None
 
 
 def ops(plan: sel.Plan, fp: dict, mx: dict | None, fmt: str, look: str | None, about: str,
-        talking: set[str], name: str = "Your video", lines: list[str] | None = None) -> list[dict]:
-    """Everything the turn applies: the board, the bed, the look, the words."""
+        talking: set[str], name: str = "Your video", lines: list[str] | None = None,
+        emotional_blueprint: dict | None = None) -> list[dict]:
+    """Everything the turn applies: the board, the bed, the look, the words.
+
+    If emotional_blueprint is provided, applies intelligent editing decisions based on
+    detected moments in the footage and the learned emotional patterns from references.
+    """
     ramp = ramp_hook(plan, mx, fmt)
     board = remix.board_of(plan, fp, name)
     board["option"] = "made"
     board["structure"] = ("Made from your clips in the style of your references — " if fp.get("refs_used")
                           else "Made from your clips — ") + remix.describe(fp)
     out: list[dict] = [{"op": "choose_option", "option": "made", "snapshot": board}]
+
+    # Apply intelligent editing if emotional blueprint is available
+    if emotional_blueprint:
+        try:
+            # Create a minimal session dict for the intelligent editing system
+            session = {
+                "board": board,
+                "brief": {"clips": list(plan.picks)},
+                "media_analysis": {"motion": {}, "duration": fp.get("duration", 60)},
+                "session": {"music": {"estimated_bpm": mx.get("bpm", 120)} if mx else {}},
+            }
+            intelligent_ops = apply_intelligent_editing.apply_to_session(session, emotional_blueprint)
+            out.extend(intelligent_ops)  # Add intelligent editing operations
+        except Exception:  # noqa: BLE001 -- fallback to normal behavior if intelligent editing fails
+            pass
     if mx:
         lv = LEVELS.get(fmt, LEVELS["tall"])
         m = {"op": "set_music", "track": mx["track"].id, "in": mx["in"], "gain": lv["gain"], "original": lv["original"],
@@ -479,7 +511,14 @@ def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, ab
             talking = tempo.talking(list(clips.values()), pool)
             judged = any(n.startswith("Claude judged") for n in plan.notes)
             lines = words(plan, about, taste, words_ask, fp, found, phrasing)
-            job.result = {"ops": ops(plan, fp, mx, fmt, look, about, talking, lines=lines), "music": mx, "fp": fp,
+            # Extract emotional blueprint from vibe if available
+            emotional_bp = None
+            if vibe:
+                bp = vibe.get("blueprint", {})
+                emotional_bp = bp.get("emotional_blueprint")
+
+            job.result = {"ops": ops(plan, fp, mx, fmt, look, about, talking, lines=lines,
+                                     emotional_blueprint=emotional_bp), "music": mx, "fp": fp,
                           "plan": plan, "taste": taste, "written": bool(lines),
                           "reply": say(plan, fp, mx, source, judged) + (" Claude wrote the lines, in your voice." if lines else "")}
             job.stage = "done"
