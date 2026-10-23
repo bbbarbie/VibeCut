@@ -6,7 +6,9 @@ schema: a one-line reply, at most one clarifying question, and a list of
 operations for board.py to apply. It never sees pixels; what leaves the
 machine is the storyboard text and the conversation.
 
-Credentials: ANTHROPIC_API_KEY in the environment, or in web/.env.
+Credentials: ANTHROPIC_API_KEY in the environment, or in web/.env. The chat
+(interpret) also runs on OpenAI with the course key when the AI switch is on
+(oai.py; sarah, 2026-10-18), and then that is who answers.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ import os
 from pathlib import Path
 
 from . import board as bd
+from . import oai
 from . import overlays as ov
 from . import storyboard as sb
 
@@ -37,6 +40,52 @@ _load_env()
 
 def available() -> bool:
     return bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"))
+
+
+def chat_provider() -> str | None:
+    """Who answers the chat: OpenAI on the course key while the AI switch is
+    on (sarah, 2026-10-18: the chat should show when AI is on), else Claude
+    if its key is set, else nobody. Only the chat moves: the other calls in
+    this file stay on Claude's key."""
+    if oai.enabled():
+        return "openai"
+    return "claude" if available() else None
+
+
+# Claude Opus 5 list prices, $ per million tokens (MODEL), for the chat's
+# estimate and its bill when Claude answers.
+CLAUDE_PRICE_IN, CLAUDE_PRICE_OUT = 5.0, 25.0
+# What one answer costs to write, with its thinking: JSON ops + a sentence
+# or two. A range, because thinking length varies. [prior]
+OUT_TOKENS = (600, 2500)
+CHARS_PER_TOKEN = 3.5
+
+
+def chat_prices() -> tuple[str | None, float, float, float]:
+    """(model, $ per 1M input tokens, per 1M output, tokens one small frame
+    costs) for whoever answers the chat now."""
+    if chat_provider() == "openai":
+        name = oai.model()
+        p_in, _, p_out = oai.PRICES.get(name, oai.DEAREST)
+        return name, p_in, p_out, 85.0          # a "low" detail image is a flat small charge
+    return MODEL, CLAUDE_PRICE_IN, CLAUDE_PRICE_OUT, 384 * 216 / 750
+
+
+def estimate(prompt_chars: int, with_image: bool = False) -> dict:
+    """Dollars for one chat message before it is sent: input from the
+    prompt's size, output as a range. Never calls a model."""
+    name, p_in, p_out, img = chat_prices()
+    tin = prompt_chars / CHARS_PER_TOKEN + (img if with_image else 0)
+    lo, hi = (tin * p_in + o * p_out for o in OUT_TOKENS)
+    return {"provider": chat_provider(), "model": name, "tokens_in": int(tin),
+            "usd": [round(lo / 1e6, 4), round(hi / 1e6, 4)]}
+
+
+def prompt_chars(cat: bd.Catalog, session: bd.Session, rules: str = "") -> int:
+    """How long the chat's prompt is before the creator's own words: the
+    instructions, the edit as text and the conversation so far."""
+    return (len(SYSTEM) + len(render_state(cat, session, rules))
+            + sum(len(m["content"]) for m in _history(session)))
 
 
 _client = None
@@ -91,6 +140,7 @@ How the sound crosses a cut. Between parts the place's sound already carries a b
 - If the target is ambiguous (two beats could be "the market", or none looks like it), don't guess: ask one short question and return no operations.
 - If the user describes the video itself rather than an edit (e.g. the first message, "it's a trip to Tokyo"), set `direction`: the themes to lean into, mapped to labels that exist in FOOTAGE. VibeCut then rebuilds the three proposals — this never touches the working storyboard.
 - If that description is too vague to know what to lean into, and the footage has clearly different threads (e.g. lots of food and lots of people), ask exactly one question offering two or three concrete choices grounded in the footage ("Is this more about the food or the people you were with?"), put those choices in `choices`, and set nothing else. Don't ask when the footage only supports one reading or the user already said.
+- If the request needs something these operations can't do (new or generated footage, video effects, a different song), say so plainly in `reply` in one short sentence and return no operations. Never pretend to have done it.
 - Never ask more than one question at a time. Never ask when the request is clear.
 - `reply` is one short sentence saying what you did (or empty if you asked a question). No lists, no restating the whole storyboard."""
 
@@ -241,22 +291,41 @@ def _history(session: bd.Session, limit: int = 12) -> list[dict]:
 # --------------------------------------------------------------------------
 
 class LLMError(Exception):
-    pass
+    def __init__(self, msg: str, usage: dict | None = None) -> None:
+        super().__init__(msg)
+        self.usage = usage    # a failed answer can still have cost something
 
 
 def interpret(message: str, cat: bd.Catalog, session: bd.Session, rules: str = "",
-              moment: str = "", image_b64: str | None = None) -> dict:
-    """-> {"reply", "question", "choices", "direction", "ops"}. `rules` are the
-    creator's confirmed preferences (preferences.py), never candidates.
-    `moment` / `image_b64`: the paused moment the message is about (moment.py)."""
+              moment: str = "", image_b64: str | None = None, who: str | None = None) -> dict:
+    """-> {"reply", "question", "choices", "direction", "ops", "usage"}. `rules`
+    are the creator's confirmed preferences (preferences.py), never candidates.
+    `moment` / `image_b64`: the paused moment the message is about (moment.py).
+    `usage` says who answered and what it cost ({"model", "cost", ...}). `who`:
+    the answerer the caller already checked (app._chat_gate), so a switch
+    flipped meanwhile can't send an unpriced message to the course key."""
+    return ask(prepare(message, cat, session, rules, moment), image_b64, who)
+
+
+def prepare(message: str, cat: bd.Catalog, session: bd.Session, rules: str = "", moment: str = "") -> dict:
+    """Everything a chat turn sends, read off the edit as it is now (under the
+    app's lock), so the call itself can wait outside it."""
+    text = f"{render_state(cat, session, rules)}\n\n{moment + chr(10) + chr(10) if moment else ''}USER: {message}"
+    return {"text": text, "history": _history(session)}
+
+
+def ask(prepared: dict, image_b64: str | None = None, who: str | None = None) -> dict:
+    """One chat turn from `prepare`, answered by `who` (default: whoever
+    answers now, chat_provider)."""
+    if (who or chat_provider()) == "openai":
+        return _interpret_openai(prepared["text"], prepared["history"], image_b64)
     import anthropic
 
-    text = f"{render_state(cat, session, rules)}\n\n{moment + chr(10) + chr(10) if moment else ''}USER: {message}"
-    content: str | list = text
+    content: str | list = prepared["text"]
     if image_b64:
         content = [{"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": image_b64}},
-                   {"type": "text", "text": text}]
-    messages = _history(session) + [{"role": "user", "content": content}]
+                   {"type": "text", "text": prepared["text"]}]
+    messages = prepared["history"] + [{"role": "user", "content": content}]
     try:
         resp = client().beta.messages.create(
             model=MODEL,
@@ -285,9 +354,31 @@ def interpret(message: str, cat: bd.Catalog, session: bd.Session, rules: str = "
         out = json.loads(text)
     except json.JSONDecodeError as e:
         raise LLMError("The model's answer wasn't valid JSON.") from e
+    u = getattr(resp, "usage", None)
+    tin = sum(int(getattr(u, k, 0) or 0) for k in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
+    tout = int(getattr(u, "output_tokens", 0) or 0)
+    out["usage"] = {"model": MODEL, "prompt_tokens": tin, "completion_tokens": tout,
+                    "cost": round((tin * CLAUDE_PRICE_IN + tout * CLAUDE_PRICE_OUT) / 1e6, 4)}
+    return _tidy(out)
+
+
+def _tidy(out: dict) -> dict:
     out.setdefault("choices", [])
     out["ops"] = [_overlay_op(op) for op in out.get("ops") or [] if isinstance(op, dict)]
     return out
+
+
+def _interpret_openai(text: str, history: list[dict], image_b64: str | None) -> dict:
+    """The same turn on OpenAI's course key: same instructions, same state as
+    text, same schema (strict), the paused frame at low detail. Only a chat
+    request the creator sent with its cost shown gets here (app.py)."""
+    content = ([oai.image_b64(image_b64)] if image_b64 else []) + [{"type": "text", "text": text}]
+    try:
+        out, usage = oai.ask_json(SYSTEM, content, SCHEMA, "storyboard_ops", max_tokens=8000, history=history)
+    except oai.OAIError as e:
+        raise LLMError(str(e)[:1].upper() + str(e)[1:] + ".", e.usage) from e
+    out["usage"] = usage
+    return _tidy(out)
 
 
 def _overlay_op(op: dict) -> dict:
@@ -309,9 +400,11 @@ def interpret_offline(message: str, cat: bd.Catalog, session: bd.Session, rules:
         d = sb.read_direction(message, list(cat.shots.values()))
         return {"reply": "", "question": None, "choices": [], "ops": [],
                 "direction": {"themes": d.themes, "labels": sorted(d.labels), "keywords": True}}
+    why = ("Editing by chat needs AI: turn AI on in the top bar. Each message shows what it costs before "
+           "it's sent." if oai.has_key() else
+           "Editing by chat needs AI, and there's no AI key on this Mac (OPENAI_API_KEY in web/.env).")
     return {"reply": "", "question": None, "choices": [], "direction": None, "ops": [],
-            "error": "Editing by chat needs the language model: add ANTHROPIC_API_KEY=… to "
-                     "web/.env and restart the server. Timeline edits, Apply and Undo still work."}
+            "error": why + " Timeline edits and Undo still work."}
 
 
 # --------------------------------------------------------------------------

@@ -450,13 +450,17 @@ class PackSource(music.TrackSource):
             if self.progress:
                 self.progress(i, len(self.songs))
             ensure(s, folder)
-        by_file = {f"{s.id}.m4a": s for s in self.songs}
-        out = []
-        for t in music.LocalFolderSource(str(folder), progress=self.progress).list():
-            s = by_file.get(Path(t.path).name)
-            if s is None:
-                continue
-            t.meta = {**t.meta, "licence": record(s)}
-            t.title = f"{s.title} (VibeCut)"
-            out.append(t)
-        return out
+        mine = {f"{s.id}.m4a" for s in self.songs}
+        return [t for t in music.LocalFolderSource(str(folder), progress=self.progress).list()
+                if Path(t.path).name in mine and dress(t) is not None]
+
+
+def dress(t: music.Track) -> music.Track | None:
+    """A rendered pack song with its licence record and title; None if the
+    file isn't one of the pack's."""
+    s = next((s for s in SONGS if f"{s.id}.m4a" == Path(t.path).name), None)
+    if s is None:
+        return None
+    t.meta = {**t.meta, "licence": record(s)}
+    t.title = f"{s.title} (VibeCut)"
+    return t

@@ -30,41 +30,24 @@ the file. Every number in PRIOR is a guess until the creator says otherwise.
 
 from __future__ import annotations
 
+import sys
 import threading
 import time
 import uuid
 
 from cutgrammar import music as mu
 
-from . import (
-    apply_intelligent_editing,
-    apply_trend_graphics,
-    smart_graphics,
-    audiomix,
-    bed,
-    habits,
-    places,
-    remix,
-    select as sel,
-    storyboard as sb,
-    tempo,
-    timeline,
-    vlog,
-)
+from . import audiomix, bed, habits, oai, places, remix, select as sel, story, storyboard as sb, tempo, timeline
 
 # Shot length and hook by frame and pace [prior]. A short is cut like the
 # reels the creator brought on 2026-09-25 (0.7 s a shot, hook 1.4 s); a
 # vlog breathes (2-3 s) but still opens on its strongest moment.
-# A short is cut like a reel. A vlog (tall or wide) is cut like the pretty
-# ones on YouTube (2026-10-19, vlog.py): 3–6 s a shot held where the action
-# ends, scenes of wide → medium → close, the stillest shots held longest.
 PRIOR = {
     "short": {"median": {"fast": 0.7, "balanced": 0.9, "calm": 1.2}, "hook_s": 1.5, "max_s": 60.0},
-    "tall": {"median": {"fast": 3.0, "balanced": 4.0, "calm": 5.5}, "hook_s": 3.0, "max_s": None},
-    "wide": {"median": {"fast": 3.0, "balanced": 4.0, "calm": 5.5}, "hook_s": 3.0, "max_s": None},
+    "tall": {"median": {"fast": 1.8, "balanced": 2.5, "calm": 3.2}, "hook_s": 2.5, "max_s": None},
+    "wide": {"median": {"fast": 1.8, "balanced": 2.5, "calm": 3.2}, "hook_s": 2.5, "max_s": None},
 }
 CURVE = [1.15, 1.0, 0.9, 0.9, 1.05]       # shots shorten through the middle, the ending breathes [prior]
-VLOG_CURVE = [1.1, 1.0, 1.0, 0.95, 1.15]  # a vlog breathes throughout and rests at the end [prior]
 SPREAD = (0.6, 1.5)                        # shot-to-shot variety around the median (p10 / p90 of the median)
 # Levels by frame [prior]: a short rides on the music (Remix's levels); a
 # vlog's own sounds stay up front (the bed's).
@@ -72,7 +55,7 @@ LEVELS = {"short": {"gain": remix.MUSIC_GAIN, "original": remix.ORIGINAL_GAIN},
           "tall": {"gain": audiomix.MUSIC_GAIN, "original": 1.0},
           "wide": {"gain": audiomix.MUSIC_GAIN, "original": 1.0}}
 STAGES = {"choosing": "Choosing the moments…", "music": "Finding music and its drop…",
-          "words": "Writing the words…", "done": "Done", "error": "Failed"}
+          "words": "Writing the words…", "checking": "Checking its own edit…", "done": "Done", "error": "Failed"}
 
 
 def fingerprint(fmt: str, pace: str, seconds: float, styles: list[dict] | None = None,
@@ -93,7 +76,7 @@ def fingerprint(fmt: str, pace: str, seconds: float, styles: list[dict] | None =
     if p["max_s"]:
         dur = min(dur, p["max_s"])
     med = p["median"][pace]
-    return {"median_s": med, "curve": list(CURVE if fmt == "short" else VLOG_CURVE), "spread": SPREAD, "hook_s": p["hook_s"],
+    return {"median_s": med, "curve": list(CURVE), "spread": SPREAD, "hook_s": p["hook_s"],
             "bpm": bed.PACE_BPM[pace], "arc": "builds", "energy": None, "bright": None,
             "duration": round(max(15.0, dur), 1), "vertical": fmt != "wide", "refs": 0, "refs_used": False}
 
@@ -155,27 +138,8 @@ def plain_lines(plan: sel.Plan, found: dict | None) -> list[str]:
     return out
 
 
-def moments(clips: dict[str, dict], cut, fp: dict, judge=None, taste: str = "", bias: dict | None = None,
-            fmt: str = "short") -> sel.Plan:
-    if fmt == "short" or fp.get("refs_used"):
-        plan = remix.plan_shots(clips, fp, length=fp["duration"], cut=cut, judge=judge, taste=taste, bias=bias)
-    else:
-        # the vlog grammar (vlog.py): shots with room to rest in, scenes of
-        # wide -> medium -> close, the still shots held longest. Holds come
-        # out shorter than the median (walks are cut short, some shots were
-        # filmed short), so a vlog that lands well under its length asks for
-        # more moments once, in proportion.
-        length = fp["duration"]
-        for _ in range(2):
-            plan = remix.plan_shots(clips, fp, length=length, cut=cut, judge=judge, taste=taste, bias=bias,
-                                    min_s=vlog.MIN_PICK_S)
-            vlog.scenes(plan)
-            vlog.flow(plan, clips)
-            vlog.breathe(plan, clips, fp)
-            if plan.duration >= vlog.LENGTH_OK * fp["duration"] or plan.duration <= 0:
-                break
-            length = min(fp["duration"] * fp["duration"] / plan.duration, fp["duration"] * vlog.ASK_MORE_MAX)
-        plan.notes.append(vlog.describe(plan))
+def moments(clips: dict[str, dict], cut, fp: dict, judge=None, taste: str = "", bias: dict | None = None) -> sel.Plan:
+    plan = remix.plan_shots(clips, fp, length=fp["duration"], cut=cut, judge=judge, taste=taste, bias=bias)
     # The hook is lifted out of its stop, not copied: a Remix played the hook
     # shot again in its place (sarah: never the same shot twice). A stop that
     # was only its hook is not lost: it opens the video.
@@ -232,7 +196,7 @@ def pace_of(fp: dict) -> str:
 
 
 def music(clips: dict[str, dict], plan: sel.Plan, fp: dict, pace: str, own: list[mu.Track] | None,
-          progress=None, pool: list[mu.Track] | None = None, fmt: str = "short") -> tuple[dict | None, str]:
+          progress=None, pool: list[mu.Track] | None = None) -> tuple[dict | None, str]:
     """A track for this plan, and the plan re-cut to its beat. `pool` stands
     in for bed.candidates in tests. Returns (pick, where it came from)."""
     source = "given"
@@ -241,10 +205,7 @@ def music(clips: dict[str, dict], plan: sel.Plan, fp: dict, pace: str, own: list
     hook_s = sum(p.duration for p in plan.hook) or fp["hook_s"]
     mx = remix.pick_from(pool, fp, plan.duration + 4.0, hook_s)
     if mx:
-        if fmt == "short" or fp.get("refs_used"):
-            remix.quantise(plan, clips, mx["period"])       # a reel: every cut on the grid
-        else:
-            vlog.phrase(plan, clips, mx["period"])           # a vlog: scene changes on the phrases
+        remix.quantise(plan, clips, mx["period"])
         hold_ending(clips, plan, mx["period"], end_beats(fp, mx["period"]))
         hook_s = sum(p.duration for p in plan.hook) or hook_s
         mx["in"] = round(max(0.0, mx["drop"] - hook_s), 3)
@@ -293,56 +254,39 @@ def words(plan: sel.Plan, about: str, taste: str = "", ask=None, fp: dict | None
 
 def ops(plan: sel.Plan, fp: dict, mx: dict | None, fmt: str, look: str | None, about: str,
         talking: set[str], name: str = "Your video", lines: list[str] | None = None,
-        emotional_blueprint: dict | None = None) -> list[dict]:
+        chapters: list[dict] | None = None) -> list[dict]:
     """Everything the turn applies: the board, the bed, the look, the words.
-
-    If emotional_blueprint is provided, applies intelligent editing decisions based on
-    detected moments in the footage and the learned emotional patterns from references.
-    """
+    `chapters` (story.py): the plan's chapters, which then carry the words --
+    a designed title and a plain line under it each -- instead of a clock
+    time per stop."""
     ramp = ramp_hook(plan, mx, fmt)
     board = remix.board_of(plan, fp, name)
     board["option"] = "made"
     board["structure"] = ("Made from your clips in the style of your references — " if fp.get("refs_used")
                           else "Made from your clips — ") + remix.describe(fp)
+    if chapters:
+        board["structure"] = f"Told in {len(chapters)} chapters, each a setup, its steps and a payoff — " + remix.describe(fp)
     out: list[dict] = [{"op": "choose_option", "option": "made", "snapshot": board}]
-
-    # Apply intelligent editing if emotional blueprint is available
-    if emotional_blueprint:
-        try:
-            # Create a minimal session dict for the intelligent editing system
-            session = {
-                "board": board,
-                "brief": {"clips": list(plan.picks)},
-                "media_analysis": {"motion": {}, "duration": fp.get("duration", 60)},
-                "session": {"music": {"estimated_bpm": mx.get("bpm", 120)} if mx else {}},
-            }
-            intelligent_ops = apply_intelligent_editing.apply_to_session(session, emotional_blueprint)
-            out.extend(intelligent_ops)  # Add intelligent editing operations
-        except Exception:  # noqa: BLE001 -- fallback to normal behavior if intelligent editing fails
-            pass
     if mx:
         lv = LEVELS.get(fmt, LEVELS["tall"])
         m = {"op": "set_music", "track": mx["track"].id, "in": mx["in"], "gain": lv["gain"], "original": lv["original"],
              "level": True, "fade_out": min(3.0, max(1.5, 4 * mx["period"])), "duck": [], "sfx": []}
         if fmt != "short" and talking:
             m["duck"] = bed.ducks(board, talking)
-        if fmt != "short" and not fp.get("refs_used"):
-            m["gain"] = vlog.MUSIC_GAIN
-            m["duck"] = list(m["duck"]) + vlog.swells(plan)   # up at a scene change, settled inside
         out.append(m)
-    if fmt != "short" and not fp.get("refs_used"):
-        out.extend(vlog.carries(plan))                       # the place's sound runs on under the next shot
     if look:
         out.append({"op": "set_look", "look": look})
-    out.extend(punches(plan, mx, fmt == "short"))
+    out.extend(punches(plan, mx))
     if ramp:
         hook_key, cut_at, second = ramp
         out.append({"op": "split", "shot": hook_key, "at": cut_at})
         out.append({"op": "set_shot", "shot": second, "speed": RAMP_SPEED})
         if look in FLASH_LOOKS:
             out.append({"op": "set_transition", "shot": second, "kind": "flash", "dur": FLASH_S})
-    elif look in FLASH_LOOKS and plan.hook and mx and fmt == "short":
+    elif look in FLASH_LOOKS and plan.hook and mx:
         out.append({"op": "set_transition", "shot": plan.hook[-1].shot.id, "kind": "flash", "dur": FLASH_S})
+    if chapters:
+        return out + story.heading_ops(plan, chapters)    # beat-anchored, so the ramp moves nothing
     # the references' words: where they sit, how long they hold, whether a
     # reel that opens on its footage gets a title at all, caps or not
     text = fp.get("text")
@@ -371,28 +315,6 @@ def ops(plan: sel.Plan, fp: dict, mx: dict | None, fmt: str, look: str | None, a
         elif c["kind"] == "scene":
             out.append({"op": "add_overlay", "kind": "part", "text": c["text"], "pos": "top", "size": "S",
                         "start": c["start"], "dur": round(c["end"] - c["start"], 2), "anim": "rise"})
-
-    # Apply smart graphics: Auto-generate animations matching vibe + auto-process photos
-    # This replaces simple trend graphics with intelligent, vibe-matched animations
-    try:
-        caption_list = remix.captions(plan, title, None, hold_s=hold, with_title=with_title, phrases=lines, clock=False)
-
-        # Get emotional blueprint if available (from vibe)
-        # For now using basic structure; would be enhanced with actual vibe data
-        blueprint = {}  # Would be populated from vibe's emotional_blueprint
-
-        smart_ops = smart_graphics.apply_smart_graphics(
-            session={},
-            blueprint=blueprint if blueprint else None,
-            captions=[{"text": c["text"]} for c in caption_list],
-            voiceover_transcript=about,
-            brief_description=about,
-            clips=[],  # Would be populated from plan.picks
-        )
-        out.extend(smart_ops)
-    except Exception:  # noqa: BLE001 -- fallback if smart graphics fails
-        pass
-
     return out
 
 
@@ -404,7 +326,7 @@ PUSH_HOOK, PUSH_HIT, PUSH_BAR = 0.08, 0.14, 0.05
 BAR_BEATS = 4
 
 
-def punches(plan: sel.Plan, mx: dict | None, fmt_is_short: bool = True) -> list[dict]:
+def punches(plan: sel.Plan, mx: dict | None) -> list[dict]:
     """set_shot ops with a push per shot: the hook, the hit on the drop, the
     bars. With no beat known, only the hook and the first body shot move."""
     out: list[dict] = []
@@ -420,8 +342,8 @@ def punches(plan: sel.Plan, mx: dict | None, fmt_is_short: bool = True) -> list[
     for h in plan.hook:
         push(h, PUSH_HOOK)
     body = [p for sess in plan.sessions for p in sess]
-    if not body or not fmt_is_short:
-        return out                 # a vlog rests; only the hook pushes
+    if not body:
+        return out
     push(body[0], PUSH_HIT)
     if mx:
         period, sign = mx["period"], 1
@@ -459,9 +381,14 @@ def ramp_hook(plan: sel.Plan, mx: dict | None, fmt: str) -> tuple[str, float, st
     return p.shot.id, cut_at, f"{p.shot.id}~{int(round(cut_at * 1000))}"
 
 
-def say(plan: sel.Plan, fp: dict, mx: dict | None, source: str, judged: bool) -> str:
+def say(plan: sel.Plan, fp: dict, mx: dict | None, source: str, judged: bool, ai: dict | None = None) -> str:
     parts = [f"Made your video: {len(plan.picks)} moments, {plan.duration:.0f} s"
              + (", in the style of your references" if fp.get("refs_used") else "") + "."]
+    if ai and ai.get("chapters"):
+        parts.append(f"{ai['model']} planned it as {ai['chapters']} chapters (cost ${ai['cost']:.3f}).")
+    elif ai and ai.get("error"):
+        parts.append(f"The story plan didn't work ({ai['error']}), so the usual rules picked the moments."
+                     + (f" That try cost ${ai['cost']:.3f}." if ai.get("cost") else ""))
     t = fp.get("text")
     if fp.get("refs_used") and t:
         parts.append("No words, like the reel." if t["share"] < 0.05 else
@@ -505,11 +432,15 @@ JOBS: dict[str, Job] = {}
 def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, about: str, seconds: float,
           own: list[mu.Track] | None, styles: list[dict] | None, judge, on_done, want_music: bool = True,
           register=None, vibe: dict | None = None, taste: str = "", words_ask=None,
-          bias: dict | None = None, found: dict | None = None, phrasing: list[str] | None = None) -> Job:
+          bias: dict | None = None, found: dict | None = None, phrasing: list[str] | None = None,
+          use_ai: bool = False, check=None) -> Job:
     """Run the pipeline in a thread; `on_done(job)` puts the ops on the session.
     Everything the thread needs is copied in now, so later edits can't move it.
     `register(job)` is called before the thread starts: a fast job (no music,
-    few clips) can finish before the caller has even seen it."""
+    few clips) can finish before the caller has even seen it. `check(ops,
+    beat period) -> dict`: the AI looks at the finished cut (selfcheck.py),
+    only when this edit's AI cost was agreed; its fixes land as a turn of
+    their own, so they undo on their own."""
     job = Job()
     JOBS[job.id] = job
     if register:
@@ -522,29 +453,68 @@ def start(clips: dict[str, dict], cut, fmt: str, pace: str, look: str | None, ab
         try:
             job.stage = "choosing"
             fp = fingerprint(fmt, pace, seconds, styles, vibe)
-            plan = moments(clips, cut, fp, judge, taste, bias, fmt)
+            plan, chapters, ai = None, None, None
+            if use_ai and oai.enabled() and not styles and not vibe:
+                # the story editor (story.py): only with the AI switch on and this edit's cost agreed;
+                # references or a chosen vibe set the cut themselves
+                job.line = "Planning the story…"
+                try:
+                    plan, chapters, _title, usage = story.plan(clips, cut, fmt, fp["duration"], about)
+                    ai = {"model": usage.get("model"), "cost": usage.get("cost", 0.0), "chapters": len(chapters),
+                          "tokens_in": usage.get("prompt_tokens"), "tokens_out": usage.get("completion_tokens")}
+                except Exception as e:  # noqa: BLE001 -- the rules make the edit instead, and say so
+                    paid = (getattr(e, "usage", None) or {}).get("cost", 0.0)
+                    plan, chapters, ai = None, None, {"error": str(e)[:160], "cost": paid}
+                job.line = ""
+            if plan is None:
+                plan = moments(clips, cut, fp, judge, taste, bias)
             if not plan.picks:
                 raise ValueError("none of the clips had a moment worth keeping — add more footage")
-            if fmt == "short" or fp.get("refs_used"):
-                end_strong(plan)          # a vlog's scene already ends on its detail or its face
+            if not chapters:
+                end_strong(plan)      # the AI already ends each chapter on its payoff
+            # the taste model weighs a few cuts of these moments (tastepick.py), on the
+            # rules path only: AI chapters name their own picks. It needs the plan as
+            # it is before the music re-cuts it to the beat.
+            raw = None
+            if not chapters:
+                try:
+                    from . import tastepick
+                    raw = tastepick.copy_plan(plan) if tastepick.enabled(fmt) else None
+                except Exception as e:  # noqa: BLE001 -- no model to ask: today's edit, as before
+                    print(f"tastepick: {e!r}; today's edit stands", file=sys.stderr)
             job.stage = "music"
-            mx, source = (music(clips, plan, fp, pace, own, progress, fmt=fmt) if want_music
+            mx, source = (music(clips, plan, fp, pace, own, progress) if want_music
                           else (None, "off, as last time"))
             job.stage = "words"
             pool, _ = sb.usable(sb.shots_from_clips(list(clips.values()), cut))
             talking = tempo.talking(list(clips.values()), pool)
             judged = any(n.startswith("Claude judged") for n in plan.notes)
-            lines = words(plan, about, taste, words_ask, fp, found, phrasing)
-            # Extract emotional blueprint from vibe if available
-            emotional_bp = None
-            if vibe:
-                bp = vibe.get("blueprint", {})
-                emotional_bp = bp.get("emotional_blueprint")
-
-            job.result = {"ops": ops(plan, fp, mx, fmt, look, about, talking, lines=lines,
-                                     emotional_blueprint=emotional_bp), "music": mx, "fp": fp,
-                          "plan": plan, "taste": taste, "written": bool(lines),
-                          "reply": say(plan, fp, mx, source, judged) + (" Claude wrote the lines, in your voice." if lines else "")}
+            # chapters carry their own words (a designed title over a line), else a line per stop
+            lines = None if chapters else words(plan, about, taste, words_ask, fp, found, phrasing)
+            # only a writer's lines are "written": place and time of day are the plain fallback
+            wrote = bool(lines) and lines != plain_lines(plan, found)
+            made = ops(plan, fp, mx, fmt, look, about, talking, lines=lines, chapters=chapters)
+            picked = deck = None
+            if raw is not None:
+                job.line = "Weighing a few cuts…"
+                base = (plan, mx, made)
+                try:
+                    plan, mx, made, picked = tastepick.choose(clips, raw, fp, mx, fmt, look, about, talking, lines, base)
+                    # what the "which do you like better?" cards cut their versions from (prefer.py)
+                    deck = {"raw": raw, "base": base, "clips": clips, "fp": fp, "mx": base[1], "fmt": fmt,
+                            "look": look, "about": about, "talking": talking, "lines": lines}
+                except Exception as e:  # noqa: BLE001 -- today's edit stands; the video is always made
+                    print(f"tastepick: {e!r}; today's edit stands", file=sys.stderr)
+                    picked = {"error": str(e)[:160]}
+                job.line = ""
+            chose = tastepick.sentence(picked) if raw is not None else ""
+            job.result = {"ops": made, "music": mx, "fp": fp, "plan": plan, "taste": taste, "written": wrote,
+                          "ai": ai, "taste_pick": picked, "deck": deck,
+                          "reply": say(plan, fp, mx, source, judged, ai) + (" Claude wrote the lines, in your voice." if wrote else "")
+                          + (" " + chose if chose else "")}
+            if check:
+                job.stage = "checking"
+                job.result["check"] = check(job.result["ops"], mx["period"] if mx else None)
             job.stage = "done"
         except Exception as e:  # noqa: BLE001 -- the dialog shows it; nothing was changed
             job.stage, job.error = "error", str(e)[:300]

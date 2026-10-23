@@ -6,7 +6,8 @@ import type { JoinInfo, Overlay, SoundStrip, TimelineData } from '../types'
 import { KIND_META } from '../overlayDraw'
 import { SHOT_MIME } from './Shelf'
 import { Icon, type IconName } from './icons'
-import { anchoredScroll, clampZoom, fromSlider, toSlider, wheelFactor } from '../zoom'
+import { LABEL_GAP_PX, rulerFps, rulerLabel, rulerMarks, rulerScale, TICK_GAP_PX } from '../ruler'
+import { anchoredScroll, clampZoom, fromSlider, maxZoom, toSlider, wheelFactor } from '../zoom'
 
 const TL_MIME = 'application/x-vibecut-tl'
 const MIN_W = 56
@@ -26,6 +27,10 @@ const SOUND_H = 26   // a row of the Audio lane: sound taken off shots, the musi
 // the captions, then the sound (Audio) -- as in her reference picture
 // (sarah, 2026-10-16), each named in a column on the left.
 const VIDEO_TOP = 48
+// The picture never gets squeezed out: with many caption rows in a short
+// panel the lanes scroll up and down instead (sarah, 2026-10-18: "where are
+// my frames" -- three caption rows had left the Video row 0 px tall).
+const MIN_VIDEO_H = 56
 const LANE_GAP = 6
 const LABEL_W = 96
 // A caption being dragged: where it started, where it is, the line it's
@@ -119,8 +124,9 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   const anchor = useRef<{ t: number; offset: number } | null>(null)
   const zoomRef = useRef(zoom)
   useLayoutEffect(() => { zoomRef.current = zoom }, [zoom])
+  const zoomMax = maxZoom(fitNow(), tl.fps)
   const zoomTo = (z: number, at?: { t: number; offset: number }) => {
-    z = clampZoom(z)
+    z = clampZoom(z, zoomMax)
     if (z === zoomRef.current) return
     const el = track.current
     if (!anchor.current && el) {
@@ -191,7 +197,9 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
     const { t, localPps } = tOf(clientX - el.getBoundingClientRect().left + el.scrollLeft)
     const opts = { pxPerSec: localPps, disabled: bypass }
     const r = snap(tl.targets, t, opts)
-    transport.seek(r.t)
+    // as in every editor, the playhead lands on a frame, never between two
+    const fps = rulerFps(tl.fps)
+    transport.seek(r.target ? r.t : Math.min(tl.total, Math.round(r.t * fps) / fps))
     const near = r.target ? null : approaching(tl.targets, t, opts)
     snapStore.set(r.target ? { target: r.target, snapped: true } : near ? { target: near, snapped: false } : null)
   }
@@ -233,7 +241,25 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
     const t = anchor.current?.t ?? tOf(offset + el.scrollLeft).t
     zoomTo(gestureRef.current.z * e.scale, { t, offset })
   }
-  useLayoutEffect(() => { wheelRef.current = onWheel; pinchRef.current = onPinch })
+  // The keys every editor zooms with: ⌘= / ⌘− (Ctrl on Windows) in and out
+  // around the playhead, ⇧Z to fit the whole video, as in Final Cut.
+  const onKey = (e: KeyboardEvent) => {
+    const tag = (e.target as HTMLElement | null)?.tagName
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement | null)?.isContentEditable || !items.length) return
+    const mod = e.metaKey || e.ctrlKey
+    if (mod && (e.key === '=' || e.key === '+')) zoomTo(zoomRef.current * 1.5)
+    else if (mod && (e.key === '-' || e.key === '_')) zoomTo(zoomRef.current / 1.5)
+    else if (!mod && !e.altKey && e.shiftKey && e.key.toLowerCase() === 'z') zoomTo(1)
+    else return
+    e.preventDefault()
+  }
+  const keyRef = useRef<(e: KeyboardEvent) => void>(() => {})
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => keyRef.current(e)
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [])
+  useLayoutEffect(() => { wheelRef.current = onWheel; pinchRef.current = onPinch; keyRef.current = onKey })
   useEffect(() => {
     const el = track.current
     if (!el) return
@@ -252,6 +278,47 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
       el.removeEventListener('gestureend', end)
     }
   }, [])
+
+  // The part of the edit on screen: zoomed in to frames, the ruler only
+  // draws what can be seen (a long edit would be tens of thousands of ticks).
+  const [view, setView] = useState({ left: 0, width: 800 })
+  useEffect(() => {
+    const el = track.current
+    if (!el) return
+    let raf = 0
+    const read = () => { raf = 0; setView({ left: el.scrollLeft, width: el.clientWidth }) }
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(read) }
+    read()
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => { el.removeEventListener('scroll', onScroll); cancelAnimationFrame(raf) }
+  }, [width, pps])
+
+  // The ruler: labelled times (5s, 10s… down to 15f, 1f zoomed in) with small
+  // ticks between them. A label that would land on the one before it (short
+  // shots are drawn wider than their length) is skipped, as is a tick.
+  const ruler = useMemo(() => {
+    const fps = rulerFps(tl.fps)
+    const { major, minor } = rulerScale(pps, fps)
+    const from = Math.max(0, tOf(view.left - 2 * LABEL_GAP_PX).t)
+    const to = Math.min(tl.total, tOf(view.left + view.width + 2 * LABEL_GAP_PX).t)
+    const labels: { f: number; x: number }[] = []
+    for (const f of rulerMarks(from, to, major, fps)) {
+      const x = xOf(f / fps)
+      if (!labels.length || x - labels[labels.length - 1].x >= LABEL_GAP_PX * 0.75) labels.push({ f, x })
+    }
+    const ticks: number[] = []
+    for (const f of rulerMarks(from, to, minor, fps)) {
+      if (f % major === 0) continue
+      const x = xOf(f / fps)
+      if (!ticks.length || x - ticks[ticks.length - 1] >= TICK_GAP_PX * 0.7) ticks.push(x)
+    }
+    // and the edit's own length at its end, when there's room for it
+    const end = xOf(tl.total)
+    const endF = Math.round(tl.total * fps)
+    if (labels.length && endF % major && end - labels[labels.length - 1].x >= LABEL_GAP_PX && end <= view.left + view.width + 2 * LABEL_GAP_PX)
+      labels.push({ f: endF, x: end })
+    return { labels, ticks, fps }
+  }, [tl.total, tl.fps, pps, geo, view]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep the playhead in view while it moves.
   useEffect(() => {
@@ -348,6 +415,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   const audioBottom = 8
   const capBottom = audioBottom + audioH + LANE_GAP
   const shotsBottom = capBottom + capH + LANE_GAP
+  const lanesH = VIDEO_TOP + MIN_VIDEO_H + shotsBottom
   const musicBottom = audioBottom + 4
   const stripBottom = musicBottom + SOUND_H + 4
   const [moving, setMoving] = useState<{ id: string; x0: number; grab: number; at: number; moved: boolean } | null>(null)
@@ -364,7 +432,10 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
   const outX = marks.out != null ? xOf(marks.out) : null
 
   return (
-    <section className="flex min-h-0 shrink-0 flex-col" style={{ height }}>
+    // The timeline reads like an editor's (Final Cut, CapCut): a crisp sans
+    // with even-width numbers, so times don't jitter; the rest of the app
+    // keeps its serif (sarah, 2026-10-18: "a more formal font").
+    <section className="flex min-h-0 shrink-0 flex-col font-sans tabular-nums" style={{ height }}>
       <header className="flex h-12 shrink-0 items-center gap-2.5 border-b border-line px-3">
         <div className="flex items-center gap-1">
           <TB title="Play backwards (J — press again to go faster)" onClick={() => transport.play(rate < 0 ? Math.max(rate * 2, -8) : -1)}>◀◀</TB>
@@ -417,10 +488,12 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
         <div className="flex shrink-0 items-center gap-1.5" title="Zoom the timeline. You can also hold ⌘ (or Ctrl) and scroll, or pinch on the trackpad, over the timeline">
           <button type="button" aria-label="Zoom out" onClick={() => zoomTo(zoom / 1.5)}
                   className="grid size-7 place-items-center rounded-md text-zinc-300 hover:bg-raised"><Icon name="minus" size={18} /></button>
-          <input type="range" min={0} max={1} step="any" value={toSlider(zoom)} aria-label="Zoom"
-                 onChange={(e) => zoomTo(fromSlider(Number(e.target.value)))} className="w-24 accent-[#1f5f8b]" />
+          <input type="range" min={0} max={1} step="any" value={toSlider(zoom, zoomMax)} aria-label="Zoom"
+                 onChange={(e) => zoomTo(fromSlider(Number(e.target.value), zoomMax))} className="w-24 accent-[#1f5f8b]" />
           <button type="button" aria-label="Zoom in" onClick={() => zoomTo(zoom * 1.5)}
                   className="grid size-7 place-items-center rounded-md text-zinc-300 hover:bg-raised"><Icon name="plus" size={18} /></button>
+          <button type="button" onClick={() => zoomTo(1)} disabled={zoom === 1} title="Fit the whole video (⇧Z)"
+                  className="rounded-md px-1.5 py-1 font-serif text-[13px] text-zinc-300 hover:bg-raised disabled:opacity-40">Fit</button>
         </div>
         {onExport && (
           <button type="button" onClick={onExport} disabled={!items.length} title="Render the edit, its captions and its music to one video file"
@@ -432,9 +505,9 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                 className="shrink-0 rounded-md px-1.5 py-1 text-[11px] text-muted hover:text-zinc-200 disabled:opacity-30">Clear</button>
       </header>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 overflow-y-auto">
       {items.length > 0 && (
-        <div className="relative shrink-0 border-r border-line" style={{ width: LABEL_W }} aria-hidden>
+        <div className="relative shrink-0 border-r border-line" style={{ width: LABEL_W, minHeight: lanesH }} aria-hidden>
           <LaneLabel icon="video" style={{ top: VIDEO_TOP, bottom: shotsBottom }}>Video</LaneLabel>
           <LaneLabel icon="lines" style={{ bottom: capBottom, height: capH }}>Captions</LaneLabel>
           <LaneLabel icon="music" style={{ bottom: audioBottom, height: audioH }}>Audio</LaneLabel>
@@ -443,6 +516,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
       <div
         ref={track}
         className="relative min-h-0 flex-1 select-none overflow-x-auto overflow-y-hidden"
+        style={items.length ? { minHeight: lanesH } : undefined}
         onDragOver={(e) => {
           if (!accepts(e)) return
           e.preventDefault()
@@ -481,6 +555,17 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                 {inX != null && outX != null && outX > inX && (
                   <rect x={inX} y={0} width={outX - inX} height={28} fill="#1f5f8b" opacity={0.18} />
                 )}
+                <g className="text-zinc-300">
+                  {ruler.ticks.length > 0 && (
+                    <path d={ruler.ticks.map((x) => `M${x},0v4`).join('')} stroke="currentColor" strokeWidth={1} opacity={0.4} />
+                  )}
+                  {ruler.labels.map(({ f, x }) => (
+                    <g key={f}>
+                      <line x1={x} x2={x} y1={0} y2={9} stroke="currentColor" strokeWidth={1} opacity={0.7} />
+                      <text x={x + 4} y={14} fill="currentColor" fontSize={12} fontWeight={500}>{rulerLabel(f, ruler.fps)}</text>
+                    </g>
+                  ))}
+                </g>
                 {tl.targets.map((g: Target, i) => (
                   <line key={i} x1={xOf(g.t)} x2={xOf(g.t)} y1={28 - TICK_H[g.type]} y2={28}
                         stroke={TICK[g.type]} strokeWidth={g.type === 'shot' ? 1.5 : 1} opacity={g === hl ? 1 : 0.55} />
@@ -496,7 +581,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
             {music && (
               <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={onSelectMusic}
                       title={`${music.title}: click for the music's controls`}
-                      className="absolute flex items-center gap-2 overflow-hidden rounded-md px-2.5 font-serif text-[14px] text-[#1d5c46] hover:brightness-95"
+                      className="absolute flex items-center gap-2 overflow-hidden rounded-md px-2.5 text-[14px] text-[#1d5c46] hover:brightness-95"
                       style={{ left: PAD, width: Math.max(40, still.end), bottom: musicBottom, height: SOUND_H,
                         background: 'repeating-linear-gradient(90deg, #bfe3d3 0 2px, #cdeadd 2px 5px)' }}>
                 <Icon name="music" size={16} />
@@ -689,7 +774,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
                        if (!m.moved) { onSelectAudio?.(a.id, e.currentTarget.getBoundingClientRect()); return }
                        if (Math.abs(m.at - a.at) > 1 / 60) onAudioMove?.(a.id, Math.round(m.at * 1000) / 1000)
                      }}
-                     className={`absolute flex cursor-grab items-center gap-1.5 overflow-hidden rounded-md px-1.5 font-serif text-[12px] leading-none active:cursor-grabbing ${
+                     className={`absolute flex cursor-grab items-center gap-1.5 overflow-hidden rounded-md px-1.5 text-[12px] leading-none active:cursor-grabbing ${
                        a.mute ? 'bg-stone-300 text-stone-600' : 'bg-teal-600 text-white'} ${
                        selectedAudio === a.id ? 'ring-2 ring-accent' : ''} ${m?.moved ? 'opacity-80' : ''}`}
                      style={{ left: x, width: w, bottom: stripBottom, height: SOUND_H,
@@ -730,7 +815,7 @@ export function Timeline({ tl, marks, marksOf, selected, flash, alt, onSelect, o
 
 function LaneLabel({ icon, style, children }: { icon: IconName; style: React.CSSProperties; children: React.ReactNode }) {
   return (
-    <div className="absolute inset-x-0 flex items-center gap-2 px-3 font-serif text-[15px] text-zinc-200" style={style}>
+    <div className="absolute inset-x-0 flex items-center gap-2 px-3 text-[15px] text-zinc-200" style={style}>
       <Icon name={icon} size={18} className="shrink-0 text-zinc-400" />{children}
     </div>
   )
@@ -739,7 +824,7 @@ function LaneLabel({ icon, style, children }: { icon: IconName; style: React.CSS
 function Tool({ icon, label, title, onClick, disabled }: { icon: IconName; label: string; title: string; onClick: () => void; disabled?: boolean }) {
   return (
     <button type="button" onClick={onClick} title={title} disabled={disabled}
-            className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 font-serif text-[15px] text-zinc-100 hover:bg-raised disabled:opacity-35">
+            className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-[15px] text-zinc-100 hover:bg-raised disabled:opacity-35">
       <Icon name={icon} size={18} />{label}
     </button>
   )

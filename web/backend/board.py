@@ -841,6 +841,8 @@ def _describe_sound(a: dict | None, b: dict | None) -> list[dict]:
                         "fade_out": lambda: f"Shot's sound fades out over {y:g}s" if y else "Shot's sound ends without a fade",
                         "effect": lambda: f"Shot has the {_effect_name(y)} effect" if y else f"Took the {_effect_name(x)} effect off a shot",
                         "effect_amount": lambda: f"Shot's effect at {round(y * 100)}%",
+                        # Make's motion on the beat; a describe without it raised on "Make my video again"
+                        "punch": lambda: ("Shot pushes in" if y > 0 else "Shot pulls out") if y else "Shot holds still",
                         }[f]()
                 lines.append({"kind": "sound" if f in ("gain", "mute", "fade_in", "fade_out") else "trimmed", "beat": bt["id"],
                               "shot": key(s), "text": text})
@@ -876,7 +878,7 @@ def _describe_sound(a: dict | None, b: dict | None) -> list[dict]:
 @dataclass
 class Turn:
     id: int
-    kind: str                       # "chat" | "direct"
+    kind: str                       # "chat" | "direct" | "check" (the AI checking its own edit)
     text: str                       # what the user said / did
     ops: list[dict]                 # as recorded (after first application)
     reply: str = ""
@@ -885,6 +887,8 @@ class Turn:
     direction: dict | None = None   # {"text", "themes", "labels"} when this turn set one
     undone: bool = False
     at: float = field(default_factory=time.time)
+    cost: float | None = None       # dollars, when an AI answered this turn
+    sheets: list[str] = field(default_factory=list)   # contact sheets the AI looked at (selfcheck.py)
     # filled by replay
     skipped: list[str] = field(default_factory=list)
     diff: dict | None = None

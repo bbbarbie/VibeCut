@@ -45,7 +45,8 @@ export type ExportRecord = { job: string; file: string; path: string; at: number
   verdict?: { post: boolean; note: string; at: number }; elapsed?: number; default_path?: boolean; undone?: number }
 export type Brief = { message: string; style: StyleAnswers; said: string; at: number; tempo?: string }
 // What this machine can do -- shown, so nothing is offered that then fails.
-export type Capabilities = { cloud?: boolean; llm: boolean; speech: boolean; vision: string; links: boolean; music_folder: string | null; platform: string }
+export type Capabilities = { cloud?: boolean; llm: boolean; speech: boolean; vision: string; links: boolean; music_folder: string | null; platform: string
+  chat?: 'openai' | 'claude' | null }
 export type ImportError = { path: string | null; error: string }
 
 export type Job = {
@@ -122,9 +123,11 @@ export type Diff = {
   replaced: boolean
 }
 export type Turn = {
-  id: number; kind: 'chat' | 'direct'; text: string; reply: string
+  id: number; kind: 'chat' | 'direct' | 'check'; text: string; reply: string   // check: the AI checking its own edit
   question: string | null; choices: string[]; lines: DiffLine[]; skipped: string[]
   undone: boolean; at: number; has_ops: boolean; direction: { themes: string[] } | null
+  cost?: number | null    // dollars, when an AI answered this turn
+  sheets?: string[]       // the contact sheets a check looked at (/api/check/sheet/<name>)
 }
 import type { SeqItem } from './sequence'
 import type { Trans } from './joinView'
@@ -139,7 +142,9 @@ export type SoundStrip = { id: string; at: number; dur: number; gain: number; mu
 
 // Words on screen. Anchored to the edit, its end, a part or a shot; the
 // server resolves each to sequence time (start/end) for drawing.
-export type OverlayKind = 'title' | 'part' | 'name' | 'caption' | 'date' | 'end' | 'chapters'
+export type OverlayKind = 'title' | 'part' | 'name' | 'caption' | 'date' | 'end' | 'chapters' | 'heading'
+/** a chapter title's own look (overlays.HEADING_LOOKS), independent of the captions' style */
+export type HeadingLook = 'script' | 'spaced' | 'bold' | 'serif'
 export type OverlayPos = 'top-left' | 'top' | 'top-right' | 'left' | 'center' | 'right' | 'bottom-left' | 'bottom' | 'bottom-right'
 export type OverlayAnim = 'fade' | 'rise' | 'slide' | 'type'
 export type Overlay = {
@@ -150,6 +155,7 @@ export type Overlay = {
   ink?: string; ink2?: string; halo?: string
   // dragged on the picture by hand: block centre (0..1 of the frame) and size multiplier
   place?: OverlayPlace | null
+  look?: HeadingLook
 }
 export type OverlayPlace = { x: number; y: number; scale: number }
 export type OverlayStyle = { font: 'Clean' | 'Editorial' | 'Rounded' | 'Mono' | 'Condensed'; color: string; accent: string; captions: 'bottom' | 'center'; backing: 'shadow' | 'box' | 'none'
@@ -197,8 +203,8 @@ export type Session = {
   // Music by default (backend/bed.py): the pick runs in the background and lands as a turn.
   // what the creator's habits did to the last Make (habits.py), for the one line and its Undo
   habits?: { id: string; text: string }[]
-  // one word per scene after watching (vlog.py step 8), by part id
-  scenes?: Record<string, SceneWord>
+  // "Which do you like better?" after Make (backend prefer.py): which card of how many, while any are left
+  prefer?: { at: number; of: number; deck: number; on: number | null } | null
   bed: { stage: 'looking' | 'done' | 'nothing' | 'error'; why: string; source: string; done: number; total: number; elapsed: number } | null
   // The edit's sound as one track (backend/audiomix.py) -- what preview plays and export writes.
   mix: { key: string; audio: string; joins: JoinInfo[]; transitions: Trans[]; bars: number } | null
@@ -210,6 +216,7 @@ export type Session = {
   turns: Turn[]
   proposals: Proposals | null
   llm: boolean
+  ai_spent?: number       // dollars AI has cost on this video (chat answers + AI-planned Makes)
   preferences: Preferences
   voiceover: { source: string; timing: 'estimated' | 'text_only'; lines: number; total: number } | null
   overlays: Overlays
@@ -237,14 +244,14 @@ export type PrefRule = {
   id: string; klass: 'long_term' | 'project'; rule: string; scope: string; counter: string; reason: string
   active: boolean; evidence: { said: string; changed: string[] }; history: { at: number; action: string; klass: string; actor: string }[]
 }
-export type SceneWord = 'keep' | 'cut' | 'longer'
 export type PrefSuggestion = { id: string; source: 'undo' | 'verdict'; said: string; rule: string; suggested: PrefClass }
 export type Preferences = { candidates: PrefCandidate[]; rules: PrefRule[]; suggestions?: PrefSuggestion[] }
 
 export type TimelineItem = { uid: string; shotId: string; clipId: string; start: number; end: number; thumb: string; beatId: string; beatTitle: string; mark?: Mark }
 export type Mark = 'added' | 'moved' | 'trimmed'
 
-export type Msg = { id: string; role: 'user' | 'app'; text: string; busy?: boolean; at: number }
+export type Msg = { id: string; role: 'user' | 'app'; text: string; busy?: boolean; at: number
+  retry?: string }   // a message that didn't go through: Try again sends this
 
 // What the player is showing: one span of one file.
 export type Segment = { key: string; clipId: string; start: number; end: number; autoplay: boolean }
@@ -290,3 +297,14 @@ export type SeamFinding = { key: string; label: string; value: number | null; un
 export type Seam = { after: string; before: string; at: number; verdict: 'ok' | 'warn' | 'bad'; findings: SeamFinding[] }
 // What a turn did to the cuts: a second look, shown under it.
 export type Review = { kind: 'worse' | 'better'; text: string; after?: string; at?: number; verdict?: string }
+
+// A card after Make (backend prefer.py): two versions of the video one change
+// apart, each as the shots that play in its window and the sound they play with.
+export type PreferSide = { items: SeqItemLike[]; start: number; end: number; audio: string | null; poster: string | null }
+export type SeqItemLike = {
+  key: string; kind: 'shot' | 'gap'; shot_id: string | null; clip_id: string | null
+  src_start: number; src_end: number; seq_start: number; seq_end: number
+  beat_id: string; beat_title: string; n: number | null; speed?: number; rotate?: number; fill?: boolean
+  mirror?: boolean; punch?: number
+}
+export type PreferCard = { id: number; ask: string; at: number; of: number; sides: PreferSide[] }

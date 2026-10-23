@@ -190,16 +190,22 @@ class OpenverseSource(music.TrackSource):
         tracks = music.LocalFolderSource(str(folder), progress=self.progress).list()
         out = []
         for t in tracks:
-            rec = self.records.get(t.path) or _sidecar(t.path)
             # the folder holds every track ever fetched, including ones from
             # searches cached before occasion songs were dropped
-            if rec is None or occasion(rec):
-                continue
-            t.meta = {**t.meta, "licence": rec}
-            # the catalogue's title, not the file's tags -- those are often mis-encoded
-            t.title = f"{rec['creator']} — {rec['title']}"
-            out.append(t)
+            if dress(t, self.records.get(t.path)) is not None and not occasion(t.meta["licence"]):
+                out.append(t)
         return out
+
+
+def dress(t: music.Track, rec: dict | None = None) -> music.Track | None:
+    """A fetched track with its licence record and the catalogue's title (the
+    file's tags are often mis-encoded); None when the record is gone."""
+    rec = rec or _sidecar(t.path)
+    if rec is None:
+        return None
+    t.meta = {**t.meta, "licence": rec}
+    t.title = f"{rec['creator']} — {rec['title']}"
+    return t
 
 
 def _sidecar(path: str) -> dict | None:

@@ -81,7 +81,7 @@ def main() -> int:
     llm.available = lambda: True
     seen = {}
 
-    def fake(message, cat_, sess, rules="", moment="", image_b64=None):
+    def fake(message, cat_, sess, rules="", moment="", image_b64=None, **kw):
         seen.update(message=message, moment=moment, image=image_b64)
         return {"reply": "Trimmed it to the busy part.", "question": None, "choices": [],
                 "ops": [{"op": "drop_shot", "shot": "market000001:1"}]}

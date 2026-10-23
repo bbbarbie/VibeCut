@@ -3,7 +3,7 @@ import { CAPTION_FONTS, type CaptionFont } from '../captionFonts'
 import type { SeqItem } from '../sequence'
 import { dressOf, isDressed, KIND_META } from '../overlayDraw'
 import { multiline, typable, wordsOf, wordsPatch } from '../captionWords'
-import type { JoinInfo, LookInfo, Overlay, OverlayPlace, OverlayStyle, SoundStrip } from '../types'
+import type { HeadingLook, JoinInfo, LookInfo, Overlay, OverlayPlace, OverlayStyle, SoundStrip } from '../types'
 import { Button, cx } from '../ui'
 import { Icon, type IconName } from './icons'
 import { CaptionAnimations, CaptionStyles, Transitions } from './StyleBars'
@@ -50,7 +50,7 @@ export function Inspector(p: {
   captionSample: string
   /** the caption clicked on the picture or the timeline */
   caption: Overlay | null
-  onCaptionEdit: (patch: { text?: string; sub?: string }, label: string) => void
+  onCaptionEdit: (patch: { text?: string; sub?: string; look?: HeadingLook }, label: string) => void
   onCaptionDelete: () => void
   onCaptionAdd: () => void
   onCaptionWatch: () => void
@@ -235,7 +235,7 @@ export function Inspector(p: {
 // or Enter is pressed; Escape puts the words back.
 function CaptionWords({ o, onEdit, onDelete, onWatch, onDone, onPlace }: {
   o: Overlay
-  onEdit: (patch: { text?: string; sub?: string }, label: string) => void
+  onEdit: (patch: { text?: string; sub?: string; look?: HeadingLook }, label: string) => void
   onDelete: () => void; onWatch: () => void; onDone: () => void
   onPlace: (place: OverlayPlace | null, label: string) => void
 }) {
@@ -253,6 +253,13 @@ function CaptionWords({ o, onEdit, onDelete, onWatch, onDone, onPlace }: {
   return (
     <Section title={`This ${name.toLowerCase()} · ${mmss(o.start)}`}>
       {typable(o) && <WordsBox key={o.id + shown} value={shown} lines={multiline(o)} onCommit={commit} />}
+      {o.kind === 'heading' && (
+        // a chapter title has its own look; the line under it stays plain
+        <Line label="Title look">
+          <Segmented options={HEADING_LOOKS} value={o.look ?? 'bold'}
+                     onPick={(v) => v !== o.look && onEdit({ look: v as HeadingLook }, 'You changed the chapter title\'s look')} />
+        </Line>
+      )}
       <div className="flex flex-wrap gap-2 pt-1">
         <Chip onClick={onWatch}><Icon name="play" size={17} /> See it play</Chip>
         <Chip danger onClick={onDelete}><Icon name="trash" size={17} /> Delete</Chip>
@@ -270,6 +277,8 @@ function CaptionWords({ o, onEdit, onDelete, onWatch, onDone, onPlace }: {
     </Section>
   )
 }
+
+const HEADING_LOOKS: [string, string][] = [['script', 'Script'], ['spaced', 'Spaced'], ['bold', 'Bold'], ['serif', 'Serif']]
 
 // The captions' colour. Automatic reads the footage behind each caption and
 // picks what stands out; a picked colour is kept, with an edge or glow so it

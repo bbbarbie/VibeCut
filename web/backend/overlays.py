@@ -44,7 +44,13 @@ KINDS: dict[str, dict] = {
     "date":     {"label": "Date",       "pos": "top-right",   "size": "S", "anim": "type",  "dur": 3.0},
     "end":      {"label": "End card",   "pos": "center",      "size": "L", "anim": "fade",  "dur": 3.0},
     "chapters": {"label": "Chapter bar", "pos": "top",        "size": "S", "anim": "fade",  "dur": None},
+    # a chapter's own title in a designed look, with a plain line under it
+    # (story.py; sarah's reference vlog, 2026-10-18: script "Morning Routine",
+    # red spaced "OOTD", each over a plain subtitle). Its look is its own, not
+    # the captions' one style.
+    "heading":  {"label": "Chapter title", "pos": "center",     "size": "M", "anim": "rise",  "dur": 2.4},
 }
+HEADING_LOOKS = ("script", "spaced", "bold", "serif")
 POSITIONS = ("top-left", "top", "top-right", "left", "center", "right",
              "bottom-left", "bottom", "bottom-right")
 SIZES = ("S", "M", "L")
@@ -58,7 +64,8 @@ DEFAULT_STYLE = {"font": "Clean", "color": "#ffffff", "accent": "#b9d9eb", "capt
 
 # Caption templates (the Style tab when a caption is clicked): how every
 # caption in the video is dressed -- lettering, edge, backing -- drawn by
-# overlayDraw.ts for preview and export alike. None = the look's own words.
+# overlayDraw.ts for preview and export alike. None = Soft, the quiet vlog
+# caption: small, lowercase, the look's lettering, a soft shadow, low left.
 # "outlined" is sarah's own hand edit: serif, black edge, the time on top.
 # The last five are word art (sarah, 2026-10-18): neon, glow, a gradient, 3D
 # letters and a retro hard drop, the kinds CapCut offers.
@@ -95,7 +102,7 @@ STYLE_FIELDS = ("font", "color", "accent", "captions", "backing", "template", "e
 PICKED = ("template", "enter", "text_color", "typeface", "outline", "shadow", "backdrop", "thick")   # never come from a look, so need no marking
 
 TEXT_MAX = 140
-EDITABLE = ("text", "sub", "pos", "size", "anim", "dur", "place")
+EDITABLE = ("text", "sub", "pos", "size", "anim", "dur", "place", "look")
 # Dragged on the picture by hand: block centre as a fraction of the frame and
 # a size multiplier. Overrides pos/size (and, for captions, the caption line).
 SCALE_MIN, SCALE_MAX = 0.4, 3.0
@@ -216,6 +223,10 @@ def clean_fields(patch: dict, kind: str) -> dict:
                 raise OverlayError("a place is inside the picture (0 to 1)")
             out["place"] = {"x": round(x, 4), "y": round(y, 4),
                             "scale": round(min(SCALE_MAX, max(SCALE_MIN, sc)), 3)}
+    if "look" in patch:
+        if kind != "heading" or patch["look"] not in HEADING_LOOKS:
+            raise OverlayError(f"a chapter title's look is one of {', '.join(HEADING_LOOKS)}")
+        out["look"] = patch["look"]
     if kind != "chapters" and "text" in out and not out["text"]:
         raise OverlayError("an overlay needs some text")
     return out
@@ -351,6 +362,8 @@ def add(b: dict, op: dict, new_id) -> None:
          "anchor": dict(op["anchor"]), "at": round(max(0.0, float(op["at"])), 3), **fields}
     if kind == "caption":
         o["pos"] = "bottom"     # captions follow the one caption position
+    if kind == "heading":
+        o.setdefault("look", "bold")
     if kind != "chapters" and not o["text"]:
         raise OverlayError("an overlay needs some text")
     b.setdefault("overlays", []).append(o)
@@ -465,8 +478,9 @@ def describe(a: dict | None, b: dict | None) -> list[dict]:
                                ("typeface", TYPEFACES, "Caption font")):
             if sa_.get(k) != sb2.get(k):
                 v = sb2.get(k)
-                lines.append({"kind": "retitled", "text": f"{what}: {names[v]}" if v
-                              else f"{what}: back to the look's own"})
+                # no template = the quiet vlog caption, called Soft in the Style tab
+                none = "Soft" if k == "template" else "back to the look's own"
+                lines.append({"kind": "retitled", "text": f"{what}: {names[v]}" if v else f"{what}: {none}"})
         dressed = [DRESS_NAMES[k] for k in DRESS_NAMES if sa_.get(k) != sb2.get(k)]
         if dressed:
             lines.append({"kind": "retitled", "text": f"Changed the captions' {what_list(dressed)}"})

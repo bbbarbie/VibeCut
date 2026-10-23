@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { anchoredScroll, clampZoom, fromSlider, toSlider, wheelFactor, ZOOM_MAX, ZOOM_MIN } from './zoom.ts'
+import { anchoredScroll, clampZoom, fromSlider, maxZoom, toSlider, wheelFactor, ZOOM_MAX, ZOOM_MIN } from './zoom.ts'
 
 test('wheel up zooms in, down zooms out, by the same amount', () => {
   assert.ok(wheelFactor(-10) > 1)
@@ -32,4 +32,13 @@ test('the moment under the pointer stays under the pointer', () => {
   assert.equal(anchoredScroll(900, 300, 800, 5000), 600)
   assert.equal(anchoredScroll(100, 300, 800, 5000), 0)
   assert.equal(anchoredScroll(4900, 100, 800, 5000), 4200)
+})
+
+test('the deepest zoom shows single frames', () => {
+  const fit = 16 // a minute of edit across ~1000 px
+  const z = maxZoom(fit, 30)
+  assert.ok(fit * z >= 30 * 64, 'a frame is at least a label wide')
+  assert.equal(clampZoom(1e6, z), z)
+  assert.ok(Math.abs(fromSlider(toSlider(z / 3, z), z) - z / 3) < 1e-9)
+  assert.equal(maxZoom(5000, 30), ZOOM_MAX)
 })

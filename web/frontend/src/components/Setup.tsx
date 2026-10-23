@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, type VibeJob } from '../api'
+import { api, type AIEstimate, type AIState, type VibeJob } from '../api'
 import { Button, Dialog } from '../ui'
-import { LearnVibePreview, type Recipe } from './LearnVibe'
-import { BlueprintViewer, type Blueprint } from './BlueprintViewer'
+import { AISwitch } from './AISwitch'
 
 // The two picks before anything is cut (plan of 2026-10-10, step 2): the
 // frame the video is for, and the look of the whole thing. Everything else
@@ -21,12 +20,14 @@ export type SetupData = {
 
 const GLYPH: Record<string, string> = { short: 'h-7 w-4', tall: 'h-7 w-4', wide: 'h-4 w-7' }
 
-export function Setup({ data, busy, progress, onDone, onCancel, onReload }: {
+export function Setup({ data, busy, progress, onDone, onCancel, ai, estimate, onAI, onReload }: {
   data: SetupData | null
+  ai?: AIState | null; estimate?: AIEstimate | null   // the AI switch, and what this edit would cost with it on
+  onAI?: (on: boolean) => void
   busy: boolean
   onReload?: () => Promise<void>        // after a vibe is learnt in place, so it appears under Cut it like
   progress?: { line: string; done: number; total: number; elapsed: number } | null   // where the making is
-  onDone: (format: string, look: string, music: boolean, vibe: string | null) => void
+  onDone: (format: string, look: string, music: boolean, vibe: string | null, aiCost: number | null) => void   // aiCost: the price shown, null = no AI
   onCancel: () => void
 }) {
   const [format, setFormat] = useState<string | null>(null)
@@ -37,9 +38,6 @@ export function Setup({ data, busy, progress, onDone, onCancel, onReload }: {
   const chosenVibe = vibe === undefined ? (data?.vibe ?? null) : vibe
   // learn a vibe from reels, right here (vibes.py as a job)
   const [learning, setLearning] = useState<{ open: boolean; niche: string; links: string; job: VibeJob | null; error: string | null }>({ open: false, niche: '', links: '', job: null, error: null })
-  // preview the recipe and blueprint after learning
-  const [showRecipePreview, setShowRecipePreview] = useState<{ recipe: Recipe; vibeId: string } | null>(null)
-  const [showBlueprintPreview, setShowBlueprintPreview] = useState<{ blueprint: Blueprint; vibeId: string } | null>(null)
   const learn = async () => {
     const links = learning.links.split(/\s+/).map((x) => x.trim()).filter(Boolean)
     setLearning((l) => ({ ...l, error: null }))
@@ -53,27 +51,6 @@ export function Setup({ data, busy, progress, onDone, onCancel, onReload }: {
       }
       if (job.stage === 'error') throw new Error(job.error ?? 'Could not learn from those reels')
       await onReload?.()
-
-      // Fetch the recipe and blueprint for the newly learned vibe
-      if (job.vibe) {
-        try {
-          const vibeData = await api.vibeGet(job.vibe)
-          // Show blueprint first (EVERYTHING learned), then recipe preview
-          if (vibeData?.blueprint) {
-            setShowBlueprintPreview({ blueprint: vibeData.blueprint, vibeId: job.vibe })
-            setLearning({ open: false, niche: '', links: '', job: null, error: null })
-            return
-          } else if (vibeData?.recipe) {
-            setShowRecipePreview({ recipe: vibeData.recipe, vibeId: job.vibe })
-            setLearning({ open: false, niche: '', links: '', job: null, error: null })
-            return
-          }
-        } catch (e) {
-          // If recipe fetch fails, just proceed with vibe selection
-          console.warn('Could not fetch recipe:', e)
-        }
-      }
-
       setVibe(job.vibe)
       setLearning({ open: false, niche: '', links: '', job: null, error: null })
     } catch (e) { setLearning((l) => ({ ...l, job: null, error: (e as Error).message })) }
@@ -83,46 +60,11 @@ export function Setup({ data, busy, progress, onDone, onCancel, onReload }: {
   const fmt = format ?? data?.format ?? 'tall'
   const lk = look ?? data?.look ?? 'cozy'
   useEffect(() => { first.current?.focus() }, [data])
+  // a chosen vibe sets the cut itself, so the AI doesn't plan it (and nothing is spent)
+  const aiOn = !!ai?.available && !!ai?.on && !chosenVibe
+  const cost = aiOn && estimate?.on ? estimate.dollars : null
+  const usd = (d: number) => d < 0.01 ? 'under 1¢' : `$${d.toFixed(2)}`
   const say = (s: number) => s < 60 ? `${s} s` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-
-  // Show blueprint (EVERYTHING learned) when user just learned a vibe
-  if (showBlueprintPreview) {
-    return (
-      <Dialog title="What we learned" sub="Every detail of how this vlog is made"
-              onClose={() => setShowBlueprintPreview(null)} width={900}
-              footer={<>
-                <Button variant="ghost" onClick={() => setShowBlueprintPreview(null)}>Back</Button>
-              </>}>
-        <BlueprintViewer
-          blueprint={showBlueprintPreview.blueprint}
-          onClose={() => {
-            setShowBlueprintPreview(null)
-            setShowRecipePreview(null)
-            setVibe(showBlueprintPreview.vibeId)
-          }}
-        />
-      </Dialog>
-    )
-  }
-
-  // Show recipe preview for fine-tuning
-  if (showRecipePreview) {
-    return (
-      <Dialog title="Your recipe" sub="Adjust each element below, then apply to your video"
-              onClose={() => setShowRecipePreview(null)} width={800}
-              footer={<>
-                <Button variant="ghost" onClick={() => setShowRecipePreview(null)}>Back</Button>
-              </>}>
-        <LearnVibePreview
-          recipe={showRecipePreview.recipe}
-          onApply={() => {
-            setVibe(showRecipePreview.vibeId)
-            setShowRecipePreview(null)
-          }}
-        />
-      </Dialog>
-    )
-  }
 
   return (
     <Dialog title="Two picks, then your video" sub={data ? `From the clips: ${data.about}. Length, pace and captions are read from the footage; change any of it in Frames.` : 'Reading your clips…'}
@@ -134,9 +76,24 @@ export function Setup({ data, busy, progress, onDone, onCancel, onReload }: {
                 </span>
               )}
               <Button variant="ghost" onClick={onCancel} disabled={busy}>Not yet</Button>
-              <Button variant="primary" onClick={() => onDone(fmt, lk, withMusic, chosenVibe)} disabled={!data || busy}>{busy ? 'Making it…' : 'Make my video'}</Button>
+              <Button variant="primary" onClick={() => onDone(fmt, lk, withMusic, chosenVibe, cost)} disabled={!data || busy || (aiOn && cost == null)}>
+                {busy ? 'Making it…' : cost != null ? `Make my video · ${usd(cost)}` : 'Make my video'}
+              </Button>
             </>}>
       <div className="space-y-4">
+        {ai && onAI && (
+          // what this edit will cost with AI, before anything is spent
+          <div className="flex items-center gap-3 rounded-xl border border-line px-3 py-2.5">
+            <AISwitch ai={ai} onToggle={onAI} busy={busy} />
+            <p className="font-serif text-[15px] leading-snug text-zinc-200">
+              {!ai.available ? 'No AI key on this Mac, so the usual rules make the edit.'
+                : ai.on && chosenVibe ? 'Cutting it like a vibe follows that vibe, so AI doesn’t plan this one. Free.'
+                : !aiOn ? 'Off: the usual rules make the edit, free.'
+                : cost == null ? 'Working out what this edit costs…'
+                : <>AI plans this edit into chapters, then looks over the finished cut and fixes it: about <b>{usd(cost)}</b> ({estimate!.moments} moments, {estimate!.model}). Nothing is spent until you press Make.</>}
+            </p>
+          </div>
+        )}
         <div>
           <div className="mb-1.5 flex items-baseline gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted">Which frame?
             {last?.format && format === null && <span className="font-normal normal-case tracking-normal">as last time{data?.suggested && data.suggested !== last.format ? ` · the footage suggests ${data.suggested}` : ''}</span>}
