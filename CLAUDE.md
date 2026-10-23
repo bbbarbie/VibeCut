@@ -86,7 +86,9 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   (Garamond headlines and wordmark, system sans labels; the user, 2026-10-23:
   "the font does not match the app"; Nunito only inside drawn captions) with
   one italic word, pastel bento for the fixes, a marquee of the
-  tells, a blinking clapperboard mascot (`Buddy`); motion is in the file's
+  tells, and a plain mark (`Mark`: one frame cut in two on a diagonal,
+  also `public/favicon.svg`; the clapperboard mascot went, the user:
+  "too cartoonish"); motion is in the file's
   own CSS and off under reduced motion. No logos, quotes or backers we don't
   have. Cut down 2026-10-23 (the user: "less words, more straight to the
   point, and a carousel of animations that we can do"): every section is a

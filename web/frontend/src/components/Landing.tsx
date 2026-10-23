@@ -12,7 +12,7 @@ import { cx, Wordmark } from '../ui'
 // 2026-10-23, the user: "be cute, match the vibe of current YC companies'
 // landing pages". So: a floating pill nav, an announcement pill, a big rounded
 // headline with one Garamond italic word, a product window, a marquee, a bento
-// grid, pastel tiles and a small clapperboard who blinks. The app's paper and
+// grid, pastel tiles and a plain mark (no mascot). The app's paper and
 // blue stay underneath so opening the app still feels like the same place.
 // No logos, quotes or backers we don't have. The copy keeps to the promise in
 // CLAUDE.md: "no amateur tells", never "beautiful".
@@ -50,7 +50,7 @@ export function Landing() {
         <div className={cx('mx-auto flex h-14 max-w-[980px] items-center gap-5 rounded-full border px-3 pl-5 transition-all',
           scrolled ? 'border-[#e8e2d8] bg-white/85 shadow-[0_8px_30px_-12px_rgba(29,26,23,0.25)] backdrop-blur' : 'border-transparent bg-transparent')}>
           <a href="#/welcome" className="flex shrink-0 items-center gap-2" onClick={(e) => { e.preventDefault(); jumpTop() }}>
-            <Buddy className="size-8" />
+            <Mark className="size-7" />
             <Wordmark className="text-[22px] text-[#1d1a17]" />
           </a>
           <nav className={cx('hidden flex-1 items-center justify-center gap-1 text-[14px] font-medium md:flex', soft)}>
@@ -78,7 +78,7 @@ export function Landing() {
 
       <footer className="px-6 pb-10">
         <div className={cx('mx-auto flex max-w-[1080px] flex-wrap items-center gap-x-6 gap-y-3 border-t border-[#e8e2d8] pt-8 text-[14px]', soft)}>
-          <span className="flex items-center gap-2"><Buddy className="size-6" /><Wordmark className="text-[18px] text-[#1d1a17]" /></span>
+          <span className="flex items-center gap-2"><Mark className="size-5" /><Wordmark className="text-[18px] text-[#1d1a17]" /></span>
           <span>For people who'd rather film than edit.</span>
           <span className="flex-1" />
           <a href="#/welcome" onClick={(e) => { e.preventDefault(); jump('faq') }} className="hover:text-[#1d1a17]">FAQ</a>
@@ -116,24 +116,18 @@ function Pill({ children, onClick, light, small, className }: {
   )
 }
 
-/** A little clapperboard with a face. It blinks; the top claps on hover. */
-function Buddy({ className, wave }: { className?: string; wave?: boolean }) {
+/** VibeCut's mark: one frame cut in two on a diagonal, the second shot a
+    shade lighter. Plain on purpose (the user, 2026-10-23: the clapperboard
+    mascot was "too cartoonish"); the same drawing is public/favicon.svg. */
+function Mark({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 64 64" className={cx('lc-buddy shrink-0 overflow-visible', wave && 'lc-bob', className)} aria-hidden>
-      <g className="lc-clap">
-        <rect x="7" y="9" width="50" height="13" rx="4" fill="#1d1a17" />
-        <path d="M15 9 l7 13 M27 9 l7 13 M39 9 l7 13" stroke="#fbf8f2" strokeWidth="4" />
+    <svg viewBox="0 0 32 32" className={cx('shrink-0', className)} aria-hidden>
+      <defs><clipPath id="vc-mark-frame"><rect x="6.5" y="9" width="19" height="14" rx="2.5" /></clipPath></defs>
+      <rect width="32" height="32" rx="9" fill="#1f5f8b" />
+      <g clipPath="url(#vc-mark-frame)">
+        <path d="M0 0 H18.5 L10.5 32 H0 Z" fill="#fff" />
+        <path d="M20.7 0 H32 V32 H12.7 Z" fill="#fff" fillOpacity="0.6" />
       </g>
-      <rect x="7" y="20" width="50" height="37" rx="10" fill="#1f5f8b" />
-      <g className="lc-eyes">
-        <ellipse cx="24" cy="36" rx="3.6" ry="4.4" fill="#fff" />
-        <ellipse cx="40" cy="36" rx="3.6" ry="4.4" fill="#fff" />
-        <circle cx="25" cy="37" r="1.8" fill="#1d1a17" />
-        <circle cx="41" cy="37" r="1.8" fill="#1d1a17" />
-      </g>
-      <circle cx="17" cy="45" r="4" fill="#ff9fb4" opacity="0.85" />
-      <circle cx="47" cy="45" r="4" fill="#ff9fb4" opacity="0.85" />
-      <path d="M28 46 q4 4 8 0" stroke="#fff" strokeWidth="2.6" fill="none" strokeLinecap="round" />
     </svg>
   )
 }
@@ -191,7 +185,6 @@ function Hero({ onStart }: { onStart: () => void }) {
         <Sticker className="top-24 -left-16 rotate-[6deg]" bg={P.butter} delay={1.2}>🌚 too dark</Sticker>
         <Sticker className="-top-8 -right-6 rotate-[7deg]" bg={P.mint} delay={0.6}>🎵 on the beat</Sticker>
         <Sticker className="top-40 -right-16 rotate-[-5deg]" bg={P.lilac} delay={1.8}>☕ 7:42 am</Sticker>
-        <div className="absolute -bottom-12 -left-14 z-10 hidden lg:block"><Buddy wave className="size-20 drop-shadow-[0_8px_12px_rgba(31,95,139,0.25)]" /></div>
         <BeforeAfter />
       </div>
     </section>
@@ -831,8 +824,7 @@ function Closing({ onStart }: { onStart: () => void }) {
            style={{ background: `linear-gradient(135deg, ${P.pink}, ${P.lilac} 50%, ${P.sky})` }}>
         <div aria-hidden className="lc-dots absolute inset-0 opacity-60" />
         <div className="relative">
-          <Buddy wave className="mx-auto size-20" />
-          <h2 className={cx(display, 'mx-auto mt-6 max-w-[680px] text-[40px] leading-[1.08] sm:text-[58px]')}>
+          <h2 className={cx(display, 'mx-auto max-w-[680px] text-[40px] leading-[1.08] sm:text-[58px]')}>
             Your video is <Em>one drop away.</Em>
           </h2>
           <div className="mt-8 flex justify-center"><Pill onClick={onStart}>Start with your clips</Pill></div>
@@ -854,12 +846,6 @@ const CSS = `
 .lc-rise { animation: lc-rise .7s cubic-bezier(.2,.7,.2,1) both; }
 @keyframes lc-float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-8px) } }
 .lc-float { animation: lc-float 4.5s ease-in-out infinite; }
-@keyframes lc-bob { 0%,100% { transform: translateY(0) rotate(-4deg) } 50% { transform: translateY(-6px) rotate(4deg) } }
-.lc-bob { animation: lc-bob 3.2s ease-in-out infinite; }
-@keyframes lc-blink { 0%,92%,100% { transform: scaleY(1) } 95% { transform: scaleY(0.1) } }
-.lc-eyes { transform-origin: 32px 36px; animation: lc-blink 4s infinite; }
-.lc-clap { transform-origin: 9px 21px; transition: transform .15s; }
-.lc-buddy:hover .lc-clap, a:hover .lc-clap { transform: rotate(-16deg); }
 @keyframes lc-marquee { to { transform: translateX(-50%) } }
 .lc-marquee { animation: lc-marquee 40s linear infinite; }
 .lc-marquee:hover { animation-play-state: paused; }
