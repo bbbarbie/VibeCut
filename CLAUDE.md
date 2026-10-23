@@ -41,7 +41,11 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   at most one change per part (opening / rhythm / order / ending;
   `web/backend/tastepick.py`). Trained 2026-10-21 on her Mac (24 long vlogs /
   8 creators: 90% real-vs-damaged on unseen creators; 28 shorts / 12
-  creators: 85%; both past `MIN_LOCO`, so Make uses them). **Which do you
+  creators: 85%; both past `MIN_LOCO`, so Make uses them). 2026-10-23 (her
+  Build it): new readings for talk left running and swapped shots
+  (`longest_hold`, `talk_longest`, `flow_seen`, `continuity`,
+  `music_under_talk`); retrained here: 93% / 85%; cold openings and endings
+  are still not caught (half the pros open on an ordinary shot). **Which do you
   like better?** (sarah, 2026-10-21; `web/backend/prefer.py`,
   `PreferCards.tsx`, `/api/prefer`): under the made video up to 3 cards
   play two versions one change apart; a pick refits her layer
