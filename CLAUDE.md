@@ -74,6 +74,29 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   Bottom: the timeline with Video / Captions / Audio lanes (music drawn as a
   strip). Clicking something opens its tab. Every border drags (sizes saved
   in this browser). The old bottom tool bar (ShotBar) is gone.
+- **Landing page** (`web/frontend/src/components/Landing.tsx`, route
+  `#/welcome`; 2026-10-21, the user: "like those websites selling this
+  product"; tightened 2026-10-22). Hero (two-line pitch + a before/after:
+  the shoot as a pile of clips with its tells marked, then the edit; flips
+  by itself until clicked), the 40/30/20/10 promise, three steps (with
+  "or paste a reel you love" under them), what it fixes, pricing (early
+  access free; a Creator plan named but unpriced), FAQ (which carries the
+  privacy answers), closing. Restyled 2026-10-23 (the user: "cute, the vibe
+  of current YC companies' landing pages"): pill nav, the app's own faces
+  (Garamond headlines and wordmark, system sans labels; the user, 2026-10-23:
+  "the font does not match the app"; Nunito only inside drawn captions) with
+  one italic word, pastel bento for the fixes, a marquee of the
+  tells, a blinking clapperboard mascot (`Buddy`); motion is in the file's
+  own CSS and off under reduced motion. No logos, quotes or backers we don't
+  have. Cut down 2026-10-23 (the user: "less words, more straight to the
+  point, and a carousel of animations that we can do"): every section is a
+  headline and a line; "What it can do" (`Moves`) is a carousel of 29 looping
+  9:16 cards, filterable by Captions / Transitions / Effects / On the beat,
+  each a move the editor has under its menu name, drawn as CSS over made-up
+  scenes (no faces); it advances by itself until touched. Same paper and blue underneath; both
+  sides of the before/after are drawn in CSS because every real screenshot
+  shows the creator's face. The app's home (`#/`) stays bare; the page is
+  linked only from the profile page ("About VibeCut"). Copy keeps to "no amateur tells", never "beautiful".
 - Chat editing rule: a turn applies operations to the working storyboard
   (`web/backend/board.py`), never regenerates it. The LLM only emits ops;
   the diff is computed, not reported by the model. Keep it that way.
