@@ -29,7 +29,7 @@ def summary(records: list[dict] | None = None) -> dict:
            "exports": 0, "undone_turns": 0, "turns": 0,
            "failures": {"unreadable_files": 0, "bed_nothing": 0, "bed_error": 0, "not_postable": 0},
            "costs": {"model_calls": 0, "render_seconds": 0.0, "music_hunt_seconds": 0.0},
-           "feedback": [], "per_project": []}
+           "scenes": {"keep": 0, "cut": 0, "longer": 0}, "feedback": [], "per_project": []}
     for r in recs:
         exps = r.get("exports") or []
         events = r.get("events") or []
@@ -60,6 +60,8 @@ def summary(records: list[dict] | None = None) -> dict:
             if v and v.get("note"):
                 out["feedback"].append({"project": r.get("name"), "post": v["post"], "note": v["note"]})
         for e in events:
+            if e.get("kind") == "scene_verdict" and e.get("word") in out["scenes"]:
+                out["scenes"][e["word"]] += 1
             if e.get("kind") == "bed" and e.get("why"):
                 out["feedback"].append({"project": r.get("name"), "post": None, "note": "bed: " + e["why"]})
         out["per_project"].append({"name": r.get("name"), "clips": len(r.get("clips") or {}), "exports": len(exps),
