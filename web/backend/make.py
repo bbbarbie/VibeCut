@@ -38,6 +38,7 @@ from cutgrammar import music as mu
 
 from . import (
     apply_intelligent_editing,
+    apply_trend_graphics,
     audiomix,
     bed,
     habits,
@@ -369,6 +370,21 @@ def ops(plan: sel.Plan, fp: dict, mx: dict | None, fmt: str, look: str | None, a
         elif c["kind"] == "scene":
             out.append({"op": "add_overlay", "kind": "part", "text": c["text"], "pos": "top", "size": "S",
                         "start": c["start"], "dur": round(c["end"] - c["start"], 2), "anim": "rise"})
+
+    # Apply trend graphics: detect trends mentioned and add animated graphics
+    try:
+        caption_list = remix.captions(plan, title, None, hold_s=hold, with_title=with_title, phrases=lines, clock=False)
+        trend_ops = apply_trend_graphics.apply_trend_graphics(
+            session={},  # Minimal session info
+            captions=[{"text": c["text"]} for c in caption_list],
+            voiceover_transcript=about,
+            brief_description=about,
+            auto_graphics=True,
+        )
+        out.extend(trend_ops)
+    except Exception:  # noqa: BLE001 -- fallback if trend detection fails
+        pass
+
     return out
 
 
