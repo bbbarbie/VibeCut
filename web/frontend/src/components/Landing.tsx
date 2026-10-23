@@ -28,13 +28,15 @@ const NAV = [
 const display = 'font-serif font-normal tracking-[-0.02em]'
 const label = 'text-[11px] font-medium uppercase tracking-[0.16em] text-muted'
 
-// Bold design colors
+// Premium aesthetic colors
 const COLORS = {
   accent1: '#FFD93D',      // Bold gold/yellow
   accent2: '#FF6B6B',      // Vibrant coral/red
   accent3: '#4ECDC4',      // Teal
+  accent4: '#A78BFA',      // Purple accent for depth
   dark: '#0B0F14',
   card: '#1A1F2E',
+  glass: 'rgba(255, 255, 255, 0.05)',
 }
 
 export function Landing() {
@@ -106,13 +108,13 @@ function Btn({ children, onClick, ghost, small, className }: {
 }) {
   return (
     <button type="button" onClick={onClick}
-            className={cx('group inline-flex shrink-0 items-center justify-center gap-2 rounded-[8px] font-semibold transition-all',
+            className={cx('group inline-flex shrink-0 items-center justify-center gap-2 rounded-[12px] font-semibold transition-all duration-300 backdrop-blur-sm',
               small ? 'h-9 px-3.5 text-[13px]' : 'h-12 px-6 text-[15px]',
-              ghost ? 'border border-white/25 text-zinc-100 hover:border-white/50 hover:bg-white/[0.08]' : 'bg-gradient-to-r text-ink hover:shadow-lg hover:shadow-[#FFD93D]/30',
-              !ghost && 'from-[#FFD93D] to-[#FFB700]',
+              ghost ? 'border border-white/30 text-zinc-100 hover:border-white/60 hover:bg-white/[0.12] hover:backdrop-blur-md' : 'bg-gradient-to-r text-ink shadow-lg shadow-[#FFD93D]/40 hover:shadow-xl hover:shadow-[#FFD93D]/50 hover:scale-105',
+              !ghost && 'from-[#FFD93D] via-[#FFC107] to-[#FFB700]',
               className)}>
       {children}
-      {!ghost && <span aria-hidden className="transition-transform group-hover:translate-x-0.5">→</span>}
+      {!ghost && <span aria-hidden className="transition-transform duration-300 group-hover:translate-x-1">→</span>}
     </button>
   )
 }
@@ -166,10 +168,11 @@ function Ticks() {
 
 function Hero({ onStart }: { onStart: () => void }) {
   return (
-    <section className="relative mx-auto max-w-[1120px] px-6 pt-20 pb-16 sm:pt-28">
-      {/* Decorative gradient background */}
-      <div aria-hidden className="absolute -top-40 -right-40 w-96 h-96 rounded-full blur-3xl" style={{ background: `radial-gradient(circle, ${COLORS.accent1}22, transparent)` }} />
-      <div aria-hidden className="absolute top-20 -left-32 w-80 h-80 rounded-full blur-3xl" style={{ background: `radial-gradient(circle, ${COLORS.accent3}22, transparent)` }} />
+    <section className="relative mx-auto max-w-[1120px] px-6 pt-20 pb-16 sm:pt-28 overflow-hidden">
+      {/* Premium gradient background layers */}
+      <div aria-hidden className="absolute -top-40 -right-40 w-96 h-96 rounded-full blur-3xl animate-pulse" style={{ background: `radial-gradient(circle, ${COLORS.accent1}25, transparent)`, animationDuration: '6s' }} />
+      <div aria-hidden className="absolute top-20 -left-32 w-80 h-80 rounded-full blur-3xl animate-pulse" style={{ background: `radial-gradient(circle, ${COLORS.accent3}20, transparent)`, animationDuration: '8s' }} />
+      <div aria-hidden className="absolute bottom-20 right-1/3 w-72 h-72 rounded-full blur-3xl" style={{ background: `radial-gradient(circle, ${COLORS.accent2}15, transparent)`, animationDuration: '10s' }} />
 
       <button type="button" onClick={() => jump('how')}
               className="lc-rise group inline-flex items-center gap-2.5 text-[13px] text-zinc-300 transition-colors hover:text-zinc-100">
@@ -178,10 +181,17 @@ function Hero({ onStart }: { onStart: () => void }) {
         <span aria-hidden className="transition-transform group-hover:translate-x-0.5">→</span>
       </button>
 
-      <h1 className={cx(display, 'lc-rise mt-12 text-[48px] leading-[1.1] sm:text-[120px] sm:leading-[1.05] font-bold')} style={{ animationDelay: '60ms' }}>
+      <h1 className={cx(display, 'lc-rise mt-12 text-[48px] leading-[1.1] sm:text-[120px] sm:leading-[1.05] font-bold tracking-tight')} style={{ animationDelay: '60ms' }}>
         A hundred <span className="whitespace-nowrap">clips in.</span><br />
-        <span className="relative">
-          <span className="text-zinc-400">One video</span> <span className="whitespace-nowrap" style={{ background: `linear-gradient(120deg, ${COLORS.accent1}, ${COLORS.accent2})`, backgroundClip: 'text', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>you'd post.</span>
+        <span className="relative inline-block">
+          <span className="text-zinc-400">One video</span>{' '}
+          <span className="whitespace-nowrap ml-2" style={{
+            background: `linear-gradient(135deg, ${COLORS.accent1} 0%, ${COLORS.accent2} 50%, ${COLORS.accent3} 100%)`,
+            backgroundClip: 'text',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            filter: 'drop-shadow(0 0 20px rgba(255, 217, 61, 0.2))'
+          }}>you'd post.</span>
         </span>
       </h1>
 
@@ -440,7 +450,7 @@ function Moves() {
         {list.map((m, i) => (
           <figure key={m.kind + m.name} className="w-[168px] shrink-0 snap-start sm:w-[184px]">
             {/* each card starts its loop at a different point, so a row never plays in lockstep */}
-            <div className="lc-card relative aspect-[9/16] overflow-hidden rounded-[10px] border border-zinc-700/60 bg-gradient-to-br from-zinc-900 to-black shadow-lg transition-all hover:border-accent/40 hover:shadow-[0_0_30px_rgba(255,217,61,0.1)]"
+            <div className="lc-card relative aspect-[9/16] overflow-hidden rounded-[14px] border border-white/10 bg-gradient-to-br from-zinc-900/80 via-black to-zinc-950 shadow-xl backdrop-blur-xl transition-all hover:border-white/30 hover:shadow-2xl hover:shadow-[0_0_40px_rgba(255,217,61,0.15)] hover:from-zinc-800/90"
                  style={{ '--lc-d': `-${((i * 0.9) % 2.4).toFixed(2)}s` } as React.CSSProperties}>
               <MoveArt m={m} i={i} />
             </div>
@@ -550,7 +560,7 @@ function How({ onStart }: { onStart: () => void }) {
       <div className="mt-16 grid divide-y divide-zinc-800/60 border-y border-zinc-800/60 md:grid-cols-3 md:divide-x md:divide-y-0">
         {steps.map((s, idx) => (
           <div key={s.n} className="py-10 md:px-8 md:first:pl-0 md:last:pr-0">
-            <div className="grid h-[168px] place-items-center overflow-hidden rounded-[12px] border border-zinc-700/60 bg-gradient-to-br from-zinc-900/50 to-black shadow-md">{s.art}</div>
+            <div className="grid h-[168px] place-items-center overflow-hidden rounded-[14px] border border-white/15 bg-gradient-to-br from-zinc-900/60 via-black to-zinc-950 shadow-lg backdrop-blur-md hover:border-white/30 hover:shadow-xl transition-all">{s.art}</div>
             <div className="mt-7 flex items-baseline gap-3">
               <span className="font-serif text-[16px] font-bold" style={{ color: [COLORS.accent1, COLORS.accent2, COLORS.accent3][idx] }}>{s.n}</span>
               <h3 className={cx(display, 'text-[26px] font-semibold')}>{s.title}</h3>
@@ -763,7 +773,7 @@ function Pricing({ onStart }: { onStart: () => void }) {
         <Label n="05">Pricing</Label>
         <H2>Free in <Em>early access.</Em></H2>
         <div className="mt-16 grid gap-6 overflow-visible md:grid-cols-2">
-          <div className="flex flex-col rounded-[14px] border border-zinc-700/60 bg-gradient-to-br from-zinc-900/80 to-black p-8 sm:p-10 shadow-lg ring-1 ring-accent/20">
+          <div className="flex flex-col rounded-[16px] border border-white/15 bg-gradient-to-br from-zinc-900/80 via-zinc-900/60 to-black p-8 sm:p-10 shadow-xl backdrop-blur-xl ring-1 ring-accent/30 hover:ring-accent/50 hover:shadow-2xl transition-all duration-500">
             <div className="flex items-center justify-between">
               <span className={label}>Early access</span>
               <span className="rounded-[6px] border border-accent/60 px-2 py-1 text-[10px] font-bold tracking-[0.16em] text-accent uppercase">Now</span>
@@ -938,7 +948,18 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) {
   .lc *, .lc *::before { animation: none !important; transition: none !important; }
 }
-/* Bold design enhancements */
-.lc-card { transition: all 0.3s cubic-bezier(0.2, 0.7, 0.2, 1); }
-.lc-card:hover { transform: translateY(-2px); }
+/* Premium aesthetic enhancements */
+@keyframes subtle-glow { 0%, 100% { opacity: 0.5; } 50% { opacity: 0.8; } }
+@keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
+.lc-card { transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.lc-card:hover { transform: translateY(-4px) scale(1.02); filter: brightness(1.08); }
+.lc-rise { animation: float 4s ease-in-out infinite; }
+/* Subtle text glow on hover */
+.lc h2:hover { text-shadow: 0 0 30px rgba(255, 217, 61, 0.15); }
+/* Interactive link hover */
+a:hover { transition: all 0.3s ease; }
+/* Button premium effects */
+button:active { transform: scale(0.97); }
+/* Smooth transitions */
+* { transition: color 0.3s ease, background-color 0.3s ease; }
 `
