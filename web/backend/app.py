@@ -1224,6 +1224,25 @@ def api_vibe_status(jid: str) -> dict:
     return job.public()
 
 
+@app.get("/api/vibes/{vid}")
+def api_vibe_get(vid: str) -> dict:
+    """Get a vibe's data including full blueprint and emotional intelligence."""
+    rec = vibes.get(vid)
+    if not rec:
+        raise HTTPException(404, "no such vibe")
+    blueprint = rec.get("blueprint", {})
+    return {
+        "id": rec["id"],
+        "name": rec["name"],
+        "niche": rec.get("niche"),
+        "n": rec.get("n"),
+        "recipe": rec.get("recipe"),
+        "blueprint": blueprint,  # Full detailed analysis
+        "emotional_blueprint": blueprint.get("emotional_blueprint"),  # Emotional intelligence layer
+        "summary": rec.get("words", []),
+    }
+
+
 @app.get("/api/make/{jid}")
 def api_make_status(jid: str) -> dict:
     job = make.JOBS.get(jid)

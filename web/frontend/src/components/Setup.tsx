@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, type VibeJob } from '../api'
 import { Button, Dialog } from '../ui'
+import { LearnVibePreview, type Recipe } from './LearnVibe'
+import { BlueprintViewer, type Blueprint } from './BlueprintViewer'
 
 // The two picks before anything is cut (plan of 2026-10-10, step 2): the
 // frame the video is for, and the look of the whole thing. Everything else
@@ -35,6 +37,9 @@ export function Setup({ data, busy, progress, onDone, onCancel, onReload }: {
   const chosenVibe = vibe === undefined ? (data?.vibe ?? null) : vibe
   // learn a vibe from reels, right here (vibes.py as a job)
   const [learning, setLearning] = useState<{ open: boolean; niche: string; links: string; job: VibeJob | null; error: string | null }>({ open: false, niche: '', links: '', job: null, error: null })
+  // preview the recipe and blueprint after learning
+  const [showRecipePreview, setShowRecipePreview] = useState<{ recipe: Recipe; vibeId: string } | null>(null)
+  const [showBlueprintPreview, setShowBlueprintPreview] = useState<{ blueprint: Blueprint; vibeId: string } | null>(null)
   const learn = async () => {
     const links = learning.links.split(/\s+/).map((x) => x.trim()).filter(Boolean)
     setLearning((l) => ({ ...l, error: null }))
@@ -48,6 +53,27 @@ export function Setup({ data, busy, progress, onDone, onCancel, onReload }: {
       }
       if (job.stage === 'error') throw new Error(job.error ?? 'Could not learn from those reels')
       await onReload?.()
+
+      // Fetch the recipe and blueprint for the newly learned vibe
+      if (job.vibe) {
+        try {
+          const vibeData = await api.vibeGet(job.vibe)
+          // Show blueprint first (EVERYTHING learned), then recipe preview
+          if (vibeData?.blueprint) {
+            setShowBlueprintPreview({ blueprint: vibeData.blueprint, vibeId: job.vibe })
+            setLearning({ open: false, niche: '', links: '', job: null, error: null })
+            return
+          } else if (vibeData?.recipe) {
+            setShowRecipePreview({ recipe: vibeData.recipe, vibeId: job.vibe })
+            setLearning({ open: false, niche: '', links: '', job: null, error: null })
+            return
+          }
+        } catch (e) {
+          // If recipe fetch fails, just proceed with vibe selection
+          console.warn('Could not fetch recipe:', e)
+        }
+      }
+
       setVibe(job.vibe)
       setLearning({ open: false, niche: '', links: '', job: null, error: null })
     } catch (e) { setLearning((l) => ({ ...l, job: null, error: (e as Error).message })) }
@@ -58,6 +84,45 @@ export function Setup({ data, busy, progress, onDone, onCancel, onReload }: {
   const lk = look ?? data?.look ?? 'cozy'
   useEffect(() => { first.current?.focus() }, [data])
   const say = (s: number) => s < 60 ? `${s} s` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+
+  // Show blueprint (EVERYTHING learned) when user just learned a vibe
+  if (showBlueprintPreview) {
+    return (
+      <Dialog title="What we learned" sub="Every detail of how this vlog is made"
+              onClose={() => setShowBlueprintPreview(null)} width={900}
+              footer={<>
+                <Button variant="ghost" onClick={() => setShowBlueprintPreview(null)}>Back</Button>
+              </>}>
+        <BlueprintViewer
+          blueprint={showBlueprintPreview.blueprint}
+          onClose={() => {
+            setShowBlueprintPreview(null)
+            setShowRecipePreview(null)
+            setVibe(showBlueprintPreview.vibeId)
+          }}
+        />
+      </Dialog>
+    )
+  }
+
+  // Show recipe preview for fine-tuning
+  if (showRecipePreview) {
+    return (
+      <Dialog title="Your recipe" sub="Adjust each element below, then apply to your video"
+              onClose={() => setShowRecipePreview(null)} width={800}
+              footer={<>
+                <Button variant="ghost" onClick={() => setShowRecipePreview(null)}>Back</Button>
+              </>}>
+        <LearnVibePreview
+          recipe={showRecipePreview.recipe}
+          onApply={() => {
+            setVibe(showRecipePreview.vibeId)
+            setShowRecipePreview(null)
+          }}
+        />
+      </Dialog>
+    )
+  }
 
   return (
     <Dialog title="Two picks, then your video" sub={data ? `From the clips: ${data.about}. Length, pace and captions are read from the footage; change any of it in Frames.` : 'Reading your clips…'}

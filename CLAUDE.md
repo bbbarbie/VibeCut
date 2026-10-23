@@ -81,12 +81,16 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   by itself until clicked), the 40/30/20/10 promise, three steps (with
   "or paste a reel you love" under them), what it fixes, pricing (early
   access free; a Creator plan named but unpriced), FAQ (which carries the
-  privacy answers), closing. Restyled 2026-10-23 (the user: "cute, the vibe
-  of current YC companies' landing pages"): pill nav, the app's own faces
-  (Garamond headlines and wordmark, system sans labels; the user, 2026-10-23:
-  "the font does not match the app"; Nunito only inside drawn captions) with
-  one italic word, pastel bento for the fixes, a marquee of the
-  tells, and a plain mark (`Mark`: one frame cut in two on a diagonal,
+  privacy answers), closing. Restyled 2026-10-23 (the user: "the vibe of
+  current YC companies' landing pages", then "too cartoon-ish, make it more
+  aesthetic, cool and sharp"): on the app's own dark palette (`.on-video`,
+  the one the player uses over footage), the app's own faces (Garamond
+  headlines and wordmark, system sans labels; the user, 2026-10-23: "the
+  font does not match the app"; Nunito only inside drawn captions) with one
+  italic turn per headline, numbered section labels, hairline grids instead
+  of cards, 4–10 px corners, film grain, one pale-blue accent, no emoji or
+  pastels; the carousel's scenes are light (dusk, coast, night street), not
+  drawings. A marquee of the tells, and a plain mark (`Mark`: one frame cut in two on a diagonal,
   also `public/favicon.svg`; the clapperboard mascot went, the user:
   "too cartoonish"); motion is in the file's
   own CSS and off under reduced motion. No logos, quotes or backers we don't
@@ -95,7 +99,7 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   headline and a line; "What it can do" (`Moves`) is a carousel of 29 looping
   9:16 cards, filterable by Captions / Transitions / Effects / On the beat,
   each a move the editor has under its menu name, drawn as CSS over made-up
-  scenes (no faces); it advances by itself until touched. Same paper and blue underneath; both
+  scenes (no faces); it advances by itself until touched. Both
   sides of the before/after are drawn in CSS because every real screenshot
   shows the creator's face. The app's home (`#/`) stays bare; the page is
   linked only from the profile page ("About VibeCut"). Copy keeps to "no amateur tells", never "beautiful".
