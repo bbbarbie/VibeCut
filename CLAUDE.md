@@ -98,6 +98,35 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   Bottom: the timeline with Video / Captions / Audio lanes (music drawn as a
   strip). Clicking something opens its tab. Every border drags (sizes saved
   in this browser). The old bottom tool bar (ShotBar) is gone.
+- **Landing page** (`web/frontend/src/components/Landing.tsx`, route
+  `#/welcome`; 2026-10-21, the user: "like those websites selling this
+  product"; tightened 2026-10-22). Hero (two-line pitch + a before/after:
+  the shoot as a pile of clips with its tells marked, then the edit; flips
+  by itself until clicked), the 40/30/20/10 promise, three steps (with
+  "or paste a reel you love" under them), what it fixes, pricing (early
+  access free; a Creator plan named but unpriced), FAQ (which carries the
+  privacy answers), closing. Restyled 2026-10-23 (the user: "the vibe of
+  current YC companies' landing pages", then "too cartoon-ish, make it more
+  aesthetic, cool and sharp"): on the app's own dark palette (`.on-video`,
+  the one the player uses over footage), the app's own faces (Garamond
+  headlines and wordmark, system sans labels; the user, 2026-10-23: "the
+  font does not match the app"; Nunito only inside drawn captions) with one
+  italic turn per headline, numbered section labels, hairline grids instead
+  of cards, 4–10 px corners, film grain, one pale-blue accent, no emoji or
+  pastels; the carousel's scenes are light (dusk, coast, night street), not
+  drawings. A marquee of the tells, and a plain mark (`Mark`: one frame cut in two on a diagonal,
+  also `public/favicon.svg`; the clapperboard mascot went, the user:
+  "too cartoonish"); motion is in the file's
+  own CSS and off under reduced motion. No logos, quotes or backers we don't
+  have. Cut down 2026-10-23 (the user: "less words, more straight to the
+  point, and a carousel of animations that we can do"): every section is a
+  headline and a line; "What it can do" (`Moves`) is a carousel of 29 looping
+  9:16 cards, filterable by Captions / Transitions / Effects / On the beat,
+  each a move the editor has under its menu name, drawn as CSS over made-up
+  scenes (no faces); it advances by itself until touched. Both
+  sides of the before/after are drawn in CSS because every real screenshot
+  shows the creator's face. The app's home (`#/`) stays bare; the page is
+  linked only from the profile page ("About VibeCut"). Copy keeps to "no amateur tells", never "beautiful".
 - Chat editing rule: a turn applies operations to the working storyboard
   (`web/backend/board.py`), never regenerates it. The LLM only emits ops;
   the diff is computed, not reported by the model. Keep it that way.
@@ -573,6 +602,41 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   `media.to_sdr` so they look like the phone showed them; measurement frames
   are untouched. `tests/test_hdr.py`.
 
+- **The vlog grammar** (`web/backend/vlog.py`; 2026-10-19, after the creator
+  watched a made video: "the cut is too random, not those pretty vlogs on
+  YouTube"). A tall or wide Make, when no reel is being copied, is cut like
+  a vlog, not a reel: `make.PRIOR` holds 3–6 s a shot (hook 3 s), no speed
+  ramp, no flash, only the hook pushes; the picker refuses shots filmed
+  under 2.5 s (`select.choose(min_s)`) and a vlog that lands under 90% of
+  its length asks for more moments once. Picks are regrouped into *scenes*
+  (`brief.spots`: a place, twenty minutes; at most 7), each stop sequenced
+  wide → medium → close from face area + detail labels, look-alikes apart,
+  ending on a detail or a face; folded scenes keep the day's order. Holds
+  follow stillness (`activity` < 15 ×1.5, > 40 ×0.7, clamped 1.5–7 s), cut
+  in before the action (`select.window`). Shorts are unchanged. Judged on
+  the one real shoot (42 clips: 27 shots of 0.6–3.9 s in 45-min sessions →
+  20 shots of 2.6–6.8 s in 7 scenes, 73 s of the 90 asked: the footage is
+  short). Every number is a prior. Then, the same day, the rest of the plan:
+  **continuity** (`vlog.flow`: inside one stop, among the orders that keep
+  wide → medium → close, the one the joins checker scores smoothest, with
+  look-alikes apart and the scene still ending on a detail or a face;
+  never across stops, so the day's order holds) and the smoother's nudge
+  onto movement runs after a vlog Make as its own "Smoother cuts" turn
+  (user decision 2026-10-19: Make is the machine's own edit, so this is
+  not cutfix; it still never touches a hand-cut edit); **phrases**
+  (`vlog.phrase`: the hook on a whole beat, every scene a whole number of
+  two- or four-bar phrases, shots inside a scene where the action ends,
+  not on the beat; the closing shot takes the slack); **natural sound**
+  (the vlog's own sound at 1.0, music at `vlog.MUSIC_GAIN` 0.5 settling to
+  `SETTLE` 0.6 of that inside each scene via the bed's duck list, so it
+  rises at a scene change; `set_join carry_out` inside a scene = L cuts);
+  **one word per scene** (`POST /api/scenes/{beat}/verdict {keep|cut|
+  longer}` from the Watch screen; cut and longer are one undoable turn
+  each, every word is a `scene_verdict` event on the project with the
+  scene's labels and holds — the calibration record — and `habits.derive`
+  reads cut / longer as removed / held; `launchlog.summary` counts them).
+  Tested in `tests/test_vlog.py` and the wide Make in `test_make.py`.
+
 - From montage-vlog-compiler (MIT; see NOTICE), four pieces:
   - **Evidence levels** (`cutgrammar/evidence.py`): every finding names
     what it rests on — meta / still / motion / audio. A finding whose
@@ -687,7 +751,10 @@ The promise to a user is therefore *not* "this will be beautiful." It is
 - **Smoother cuts** (`web/backend/smooth.py`, P3-1/P3-2). Only when asked,
   one undoable turn: beam search over join roughness + filming-order
   penalty inside a part (move_shot), and window nudges ≤2 s onto movement,
-  never onto a word (trim). Never runs by default — that would be cutfix.
+  never onto a word (trim). Never runs by default on a hand-cut edit — that
+  would be cutfix. The one exception (2026-10-19, vlog.py step 5): the
+  nudge alone runs after a vlog *Make*, as its own turn, because that edit
+  is the machine's to begin with.
 - **Looks** (`web/backend/looks.py`, `looks/*.json`, P3-3). The spec's 7
   vibes as dated records: type + motion, and since 2026-10-10 (plan step 1)
   the picture too — `grade` (relative to the footage: warmth, black floor /
