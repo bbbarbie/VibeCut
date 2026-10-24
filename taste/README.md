@@ -269,3 +269,33 @@ was gone. Also the grammar's log-probability of the first and last
 shots; the opening against its kind, its music, a regression on its
 readings, or caption reading speed; counting cutaways that break the talk
 (it counts exactly what the damage takes out).
+
+## Third training (2026-10-24, more creators)
+
+sarah: "lets do a little more training ... explore more vloggers other than
+the ones we had to avoid overfitting", then "a bit more us centric". 20 new
+creators, mostly American and in other kinds of vlog (hiking, road trips,
+trucking, RV and van life, family, pregnancy), went into
+`data/candidate-creators.csv`; the run on her Mac read 45 new videos for
+$1.50 of the course key ($3.78 of the $5.00 cap in all). 10 long downloads
+timed out and are `failed`, so the next run tries them again. Of the 45, 10
+weren't vlogs (a storytime, outfit styling, a haul, two sponsored pitches, a
+getting-ready routine, a Q&A, advice to camera, a hairstyle tutorial posted
+twice): marked `not a vlog` and left out.
+
+8-seed means, unseen creator / damage never shown:
+
+| | long | shorts |
+| --- | --- | --- |
+| before (24 by 8 / 28 by 12) | 93.0% / 34.2% | 85.1% / 23.3% |
+| after (50 by 20 / 37 by 17) | 91.9% / 34.0% | 86.7% / 25.7% |
+| the creators it had before (seed 0) | 93.0% → 94.5% | 83.9% → 85.7% |
+| the new creators (seed 0) | 91.4% | 87.8% |
+
+So more creators made it better on the ones it already knew; long's overall
+number dips because the test now covers 20 creators and the new ones are
+further from the old (near-silent hiking films, trucking days). On long,
+a cold opening is caught 14% → 34% of the time; swapped shots 89% → 78%
+and talk left running 78% → 72%. Story jobs on long: 48% against 28% for
+guessing the commonest. At seed 0 the saved models read 93% / 87%, as the
+Mac's own retrain did with the non-vlogs still in.

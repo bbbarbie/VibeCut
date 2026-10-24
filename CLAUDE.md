@@ -45,7 +45,9 @@ The promise to a user is therefore *not* "this will be beautiful." It is
   Build it): new readings for talk left running and swapped shots
   (`longest_hold`, `talk_longest`, `flow_seen`, `continuity`,
   `music_under_talk`); retrained here: 93% / 85%; cold openings and endings
-  are still not caught (half the pros open on an ordinary shot). **Which do you
+  are still not caught (half the pros open on an ordinary shot). 2026-10-24:
+  20 more creators, mostly American (50 long / 20 creators: 92%; 37 shorts /
+  17: 87%; better on the creators it knew, see the README). **Which do you
   like better?** (sarah, 2026-10-21; `web/backend/prefer.py`,
   `PreferCards.tsx`, `/api/prefer`): under the made video up to 3 cards
   play two versions one change apart; a pick refits her layer
